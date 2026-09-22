@@ -1,0 +1,83 @@
+'use strict';
+const { todayISO } = require('./util');
+
+// Profissional aparece na vitrine se estiver aprovado e com a mensalidade em dia
+const VISIBLE_SQL = "p.status = 'aprovado' AND p.subscription_until IS NOT NULL AND p.subscription_until >= date('now')";
+
+function isVisible(p) {
+  return p.status === 'aprovado' && !!p.subscription_until && p.subscription_until >= todayISO();
+}
+
+function parsePackages(json) {
+  try {
+    const arr = JSON.parse(json || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+
+// Visitante sem conta vê o profissional, mas sem valores e sem localização
+function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
+  const base = {
+    id: p.id,
+    name: p.name,
+    profession: p.profession,
+    registry: p.registry,
+    bio: p.bio,
+    specialties: p.specialties,
+    photo: p.photo,
+  };
+  if (!loggedIn) return { ...base, locked: true };
+  return {
+    ...base,
+    locked: false,
+    favorite: !!favorite,
+    price_cents: p.price_cents,
+    packages: parsePackages(p.packages),
+    state: p.state,
+    city: p.city,
+    has_clinic: !!p.has_clinic,
+    clinic_name: p.has_clinic ? p.clinic_name : '',
+    clinic_address: p.has_clinic ? p.clinic_address : '',
+  };
+}
+
+function ownProfessional(p) {
+  return {
+    id: p.id,
+    code: p.code,
+    name: p.name,
+    profession: p.profession,
+    registry: p.registry,
+    email: p.email,
+    phone: p.phone,
+    status: p.status,
+    bio: p.bio,
+    specialties: p.specialties,
+    photo: p.photo,
+    price_cents: p.price_cents,
+    packages: parsePackages(p.packages),
+    state: p.state,
+    city: p.city,
+    has_clinic: !!p.has_clinic,
+    clinic_name: p.clinic_name,
+    clinic_address: p.clinic_address,
+    pix_key: p.pix_key,
+    subscription_until: p.subscription_until,
+    visible: isVisible(p),
+    created_at: p.created_at,
+  };
+}
+
+function ownPatient(p) {
+  return {
+    id: p.id,
+    name: p.name,
+    display_name: p.display_name || '',
+    cpf_masked: `***.${p.cpf.slice(3, 6)}.${p.cpf.slice(6, 9)}-**`,
+    state: p.state,
+    city: p.city,
+    photo: p.photo,
+  };
+}
+
+module.exports = { VISIBLE_SQL, isVisible, parsePackages, publicProfessional, ownProfessional, ownPatient };

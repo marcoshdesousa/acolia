@@ -1,0 +1,73 @@
+'use strict';
+const express = require('express');
+const { db } = require('../db');
+const U = require('../util');
+const A = require('../auth');
+const { handlePhoto, removePhoto } = require('../upload');
+const { ownProfessional } = require('../serialize');
+const { requirePassword, validateLocation, PROFESSIONS } = require('./auth');
+const rt = require('../realtime');
+
+const router = express.Router();
+router.use(A.requireRole('professional'));
+
+function toCents(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(String(v).replace(/\./g, '').replace(',', '.'));
+  if (!Number.isFinite(n) || n < 0 || n > 100000) throw new U.HttpError(400, 'Valor inválido.');
+  return Math.round(n * 100);
+}
+
+router.get('/me', (req, res) => res.json(ownProfessional(req.auth.user)));
+
+router.put('/profile', (req, res) => {
+  const b = req.body;
+  const name = U.cleanText(b.name, 120);
+  if (!U.isFullName(name)) throw new U.HttpError(400, 'Informe nome e sobrenome.');
+  const profession = U.cleanText(b.profession, 60);
+  if (!PROFESSIONS.includes(profession)) throw new U.HttpError(400, 'Selecione sua profissão.');
+  const registry = U.cleanText(b.registry, 40);
+  if (registry.length < 3) throw new U.HttpError(400, 'Informe seu registro profissional.');
+  const phone = U.onlyDigits(b.phone);
+  if (phone.length < 10 || phone.length > 13) throw new U.HttpError(400, 'Informe o WhatsApp com DDD.');
+  const { state, city } = validateLocation(b.state, b.city);
+  const price = toCents(b.price);
+
+  const packages = (Array.isArray(b.packages) ? b.packages : []).slice(0, 10).map((pk) => {
+    const sessions = Number.parseInt(pk.sessions, 10);
+    if (!Number.isInteger(sessions) || sessions < 2 || sessions > 100) throw new U.HttpError(400, 'Cada pacote precisa ter de 2 a 100 sessões.');
+    const cents = toCents(pk.price);
+    if (!cents) throw new U.HttpError(400, 'Informe o valor de cada pacote.');
+    return { sessions, price_cents: cents, description: U.cleanText(pk.description, 120) };
+  });
+
+  const hasClinic = b.has_clinic ? 1 : 0;
+  const clinicName = hasClinic ? U.cleanText(b.clinic_name, 120) : '';
+  const clinicAddress = hasClinic ? U.cleanText(b.clinic_address, 250) : '';
+  if (hasClinic && clinicAddress.length < 5) throw new U.HttpError(400, 'Informe o endereço da clínica.');
+
+  db.prepare(`UPDATE professionals SET name=?, profession=?, registry=?, phone=?, bio=?, specialties=?, price_cents=?, packages=?,
+      state=?, city=?, city_norm=?, has_clinic=?, clinic_name=?, clinic_address=?, pix_key=? WHERE id=?`)
+    .run(name, profession, registry, phone, U.cleanText(b.bio, 2000), U.cleanText(b.specialties, 300), price, JSON.stringify(packages),
+      state, city, U.norm(city), hasClinic, clinicName, clinicAddress, U.cleanText(b.pix_key, 140), req.auth.user.id);
+  res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
+});
+
+router.post('/photo', async (req, res) => {
+  const url = await handlePhoto(req, res);
+  removePhoto(req.auth.user.photo);
+  db.prepare('UPDATE professionals SET photo = ? WHERE id = ?').run(url, req.auth.user.id);
+  for (const c of db.prepare('SELECT id, patient_id FROM conversations WHERE professional_id = ?').all(req.auth.user.id)) {
+    rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });
+  }
+  res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
+});
+
+router.post('/password', (req, res) => {
+  if (!U.verifyPassword(req.body.current || '', req.auth.user.password_hash)) throw new U.HttpError(400, 'Senha atual incorreta.');
+  requirePassword(req.body.password);
+  db.prepare('UPDATE professionals SET password_hash = ? WHERE id = ?').run(U.hashPassword(req.body.password), req.auth.user.id);
+  res.json({ ok: true });
+});
+
+module.exports = { router };
