@@ -83,6 +83,7 @@ router.post('/delete', (req, res) => {
     rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });
   }
   A.destroyUserSessions('professional', me.id);
+  require('../push').removeUser('professional', me.id);
   A.destroySession(req, res);
   res.json({ ok: true });
 });

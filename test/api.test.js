@@ -487,3 +487,49 @@ test('link próprio do profissional', async () => {
   r = await c.post('/api/professional/slug', { slug: 'dr-joao-psicologo' });
   assert.equal(r.status, 409);
 });
+
+test('notificação chega no aparelho de quem recebe a mensagem', async () => {
+  const crypto = require('node:crypto');
+  const webpush = require('web-push');
+  const original = webpush.sendNotification;
+  const hits = [];
+  let fail = null;
+  // Troca o envio real (que iria para o Google/Apple) por um registro local
+  webpush.sendNotification = async (sub, payload) => {
+    hits.push({ endpoint: sub.endpoint, payload: JSON.parse(payload) });
+    if (fail) throw Object.assign(new Error('gone'), { statusCode: fail });
+    return { statusCode: 201 };
+  };
+  const ecdh = crypto.createECDH('prime256v1');
+  ecdh.generateKeys();
+  const subscription = {
+    endpoint: 'https://push.exemplo.com/aparelho-do-joao',
+    keys: { p256dh: ecdh.getPublicKey().toString('base64url'), auth: crypto.randomBytes(16).toString('base64url') },
+  };
+  try {
+    await pro.post('/api/auth/professional/login', { login: proCode, password: 'segredo1' });
+    assert.equal((await pro.post('/api/push/subscribe', { subscription })).status, 200);
+    assert.equal((await anon.post('/api/push/subscribe', { subscription })).status, 401, 'precisa estar logado');
+    assert.equal((await pro.post('/api/push/subscribe', { subscription: { ...subscription, endpoint: 'http://x' } })).status, 400);
+    const carlos = client();
+    await carlos.post('/api/auth/patient/login', { cpf: CPF_B, password: '123456' });
+    const conv = await carlos.post('/api/chat/conversations', { professional_id: proId });
+    await carlos.post(`/api/chat/conversations/${conv.data.id}/messages`, { body: 'Oi, doutor, tudo bem?' });
+    await new Promise((r) => setTimeout(r, 30));
+    assert.equal(hits.length, 1, 'o profissional recebeu a notificação');
+    assert.equal(hits[0].payload.body, 'Oi, doutor, tudo bem?');
+    assert.equal(hits[0].payload.url, `/painel#conversas/${conv.data.id}`);
+    // Quem envia não é notificado
+    await pro.post(`/api/chat/conversations/${conv.data.id}/messages`, { body: 'Tudo, e você?' });
+    await new Promise((r) => setTimeout(r, 30));
+    assert.equal(hits.length, 1, 'o paciente não tem aparelho inscrito; o profissional não recebe o próprio aviso');
+    // Aparelho que desinstalou (410) sai da lista
+    fail = 410;
+    await carlos.post(`/api/chat/conversations/${conv.data.id}/messages`, { body: 'Mais uma' });
+    await new Promise((r) => setTimeout(r, 30));
+    const { db } = require('../server/db');
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM push_subscriptions').get().n, 0);
+  } finally {
+    webpush.sendNotification = original;
+  }
+});

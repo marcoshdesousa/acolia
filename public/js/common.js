@@ -241,43 +241,190 @@
   }
 
   async function logout(to = '/') {
+    await stopPushOnThisDevice();
     await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
     location.href = to;
   }
 
   // ---------- App instalável (PWA) ----------
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const platform = () => {
+    const ua = navigator.userAgent;
+    if (/iphone|ipad|ipod/i.test(ua) || (ua.includes('Macintosh') && 'ontouchend' in document)) return 'ios';
+    if (/android/i.test(ua)) return 'android';
+    return 'pc';
+  };
   let deferredInstall = null;
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredInstall = e;
-    $$('[data-install]').forEach((b) => b.classList.remove('hidden'));
+    $$('[data-install-now]').forEach((b) => b.classList.remove('hidden'));
   });
-  async function installApp() {
-    if (deferredInstall) {
-      deferredInstall.prompt();
-      await deferredInstall.userChoice;
-      deferredInstall = null;
-      return;
+  window.addEventListener('appinstalled', () => { deferredInstall = null; toast('App instalado! Procure o ícone da Acolia.'); });
+
+  const STEPS = {
+    android: {
+      label: 'Android',
+      steps: [
+        'Abra este site no <b>Google Chrome</b>.',
+        'Toque nos <b>três pontinhos ⋮</b>, no canto de cima.',
+        'Toque em <b>Instalar app</b> (ou <b>Adicionar à tela inicial</b>).',
+        'Confirme em <b>Instalar</b>. O ícone da Acolia aparece na sua tela inicial.',
+        'Abra o app e toque em <b>Ativar notificações</b> para saber quando chegar mensagem.',
+      ],
+    },
+    ios: {
+      label: 'iPhone',
+      steps: [
+        'Abra este site no <b>Safari</b>.',
+        'Toque no botão <b>Compartilhar</b> (o quadrado com a setinha para cima), na barra de baixo.',
+        'Role e toque em <b>Adicionar à Tela de Início</b>.',
+        'Toque em <b>Adicionar</b>, no canto de cima.',
+        'Abra a Acolia <b>pelo ícone novo</b> e toque em <b>Ativar notificações</b>. No iPhone as notificações só funcionam pelo app instalado (iOS 16.4 ou mais novo).',
+      ],
+    },
+    pc: {
+      label: 'Computador',
+      steps: [
+        'Abra este site no <b>Google Chrome</b> ou no <b>Microsoft Edge</b>.',
+        'Clique no ícone de <b>instalar</b> no fim da barra de endereço (um monitor com uma setinha), ou no menu <b>⋮ → Instalar Acolia</b>.',
+        'Clique em <b>Instalar</b>. A Acolia fica no menu Iniciar e na área de trabalho, como um programa.',
+        'Abra e clique em <b>Ativar notificações</b>.',
+      ],
+    },
+  };
+
+  function installGuide() {
+    if (isStandalone()) {
+      return modal({ title: 'App já instalado', html: '<p>Você já está usando o app da Acolia. 🎉</p>' });
     }
-    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    modal({
-      title: 'Instalar o aplicativo',
-      html: ios
-        ? '<p>No iPhone/iPad: toque no botão <b>Compartilhar</b> do Safari e depois em <b>Adicionar à Tela de Início</b>.</p>'
-        : '<p>No menu do navegador (⋮), toque em <b>Instalar aplicativo</b> ou <b>Adicionar à tela inicial</b>.</p>',
+    const current = platform();
+    const tabs = Object.entries(STEPS).map(([k, v]) => `<button type="button" data-tab="${k}" class="${k === current ? 'active' : ''}">${v.label}</button>`).join('');
+    const panels = Object.entries(STEPS).map(([k, v]) => `<ol class="install-steps ${k === current ? '' : 'hidden'}" data-panel="${k}">${v.steps.map((t) => `<li>${t}</li>`).join('')}</ol>`).join('');
+    return modal({
+      title: 'Baixe o app da Acolia',
+      html: `<p class="muted" style="margin-top:-4px">Grátis, direto pelo site — sem precisar da Play Store ou da App Store. Com o app você recebe as mensagens como notificação.</p>
+        <button type="button" class="btn block ${deferredInstall ? '' : 'hidden'}" data-install-now style="margin-bottom:14px">Instalar agora</button>
+        <div class="tabs" role="tablist" style="margin-bottom:12px">${tabs}</div>${panels}`,
+      actions: [{ label: 'Fechar', class: 'secondary' }],
+      onOpen: (dlg) => {
+        $$('[data-tab]', dlg).forEach((b) => b.addEventListener('click', () => {
+          $$('[data-tab]', dlg).forEach((x) => x.classList.toggle('active', x === b));
+          $$('[data-panel]', dlg).forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== b.dataset.tab));
+        }));
+        $('[data-install-now]', dlg).addEventListener('click', async () => {
+          if (!deferredInstall) return;
+          deferredInstall.prompt();
+          await deferredInstall.userChoice;
+          deferredInstall = null;
+          dlg.querySelector('.dlg-actions button').click();
+        });
+      },
     });
   }
+  const installApp = installGuide;
+
+  // ---------- Notificações (Web Push) ----------
+  function urlB64ToUint8Array(b64) {
+    const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+    const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+  }
+  const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+  async function registerPush() {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const { publicKey } = await api('/api/push/key');
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(publicKey) });
+    }
+    await api('/api/push/subscribe', { method: 'POST', body: { subscription: sub.toJSON() } });
+  }
+
+  // Botão "Ativar notificações"
+  async function enableNotifications() {
+    if (!pushSupported()) {
+      if (platform() === 'ios' && !isStandalone()) {
+        return modal({
+          title: 'Instale o app primeiro',
+          html: '<p>No iPhone, as notificações só funcionam depois de instalar a Acolia na tela de início.</p>',
+          actions: [{ label: 'Fechar', class: 'secondary' }, { label: 'Ver como instalar', handler: () => { setTimeout(installGuide, 50); } }],
+        });
+      }
+      return toast('Este navegador não aceita notificações. Tente o Chrome.', 'error');
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      return modal({
+        title: 'Notificações bloqueadas',
+        html: '<p>Para receber avisos de mensagem, libere as notificações da Acolia nas configurações do navegador ou do celular (toque no cadeado ao lado do endereço do site → Notificações → Permitir) e tente de novo.</p>',
+      });
+    }
+    try {
+      await registerPush();
+      toast('Notificações ativadas! Você será avisado quando chegar mensagem.');
+      $$('[data-push-banner]').forEach((b) => b.remove());
+    } catch (e) {
+      toast('Não foi possível ativar as notificações agora.', 'error');
+      console.error(e);
+    }
+  }
+
+  // Ao abrir o app/painel: mantém a inscrição em dia ou mostra o convite
+  async function setupNotifications(bannerParent) {
+    if (!pushSupported()) {
+      if (platform() === 'ios' && !isStandalone() && bannerParent) showPushBanner(bannerParent, true);
+      return;
+    }
+    if (Notification.permission === 'granted') { registerPush().catch(() => {}); return; }
+    if (Notification.permission === 'default' && bannerParent) showPushBanner(bannerParent, false);
+  }
+  function showPushBanner(parent, iosInstall) {
+    try { if (localStorage.getItem('push-banner-fechado') === '1') return; } catch { /* ignora */ }
+    const div = document.createElement('div');
+    div.className = 'notice info push-banner';
+    div.dataset.pushBanner = '';
+    div.innerHTML = `<span class="grow">${iosInstall ? 'Instale o app da Acolia para receber as mensagens como notificação.' : 'Ative as notificações para saber na hora quando chegar mensagem.'}</span>
+      <button class="btn sm" type="button" data-act>${iosInstall ? 'Como instalar' : 'Ativar'}</button>
+      <button class="icon-btn" type="button" aria-label="Fechar aviso" data-close>✕</button>`;
+    $('[data-act]', div).addEventListener('click', () => (iosInstall ? installGuide() : enableNotifications()));
+    $('[data-close]', div).addEventListener('click', () => {
+      div.remove();
+      try { localStorage.setItem('push-banner-fechado', '1'); } catch { /* ignora */ }
+    });
+    parent.prepend(div);
+  }
+
+  // Ao sair da conta, este aparelho para de receber notificações dessa conta
+  async function stopPushOnThisDevice() {
+    try {
+      if (!pushSupported()) return;
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await api('/api/push/unsubscribe', { method: 'POST', body: { endpoint: sub.endpoint } }).catch(() => {});
+        await sub.unsubscribe();
+      }
+    } catch { /* ignora */ }
+  }
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
   }
+  document.addEventListener('DOMContentLoaded', () => {
+    if (isStandalone()) $$('[data-install], [data-install-card]').forEach((b) => b.classList.add('hidden'));
+  });
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-install]');
-    if (b) { e.preventDefault(); installApp(); }
+    if (b) { e.preventDefault(); installGuide(); }
+    const n = e.target.closest('[data-enable-push]');
+    if (n) { e.preventDefault(); enableNotifications(); }
   });
 
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
     confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData,
-    handleForm, logout, installApp,
+    handleForm, logout, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
   };
 })();

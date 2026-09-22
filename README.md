@@ -22,6 +22,10 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 
 A chamada é ponto a ponto (WebRTC): o áudio e o vídeo não passam pelo servidor nem ficam gravados.
 
+## App e notificações
+
+O site pode ser instalado como app (Android, iPhone e computador) pelo próprio site, sem loja. As páginas de entrada e o rodapé têm um tutorial de instalação por aparelho. Depois de instalar e tocar em **Ativar notificações**, paciente e profissional recebem cada mensagem nova como notificação, mesmo com o app fechado (Web Push). As chaves de notificação são criadas sozinhas e ficam guardadas no banco. No iPhone, as notificações só funcionam com o app instalado (iOS 16.4 ou mais novo).
+
 ## Mensagens
 
 Ficam salvas no banco e **não podem ser apagadas nem editadas** (não há rota para isso e o banco tem gatilhos que impedem). Cada lado pode arquivar a conversa; ela continua disponível em "Arquivadas".
@@ -60,6 +64,7 @@ Testes: `npm test`
 | `COOKIE_SECURE=true` | Use em produção com HTTPS |
 | `TRUST_PROXY=true` | Se estiver atrás de proxy (Nginx, Render, Railway…) |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_BUCKET` | Guardar os dados no Supabase (ver acima) |
+| `PUSH_CONTACT` | E-mail de contato enviado aos serviços de notificação (padrão `mailto:contato@acolia.com.br`) |
 | `ICE_SERVERS` | JSON com servidores STUN/TURN para as chamadas (ver abaixo) |
 | `CPF_API_URL`, `CPF_API_TOKEN`, `CPF_API_NAME_FIELD` | Conferência do nome com o CPF na Receita (ver abaixo) |
 | `REGISTRY_API_URL`, `REGISTRY_API_TOKEN`, `REGISTRY_API_NAME_FIELD`, `REGISTRY_API_ACTIVE_FIELD` | Consulta automática do CRP/CRM no conselho (ver abaixo) |

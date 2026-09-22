@@ -39,6 +39,7 @@ router.post('/delete', (req, res) => {
     state = '', city = '', city_norm = '', photo = NULL, password_hash = '!' WHERE id = ?`).run(`excluido-${me.id}`, me.id);
   broadcastIdentity(me);
   A.destroyUserSessions('patient', me.id);
+  require('../push').removeUser('patient', me.id);
   A.destroySession(req, res);
   res.json({ ok: true });
 });

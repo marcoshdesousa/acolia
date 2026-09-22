@@ -58,7 +58,7 @@
         </div>
         <div class="card stack" style="margin-top:16px">
           <h2>Aplicativo e avisos</h2>
-          <div class="row"><button class="btn secondary" data-install-btn>Instalar o app</button><button class="btn secondary" data-notify>Ativar notificações</button></div>
+          <div class="row"><button class="btn secondary" data-install-btn>Instalar o app</button><button class="btn secondary" data-enable-push>Ativar notificações</button></div>
         </div>
         <button class="btn secondary block" style="margin-top:16px" data-logout>Sair da conta</button>
         <div class="card stack" style="margin-top:24px;border-color:var(--danger)">
@@ -173,11 +173,7 @@
       e.target.value = '';
     });
     $('[data-install-btn]').addEventListener('click', installApp);
-    $('[data-notify]').addEventListener('click', async () => {
-      if (!('Notification' in window)) return toast('Seu navegador não suporta notificações.', 'error');
-      const r = await Notification.requestPermission();
-      toast(r === 'granted' ? 'Notificações ativadas!' : 'Notificações não permitidas.');
-    });
+    Acolia.setupNotifications($('[data-view=buscar]'));
     $('[data-logout]').addEventListener('click', () => logout('/'));
     AcoliaDeleteAccount($('[data-delete-account]'), '/api/patient/delete');
   })();

@@ -83,11 +83,19 @@ router.get('/conversations/:id/messages', (req, res) => {
 
 function postMessage(req, c, kind, body) {
   const role = req.auth.role;
+  const sender = req.auth.user;
   const info = db.prepare('INSERT INTO messages (conversation_id, sender_role, kind, body) VALUES (?, ?, ?, ?)').run(c.id, role, kind, body);
   const msg = db.prepare(`SELECT ${MSG_COLS} FROM messages WHERE id = ?`).get(Number(info.lastInsertRowid));
   db.prepare('UPDATE conversations SET last_message_at = ? WHERE id = ?').run(msg.created_at, c.id);
   rt.emit(`patient:${c.patient_id}`, 'message:new', msg);
   rt.emit(`professional:${c.professional_id}`, 'message:new', msg);
+  // Notificação no aparelho de quem recebe
+  const to = role === 'patient' ? ['professional', c.professional_id, `/painel#conversas/${c.id}`] : ['patient', c.patient_id, `/app#chat/${c.id}`];
+  const from = role === 'patient' ? (sender.display_name || sender.name) : sender.name;
+  const text = kind === 'pix' ? 'Enviou a chave Pix para pagamento' : kind === 'call' ? 'Enviou um código de atendimento' : body;
+  require('../push').notify(to[0], to[1], {
+    title: from, body: text.length > 140 ? `${text.slice(0, 137)}…` : text, url: to[2], tag: `conversa-${c.id}`,
+  });
   return msg;
 }
 

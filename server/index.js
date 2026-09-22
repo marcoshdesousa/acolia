@@ -58,6 +58,7 @@ function createApp() {
   app.use('/api/patient', require('./routes/patient').router);
   app.use('/api/professional', require('./routes/professional').router);
   app.use('/api/chat', require('./routes/chat').router);
+  app.use('/api/push', require('./routes/push').router);
   app.use('/api/calls', require('./routes/calls').router);
   app.use('/api/admin', require('./routes/admin').router);
   app.use('/api', (_req, _res, next) => next(new U.HttpError(404, 'Rota não encontrada.')));
