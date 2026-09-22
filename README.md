@@ -30,7 +30,7 @@ Ficam salvas no banco e **não podem ser apagadas nem editadas** (não há rota 
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/marcoshdesousa/acolia)
 
-O botão cria o site no Render já com o disco para guardar os dados. Ele só pede a senha do administrador (`ADMIN_PASSWORD`).
+O botão cria o site no plano **grátis** do Render e só pede a senha do administrador (`ADMIN_PASSWORD`). No plano grátis os dados são apagados quando o site fica 15 minutos sem visitas; serve para testar. Para uso real, veja os comentários em `render.yaml`.
 
 ## Como rodar
 

@@ -1,9 +1,13 @@
-# Publicação com um clique no Render (render.com)
+# Publicação com um clique no Render (render.com) — plano GRÁTIS.
+# Atenção: no plano grátis não há disco permanente. Os cadastros, mensagens
+# e fotos são apagados quando o site "dorme" (15 min sem visitas) ou é
+# atualizado. Serve para ver e testar. Para uso real, troque "plan: free"
+# por "plan: starter" e descomente o bloco "disk" no final.
 services:
   - type: web
     name: acolia
     runtime: node
-    plan: starter
+    plan: free
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /
@@ -12,13 +16,14 @@ services:
         value: "22"
       - key: ADMIN_PASSWORD
         sync: false # o Render pede para você digitar a senha do admin
-      - key: DATA_DIR
-        value: /var/data
       - key: COOKIE_SECURE
         value: "true"
       - key: TRUST_PROXY
         value: "true"
-    disk:
-      name: dados
-      mountPath: /var/data
-      sizeGB: 1
+    # Uso real (plano pago): descomente as linhas abaixo
+    #   - key: DATA_DIR
+    #     value: /var/data
+    # disk:
+    #   name: dados
+    #   mountPath: /var/data
+    #   sizeGB: 1
