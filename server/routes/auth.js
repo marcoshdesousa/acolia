@@ -5,6 +5,8 @@ const U = require('../util');
 const A = require('../auth');
 const { verifyCpfName, isConfigured: cpfApiConfigured } = require('../cpf');
 const { ownProfessional, ownPatient } = require('../serialize');
+const { validateRegistry, verifyRegistry, isApiConfigured: registryApiConfigured } = require('../registry');
+const { handleDocument, removeDocument } = require('../upload');
 
 const router = express.Router();
 const { HttpError } = U;
@@ -106,17 +108,40 @@ function validateProfessionalInput(body) {
 function insertProfessional(d, passwordHash, status, subscriptionUntil = null) {
   const code = newProfessionalCode();
   const info = db.prepare(`INSERT INTO professionals
-    (code, name, profession, registry, email, phone, password_hash, status, state, city, city_norm, subscription_until)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(code, d.name, d.profession, d.registry, d.email, d.phone, passwordHash, status, d.state, d.city, U.norm(d.city), subscriptionUntil);
+    (code, name, profession, registry, email, phone, password_hash, status, state, city, city_norm, subscription_until,
+     document_file, registry_verified, legal_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(code, d.name, d.profession, d.registry, d.email, d.phone, passwordHash, status, d.state, d.city, U.norm(d.city), subscriptionUntil,
+      d.document_file || null, d.registry_verified ? 1 : 0, d.name);
   return { id: Number(info.lastInsertRowid), code };
 }
 
-router.post('/professional/register', (req, res) => {
-  const d = validateProfessionalInput(req.body);
-  requirePassword(req.body.password);
-  const { code } = insertProfessional(d, U.hashPassword(req.body.password), 'pendente');
-  res.status(201).json({ ok: true, code });
+// Autocadastro: o registro (CRP/CRM) precisa ser válido e do mesmo estado, e a
+// foto da carteirinha é obrigatória. (Cadastro feito pelo admin não passa por aqui.)
+router.post('/professional/register', async (req, res) => {
+  const documentFile = await handleDocument(req, res);
+  try {
+    if (!documentFile) throw new HttpError(400, 'Envie a foto da sua carteirinha profissional (frente, com nome e número legíveis).');
+    const d = validateProfessionalInput(req.body);
+    requirePassword(req.body.password);
+    const reg = validateRegistry(d.profession, req.body.registry, d.state);
+    if (db.prepare('SELECT 1 FROM professionals WHERE registry = ?').get(reg.registry)) {
+      throw new HttpError(409, `Já existe um cadastro com o ${reg.registry}. Se é você, entre na sua conta ou fale com a administração.`);
+    }
+    let verified = false;
+    if (reg.council && registryApiConfigured()) {
+      const r = await verifyRegistry(reg, d.name);
+      if (r.error) throw new HttpError(503, 'Não foi possível consultar o conselho agora. Tente novamente em alguns minutos.');
+      if (!r.match) throw new HttpError(400, r.message || 'Registro não confere.');
+      verified = true;
+    }
+    const { code } = insertProfessional({ ...d, registry: reg.registry, document_file: documentFile, registry_verified: verified },
+      U.hashPassword(req.body.password), 'pendente');
+    res.status(201).json({ ok: true, code });
+  } catch (e) {
+    removeDocument(documentFile);
+    throw e;
+  }
 });
 
 router.post('/professional/login', (req, res) => {

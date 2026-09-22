@@ -32,7 +32,17 @@ function client() {
     const data = await res.json().catch(() => null);
     return { status: res.status, data };
   };
+  const form = async (url, fields, file) => {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+    if (file) fd.append('document', new Blob([file.data], { type: file.type }), file.name);
+    const res = await fetch(base + url, { method: 'POST', body: fd, headers: cookie ? { Cookie: cookie } : {} });
+    const set = res.headers.get('set-cookie');
+    if (set) cookie = set.split(';')[0];
+    return { status: res.status, data: await res.json().catch(() => null) };
+  };
   return {
+    form,
     get: (u) => call('GET', u),
     post: (u, b = {}) => call('POST', u, b),
     put: (u, b = {}) => call('PUT', u, b),
@@ -64,6 +74,7 @@ const pat = client();
 const anon = client();
 let proId;
 let proCode;
+let PROFILE;
 
 test('validação de CPF', () => {
   assert.equal(isValidCpf(CPF_A), true);
@@ -86,16 +97,36 @@ test('paciente: cadastro exige CPF válido e nome completo', async () => {
   assert.equal(r.data.user.city, 'Parauapebas');
 });
 
+const DOC = { data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), type: 'image/png', name: 'carteirinha.png' };
+const PRO = {
+  name: 'João Pereira', profession: 'Psicólogo(a)', registry: 'CRP 10/12345', email: 'joao@example.com',
+  phone: '(94) 99999-0000', state: 'PA', city: 'Parauapebas', password: 'segredo1',
+};
+
+test('profissional: registro precisa ser válido, do mesmo estado, e com carteirinha', async () => {
+  let r = await anon.form('/api/auth/professional/register', PRO);
+  assert.equal(r.status, 400, 'sem carteirinha');
+  assert.match(r.data.error, /carteirinha/);
+  r = await anon.form('/api/auth/professional/register', { ...PRO, registry: '12345' }, DOC);
+  assert.equal(r.status, 400, 'formato inválido');
+  r = await anon.form('/api/auth/professional/register', { ...PRO, registry: 'CRP 99/12345' }, DOC);
+  assert.equal(r.status, 400, 'região inexistente');
+  r = await anon.form('/api/auth/professional/register', { ...PRO, registry: 'CRP 06/12345' }, DOC);
+  assert.equal(r.status, 400, 'CRP de SP com estado PA');
+  assert.match(r.data.error, /SP/);
+  r = await anon.form('/api/auth/professional/register', { ...PRO, profession: 'Psiquiatra', registry: 'CRM-SP 123456' }, DOC);
+  assert.equal(r.status, 400, 'CRM de outro estado');
+});
+
 test('profissional: cadastro fica pendente e não entra até aprovação', async () => {
-  let r = await pro.post('/api/auth/professional/register', {
-    name: 'João Pereira', profession: 'Psicólogo(a)', registry: 'CRP 10/12345', email: 'joao@example.com',
-    phone: '(94) 99999-0000', state: 'PA', city: 'Parauapebas', password: 'segredo1',
-  });
-  assert.equal(r.status, 201);
+  let r = await pro.form('/api/auth/professional/register', { ...PRO, registry: 'crp 10 / 12345' }, DOC);
+  assert.equal(r.status, 201, JSON.stringify(r.data));
   proCode = r.data.code;
   assert.match(proCode, /^[A-Z0-9]{8}$/);
   assert.match(proCode, /[A-Z]/);
   assert.match(proCode, /[0-9]/);
+  r = await anon.form('/api/auth/professional/register', { ...PRO, email: 'outro@example.com' }, DOC);
+  assert.equal(r.status, 409, 'mesmo CRP duas vezes');
   r = await pro.post('/api/auth/professional/login', { login: proCode, password: 'segredo1' });
   assert.equal(r.status, 403);
   // Não aparece na vitrine
@@ -112,6 +143,11 @@ test('admin: login, lista pendentes e aprova', async () => {
   assert.equal(r.data.items.length, 1);
   proId = r.data.items[0].id;
   assert.equal(r.data.items[0].code, proCode);
+  assert.equal(r.data.items[0].registry, 'CRP 10/12345', 'registro normalizado');
+  assert.equal(r.data.items[0].has_document, true);
+  const doc = await fetch(`${base}/api/admin/professionals/${proId}/document`, { headers: { Cookie: admin.cookie } });
+  assert.equal(doc.status, 200);
+  assert.equal((await fetch(`${base}/api/admin/professionals/${proId}/document`)).status, 401, 'carteirinha não é pública');
   r = await admin.post(`/api/admin/professionals/${proId}/status`, { status: 'aprovado' });
   assert.equal(r.data.status, 'aprovado');
   assert.equal(r.data.visible, true);
@@ -124,7 +160,7 @@ test('profissional entra (código ou e-mail) e edita o perfil', async () => {
   assert.equal(r.status, 200);
   r = await client().post('/api/auth/professional/login', { login: 'joao@example.com', password: 'segredo1' });
   assert.equal(r.status, 200);
-  r = await pro.put('/api/professional/profile', {
+  r = await pro.put('/api/professional/profile', PROFILE = {
     name: 'João Pereira', profession: 'Psicólogo(a)', registry: 'CRP 10/12345', phone: '94999990000',
     bio: 'Atendo adultos.', specialties: 'Ansiedade, TCC', price: '150,00',
     packages: [{ sessions: 4, price: '520', description: 'Mensal' }], state: 'PA', city: 'Parauapebas',
@@ -132,7 +168,16 @@ test('profissional entra (código ou e-mail) e edita o perfil', async () => {
   });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.price_cents, 15000);
+  // Não consegue trocar o registro nem usar outro nome
+  const full = JSON.parse(JSON.stringify(PROFILE));
+  r = await pro.put('/api/professional/profile', { ...full, registry: 'CRP 10/99999', profession: 'Psiquiatra' });
+  assert.equal(r.data.registry, 'CRP 10/12345');
+  assert.equal(r.data.profession, 'Psicólogo(a)');
+  r = await pro.put('/api/professional/profile', { ...full, name: 'Carlos Silva' });
+  assert.equal(r.status, 400);
+  r = await pro.get('/api/professional/me');
   assert.equal(r.data.packages[0].price_cents, 52000);
+  assert.equal(r.data.name, 'João Pereira');
 });
 
 test('vitrine: visitante não vê valores nem localização; paciente vê', async () => {
@@ -325,7 +370,7 @@ test('admin cadastra profissional já aprovado', async () => {
   const r = await admin.post('/api/admin/professionals', {
     name: 'Ana Costa', profession: 'Psicanalista', registry: 'Registro 123', email: 'ana@example.com', phone: '11988887777', state: 'SP', city: 'Campinas',
   });
-  assert.equal(r.status, 201);
+  assert.equal(r.status, 201, 'admin escolhe o registro que quiser');
   const login = await client().post('/api/auth/professional/login', { login: r.data.code, password: r.data.password });
   assert.equal(login.status, 200);
 });

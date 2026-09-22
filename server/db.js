@@ -115,6 +115,16 @@ CREATE TRIGGER IF NOT EXISTS messages_no_body_update BEFORE UPDATE OF body, send
 BEGIN SELECT RAISE(ABORT, 'mensagens não podem ser alteradas'); END;
 `);
 
+// Migrações simples (colunas novas em bancos já existentes)
+function addColumn(table, col, def) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+}
+addColumn('professionals', 'document_file', 'TEXT');              // foto/PDF da carteirinha (pasta privada)
+addColumn('professionals', 'legal_name', 'TEXT');                 // nome completo da carteirinha (não muda)
+addColumn('professionals', 'registry_verified', 'INTEGER NOT NULL DEFAULT 0'); // conferido no conselho por API
+fs.mkdirSync(path.join(DATA_DIR, 'documents'), { recursive: true });
+
 function tx(fn) {
   db.exec('BEGIN IMMEDIATE');
   try {

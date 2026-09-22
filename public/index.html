@@ -28,12 +28,18 @@
       <div>
         <h1>Cuidar da mente, de onde você estiver.</h1>
         <p class="lead">Encontre psicólogos, psicanalistas e psiquiatras verificados. Converse pelo chat e faça sua consulta online por vídeo, com sigilo.</p>
-        <div class="row">
-          <a class="btn" href="/cadastro-paciente" data-cta>Criar conta grátis</a>
-          <a class="btn secondary" href="#vitrine">Ver profissionais</a>
-          <button class="btn ghost hidden" data-install>Baixar o app</button>
+        <div class="choose" data-choose>
+          <a class="choice" href="/cadastro-paciente">
+            <span class="choice-icon" data-i="heart"></span>
+            <span><b>Quero ser atendido</b><span>Criar conta de paciente</span></span>
+          </a>
+          <a class="choice" href="/cadastro-profissional">
+            <span class="choice-icon" data-i="badge"></span>
+            <span><b>Sou profissional</b><span>Psicólogo, psicanalista, psiquiatra…</span></span>
+          </a>
         </div>
-        <p class="small muted" style="margin-top:12px">É profissional da saúde mental? <a href="/cadastro-profissional">Cadastre-se na plataforma</a>.</p>
+        <p class="small muted" style="margin-top:12px" data-have>Já tem conta? <a href="/entrar">Entrar</a> · <a href="#vitrine">Ver profissionais</a>
+          <button class="btn ghost sm hidden" data-install>Baixar o app</button></p>
       </div>
       <svg class="hero-art" viewBox="0 0 400 400" aria-hidden="true">
         <circle cx="200" cy="200" r="190" fill="var(--primary-soft)"/>
@@ -61,6 +67,7 @@
     <span>© Acolia — Psicologia online</span>
     <span class="row"><a href="/entrar#profissional">Área do profissional</a><a href="/atendimento">Entrar no atendimento</a></span>
     <p class="small" style="width:100%;margin:8px 0 0">Em caso de crise ou risco de vida, ligue para o CVV (188, 24h e gratuito) ou SAMU (192).</p>
+    <a href="/admin" class="staff-link">acesso restrito</a>
   </div></footer>
 
   <script src="/js/common.js"></script>
@@ -69,13 +76,13 @@
   (async function () {
     const { $, $$, api, ICONS, esc } = Acolia;
     $('[data-logo]').innerHTML = ICONS.logo;
-    $$('[data-i]').forEach((el) => { el.outerHTML = ICONS[el.dataset.i]; });
+    $$('[data-i]').forEach((el) => { if (el.classList.contains('choice-icon')) el.innerHTML = ICONS[el.dataset.i]; else el.outerHTML = ICONS[el.dataset.i]; });
     const me = await api('/api/auth/me').catch(() => ({ role: null }));
     const nav = $('[data-nav]');
     if (me.role === 'patient') {
       nav.innerHTML = `<a class="btn sm" href="/app">Abrir meu app</a>`;
-      $('[data-cta]').textContent = 'Abrir meu app';
-      $('[data-cta]').href = '/app';
+      $('[data-choose]').innerHTML = '<a class="btn" href="/app">Abrir meu app</a>';
+      $('[data-have]').classList.add('hidden');
     } else if (me.role === 'professional') {
       nav.innerHTML = `<a class="btn sm" href="/painel">Meu painel</a>`;
     } else if (me.role === 'admin') {

@@ -159,6 +159,15 @@
         </div></div>
         <table style="font-size:.9rem"><tbody>
           <tr><th>Código único</th><td><code style="font-size:1.05rem;font-weight:800">${esc(p.code)}</code> <button type="button" class="btn ghost sm" data-copy-code>Copiar</button></td></tr>
+          <tr><th>Nome na carteirinha</th><td>${esc(p.legal_name)}</td></tr>
+          <tr><th>Registro</th><td><div class="row" style="gap:6px"><input data-registry value="${esc(p.registry)}" maxlength="40" style="width:auto;min-height:34px;padding:4px 8px">
+            <button type="button" class="btn ghost sm" data-save-registry>Salvar</button></div>
+            ${p.registry_verified ? '<span class="badge ok">Conferido no conselho</span>' : '<span class="badge warn">Conferir pela carteirinha</span>'}</td></tr>
+          <tr><th>Carteirinha</th><td>${p.has_document
+            ? (p.document_is_pdf ? `<a href="/api/admin/professionals/${p.id}/document" target="_blank" rel="noopener">Abrir PDF da carteirinha</a>`
+              : `<a href="/api/admin/professionals/${p.id}/document" target="_blank" rel="noopener"><img src="/api/admin/professionals/${p.id}/document" alt="Carteirinha de ${esc(p.name)}" style="max-height:220px;border-radius:8px;border:1px solid var(--line)"></a>`)
+            : '<span class="muted">Não enviada (cadastrado pela administração)</span>'}
+            <div class="small muted">Confira se nome, número e estado batem com os dados acima antes de aprovar.</div></td></tr>
           <tr><th>E-mail</th><td>${esc(p.email)}</td></tr>
           <tr><th>WhatsApp</th><td><a href="https://wa.me/55${esc(p.phone)}" target="_blank" rel="noopener">${esc(fmtPhone(p.phone))}</a></td></tr>
           <tr><th>Local</th><td>${esc(p.city)} - ${esc(p.state)}${p.has_clinic ? `<div class="small">${esc(p.clinic_name)} — ${esc(p.clinic_address)}</div>` : '<div class="small muted">Somente online</div>'}</td></tr>
@@ -185,6 +194,12 @@
       onOpen: (dlg) => {
         const refresh = async () => { dlg.close(); dlg.remove(); await reloadAll(); openPro(id); };
         $('[data-copy-code]', dlg).addEventListener('click', () => copyText(p.code));
+        $('[data-save-registry]', dlg).addEventListener('click', async () => {
+          try {
+            await api(`/api/admin/professionals/${id}/registry`, { method: 'POST', body: { registry: $('[data-registry]', dlg).value } });
+            toast('Registro atualizado');
+          } catch (ex) { toast(ex.message, 'error'); }
+        });
         $$('[data-set]', dlg).forEach((b) => b.addEventListener('click', async () => {
           const s = b.dataset.set;
           const msgs = { aprovado: 'Aprovar/reativar este profissional?', recusado: 'Recusar este cadastro?', restrito: 'Restringir? Ele sai da vitrine mas continua respondendo conversas.', bloqueado: 'Bloquear? Ele não conseguirá mais entrar.' };

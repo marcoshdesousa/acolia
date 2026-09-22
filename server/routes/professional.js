@@ -5,7 +5,7 @@ const U = require('../util');
 const A = require('../auth');
 const { handlePhoto, removePhoto } = require('../upload');
 const { ownProfessional } = require('../serialize');
-const { requirePassword, validateLocation, PROFESSIONS } = require('./auth');
+const { requirePassword, validateLocation } = require('./auth');
 const rt = require('../realtime');
 
 const router = express.Router();
@@ -24,10 +24,13 @@ router.put('/profile', (req, res) => {
   const b = req.body;
   const name = U.cleanText(b.name, 120);
   if (!U.isFullName(name)) throw new U.HttpError(400, 'Informe nome e sobrenome.');
-  const profession = U.cleanText(b.profession, 60);
-  if (!PROFESSIONS.includes(profession)) throw new U.HttpError(400, 'Selecione sua profissão.');
-  const registry = U.cleanText(b.registry, 40);
-  if (registry.length < 3) throw new U.HttpError(400, 'Informe seu registro profissional.');
+  // Pode encurtar o nome (ex.: só nome e sobrenome), mas só com palavras do nome da carteirinha
+  const legal = new Set(U.norm(req.auth.user.legal_name || req.auth.user.name).split(' '));
+  if (!U.norm(name).split(' ').every((w) => legal.has(w))) {
+    throw new U.HttpError(400, `Use apenas partes do seu nome registrado (${req.auth.user.legal_name || req.auth.user.name}).`);
+  }
+  // Profissão e registro (carteirinha) só a administração altera
+  const { profession, registry } = req.auth.user;
   const phone = U.onlyDigits(b.phone);
   if (phone.length < 10 || phone.length > 13) throw new U.HttpError(400, 'Informe o WhatsApp com DDD.');
   const { state, city } = validateLocation(b.state, b.city);

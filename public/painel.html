@@ -61,10 +61,11 @@
         </div>
         <form class="card" data-profile-form style="margin-top:16px" novalidate>
           <h2>Dados profissionais</h2>
-          <div class="field"><label for="name">Nome e sobrenome (ou nome completo)</label><input id="name" name="name" required maxlength="120"></div>
+          <div class="field"><label for="name">Nome exibido (nome completo ou nome e sobrenome)</label><input id="name" name="name" required maxlength="120"></div>
           <div class="grid-2">
-            <div class="field"><label for="profession">Profissão</label><select id="profession" name="profession"></select></div>
-            <div class="field"><label for="registry">Registro profissional (CRP, CRM…)</label><input id="registry" name="registry" required maxlength="40"></div>
+            <div class="field"><label for="profession">Profissão</label><select id="profession" name="profession" disabled></select></div>
+            <div class="field"><label for="registry">Registro profissional (CRP, CRM…)</label><input id="registry" name="registry" readonly maxlength="40">
+              <div class="hint">Para alterar profissão ou registro, fale com a administração.</div></div>
           </div>
           <div class="field"><label for="phone">WhatsApp</label><input id="phone" name="phone" inputmode="tel"></div>
           <div class="field"><label for="specialties">Especialidades / abordagens</label><input id="specialties" name="specialties" maxlength="300" placeholder="Ex.: Ansiedade, Depressão, TCC, Casais">

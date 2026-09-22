@@ -57,11 +57,13 @@ Testes: `npm test`
 | `TRUST_PROXY=true` | Se estiver atrás de proxy (Nginx, Render, Railway…) |
 | `ICE_SERVERS` | JSON com servidores STUN/TURN para as chamadas (ver abaixo) |
 | `CPF_API_URL`, `CPF_API_TOKEN`, `CPF_API_NAME_FIELD` | Conferência do nome com o CPF na Receita (ver abaixo) |
+| `REGISTRY_API_URL`, `REGISTRY_API_TOKEN`, `REGISTRY_API_NAME_FIELD`, `REGISTRY_API_ACTIVE_FIELD` | Consulta automática do CRP/CRM no conselho (ver abaixo) |
 
 ## Importante antes de colocar no ar
 
 - **HTTPS é obrigatório**: navegadores só liberam câmera/microfone e instalação do app em sites com HTTPS.
 - **Conferir se o nome bate com o CPF**: o sistema sempre valida os dígitos do CPF (bloqueia CPF inventado). Já saber se o nome pertence ao CPF só é possível consultando a Receita Federal por um serviço **pago**, como o SERPRO *Consulta CPF*. Com o contrato em mãos, configure `CPF_API_URL` (ex.: `https://gateway.apiserpro.serpro.gov.br/consulta-cpf-df/v2/cpf/{cpf}`) e `CPF_API_TOKEN`; a partir daí o cadastro só é aceito se o nome conferir, e o admin vê a marca "conferido".
+- **Carteirinha do profissional**: no autocadastro, o sistema confere o formato do CRP (região/número) ou CRM e se o conselho regional é do mesmo estado informado; a foto da carteirinha é obrigatória e fica numa pasta privada que só o admin vê, para conferir nome e endereço antes de aprovar. Nome e registro não podem ser trocados pelo profissional depois. Os conselhos (CFP/CFM) não oferecem API pública gratuita; com um serviço contratado, configure `REGISTRY_API_URL` (com `{tipo}`, `{uf}` e `{numero}`) e `REGISTRY_API_TOKEN` para bloquear automaticamente registro inexistente, inativo ou de outro nome. Psicanalistas e terapeutas não têm conselho federal: para eles vale a conferência manual da carteirinha da entidade. O admin, ao cadastrar um profissional, pode usar qualquer registro.
 - **Servidor TURN**: sem ele, algumas chamadas entre redes muito restritas (algumas operadoras 4G, redes corporativas) não conectam. Contrate um (ex.: Twilio, Metered, ou instale o coturn) e informe em `ICE_SERVERS`, ex.:
   `[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.seudominio.com:3478","username":"u","credential":"s"}]`
 - **Recuperação de senha do paciente** usa CPF + nome completo, como pedido. Esses dados não são segredo; se quiser mais segurança, dá para trocar por código via e-mail/SMS.

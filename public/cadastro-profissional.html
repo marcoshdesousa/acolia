@@ -21,15 +21,18 @@
       <h1 class="center">Cadastro de profissional</h1>
       <p class="center muted">Psicólogos, psicanalistas, psiquiatras e psicoterapeutas. Seu cadastro será analisado pela administração antes de aparecer na vitrine.</p>
       <form class="card" data-form novalidate>
-        <div class="field"><label for="name">Nome e sobrenome</label><input id="name" name="name" autocomplete="name" required maxlength="120"></div>
+        <div class="field"><label for="name">Nome completo (igual ao da carteirinha)</label><input id="name" name="name" autocomplete="name" required maxlength="120"></div>
         <div class="grid-2">
           <div class="field"><label for="profession">Profissão</label><select id="profession" name="profession" required><option value="">Selecione</option></select></div>
-          <div class="field"><label for="registry">Registro profissional</label><input id="registry" name="registry" placeholder="Ex.: CRP 10/12345" required maxlength="40">
-            <div class="hint">CRP, CRM ou registro da sua área.</div></div>
+          <div class="field"><label for="registry">Número da carteirinha</label><input id="registry" name="registry" placeholder="Ex.: CRP 10/12345" required maxlength="40">
+            <div class="hint" data-reg-hint>CRP, CRM ou registro da sua área.</div></div>
         </div>
+        <div class="field"><label for="doc">Foto da carteirinha profissional</label>
+          <input id="doc" name="document" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required>
+          <div class="hint">Frente da carteirinha, com nome e número legíveis (JPG, PNG ou PDF, até 8 MB). Só a administração vê este arquivo.</div></div>
         <div class="field"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="email" required></div>
         <div class="field"><label for="phone">WhatsApp (com DDD)</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="(94) 99999-9999" required></div>
-        <div class="field"><label>Onde você atende</label>
+        <div class="field"><label>Estado e município (o estado precisa ser o mesmo do seu conselho regional)</label>
           <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
         <div class="grid-2">
           <div class="field"><label for="pw">Senha</label><input id="pw" name="password" type="password" autocomplete="new-password" minlength="6" required></div>
@@ -60,9 +63,21 @@
     maskPhone(form.phone);
     const cfg = await api('/api/config');
     form.profession.insertAdjacentHTML('beforeend', cfg.professions.map((p) => '<option>' + esc(p) + '</option>').join(''));
+    const HINTS = {
+      'Psicólogo(a)': 'Seu CRP com região e número. Ex.: CRP 10/12345.',
+      'Neuropsicólogo(a)': 'Seu CRP com região e número. Ex.: CRP 10/12345.',
+      Psiquiatra: 'Seu CRM com estado e número. Ex.: CRM-PA 12345.',
+    };
+    form.profession.addEventListener('change', () => {
+      $('[data-reg-hint]').textContent = HINTS[form.profession.value] || 'Número do seu registro na entidade de classe.';
+      form.registry.placeholder = form.profession.value === 'Psiquiatra' ? 'Ex.: CRM-PA 12345' : HINTS[form.profession.value] ? 'Ex.: CRP 10/12345' : 'Número do registro';
+    });
     handleForm(form, async (d) => {
       if (d.password !== d.password2) throw new Error('As senhas não são iguais.');
-      const r = await api('/api/auth/professional/register', { method: 'POST', body: d });
+      if (!form.document.files.length) throw new Error('Envie a foto da sua carteirinha profissional.');
+      const fd = new FormData(form);
+      fd.delete('password2');
+      const r = await api('/api/auth/professional/register', { method: 'POST', form: fd });
       $('[data-code]').textContent = r.code;
       $('[data-copy]').onclick = () => copyText(r.code);
       $('[data-step1]').classList.add('hidden');

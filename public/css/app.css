@@ -290,3 +290,16 @@ td .row { flex-wrap: nowrap; }
 .topbar nav .btn { white-space: nowrap; }
 @media (max-width: 440px) { .topbar nav .btn.ghost { display: none; } }
 .sidebar .nav-badge:empty { display: none; }
+
+/* Escolha de conta na página inicial */
+.choose { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 560px; }
+@media (max-width: 480px) { .choose { grid-template-columns: 1fr; } }
+.choice { display: flex; gap: 12px; align-items: center; padding: 16px; border-radius: var(--radius); background: var(--surface); border: 2px solid var(--line); color: var(--text); text-decoration: none; transition: border-color .15s, transform .05s; }
+.choice:hover, .choice:focus-visible { border-color: var(--primary); outline: none; }
+.choice:active { transform: translateY(1px); }
+.choice b { display: block; font-size: 1.05rem; }
+.choice span span { color: var(--muted); font-size: .88rem; }
+.choice-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; flex: none; }
+.choice-icon svg { width: 24px; height: 24px; }
+.staff-link { font-size: .72rem; color: var(--muted); opacity: .6; text-decoration: none; margin-top: 10px; }
+.staff-link:hover { opacity: 1; text-decoration: underline; }

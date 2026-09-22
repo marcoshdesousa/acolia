@@ -8,6 +8,8 @@ const A = require('../auth');
 const { isVisible, parsePackages } = require('../serialize');
 const { validateProfessionalInput, insertProfessional, requirePassword } = require('./auth');
 const { endCall } = require('./calls');
+const path = require('node:path');
+const { DOC_DIR } = require('../upload');
 
 const router = express.Router();
 router.use(A.requireRole('admin'));
@@ -21,6 +23,8 @@ function adminPro(p) {
     price_cents: p.price_cents, packages: parsePackages(p.packages), has_clinic: !!p.has_clinic,
     clinic_name: p.clinic_name, clinic_address: p.clinic_address, subscription_until: p.subscription_until,
     visible: isVisible(p), admin_note: p.admin_note, created_at: p.created_at,
+    has_document: !!p.document_file, document_is_pdf: /\.pdf$/.test(p.document_file || ''),
+    registry_verified: !!p.registry_verified, legal_name: p.legal_name || p.name,
   };
 }
 
@@ -128,6 +132,23 @@ router.post('/professionals/:id/subscription', (req, res) => {
   }
   db.prepare('UPDATE professionals SET subscription_until = ? WHERE id = ?').run(until, p.id);
   res.json(adminPro(db.prepare('SELECT * FROM professionals WHERE id = ?').get(p.id)));
+});
+
+// Foto/PDF da carteirinha enviada no cadastro (só o admin vê)
+router.get('/professionals/:id/document', (req, res) => {
+  const p = db.prepare('SELECT document_file FROM professionals WHERE id = ?').get(Number(req.params.id));
+  if (!p?.document_file) throw new U.HttpError(404, 'Carteirinha não enviada.');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.sendFile(path.join(DOC_DIR, path.basename(p.document_file)));
+});
+
+// O admin pode definir o registro livremente
+router.post('/professionals/:id/registry', (req, res) => {
+  const registry = U.cleanText(req.body.registry, 40);
+  if (registry.length < 2) throw new U.HttpError(400, 'Informe o registro.');
+  const r = db.prepare('UPDATE professionals SET registry = ? WHERE id = ?').run(registry, Number(req.params.id));
+  if (!r.changes) throw new U.HttpError(404, 'Profissional não encontrado.');
+  res.json(adminPro(db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id))));
 });
 
 router.post('/professionals/:id/note', (req, res) => {
