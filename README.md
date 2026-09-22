@@ -26,6 +26,12 @@ A chamada é ponto a ponto (WebRTC): o áudio e o vídeo não passam pelo servid
 
 Ficam salvas no banco e **não podem ser apagadas nem editadas** (não há rota para isso e o banco tem gatilhos que impedem). Cada lado pode arquivar a conversa; ela continua disponível em "Arquivadas".
 
+## Colocar no ar com um clique
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/marcoshdesousa/acolia)
+
+O botão cria o site no Render já com o disco para guardar os dados. Ele só pede a senha do administrador (`ADMIN_PASSWORD`).
+
 ## Como rodar
 
 Requer **Node.js 22.13+** (usa o SQLite embutido do Node, sem instalar banco).
