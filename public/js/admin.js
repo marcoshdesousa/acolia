@@ -29,6 +29,7 @@
     restrito: '<span class="badge danger">Restrito</span>',
     bloqueado: '<span class="badge danger">Bloqueado</span>',
     ativo: '<span class="badge ok">Ativo</span>',
+    excluido: '<span class="badge">Excluída pelo usuário</span>',
   };
   const fmtDT = (s) => parseDate(s).toLocaleDateString('pt-BR');
   const subBadge = (p) => {
@@ -94,9 +95,9 @@
         <td>${esc(p.city)} - ${esc(p.state)}</td>
         <td>${fmtDT(p.created_at)}</td>
         <td>${STATUS_BADGE[p.status]}</td>
-        <td><div class="row">
+        <td>${p.status === 'excluido' ? '' : `<div class="row">
           <button class="btn secondary sm" data-pat-status="${p.id}" data-to="${p.status === 'ativo' ? 'bloqueado' : 'ativo'}">${p.status === 'ativo' ? 'Bloquear' : 'Desbloquear'}</button>
-          <button class="btn ghost sm" data-pat-reset="${p.id}" data-name="${esc(p.name)}">Gerar nova senha</button></div></td></tr>`).join('')
+          <button class="btn ghost sm" data-pat-reset="${p.id}" data-name="${esc(p.name)}">Gerar nova senha</button></div>`}</td></tr>`).join('')
         : '<tr><td colspan="6" class="center muted">Nenhum paciente encontrado.</td></tr>';
     }
     $(`[data-count="${kind}"]`).textContent = `${items.length} resultado${items.length === 1 ? '' : 's'}`;
@@ -148,6 +149,7 @@
     let statusBtns = '';
     if (p.status === 'pendente') statusBtns = btn('aprovado', 'Aprovar', '') + btn('recusado', 'Recusar', 'danger');
     else if (p.status === 'aprovado') statusBtns = btn('restrito', 'Restringir') + btn('bloqueado', 'Bloquear', 'danger');
+    else if (p.status === 'excluido') statusBtns = '<span class="muted">Conta excluída pelo próprio profissional.</span>';
     else statusBtns = btn('aprovado', p.status === 'recusado' ? 'Aprovar' : 'Reativar', '') + (p.status !== 'bloqueado' ? btn('bloqueado', 'Bloquear', 'danger') : '');
 
     await modal({

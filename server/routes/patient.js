@@ -28,6 +28,21 @@ router.post('/photo', async (req, res) => {
   res.json(ownPatient(me));
 });
 
+// A própria pessoa exclui a conta. Os dados pessoais são apagados; as mensagens
+// continuam para o profissional (não podem ser apagadas), com o nome "Conta excluída".
+router.post('/delete', (req, res) => {
+  const me = req.auth.user;
+  if (!U.verifyPassword(req.body.password || '', me.password_hash)) throw new U.HttpError(400, 'Senha incorreta.');
+  removePhoto(me.photo);
+  db.prepare("DELETE FROM favorites WHERE patient_id = ?").run(me.id);
+  db.prepare(`UPDATE patients SET status = 'excluido', name = 'Conta excluída', display_name = '', cpf = ?, cpf_name_verified = 0,
+    state = '', city = '', city_norm = '', photo = NULL, password_hash = '!' WHERE id = ?`).run(`excluido-${me.id}`, me.id);
+  broadcastIdentity(me);
+  A.destroyUserSessions('patient', me.id);
+  A.destroySession(req, res);
+  res.json({ ok: true });
+});
+
 router.post('/password', (req, res) => {
   if (!U.verifyPassword(req.body.current || '', req.auth.user.password_hash)) throw new U.HttpError(400, 'Senha atual incorreta.');
   requirePassword(req.body.password);

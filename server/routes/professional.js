@@ -3,7 +3,7 @@ const express = require('express');
 const { db } = require('../db');
 const U = require('../util');
 const A = require('../auth');
-const { handlePhoto, removePhoto } = require('../upload');
+const { handlePhoto, removePhoto, removeDocument } = require('../upload');
 const { ownProfessional } = require('../serialize');
 const { requirePassword, validateLocation } = require('./auth');
 const rt = require('../realtime');
@@ -64,6 +64,27 @@ router.post('/photo', async (req, res) => {
     rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });
   }
   res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
+});
+
+// O profissional exclui a própria conta: sai da vitrine, os dados pessoais são apagados
+// e as conversas continuam para os pacientes com o nome "Profissional removido".
+router.post('/delete', (req, res) => {
+  const me = req.auth.user;
+  if (!U.verifyPassword(req.body.password || '', me.password_hash)) throw new U.HttpError(400, 'Senha incorreta.');
+  const active = db.prepare("SELECT * FROM calls WHERE professional_id = ? AND status = 'ativo'").get(me.id);
+  if (active) require('./calls').endCall(active);
+  removePhoto(me.photo);
+  removeDocument(me.document_file);
+  db.prepare(`UPDATE professionals SET status = 'excluido', name = 'Profissional removido', legal_name = NULL, registry = ?, email = ?,
+    phone = '', bio = '', specialties = '', photo = NULL, document_file = NULL, pix_key = '', clinic_name = '', clinic_address = '',
+    has_clinic = 0, password_hash = '!' WHERE id = ?`).run(`excluido-${me.id}`, `excluido-${me.id}@removido.acolia`, me.id);
+  db.prepare('DELETE FROM favorites WHERE professional_id = ?').run(me.id);
+  for (const c of db.prepare('SELECT id, patient_id FROM conversations WHERE professional_id = ?').all(me.id)) {
+    rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });
+  }
+  A.destroyUserSessions('professional', me.id);
+  A.destroySession(req, res);
+  res.json({ ok: true });
 });
 
 router.post('/password', (req, res) => {

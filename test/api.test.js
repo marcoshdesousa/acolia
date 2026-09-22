@@ -387,3 +387,33 @@ test('páginas estáticas', async () => {
   }
   assert.equal((await fetch(`${base}/nao-existe`)).status, 404);
 });
+
+test('a própria pessoa exclui a conta (paciente e profissional)', async () => {
+  const CPF_C = '390.533.447-05';
+  const p = client();
+  await p.post('/api/auth/patient/register', { name: 'Paula Lima', cpf: CPF_C, state: 'SP', city: 'Campinas', password: '123456' });
+  let r = await p.post('/api/patient/delete', { password: 'errada' });
+  assert.equal(r.status, 400);
+  r = await p.post('/api/patient/delete', { password: '123456' });
+  assert.equal(r.status, 200);
+  assert.equal((await p.get('/api/auth/me')).data.role, null, 'saiu da conta');
+  r = await client().post('/api/auth/patient/login', { cpf: CPF_C, password: '123456' });
+  assert.equal(r.status, 401);
+  r = await client().post('/api/auth/patient/register', { name: 'Paula Lima', cpf: CPF_C, state: 'SP', city: 'Campinas', password: '123456' });
+  assert.equal(r.status, 201, 'o CPF pode criar conta de novo');
+
+  const created = await admin.post('/api/admin/professionals', {
+    name: 'Bia Rocha', profession: 'Psicanalista', registry: 'X-1', email: 'bia@example.com', phone: '11988887777', state: 'SP', city: 'Campinas',
+  });
+  const b = client();
+  await b.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
+  r = await b.post('/api/professional/delete', { password: created.data.password });
+  assert.equal(r.status, 200);
+  r = await client().post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
+  assert.equal(r.status, 401);
+  const list = await admin.get('/api/admin/professionals?status=excluido');
+  assert.equal(list.data.items.length, 1);
+  assert.equal(list.data.items[0].name, 'Profissional removido');
+  r = await admin.post(`/api/admin/professionals/${created.data.id}/status`, { status: 'aprovado' });
+  assert.equal(r.status, 400, 'admin não reativa conta excluída');
+});

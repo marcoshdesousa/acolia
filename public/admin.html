@@ -48,7 +48,7 @@
         <div class="row between"><h1 style="font-size:1.5rem;margin:0">Profissionais</h1><a class="btn secondary sm" data-export="professionals" href="#">Exportar planilha (CSV)</a></div>
         <form class="search-bar" data-filter="professionals" style="margin-top:12px">
           <input name="q" type="search" placeholder="Nome, e-mail, código ou registro">
-          <select name="status"><option value="">Todas as situações</option><option value="pendente">Pendentes</option><option value="aprovado">Aprovados</option><option value="vencido">Mensalidade vencida</option><option value="restrito">Restritos</option><option value="bloqueado">Bloqueados</option><option value="recusado">Recusados</option></select>
+          <select name="status"><option value="">Todas as situações</option><option value="pendente">Pendentes</option><option value="aprovado">Aprovados</option><option value="vencido">Mensalidade vencida</option><option value="restrito">Restritos</option><option value="bloqueado">Bloqueados</option><option value="recusado">Recusados</option><option value="excluido">Excluídos pelo usuário</option></select>
           <select name="state" style="flex:0 1 120px"></select>
           <select name="city"><option value="">Todos os municípios</option></select>
           <button class="btn" type="submit">Filtrar</button>
@@ -61,7 +61,7 @@
         <div class="row between"><h1 style="font-size:1.5rem;margin:0">Pacientes</h1><a class="btn secondary sm" data-export="patients" href="#">Exportar planilha (CSV)</a></div>
         <form class="search-bar" data-filter="patients" style="margin-top:12px">
           <input name="q" type="search" placeholder="Nome ou CPF">
-          <select name="status"><option value="">Todos</option><option value="ativo">Ativos</option><option value="bloqueado">Bloqueados</option></select>
+          <select name="status"><option value="">Todos</option><option value="ativo">Ativos</option><option value="bloqueado">Bloqueados</option><option value="excluido">Excluídos pelo usuário</option></select>
           <select name="state" style="flex:0 1 120px"></select>
           <select name="city"><option value="">Todos os municípios</option></select>
           <button class="btn" type="submit">Filtrar</button>

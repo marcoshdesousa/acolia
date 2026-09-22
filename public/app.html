@@ -61,6 +61,11 @@
           <div class="row"><button class="btn secondary" data-install-btn>Instalar o app</button><button class="btn secondary" data-notify>Ativar notificações</button></div>
         </div>
         <button class="btn secondary block" style="margin-top:16px" data-logout>Sair da conta</button>
+        <div class="card stack" style="margin-top:24px;border-color:var(--danger)">
+          <h2 style="color:var(--danger)">Excluir minha conta</h2>
+          <p class="small muted" style="margin:0">Seus dados pessoais são apagados e você não consegue mais entrar. As mensagens já enviadas continuam com o profissional, sem o seu nome. Não dá para desfazer.</p>
+          <button class="btn danger" data-delete-account style="width:max-content">Excluir minha conta</button>
+        </div>
         <p class="small muted center" style="margin-top:16px">Em caso de crise ou risco de vida, ligue 188 (CVV) ou 192 (SAMU).</p>
       </section>
     </main>
@@ -77,6 +82,7 @@
   <script src="/js/catalog.js"></script>
   <script src="/js/profile-view.js"></script>
   <script src="/js/chat.js"></script>
+  <script src="/js/delete-account.js"></script>
   <script>
   (async function () {
     const { $, $$, api, ICONS, avatar, esc, toast, handleForm, logout, installApp } = Acolia;
@@ -173,6 +179,7 @@
       toast(r === 'granted' ? 'Notificações ativadas!' : 'Notificações não permitidas.');
     });
     $('[data-logout]').addEventListener('click', () => logout('/'));
+    AcoliaDeleteAccount($('[data-delete-account]'), '/api/patient/delete');
   })();
   </script>
 </body>

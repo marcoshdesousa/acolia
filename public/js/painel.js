@@ -105,6 +105,7 @@
     toast('Senha alterada!');
   });
   $('[data-logout]').addEventListener('click', () => logout('/'));
+  AcoliaDeleteAccount($('[data-delete-account]'), '/api/professional/delete');
   $('[data-install-btn]').addEventListener('click', installApp);
   $('[data-notify]').addEventListener('click', async () => {
     if (!('Notification' in window)) return toast('Seu navegador não suporta notificações.', 'error');

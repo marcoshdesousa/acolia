@@ -76,7 +76,7 @@ router.get('/locations', (_req, res) => {
 // ---------- Profissionais ----------
 router.get('/professionals', (req, res) => {
   let rows = db.prepare('SELECT * FROM professionals ORDER BY created_at DESC').all();
-  if (PRO_STATUSES.includes(req.query.status)) rows = rows.filter((r) => r.status === req.query.status);
+  if ([...PRO_STATUSES, 'excluido'].includes(req.query.status)) rows = rows.filter((r) => r.status === req.query.status);
   if (req.query.status === 'vencido') rows = rows.filter((r) => r.status === 'aprovado' && !isVisible(r));
   rows = filterRows(rows, req.query);
   res.json({ items: rows.map(adminPro) });
@@ -103,6 +103,7 @@ router.post('/professionals/:id/status', (req, res) => {
   if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
   const status = req.body.status;
   if (!PRO_STATUSES.includes(status) || status === 'pendente') throw new U.HttpError(400, 'Status inválido.');
+  if (p.status === 'excluido') throw new U.HttpError(400, 'Esta conta foi excluída pelo próprio profissional.');
   let until = p.subscription_until;
   // Na primeira aprovação, libera o primeiro período de mensalidade
   if (status === 'aprovado' && !until) until = U.addDaysISO(U.todayISO(), 30);
@@ -168,7 +169,7 @@ router.post('/professionals/:id/reset-password', (req, res) => {
 // ---------- Pacientes ----------
 router.get('/patients', (req, res) => {
   let rows = db.prepare('SELECT * FROM patients ORDER BY created_at DESC').all();
-  if (['ativo', 'bloqueado'].includes(req.query.status)) rows = rows.filter((r) => r.status === req.query.status);
+  if (['ativo', 'bloqueado', 'excluido'].includes(req.query.status)) rows = rows.filter((r) => r.status === req.query.status);
   rows = filterRows(rows, req.query);
   res.json({ items: rows.map(adminPatient) });
 });
@@ -176,7 +177,7 @@ router.get('/patients', (req, res) => {
 router.post('/patients/:id/status', (req, res) => {
   const status = req.body.status;
   if (!['ativo', 'bloqueado'].includes(status)) throw new U.HttpError(400, 'Status inválido.');
-  const r = db.prepare('UPDATE patients SET status = ? WHERE id = ?').run(status, Number(req.params.id));
+  const r = db.prepare("UPDATE patients SET status = ? WHERE id = ? AND status <> 'excluido'").run(status, Number(req.params.id));
   if (!r.changes) throw new U.HttpError(404, 'Paciente não encontrado.');
   if (status === 'bloqueado') A.destroyUserSessions('patient', Number(req.params.id));
   res.json({ ok: true, status });
