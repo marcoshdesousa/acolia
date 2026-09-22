@@ -320,3 +320,17 @@ td .row { flex-wrap: nowrap; }
 .social a:hover, .social a:focus-visible { background: var(--primary); color: var(--on-primary); outline: none; }
 .social svg { width: 22px; height: 22px; }
 .check svg { flex: none; }
+
+/* Busca com filtros */
+.search-row { display: flex; gap: 8px; }
+.search-row input { flex: 1; min-width: 0; }
+.search-row .btn { flex: none; position: relative; }
+.filter-count { position: static; margin-left: 2px; }
+.filter-panel { margin-top: 12px; padding: 16px; }
+.filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 12px; }
+@media (max-width: 480px) { .hide-sm { display: none; } }
+@media (max-width: 560px) {
+  .search-row { flex-wrap: wrap; }
+  .search-row input { flex-basis: 100%; }
+  .search-row [data-toggle] { flex: 1; }
+}

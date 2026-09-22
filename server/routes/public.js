@@ -16,50 +16,66 @@ router.get('/config', (_req, res) => {
 });
 
 // Vitrine de profissionais.
-// Visitante: vê todos, mas sem valores/localização (e sem filtrar por local).
-// Paciente logado: vê tudo, com os da sua cidade primeiro, depois do seu estado.
+// - Todos podem buscar e filtrar (tipo, estado, município, localidade, preço).
+// - Visitante sem conta: vê os profissionais em destaque, mas sem valores/localização
+//   e sem favoritar ou mandar mensagem.
+// - Paciente logado: por padrão vê os do seu estado, com os do seu município primeiro;
+//   para ver outros estados, usa o filtro ("state=todos" mostra o Brasil todo).
+function popularity() {
+  // Destaque = atendimentos realizados + conversas iniciadas (o número não é exibido)
+  const rows = db.prepare(`SELECT p.id,
+      (SELECT COUNT(*) FROM calls c WHERE c.professional_id = p.id AND c.started_at IS NOT NULL) AS atend,
+      (SELECT COUNT(*) FROM conversations v WHERE v.professional_id = p.id) AS conv
+    FROM professionals p`).all();
+  return new Map(rows.map((r) => [r.id, r.atend * 3 + r.conv]));
+}
+
 router.get('/professionals', (req, res) => {
   const isPatient = req.auth?.role === 'patient';
+  const me = isPatient ? req.auth.user : null;
   const where = [VISIBLE_SQL];
   const params = [];
-  const q = U.norm(req.query.q);
   const profession = U.cleanText(req.query.profession, 60);
   if (profession) { where.push('p.profession = ?'); params.push(profession); }
-
   let rows = db.prepare(`SELECT p.* FROM professionals p WHERE ${where.join(' AND ')}`).all(...params);
-  if (q) rows = rows.filter((p) => U.norm(`${p.name} ${p.specialties}`).includes(q));
+
+  const q = U.norm(req.query.q);
+  if (q) rows = rows.filter((p) => U.norm(`${p.name} ${p.specialties} ${p.profession}`).includes(q));
+
+  // Estado: paciente logado começa no próprio estado; "todos" libera o Brasil inteiro
+  let state = U.isUf(req.query.state) ? req.query.state.toUpperCase() : '';
+  if (!state && me && req.query.state === undefined && !q) state = me.state;
+  const city = U.norm(req.query.city);
+  const place = U.norm(req.query.place);
+  if (state) rows = rows.filter((p) => p.state === state);
+  if (city) rows = rows.filter((p) => p.city_norm === city);
+  if (place) rows = rows.filter((p) => U.norm(`${p.city} ${p.state} ${p.clinic_address}`).includes(place));
+
+  const maxPrice = Number(req.query.max_price);
+  if (maxPrice > 0) rows = rows.filter((p) => p.price_cents != null && p.price_cents <= maxPrice * 100);
 
   let favSet = new Set();
-  if (isPatient) {
-    const me = req.auth.user;
-    const state = U.isUf(req.query.state) ? req.query.state.toUpperCase() : '';
-    const city = U.norm(req.query.city);
-    const place = U.norm(req.query.place); // busca livre de localidade
-    if (state) rows = rows.filter((p) => p.state === state);
-    if (city) rows = rows.filter((p) => p.city_norm === city);
-    if (place) rows = rows.filter((p) => U.norm(`${p.city} ${p.state} ${p.clinic_address}`).includes(place));
-    if (req.query.favorites === '1') {
-      const ids = new Set(db.prepare('SELECT professional_id FROM favorites WHERE patient_id = ?').all(me.id).map((r) => r.professional_id));
-      rows = rows.filter((p) => ids.has(p.id));
-    }
+  if (me) {
     favSet = new Set(db.prepare('SELECT professional_id FROM favorites WHERE patient_id = ?').all(me.id).map((r) => r.professional_id));
-    const score = (p) => (p.city_norm === me.city_norm && p.state === me.state ? 0 : p.state === me.state ? 1 : 2);
-    // Valor máximo da consulta (quem não informou valor fica de fora quando há limite)
-    const maxPrice = Number(req.query.max_price);
-    if (maxPrice > 0) rows = rows.filter((p) => p.price_cents != null && p.price_cents <= maxPrice * 100);
-    const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
-    // Sem valor informado vai sempre para o fim da lista
-    const price = (p, dir) => (p.price_cents == null ? Infinity : dir * p.price_cents);
-    if (req.query.sort === 'preco_menor') rows.sort((a, b) => price(a, 1) - price(b, 1) || byName(a, b));
-    else if (req.query.sort === 'preco_maior') rows.sort((a, b) => price(a, -1) - price(b, -1) || byName(a, b));
-    else rows.sort((a, b) => score(a) - score(b) || byName(a, b));
-    return res.json({
-      loggedIn: true,
-      items: rows.map((p) => ({ ...publicProfessional(p, { loggedIn: true, favorite: favSet.has(p.id) }), near: score(p) === 0 })),
-    });
+    if (req.query.favorites === '1') rows = rows.filter((p) => favSet.has(p.id));
   }
-  rows.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-  res.json({ loggedIn: false, items: rows.map((p) => publicProfessional(p)) });
+
+  const pop = popularity();
+  const near = (p) => (me ? (p.city_norm === me.city_norm && p.state === me.state ? 0 : p.state === me.state ? 1 : 2) : 0);
+  const byPop = (a, b) => (pop.get(b.id) || 0) - (pop.get(a.id) || 0);
+  const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
+  const price = (p, dir) => (p.price_cents == null ? Infinity : dir * p.price_cents); // sem valor vai para o fim
+  if (req.query.sort === 'preco_menor') rows.sort((a, b) => price(a, 1) - price(b, 1) || byPop(a, b) || byName(a, b));
+  else if (req.query.sort === 'preco_maior') rows.sort((a, b) => price(a, -1) - price(b, -1) || byPop(a, b) || byName(a, b));
+  else rows.sort((a, b) => near(a) - near(b) || byPop(a, b) || byName(a, b));
+
+  res.json({
+    loggedIn: !!me,
+    state: state || null,
+    items: rows.map((p) => (me
+      ? { ...publicProfessional(p, { loggedIn: true, favorite: favSet.has(p.id) }), near: near(p) === 0 }
+      : publicProfessional(p))),
+  });
 });
 
 router.get('/professionals/:id', (req, res) => {

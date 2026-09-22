@@ -264,8 +264,11 @@ test('outro paciente não acessa a conversa', async () => {
   const r = await other.get(`/api/chat/conversations/${convId}/messages`);
   assert.equal(r.status, 404);
   // e o paciente de SP vê o profissional do PA depois dos locais (sem "near")
-  const list = await other.get('/api/professionals');
-  assert.equal(list.data.items[0].near, false);
+  let list = await other.get('/api/professionals');
+  assert.equal(list.data.items.length, 0, 'por padrão só aparecem os do estado do paciente (SP)');
+  assert.equal(list.data.state, 'SP');
+  list = await other.get('/api/professionals?state=todos');
+  assert.equal(list.data.items[0].near, false, 'pelo filtro vê outros estados');
 });
 
 test('admin não tem acesso a mensagens', async () => {
@@ -386,9 +389,20 @@ test('admin cadastra profissional já aprovado', async () => {
   await rui.put('/api/professional/profile', { name: 'Rui Alves', phone: '11977776666', state: 'SP', city: 'Campinas', price: '90' });
   const patient = client(); // Carlos, cadastrado antes
   await patient.post('/api/auth/patient/login', { cpf: CPF_B, password: '123456' });
-  const names = async (sort) => (await patient.get(`/api/professionals?sort=${sort}`)).data.items.map((x) => x.name);
+  const names = async (sort) => (await patient.get(`/api/professionals?state=todos&sort=${sort}`)).data.items.map((x) => x.name);
   assert.deepEqual(await names('preco_menor'), ['Rui Alves', 'João Pereira', 'Ana Costa']);
   assert.deepEqual(await names('preco_maior'), ['João Pereira', 'Rui Alves', 'Ana Costa']);
+  // Visitante sem conta também filtra e ordena, mas continua sem ver valor e local
+  const v = client();
+  let r2 = await v.get('/api/professionals?state=SP&sort=preco_menor');
+  assert.deepEqual(r2.data.items.map((x) => x.name), ['Rui Alves', 'Ana Costa']);
+  assert.equal(r2.data.items[0].price_cents, undefined);
+  assert.equal(r2.data.items[0].city, undefined);
+  r2 = await v.get('/api/professionals?max_price=100');
+  assert.deepEqual(r2.data.items.map((x) => x.name), ['Rui Alves']);
+  // Destaques: quem tem mais conversas/atendimentos aparece primeiro para o visitante
+  r2 = await v.get('/api/professionals');
+  assert.equal(r2.data.items[0].name, 'João Pereira', 'João tem conversa e atendimentos');
   const login = await client().post('/api/auth/professional/login', { login: r.data.code, password: r.data.password });
   assert.equal(login.status, 200);
 });
