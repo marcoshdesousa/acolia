@@ -313,3 +313,9 @@ td .row { flex-wrap: nowrap; }
 .hero-logo img { width: 100%; height: auto; }
 .eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .22em; font-size: .78rem; color: var(--muted); margin-bottom: 12px; }
 @media (max-width: 800px) { .hero-logo { max-width: 240px; padding: 18px; order: -1; } }
+
+/* Redes sociais no rodapé */
+.social { display: flex; gap: 10px; width: 100%; margin-bottom: 12px; }
+.social a { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); transition: background .15s, color .15s; }
+.social a:hover, .social a:focus-visible { background: var(--primary); color: var(--on-primary); outline: none; }
+.social svg { width: 22px; height: 22px; }
