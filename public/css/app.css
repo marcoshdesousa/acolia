@@ -380,3 +380,11 @@ footer.site .social { width: auto; margin: 0; }
 .call-protected #remoteVideo, .call-protected #localVideo { visibility: hidden; }
 .call-stage, .call-stage * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 @media (max-width: 560px) { .call-top { top: 64px; } .call-brand { top: calc(10px + env(safe-area-inset-top, 0px)); } #localVideo { top: 64px; } }
+
+/* Conversa protegida */
+.messages-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.messages-wrap .messages { background-repeat: repeat; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.chat-shield { position: absolute; inset: 0; z-index: 3; background: var(--chat-bg); display: grid; place-items: center; text-align: center; padding: 24px; color: var(--text); }
+.chat-shield img { margin: 0 auto 8px; }
+.chat-protected .messages { visibility: hidden; }
+.thread-head .brand-mark { width: 26px; height: 26px; opacity: .85; }
