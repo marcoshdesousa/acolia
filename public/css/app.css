@@ -1,37 +1,38 @@
 /* Acolia — estilos compartilhados */
 :root {
-  --bg: #f6f3ee;
+  --bg: #faf9f5;
   --surface: #ffffff;
-  --surface-2: #f0ece5;
-  --text: #1f2a2a;
-  --muted: #5f6b6a;
-  --line: #e2ddd4;
-  --primary: #1f6f6b;
-  --primary-strong: #175955;
-  --primary-soft: #dcefec;
+  --surface-2: #f1f0eb;
+  --text: #26322f;
+  --muted: #626d69;
+  --line: #e3e2dc;
+  --primary: #3f5550;
+  --primary-strong: #2e403c;
+  --primary-soft: #e5ebe8;
   --on-primary: #ffffff;
-  --accent: #d9774f;
-  --accent-soft: #fbe7dd;
+  --accent: #8a7362;
+  --accent-soft: #eee8e2;
   --danger: #b3261e;
   --danger-soft: #fbe3e1;
   --warn: #8a5a00;
   --warn-soft: #fff1cf;
   --ok: #1e7a3c;
   --ok-soft: #dcf3e3;
-  --bubble-me: #d8efe9;
+  --bubble-me: #e0e8e4;
   --bubble-them: #ffffff;
-  --chat-bg: #efeae2;
+  --chat-bg: #eeede7;
   --shadow: 0 1px 2px rgba(20, 30, 30, .06), 0 4px 16px rgba(20, 30, 30, .06);
   --radius: 14px;
   --font: "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Jost", "Nunito", system-ui, sans-serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #111716; --surface: #1a2221; --surface-2: #222c2b; --text: #e7eeec; --muted: #9aaaa7; --line: #2d3937;
-    --primary: #4fb3a9; --primary-strong: #6cc7bd; --primary-soft: #1d3633; --on-primary: #0b1b19;
-    --accent: #e89572; --accent-soft: #3a2a22; --danger: #ff8a80; --danger-soft: #3b1f1d; --warn: #f3c465; --warn-soft: #3a3020;
-    --ok: #7bd69a; --ok-soft: #1c3325; --bubble-me: #1f4a44; --bubble-them: #222c2b; --chat-bg: #0e1413;
+    --primary: #9db8b0; --primary-strong: #b7cdc6; --primary-soft: #243230; --on-primary: #14201d;
+    --accent: #c2ae9d; --accent-soft: #332c26; --danger: #ff8a80; --danger-soft: #3b1f1d; --warn: #f3c465; --warn-soft: #3a3020;
+    --ok: #7bd69a; --ok-soft: #1c3325; --bubble-me: #2c3d39; --bubble-them: #222c2b; --chat-bg: #0e1413;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
     color-scheme: dark;
   }
@@ -45,7 +46,7 @@ body {
 }
 img { max-width: 100%; display: block; }
 a { color: var(--primary); }
-h1, h2, h3 { line-height: 1.2; margin: 0 0 .5em; }
+h1, h2, h3 { line-height: 1.2; margin: 0 0 .5em; font-family: var(--font-display); font-weight: 500; letter-spacing: -.01em; text-wrap: balance; }
 h1 { font-size: clamp(1.7rem, 4vw, 2.6rem); }
 h2 { font-size: 1.35rem; }
 h3 { font-size: 1.08rem; }
@@ -68,7 +69,10 @@ p { margin: 0 0 1em; }
 }
 .topbar .container { display: flex; align-items: center; gap: 12px; height: 60px; }
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1.25rem; color: var(--text); text-decoration: none; }
-.brand svg { width: 30px; height: 30px; }
+.brand svg, .brand [data-logo] img { width: 34px; height: 34px; object-fit: contain; display: block; }
+.brand-word { height: 17px; width: auto; display: block; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .brand-word { filter: invert(1) brightness(1.15); } }
+:root[data-theme="dark"] .brand-word { filter: invert(1) brightness(1.15); }
 .topbar nav { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 
 /* Botões */
@@ -171,7 +175,7 @@ footer.site { border-top: 1px solid var(--line); padding: 24px 0 90px; color: va
 }
 .bottom-nav a svg { width: 26px; height: 26px; }
 .bottom-nav a.active { color: var(--primary); background: var(--primary-soft); }
-.nav-badge { position: absolute; top: 2px; right: calc(50% - 24px); background: var(--accent); color: #fff; border-radius: 999px; font-size: .7rem; padding: 0 6px; min-width: 18px; text-align: center; line-height: 18px; }
+.nav-badge { position: absolute; top: 2px; right: calc(50% - 24px); background: var(--accent); color: var(--bg); border-radius: 999px; font-size: .7rem; padding: 0 6px; min-width: 18px; text-align: center; line-height: 18px; }
 .nav-badge:empty { display: none; }
 
 /* Chat */
@@ -303,3 +307,9 @@ td .row { flex-wrap: nowrap; }
 .choice-icon svg { width: 24px; height: 24px; }
 .staff-link { font-size: .72rem; color: var(--muted); opacity: .6; text-decoration: none; margin-top: 10px; }
 .staff-link:hover { opacity: 1; text-decoration: underline; }
+
+/* Logo na página inicial */
+.hero-logo { justify-self: center; width: 100%; max-width: 400px; background: #faf9f5; border-radius: 28px; padding: 28px; box-shadow: var(--shadow); }
+.hero-logo img { width: 100%; height: auto; }
+.eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .22em; font-size: .78rem; color: var(--muted); margin-bottom: 12px; }
+@media (max-width: 800px) { .hero-logo { max-width: 240px; padding: 18px; order: -1; } }

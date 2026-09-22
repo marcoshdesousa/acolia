@@ -1,7 +1,7 @@
 /* Service worker — permite instalar o app e abre mais rápido.
    Dados (API, chat, chamadas) nunca são guardados em cache. */
-const VERSION = 'acolia-v1';
-const SHELL = ['/css/app.css', '/js/common.js', '/js/chat.js', '/js/catalog.js', '/js/profile-view.js', '/img/icon.svg', '/img/icon-192.png', '/offline.html'];
+const VERSION = 'acolia-v2';
+const SHELL = ['/css/app.css', '/js/common.js', '/js/chat.js', '/js/catalog.js', '/js/profile-view.js', '/img/logo-simbolo.png', '/img/logo-nome.png', '/img/favicon.png', '/img/icon-192.png', '/offline.html'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

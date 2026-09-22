@@ -28,7 +28,7 @@
   }
 
   const ICONS = {
-    logo: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" fill="#1f6f6b"/><path d="M24 36c-7-4.5-11-9-11-14a6 6 0 0 1 11-3.3A6 6 0 0 1 35 22c0 5-4 9.5-11 14z" fill="#f6f3ee"/><path d="M24 19.5V32.5" stroke="#d9774f" stroke-width="2.4" stroke-linecap="round"/></svg>',
+    logo: '<img src="/img/logo-simbolo.png" alt="">',
     therapist: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M9.5 7.5h.01M14.5 7.5h.01"/><path d="M10.5 10c.9.6 2.1.6 3 0"/><path d="M8 3.8C9 2.7 10.4 2 12 2s3 .7 4 1.8"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/><path d="M12 14v3"/></svg>',
     search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
     chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-12.4 7.6L3 21l1.5-5.2A8.5 8.5 0 1 1 21 12z"/></svg>',
