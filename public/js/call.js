@@ -92,16 +92,9 @@
 
   // ---------- Proteção da chamada ----------
   // Um site não consegue impedir o print do sistema do celular/computador. O que dá para fazer:
-  // marca d'água com a logo e o nome de quem está vendo (vaza = dá para saber de quem veio),
-  // imagem e som escondidos quando a tela sai de primeiro plano (troca de app, gravação por
+  // tela preta e sem som quando a chamada sai de primeiro plano (troca de app, gravação por
   // outro app que tira o foco, tecla Print Screen) e nada de salvar, copiar ou abrir em janela flutuante.
-  function setupProtection(viewerName) {
-    const wm = $('[data-watermark]');
-    const stamp = () => `Acolia · ${viewerName} · ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`;
-    const paint = () => { wm.innerHTML = Array.from({ length: 24 }, () => `<span>${esc(stamp())}</span>`).join(''); };
-    paint();
-    setInterval(paint, 60000);
-
+  function setupProtection() {
     const shield = $('[data-shield]');
     const remote = $('#remoteVideo');
     let hidden = false;
@@ -149,7 +142,7 @@
     overlay(host ? 'Aguardando o paciente entrar…' : 'Aguardando o profissional…');
 
     renderControls();
-    setupProtection(host ? S.info.professional.name : S.info.call?.patient_label || 'Paciente');
+    setupProtection();
     S.socket = io();
     S.socket.on('connect', () => {
       S.socket.emit('call:join', { code: S.code }, (r) => {

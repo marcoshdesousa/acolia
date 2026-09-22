@@ -140,7 +140,6 @@
           <button class="btn send" type="submit" aria-label="Enviar" ${c.peer.active ? '' : 'disabled'}>${ICONS.send}</button>
         </form>`;
       renderMessages(true);
-      paintWatermark();
 
       $('[data-close]', threadWrap).addEventListener('click', closeThread);
       $('[data-archive]', threadWrap).addEventListener('click', toggleArchive);
@@ -175,17 +174,7 @@
     }
 
     // ---------- Proteção da conversa ----------
-    // Marca d'água com a logo, o nome de quem está vendo e a data (aparece em prints),
-    // e as mensagens ficam ocultas quando o app sai da tela ou ao apertar Print Screen.
-    function paintWatermark() {
-      const box = $('[data-messages]', threadWrap);
-      if (!box) return;
-      const who = (getMe()?.display_name || getMe()?.name || '').replace(/[<>&"']/g, '');
-      const when = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-      const text = `Acolia · ${who} · ${when}`;
-      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='360' height='200'><text x='20' y='120' transform='rotate(-22 180 100)' font-family='sans-serif' font-size='14' font-weight='700' fill='rgba(63,85,80,0.10)'>${text}</text></svg>`;
-      box.style.backgroundImage = `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
-    }
+    // As mensagens ficam ocultas quando o app sai da tela ou ao apertar Print Screen.
     const shieldOn = () => { const sh = $('[data-chat-shield]', threadWrap); if (sh) { sh.classList.remove('hidden'); chatEl.classList.add('chat-protected'); } };
     const shieldOff = () => { const sh = $('[data-chat-shield]', threadWrap); if (sh) { sh.classList.add('hidden'); chatEl.classList.remove('chat-protected'); } };
     document.addEventListener('visibilitychange', () => (document.visibilityState === 'hidden' ? shieldOn() : shieldOff()));
@@ -200,7 +189,6 @@
     document.addEventListener('keyup', printKey);
     root.addEventListener('contextmenu', (e) => { if (e.target.closest('.messages')) e.preventDefault(); });
     root.addEventListener('copy', (e) => { if (e.target.closest?.('.messages')) e.preventDefault(); });
-    setInterval(paintWatermark, 60000);
 
     function msgHtml(m) {
       const mine = m.sender_role === role;
