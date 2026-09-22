@@ -66,6 +66,10 @@
       tile(s.conversations, 'Conversas iniciadas', '#inicio'),
     ].join('');
     $$('[data-pending]').forEach((el) => { el.textContent = s.pending || ''; });
+    const st = s.storage;
+    $('[data-storage]').innerHTML = st.permanent
+      ? `<div class="notice ok">✓ Dados salvos de forma permanente — ${esc(st.label)}. Contas, logins, mensagens e fotos não se perdem em atualizações. (${s.patients} pacientes, ${s.professionals} profissionais, ${s.messages} mensagens guardadas)</div>`
+      : `<div class="notice danger">Atenção: os dados estão numa pasta temporária do servidor e podem ser apagados em atualizações. No Render, confira se o disco está montado em /var/data e se a variável DATA_DIR=/var/data existe.</div>`;
     const pend = (await api('/api/admin/professionals?status=pendente')).items;
     $('[data-pending-list]').innerHTML = pend.length ? `<div class="table-wrap"><table><tbody>${pend.map(proRow).join('')}</tbody></table></div>`
       : '<p class="muted">Nenhum cadastro pendente. 🎉</p>';

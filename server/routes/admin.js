@@ -46,6 +46,14 @@ function filterRows(rows, q) {
   return rows.filter((r) => (!state || r.state === state) && (!city || r.city_norm === city) && matchesText(r));
 }
 
+// Onde os dados estão sendo guardados (para o admin conferir se é permanente)
+function storageInfo() {
+  const cloud = require('../cloud');
+  if (cloud.enabled) return { mode: 'nuvem', label: 'Supabase (cópia na nuvem)', permanent: true };
+  if (process.env.DATA_DIR) return { mode: 'disco', label: `Disco permanente (${process.env.DATA_DIR})`, permanent: true };
+  return { mode: 'temporario', label: 'Pasta local do servidor', permanent: false };
+}
+
 router.get('/stats', (_req, res) => {
   const g = (sql) => db.prepare(sql).get().n;
   res.json({
@@ -57,6 +65,8 @@ router.get('/stats', (_req, res) => {
     visible: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND subscription_until >= date('now')"),
     overdue: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND (subscription_until IS NULL OR subscription_until < date('now'))"),
     conversations: g('SELECT COUNT(*) n FROM conversations'),
+    messages: g('SELECT COUNT(*) n FROM messages'),
+    storage: storageInfo(),
   });
 });
 
