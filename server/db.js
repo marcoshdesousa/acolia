@@ -3,10 +3,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+const { DATA_DIR, DB_FILE } = require('./paths');
 fs.mkdirSync(path.join(DATA_DIR, 'uploads'), { recursive: true });
 
-const db = new DatabaseSync(process.env.DB_FILE || path.join(DATA_DIR, 'acolia.db'));
+const db = new DatabaseSync(DB_FILE);
 db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
 
 db.exec(`

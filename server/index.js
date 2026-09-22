@@ -103,8 +103,10 @@ function createApp() {
 }
 
 async function start(port = Number(process.env.PORT) || 3000) {
-  const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
-  await cloud.restoreDb(process.env.DB_FILE || path.join(dataDir, 'acolia.db'));
+  const paths = require('./paths');
+  await cloud.restoreDb(paths.DB_FILE);
+  const st = paths.storageStatus();
+  console.log(`[dados] ${st.label}${st.permanent ? '' : ' — ATENÇÃO: não é permanente, adicione um disco no Render'}`);
   const { setupSocket } = require('./socket');
   ensureAdmin();
   const app = createApp();

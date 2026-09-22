@@ -47,12 +47,7 @@ function filterRows(rows, q) {
 }
 
 // Onde os dados estão sendo guardados (para o admin conferir se é permanente)
-function storageInfo() {
-  const cloud = require('../cloud');
-  if (cloud.enabled) return { mode: 'nuvem', label: 'Supabase (cópia na nuvem)', permanent: true };
-  if (process.env.DATA_DIR) return { mode: 'disco', label: `Disco permanente (${process.env.DATA_DIR})`, permanent: true };
-  return { mode: 'temporario', label: 'Pasta local do servidor', permanent: false };
-}
+const storageInfo = () => require('../paths').storageStatus();
 
 router.get('/stats', (_req, res) => {
   const g = (sql) => db.prepare(sql).get().n;

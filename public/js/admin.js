@@ -69,7 +69,8 @@
     const st = s.storage;
     $('[data-storage]').innerHTML = st.permanent
       ? `<div class="notice ok">✓ Dados salvos de forma permanente — ${esc(st.label)}. Contas, logins, mensagens e fotos não se perdem em atualizações. (${s.patients} pacientes, ${s.professionals} profissionais, ${s.messages} mensagens guardadas)</div>`
-      : `<div class="notice danger">Atenção: os dados estão numa pasta temporária do servidor e podem ser apagados em atualizações. No Render, confira se o disco está montado em /var/data e se a variável DATA_DIR=/var/data existe.</div>`;
+      : `<div class="notice danger"><b>Atenção: os dados ainda não estão num disco permanente</b> (${esc(st.label)}). Contas criadas agora podem sumir na próxima atualização.<br>
+          <b>Como resolver (uma vez só):</b> no Render, abra o serviço → <b>Disks</b> → <b>Add Disk</b> → Mount Path: <code>/var/data</code> → tamanho 1 GB → <b>Save</b>. O site encontra o disco sozinho e este aviso fica verde.</div>`;
     const pend = (await api('/api/admin/professionals?status=pendente')).items;
     $('[data-pending-list]').innerHTML = pend.length ? `<div class="table-wrap"><table><tbody>${pend.map(proRow).join('')}</tbody></table></div>`
       : '<p class="muted">Nenhum cadastro pendente. 🎉</p>';

@@ -533,3 +533,13 @@ test('notificação chega no aparelho de quem recebe a mensagem', async () => {
     webpush.sendNotification = original;
   }
 });
+
+test('aviso de armazenamento: pasta comum no Render não conta como permanente', () => {
+  const { execFileSync } = require('node:child_process');
+  const run = (env) => JSON.parse(execFileSync(process.execPath, ['--no-warnings', '-e',
+    "process.stdout.write(JSON.stringify(require('./server/paths').storageStatus()))"], { cwd: path.join(__dirname, '..'), env: { ...process.env, ...env } }).toString());
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acolia-paths-'));
+  assert.equal(run({ DATA_DIR: dir, RENDER: 'true', SUPABASE_URL: '' }).permanent, false, 'no Render sem disco: temporário');
+  assert.equal(run({ DATA_DIR: dir, RENDER: '', SUPABASE_URL: '' }).permanent, true, 'no computador: permanente');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
