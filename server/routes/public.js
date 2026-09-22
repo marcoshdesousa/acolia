@@ -44,7 +44,15 @@ router.get('/professionals', (req, res) => {
     }
     favSet = new Set(db.prepare('SELECT professional_id FROM favorites WHERE patient_id = ?').all(me.id).map((r) => r.professional_id));
     const score = (p) => (p.city_norm === me.city_norm && p.state === me.state ? 0 : p.state === me.state ? 1 : 2);
-    rows.sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name, 'pt-BR'));
+    // Valor máximo da consulta (quem não informou valor fica de fora quando há limite)
+    const maxPrice = Number(req.query.max_price);
+    if (maxPrice > 0) rows = rows.filter((p) => p.price_cents != null && p.price_cents <= maxPrice * 100);
+    const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
+    // Sem valor informado vai sempre para o fim da lista
+    const price = (p, dir) => (p.price_cents == null ? Infinity : dir * p.price_cents);
+    if (req.query.sort === 'preco_menor') rows.sort((a, b) => price(a, 1) - price(b, 1) || byName(a, b));
+    else if (req.query.sort === 'preco_maior') rows.sort((a, b) => price(a, -1) - price(b, -1) || byName(a, b));
+    else rows.sort((a, b) => score(a) - score(b) || byName(a, b));
     return res.json({
       loggedIn: true,
       items: rows.map((p) => ({ ...publicProfessional(p, { loggedIn: true, favorite: favSet.has(p.id) }), near: score(p) === 0 })),

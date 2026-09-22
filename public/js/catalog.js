@@ -40,6 +40,19 @@
           <select name="state" aria-label="Estado" style="flex:0 1 110px">${ufOptions('', 'Estado')}</select>
           <input name="city" placeholder="Município" aria-label="Município">
           <input name="place" type="search" placeholder="Pesquisar localidade (bairro, cidade…)" aria-label="Pesquisar localidade">
+          <select name="sort" aria-label="Ordenar por">
+            <option value="">Mais perto de você</option>
+            <option value="preco_menor">Menor preço</option>
+            <option value="preco_maior">Maior preço</option>
+          </select>
+          <select name="max_price" aria-label="Valor máximo da consulta">
+            <option value="">Qualquer valor</option>
+            <option value="80">Até R$ 80</option>
+            <option value="100">Até R$ 100</option>
+            <option value="150">Até R$ 150</option>
+            <option value="200">Até R$ 200</option>
+            <option value="300">Até R$ 300</option>
+          </select>
           <label class="check" style="margin:0"><input type="checkbox" name="favorites" value="1"> ${ICONS.heart.replace('<svg', '<svg style="width:18px;height:18px"')} Favoritos</label>` : ''}
         <button class="btn" type="submit">${ICONS.search.replace('<svg', '<svg style="width:18px;height:18px"')} Buscar</button>
       </form>
@@ -55,6 +68,8 @@
 
     let items = [];
     async function load() {
+      const hint = $('[data-hint]', root);
+      if (hint && form.sort) hint.classList.toggle('hidden', !!form.sort.value);
       const params = new URLSearchParams();
       for (const [k, v] of new FormData(form).entries()) if (v) params.set(k, v);
       grid.innerHTML = '<div class="spinner"></div>';

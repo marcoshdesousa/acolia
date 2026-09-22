@@ -201,6 +201,10 @@ test('vitrine: visitante não vê valores nem localização; paciente vê', asyn
   assert.equal(r.data.items.length, 0);
   r = await pat.get('/api/professionals?place=parauapebas');
   assert.equal(r.data.items.length, 1);
+  r = await pat.get('/api/professionals?max_price=100');
+  assert.equal(r.data.items.length, 0, 'consulta de R$150 fica fora do limite de R$100');
+  r = await pat.get('/api/professionals?max_price=150&sort=preco_menor');
+  assert.equal(r.data.items.length, 1);
 });
 
 test('favoritos', async () => {
@@ -371,6 +375,20 @@ test('admin cadastra profissional já aprovado', async () => {
     name: 'Ana Costa', profession: 'Psicanalista', registry: 'Registro 123', email: 'ana@example.com', phone: '11988887777', state: 'SP', city: 'Campinas',
   });
   assert.equal(r.status, 201, 'admin escolhe o registro que quiser');
+  // Ordenação por preço: Ana (sem valor) vai sempre para o fim
+  const ana = client();
+  await ana.post('/api/auth/professional/login', { login: r.data.code, password: r.data.password });
+  const cheap = await admin.post('/api/admin/professionals', {
+    name: 'Rui Alves', profession: 'Psicanalista', registry: 'R-9', email: 'rui@example.com', phone: '11977776666', state: 'SP', city: 'Campinas',
+  });
+  const rui = client();
+  await rui.post('/api/auth/professional/login', { login: cheap.data.code, password: cheap.data.password });
+  await rui.put('/api/professional/profile', { name: 'Rui Alves', phone: '11977776666', state: 'SP', city: 'Campinas', price: '90' });
+  const patient = client(); // Carlos, cadastrado antes
+  await patient.post('/api/auth/patient/login', { cpf: CPF_B, password: '123456' });
+  const names = async (sort) => (await patient.get(`/api/professionals?sort=${sort}`)).data.items.map((x) => x.name);
+  assert.deepEqual(await names('preco_menor'), ['Rui Alves', 'João Pereira', 'Ana Costa']);
+  assert.deepEqual(await names('preco_maior'), ['João Pereira', 'Rui Alves', 'Ana Costa']);
   const login = await client().post('/api/auth/professional/login', { login: r.data.code, password: r.data.password });
   assert.equal(login.status, 200);
 });

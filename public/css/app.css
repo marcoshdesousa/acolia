@@ -319,3 +319,4 @@ td .row { flex-wrap: nowrap; }
 .social a { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); transition: background .15s, color .15s; }
 .social a:hover, .social a:focus-visible { background: var(--primary); color: var(--on-primary); outline: none; }
 .social svg { width: 22px; height: 22px; }
+.check svg { flex: none; }
