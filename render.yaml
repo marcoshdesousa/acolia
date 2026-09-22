@@ -1,8 +1,8 @@
 # Publicação com um clique no Render (render.com) — plano GRÁTIS.
-# Atenção: no plano grátis não há disco permanente. Os cadastros, mensagens
-# e fotos são apagados quando o site "dorme" (15 min sem visitas) ou é
-# atualizado. Serve para ver e testar. Para uso real, troque "plan: free"
-# por "plan: starter" e descomente o bloco "disk" no final.
+# O plano grátis não tem disco permanente; por isso os dados são guardados
+# no Supabase (SUPABASE_URL e SUPABASE_SERVICE_KEY). Sem essas duas chaves,
+# tudo é apagado quando o site "dorme" ou é atualizado.
+# Alternativa paga: troque "plan: free" por "plan: starter" e descomente o bloco "disk".
 services:
   - type: web
     name: acolia
@@ -20,6 +20,12 @@ services:
         value: "true"
       - key: TRUST_PROXY
         value: "true"
+      # Guarda contas, mensagens e fotos no Supabase (grátis) para não perder nada
+      # quando o Render grátis reinicia. Veja o README.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
     # Uso real (plano pago): descomente as linhas abaixo
     #   - key: DATA_DIR
     #     value: /var/data

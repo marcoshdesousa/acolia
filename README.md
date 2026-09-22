@@ -30,7 +30,17 @@ Ficam salvas no banco e **não podem ser apagadas nem editadas** (não há rota 
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/marcoshdesousa/acolia)
 
-O botão cria o site no plano **grátis** do Render e só pede a senha do administrador (`ADMIN_PASSWORD`). No plano grátis os dados são apagados quando o site fica 15 minutos sem visitas; serve para testar. Para uso real, veja os comentários em `render.yaml`.
+O botão cria o site no plano **grátis** do Render. Ele pede a senha do administrador (`ADMIN_PASSWORD`) e as chaves do Supabase.
+
+### Não perder os dados no plano grátis (Supabase)
+
+O Render grátis apaga o disco quando o site reinicia. Para as contas, mensagens, fotos e carteirinhas continuarem salvas:
+
+1. Crie um projeto grátis em [supabase.com](https://supabase.com).
+2. Em **Project Settings → API**, copie a **Project URL** e a chave secreta (**service_role** ou **secret key**).
+3. No Render, em **Environment**, preencha `SUPABASE_URL` e `SUPABASE_SERVICE_KEY` e salve.
+
+O site cria sozinho um bucket privado `acolia-dados`. Ele baixa o banco ao ligar, envia uma cópia alguns segundos depois de cada alteração e ao desligar, e guarda uma cópia por dia em `db/diario/`. Se não conseguir falar com o Supabase ao ligar, o site não abre (para nunca começar vazio e apagar a cópia boa). Projetos grátis do Supabase pausam depois de 7 dias sem uso; se acontecer, é só reativar no painel do Supabase.
 
 ## Como rodar
 
@@ -55,6 +65,7 @@ Testes: `npm test`
 | `DATA_DIR` | Pasta do banco e das fotos (padrão `./data`) — **faça backup dela** |
 | `COOKIE_SECURE=true` | Use em produção com HTTPS |
 | `TRUST_PROXY=true` | Se estiver atrás de proxy (Nginx, Render, Railway…) |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_BUCKET` | Guardar os dados no Supabase (ver acima) |
 | `ICE_SERVERS` | JSON com servidores STUN/TURN para as chamadas (ver abaixo) |
 | `CPF_API_URL`, `CPF_API_TOKEN`, `CPF_API_NAME_FIELD` | Conferência do nome com o CPF na Receita (ver abaixo) |
 | `REGISTRY_API_URL`, `REGISTRY_API_TOKEN`, `REGISTRY_API_NAME_FIELD`, `REGISTRY_API_ACTIVE_FIELD` | Consulta automática do CRP/CRM no conselho (ver abaixo) |

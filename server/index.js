@@ -2,14 +2,13 @@
 const http = require('node:http');
 const path = require('node:path');
 const express = require('express');
-const { db } = require('./db');
 const U = require('./util');
-const { attachSession } = require('./auth');
-const { UPLOAD_DIR } = require('./upload');
-const { setupSocket } = require('./socket');
+const cloud = require('./cloud');
+// Os módulos que abrem o banco são carregados só depois de restaurá-lo da nuvem (ver start()).
 
 // Cria o administrador geral na primeira execução
 function ensureAdmin() {
+  const { db } = require('./db');
   const username = process.env.ADMIN_USER || 'admin';
   if (db.prepare('SELECT 1 FROM admins').get()) return;
   const password = process.env.ADMIN_PASSWORD || U.randomPassword(12);
@@ -23,6 +22,8 @@ function ensureAdmin() {
 }
 
 function createApp() {
+  const { attachSession } = require('./auth');
+  const { UPLOAD_DIR } = require('./upload');
   const app = express();
   app.disable('x-powered-by');
   if (process.env.TRUST_PROXY) app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : process.env.TRUST_PROXY);
@@ -35,6 +36,13 @@ function createApp() {
     next();
   });
   app.use(express.json({ limit: '100kb' }));
+  // Depois de qualquer alteração bem-sucedida, agenda uma cópia do banco na nuvem
+  app.use((req, res, next) => {
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      res.on('finish', () => { if (res.statusCode < 400) cloud.scheduleBackup(); });
+    }
+    next();
+  });
   app.use(attachSession);
 
   // Bloqueia requisições de outros sites que tentem usar o cookie (CSRF)
@@ -54,6 +62,11 @@ function createApp() {
   app.use('/api/admin', require('./routes/admin').router);
   app.use('/api', (_req, _res, next) => next(new U.HttpError(404, 'Rota não encontrada.')));
 
+  // Fotos: se não estiverem no disco (servidor reiniciou), baixa da nuvem
+  app.get('/uploads/:name', async (req, _res, next) => {
+    await cloud.ensureLocalFile('uploads', path.join(UPLOAD_DIR, path.basename(req.params.name)));
+    next();
+  });
   app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
   const pub = path.join(__dirname, '..', 'public');
   app.use(express.static(pub, { extensions: ['html'] }));
@@ -68,7 +81,10 @@ function createApp() {
   return app;
 }
 
-function start(port = Number(process.env.PORT) || 3000) {
+async function start(port = Number(process.env.PORT) || 3000) {
+  const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+  await cloud.restoreDb(process.env.DB_FILE || path.join(dataDir, 'acolia.db'));
+  const { setupSocket } = require('./socket');
   ensureAdmin();
   const app = createApp();
   const server = http.createServer(app);
@@ -79,6 +95,23 @@ function start(port = Number(process.env.PORT) || 3000) {
   }));
 }
 
-if (require.main === module) start();
+// Ao desligar (atualização ou o servidor "dormindo"), salva a última cópia na nuvem
+let stopping = false;
+async function shutdown(signal) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`[${signal}] salvando dados e desligando…`);
+  await cloud.flush().catch((e) => console.error(e));
+  process.exit(0);
+}
+
+if (require.main === module) {
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  start().catch((e) => {
+    console.error('Não foi possível iniciar:', e.message);
+    process.exit(1);
+  });
+}
 
 module.exports = { createApp, start };

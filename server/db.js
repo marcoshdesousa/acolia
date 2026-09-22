@@ -125,6 +125,8 @@ addColumn('professionals', 'legal_name', 'TEXT');                 // nome comple
 addColumn('professionals', 'registry_verified', 'INTEGER NOT NULL DEFAULT 0'); // conferido no conselho por API
 fs.mkdirSync(path.join(DATA_DIR, 'documents'), { recursive: true });
 
+require('./cloud').attachDb(db);
+
 function tx(fn) {
   db.exec('BEGIN IMMEDIATE');
   try {

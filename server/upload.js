@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const multer = require('multer');
 const { DATA_DIR } = require('./db');
 const { HttpError } = require('./util');
+const cloud = require('./cloud');
 
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
@@ -29,6 +30,7 @@ function handlePhoto(req, res) {
         return reject(err.status ? err : new HttpError(400, 'Não foi possível enviar a foto.'));
       }
       if (!req.file) return reject(new HttpError(400, 'Selecione uma foto.'));
+      cloud.uploadFile('uploads', req.file.path);
       resolve(`/uploads/${req.file.filename}`);
     });
   });
@@ -57,6 +59,7 @@ function handleDocument(req, res) {
         if (err.code === 'LIMIT_FILE_SIZE') return reject(new HttpError(400, 'O arquivo da carteirinha deve ter no máximo 8 MB.'));
         return reject(err.status ? err : new HttpError(400, 'Não foi possível enviar a carteirinha.'));
       }
+      if (req.file) cloud.uploadFile('documents', req.file.path);
       resolve(req.file ? req.file.filename : null);
     });
   });
@@ -64,12 +67,14 @@ function handleDocument(req, res) {
 
 function removeDocument(name) {
   if (name) fs.promises.unlink(path.join(DOC_DIR, path.basename(name))).catch(() => {});
+  cloud.removeFile('documents', name);
 }
 
 function removePhoto(url) {
   if (!url || !url.startsWith('/uploads/')) return;
   const file = path.join(UPLOAD_DIR, path.basename(url));
   fs.promises.unlink(file).catch(() => {});
+  cloud.removeFile('uploads', url);
 }
 
 module.exports = { handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };

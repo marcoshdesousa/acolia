@@ -136,9 +136,11 @@ router.post('/professionals/:id/subscription', (req, res) => {
 });
 
 // Foto/PDF da carteirinha enviada no cadastro (só o admin vê)
-router.get('/professionals/:id/document', (req, res) => {
+router.get('/professionals/:id/document', async (req, res) => {
   const p = db.prepare('SELECT document_file FROM professionals WHERE id = ?').get(Number(req.params.id));
   if (!p?.document_file) throw new U.HttpError(404, 'Carteirinha não enviada.');
+  const ok = await require('../cloud').ensureLocalFile('documents', path.join(DOC_DIR, path.basename(p.document_file)));
+  if (!ok) throw new U.HttpError(404, 'Arquivo da carteirinha não encontrado.');
   res.setHeader('Cache-Control', 'private, no-store');
   res.sendFile(path.join(DOC_DIR, path.basename(p.document_file)));
 });

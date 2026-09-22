@@ -29,6 +29,7 @@ function activeCall(proId) {
 function endCall(call) {
   db.prepare("UPDATE calls SET status = 'finalizado', ended_at = datetime('now') WHERE id = ? AND status = 'ativo'").run(call.id);
   rt.emit(`call:${call.id}`, 'call:ended', { id: call.id });
+  require('../cloud').scheduleBackup();
   if (rt.io) rt.io.in(`call:${call.id}`).socketsLeave(`call:${call.id}`);
 }
 
