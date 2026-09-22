@@ -90,6 +90,50 @@
     }
   }
 
+  // ---------- Proteção da chamada ----------
+  // Um site não consegue impedir o print do sistema do celular/computador. O que dá para fazer:
+  // marca d'água com a logo e o nome de quem está vendo (vaza = dá para saber de quem veio),
+  // imagem e som escondidos quando a tela sai de primeiro plano (troca de app, gravação por
+  // outro app que tira o foco, tecla Print Screen) e nada de salvar, copiar ou abrir em janela flutuante.
+  function setupProtection(viewerName) {
+    const wm = $('[data-watermark]');
+    const stamp = () => `Acolia · ${viewerName} · ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`;
+    const paint = () => { wm.innerHTML = Array.from({ length: 24 }, () => `<span>${esc(stamp())}</span>`).join(''); };
+    paint();
+    setInterval(paint, 60000);
+
+    const shield = $('[data-shield]');
+    const remote = $('#remoteVideo');
+    let hidden = false;
+    const hide = (why) => {
+      if (S.ended) return;
+      hidden = true;
+      shield.classList.remove('hidden');
+      document.body.classList.add('call-protected');
+      if (why === 'background') remote.muted = true; // sem som enquanto a tela não está visível
+    };
+    const show = () => {
+      if (!hidden) return;
+      hidden = false;
+      shield.classList.add('hidden');
+      document.body.classList.remove('call-protected');
+      remote.muted = false;
+    };
+    document.addEventListener('visibilitychange', () => (document.visibilityState === 'hidden' ? hide('background') : show()));
+    window.addEventListener('blur', () => hide('blur'));
+    window.addEventListener('focus', show);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'PrintScreen' || (e.metaKey && e.shiftKey && ['3', '4', '5', 's', 'S'].includes(e.key))) {
+        hide('print');
+        try { navigator.clipboard.writeText('Conteúdo protegido — Acolia'); } catch { /* ignora */ }
+        setTimeout(show, 3000);
+      }
+    });
+    document.addEventListener('keyup', (e) => { if (e.key === 'PrintScreen') { hide('print'); setTimeout(show, 3000); } });
+    ['contextmenu', 'dragstart', 'copy'].forEach((ev) => $('.call-stage').addEventListener(ev, (e) => e.preventDefault()));
+    $$('video').forEach((v) => { v.disablePictureInPicture = true; });
+  }
+
   // ---------- 3. Sala ----------
   function join() {
     show('call');
@@ -105,6 +149,7 @@
     overlay(host ? 'Aguardando o paciente entrar…' : 'Aguardando o profissional…');
 
     renderControls();
+    setupProtection(host ? S.info.professional.name : S.info.call?.patient_label || 'Paciente');
     S.socket = io();
     S.socket.on('connect', () => {
       S.socket.emit('call:join', { code: S.code }, (r) => {

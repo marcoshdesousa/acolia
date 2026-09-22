@@ -56,7 +56,7 @@ router.post('/resolve', (req, res) => {
   const r = resolveCode(req.body.code, req.auth);
   res.json({
     role: r.role,
-    call: { id: r.call.id, patient_label: r.role === 'host' ? r.call.patient_label : undefined },
+    call: { id: r.call.id, patient_label: r.call.patient_label },
     professional: { name: r.pro.name, photo: r.pro.photo, profession: r.pro.profession, registry: r.pro.registry },
   });
 });
