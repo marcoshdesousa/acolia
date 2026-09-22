@@ -1,13 +1,11 @@
-# Publicação com um clique no Render (render.com) — plano GRÁTIS.
-# O plano grátis não tem disco permanente; por isso os dados são guardados
-# no Supabase (SUPABASE_URL e SUPABASE_SERVICE_KEY). Sem essas duas chaves,
-# tudo é apagado quando o site "dorme" ou é atualizado.
-# Alternativa paga: troque "plan: free" por "plan: starter" e descomente o bloco "disk".
+# Publicação no Render (render.com) — plano Starter com disco permanente.
+# O disco guarda para sempre: contas (pacientes, profissionais, admin), logins,
+# mensagens, atendimentos, fotos e carteirinhas. Nada se perde em atualizações.
 services:
   - type: web
     name: acolia
     runtime: node
-    plan: free
+    plan: starter
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /
@@ -16,20 +14,13 @@ services:
         value: "22"
       - key: ADMIN_PASSWORD
         sync: false # o Render pede para você digitar a senha do admin
+      - key: DATA_DIR
+        value: /var/data
       - key: COOKIE_SECURE
         value: "true"
       - key: TRUST_PROXY
         value: "true"
-      # Guarda contas, mensagens e fotos no Supabase (grátis) para não perder nada
-      # quando o Render grátis reinicia. Veja o README.
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_KEY
-        sync: false
-    # Uso real (plano pago): descomente as linhas abaixo
-    #   - key: DATA_DIR
-    #     value: /var/data
-    # disk:
-    #   name: dados
-    #   mountPath: /var/data
-    #   sizeGB: 1
+    disk:
+      name: dados
+      mountPath: /var/data
+      sizeGB: 1

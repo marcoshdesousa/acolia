@@ -30,17 +30,11 @@ Ficam salvas no banco e **não podem ser apagadas nem editadas** (não há rota 
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/marcoshdesousa/acolia)
 
-O botão cria o site no plano **grátis** do Render. Ele pede a senha do administrador (`ADMIN_PASSWORD`) e as chaves do Supabase.
+O botão cria o site no plano **Starter** do Render (cerca de US$ 7/mês) com um **disco permanente de 1 GB** montado em `/var/data`. Tudo fica guardado ali para sempre, mesmo quando o site é atualizado ou reinicia: contas, logins, mensagens, atendimentos, fotos e carteirinhas. O botão só pede a senha do administrador (`ADMIN_PASSWORD`).
 
-### Não perder os dados no plano grátis (Supabase)
+O Render faz um snapshot diário do disco, que pode ser restaurado pelo painel dele em **Disks**.
 
-O Render grátis apaga o disco quando o site reinicia. Para as contas, mensagens, fotos e carteirinhas continuarem salvas:
-
-1. Crie um projeto grátis em [supabase.com](https://supabase.com).
-2. Em **Project Settings → API**, copie a **Project URL** e a chave secreta (**service_role** ou **secret key**).
-3. No Render, em **Environment**, preencha `SUPABASE_URL` e `SUPABASE_SERVICE_KEY` e salve.
-
-O site cria sozinho um bucket privado `acolia-dados`. Ele baixa o banco ao ligar, envia uma cópia alguns segundos depois de cada alteração e ao desligar, e guarda uma cópia por dia em `db/diario/`. Se não conseguir falar com o Supabase ao ligar, o site não abre (para nunca começar vazio e apagar a cópia boa). Projetos grátis do Supabase pausam depois de 7 dias sem uso; se acontecer, é só reativar no painel do Supabase.
+**Alternativa grátis:** no plano free não há disco. Nesse caso, defina `SUPABASE_URL` e `SUPABASE_SERVICE_KEY` para os dados ficarem guardados no Supabase Storage. O site baixa o banco ao ligar e envia uma cópia depois de cada alteração (ver `server/cloud.js`).
 
 ## Como rodar
 
