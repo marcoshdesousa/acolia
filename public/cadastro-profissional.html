@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <title>Cadastro de profissional — Acolia</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1f6f6b">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/img/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/img/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="topbar"><div class="container">
+    <a class="brand" href="/"><span data-logo></span>Acolia</a>
+  </div></header>
+  <main class="narrow" style="padding-top:32px;padding-bottom:48px;max-width:560px">
+    <div data-step1>
+      <h1 class="center">Cadastro de profissional</h1>
+      <p class="center muted">Psicólogos, psicanalistas, psiquiatras e psicoterapeutas. Seu cadastro será analisado pela administração antes de aparecer na vitrine.</p>
+      <form class="card" data-form novalidate>
+        <div class="field"><label for="name">Nome e sobrenome</label><input id="name" name="name" autocomplete="name" required maxlength="120"></div>
+        <div class="grid-2">
+          <div class="field"><label for="profession">Profissão</label><select id="profession" name="profession" required><option value="">Selecione</option></select></div>
+          <div class="field"><label for="registry">Registro profissional</label><input id="registry" name="registry" placeholder="Ex.: CRP 10/12345" required maxlength="40">
+            <div class="hint">CRP, CRM ou registro da sua área.</div></div>
+        </div>
+        <div class="field"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="email" required></div>
+        <div class="field"><label for="phone">WhatsApp (com DDD)</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="(94) 99999-9999" required></div>
+        <div class="field"><label>Onde você atende</label>
+          <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
+        <div class="grid-2">
+          <div class="field"><label for="pw">Senha</label><input id="pw" name="password" type="password" autocomplete="new-password" minlength="6" required></div>
+          <div class="field"><label for="pw2">Repita a senha</label><input id="pw2" name="password2" type="password" autocomplete="new-password" required></div>
+        </div>
+        <button class="btn block" type="submit">Enviar cadastro</button>
+        <p class="center small" style="margin:16px 0 0">Já tem cadastro? <a href="/entrar#profissional">Entrar</a></p>
+      </form>
+    </div>
+    <div data-step2 class="hidden card stack center">
+      <h1>Cadastro enviado!</h1>
+      <p>Este é o seu <b>código único de profissional</b>. Você vai usá-lo para <b>entrar no sistema</b> e para <b>iniciar seus atendimentos</b>.</p>
+      <div class="code-box" data-code></div>
+      <div class="notice">Tire um print ou anote este código agora. Se você perdê-lo, terá que pedir à administração, o que pode demorar.</div>
+      <div class="row" style="justify-content:center"><button class="btn secondary" data-copy>Copiar código</button><button class="btn secondary" onclick="print()">Imprimir</button></div>
+      <p class="muted">Assim que a administração aprovar seu cadastro, você poderá entrar e completar o seu perfil (foto, valores, pacotes e endereço).</p>
+      <a class="btn" href="/entrar#profissional">Ir para o login</a>
+    </div>
+  </main>
+  <script src="/js/common.js"></script>
+  <script>
+  (async function () {
+    const { $, api, ICONS, handleForm, maskPhone, ufOptions, bindUfCity, esc, copyText } = Acolia;
+    $('[data-logo]').innerHTML = ICONS.logo;
+    const form = $('[data-form]');
+    form.state.innerHTML = ufOptions('', 'UF');
+    bindUfCity(form.state, form.city);
+    maskPhone(form.phone);
+    const cfg = await api('/api/config');
+    form.profession.insertAdjacentHTML('beforeend', cfg.professions.map((p) => '<option>' + esc(p) + '</option>').join(''));
+    handleForm(form, async (d) => {
+      if (d.password !== d.password2) throw new Error('As senhas não são iguais.');
+      const r = await api('/api/auth/professional/register', { method: 'POST', body: d });
+      $('[data-code]').textContent = r.code;
+      $('[data-copy]').onclick = () => copyText(r.code);
+      $('[data-step1]').classList.add('hidden');
+      $('[data-step2]').classList.remove('hidden');
+      scrollTo(0, 0);
+    });
+  })();
+  </script>
+</body>
+</html>

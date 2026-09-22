@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <title>Atendimento — Acolia</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1f6f6b">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/img/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/img/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div data-step="code">
+    <header class="topbar"><div class="container"><a class="brand" href="/"><span data-logo></span>Acolia</a></div></header>
+    <main class="narrow" style="padding-top:40px;padding-bottom:48px">
+      <h1 class="center">Entrar no atendimento</h1>
+      <p class="center muted">Digite o código que o profissional enviou para você. Profissional: digite o seu código único.</p>
+      <form class="card" data-code-form>
+        <div class="field"><label for="code">Código</label>
+          <input id="code" name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Ex.: K74HD92P" style="font-family:ui-monospace,Menlo,monospace;font-size:1.4rem;letter-spacing:.12em;text-transform:uppercase;text-align:center" required></div>
+        <button class="btn block" type="submit">Continuar</button>
+      </form>
+      <p class="small muted center" style="margin-top:16px">O código só funciona enquanto o atendimento estiver aberto. Depois que o profissional finaliza, ele deixa de valer.</p>
+    </main>
+  </div>
+
+  <div data-step="prejoin" class="hidden">
+    <header class="topbar"><div class="container"><a class="brand" href="/"><span data-logo2></span>Acolia</a></div></header>
+    <main class="narrow" style="padding-top:32px;padding-bottom:48px;max-width:560px">
+      <div class="card stack center">
+        <div data-pro-info></div>
+        <video data-preview autoplay playsinline muted style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:12px;background:#000;transform:scaleX(-1)"></video>
+        <div data-prejoin-msg></div>
+        <div class="row" style="justify-content:center" data-prejoin-actions></div>
+      </div>
+    </main>
+  </div>
+
+  <div data-step="call" class="hidden call-page">
+    <div class="call-stage">
+      <video id="remoteVideo" autoplay playsinline></video>
+      <video id="localVideo" autoplay playsinline muted></video>
+      <div class="call-overlay" data-overlay><div><div data-overlay-avatar></div><div style="font-weight:800;font-size:1.2rem" data-overlay-title></div><div style="opacity:.8" data-overlay-sub></div></div></div>
+      <div class="call-top"><span data-top-avatar></span><div><div class="nm" data-top-name></div><div class="st" data-top-status>Conectando…</div></div></div>
+      <div class="peer-flags" data-peer-flags></div>
+      <div class="call-bar">
+        <button class="call-btn" data-mic aria-label="Desligar microfone" title="Microfone"></button>
+        <button class="call-btn" data-cam aria-label="Desligar câmera" title="Câmera"></button>
+        <button class="call-btn end" data-end></button>
+      </div>
+    </div>
+  </div>
+
+  <div data-step="ended" class="hidden">
+    <header class="topbar"><div class="container"><a class="brand" href="/"><span data-logo3></span>Acolia</a></div></header>
+    <main class="narrow center" style="padding-top:60px">
+      <div class="card stack">
+        <h1 data-ended-title>Atendimento finalizado</h1>
+        <p class="muted" data-ended-msg>Obrigado! Este código não pode mais ser usado.</p>
+        <div class="row" style="justify-content:center" data-ended-actions><a class="btn" href="/">Voltar ao início</a></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/common.js"></script>
+  <script src="/js/call.js"></script>
+</body>
+</html>
