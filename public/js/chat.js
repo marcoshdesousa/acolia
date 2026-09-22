@@ -316,7 +316,7 @@
     function notify(m) {
       toast('Nova mensagem recebida');
       if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
-        try { new Notification('Acolia — nova mensagem', { body: m.kind === 'text' ? m.body.slice(0, 80) : 'Você recebeu uma mensagem', icon: '/img/icon-192.png' }); } catch { /* ignora */ }
+        try { new Notification('Acolia — nova mensagem', { body: m.kind === 'text' ? m.body.slice(0, 80) : 'Você recebeu uma mensagem', icon: '/img/app-icon-192.png' }); } catch { /* ignora */ }
       }
     }
 
