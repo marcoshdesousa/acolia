@@ -449,3 +449,41 @@ test('a própria pessoa exclui a conta (paciente e profissional)', async () => {
   r = await admin.post(`/api/admin/professionals/${created.data.id}/status`, { status: 'aprovado' });
   assert.equal(r.status, 400, 'admin não reativa conta excluída');
 });
+
+test('link próprio do profissional', async () => {
+  await pro.post('/api/auth/professional/login', { login: proCode, password: 'segredo1' });
+  let me = await pro.get('/api/professional/me');
+  assert.equal(me.data.slug, 'joao-pereira', 'link criado a partir do nome');
+  let r = await pro.post('/api/professional/slug', { slug: 'admin' });
+  assert.equal(r.status, 400, 'endereço reservado');
+  r = await pro.post('/api/professional/slug', { slug: 'x' });
+  assert.equal(r.status, 400, 'curto demais');
+  r = await pro.post('/api/professional/slug', { slug: 'Dr João Psicólogo' });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.slug, 'dr-joao-psicologo');
+  // A página abre pelo link, com o nome no título (bom para compartilhar)
+  let page = await fetch(`${base}/dr-joao-psicologo`);
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  assert.match(html, /<title>João Pereira — Psicólogo\(a\) \| Acolia<\/title>/);
+  assert.match(html, /data-slug="dr-joao-psicologo"/);
+  assert.equal((await fetch(`${base}/nao-existe-ninguem`)).status, 404);
+  // Visitante vê o perfil sem valores; paciente vê com valores
+  r = await anon.get('/api/professionals/dr-joao-psicologo');
+  assert.equal(r.data.name, 'João Pereira');
+  assert.equal(r.data.price_cents, undefined);
+  const carlos = client();
+  await carlos.post('/api/auth/patient/login', { cpf: CPF_B, password: '123456' });
+  r = await carlos.get('/api/professionals/dr-joao-psicologo');
+  assert.equal(typeof r.data.price_cents, 'number');
+  // Outro profissional não pode pegar o mesmo link
+  const other = await admin.post('/api/admin/professionals', {
+    name: 'Joao Pereira', profession: 'Psicanalista', registry: 'Z-7', email: 'jp2@example.com', phone: '11966665555', state: 'SP', city: 'Campinas',
+  });
+  const c = client();
+  await c.post('/api/auth/professional/login', { login: other.data.code, password: other.data.password });
+  me = await c.get('/api/professional/me');
+  assert.equal(me.data.slug, 'joao-pereira', 'nome livre de novo depois da troca');
+  r = await c.post('/api/professional/slug', { slug: 'dr-joao-psicologo' });
+  assert.equal(r.status, 409);
+});

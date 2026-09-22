@@ -19,6 +19,7 @@ function parsePackages(json) {
 function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
   const base = {
     id: p.id,
+    slug: p.slug,
     name: p.name,
     profession: p.profession,
     registry: p.registry,
@@ -44,6 +45,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
 function ownProfessional(p) {
   return {
     id: p.id,
+    slug: p.slug,
     code: p.code,
     name: p.name,
     profession: p.profession,

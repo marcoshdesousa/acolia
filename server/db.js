@@ -123,7 +123,17 @@ function addColumn(table, col, def) {
 addColumn('professionals', 'document_file', 'TEXT');              // foto/PDF da carteirinha (pasta privada)
 addColumn('professionals', 'legal_name', 'TEXT');                 // nome completo da carteirinha (não muda)
 addColumn('professionals', 'registry_verified', 'INTEGER NOT NULL DEFAULT 0'); // conferido no conselho por API
+addColumn('professionals', 'slug', 'TEXT');                        // link próprio: site.com/<slug>
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_professionals_slug ON professionals(slug)');
 fs.mkdirSync(path.join(DATA_DIR, 'documents'), { recursive: true });
+
+// Quem ainda não tem link ganha um a partir do nome (não altera nenhum outro dado)
+{
+  const { uniqueSlug } = require('./slug');
+  for (const p of db.prepare("SELECT id, name FROM professionals WHERE slug IS NULL AND status <> 'excluido'").all()) {
+    db.prepare('UPDATE professionals SET slug = ? WHERE id = ?').run(uniqueSlug(db, p.name, p.id), p.id);
+  }
+}
 
 require('./cloud').attachDb(db);
 

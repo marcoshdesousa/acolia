@@ -79,7 +79,9 @@ router.get('/professionals', (req, res) => {
 });
 
 router.get('/professionals/:id', (req, res) => {
-  const p = db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id));
+  const p = /^\d+$/.test(req.params.id)
+    ? db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id))
+    : db.prepare('SELECT * FROM professionals WHERE slug = ?').get(String(req.params.id).toLowerCase());
   if (!p || !isVisible(p)) throw new U.HttpError(404, 'Profissional não encontrado.');
   const isPatient = req.auth?.role === 'patient';
   const favorite = isPatient && !!db.prepare('SELECT 1 FROM favorites WHERE patient_id = ? AND professional_id = ?').get(req.auth.user.id, p.id);

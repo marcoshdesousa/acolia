@@ -334,3 +334,12 @@ td .row { flex-wrap: nowrap; }
   .search-row input { flex-basis: 100%; }
   .search-row [data-toggle] { flex: 1; }
 }
+
+/* Link do profissional */
+.link-box { font-family: ui-monospace, Menlo, monospace; font-weight: 700; color: var(--primary); background: var(--primary-soft); border-radius: 10px; padding: 12px 14px; word-break: break-all; }
+.slug-input { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.slug-input span { padding: 0 4px 0 12px; color: var(--muted); font-size: .9rem; white-space: nowrap; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
+.slug-input input { border: 0; border-radius: 0; padding-left: 0; min-width: 0; }
+.slug-input:focus-within { outline: 2px solid var(--primary); outline-offset: 1px; }
+.slug-input input:focus { outline: none; }
+@media (max-width: 560px) { [data-slug-form] .field { flex-basis: 100%; } }

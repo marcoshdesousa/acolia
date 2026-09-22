@@ -24,7 +24,7 @@ function adminPro(p) {
     clinic_name: p.clinic_name, clinic_address: p.clinic_address, subscription_until: p.subscription_until,
     visible: isVisible(p), admin_note: p.admin_note, created_at: p.created_at,
     has_document: !!p.document_file, document_is_pdf: /\.pdf$/.test(p.document_file || ''),
-    registry_verified: !!p.registry_verified, legal_name: p.legal_name || p.name,
+    registry_verified: !!p.registry_verified, legal_name: p.legal_name || p.name, slug: p.slug,
   };
 }
 

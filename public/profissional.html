@@ -15,7 +15,7 @@
 <body>
   <header class="topbar"><div class="container">
     <a class="brand" href="/"><span data-logo></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
-    <nav><a class="btn secondary sm" href="/entrar">Entrar</a></nav>
+    <nav data-nav></nav>
   </div></header>
   <main class="container" style="padding-top:20px;padding-bottom:48px">
     <a href="/#vitrine" class="btn ghost sm" style="margin-bottom:12px">← Voltar para a vitrine</a>
@@ -25,19 +25,52 @@
   <script src="/js/profile-view.js"></script>
   <script>
   (async function () {
-    const { $, api, ICONS, esc } = Acolia;
+    const { $, api, ICONS, esc, modal, toast } = Acolia;
     $('[data-logo]').innerHTML = ICONS.logo;
-    const id = Number(new URLSearchParams(location.search).get('id'));
+    // Abre pelo link próprio (site.com/nome) ou pelo antigo ?id=
+    const key = document.body.dataset.slug || new URLSearchParams(location.search).get('id');
+    const here = location.pathname + location.search;
     const me = await api('/api/auth/me').catch(() => ({}));
-    if (me.role === 'patient') { location.replace('/app#perfil/' + id); return; }
+    const patient = me.role === 'patient';
+    const nav = $('[data-nav]');
+    if (patient) nav.innerHTML = '<a class="btn secondary sm" href="/app">Abrir meu app</a>';
+    else nav.innerHTML = '<a class="btn secondary sm" href="/entrar?next=' + encodeURIComponent(here) + '">Entrar</a>';
+
+    function needAccount() {
+      modal({
+        title: 'Crie sua conta grátis',
+        html: '<p>Para mandar mensagem, favoritar e ver valores e localização, crie sua conta. Depois você volta direto para este perfil.</p>',
+        actions: [{ label: 'Já tenho conta', value: 'entrar', class: 'secondary' }, { label: 'Criar conta', value: 'criar' }],
+      }).then((v) => {
+        if (v === 'criar') location.href = '/cadastro-paciente?next=' + encodeURIComponent(here);
+        if (v === 'entrar') location.href = '/entrar?next=' + encodeURIComponent(here);
+      });
+    }
+
     try {
-      const p = await api('/api/professionals/' + id);
-      document.title = p.name + ' — Acolia';
+      const p = await api('/api/professionals/' + encodeURIComponent(key));
+      document.title = p.name + ' — ' + p.profession + ' | Acolia';
+      const heart = ICONS.heart.replace('<svg', '<svg style="width:18px;height:18px"');
+      const chat = ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"');
       $('[data-profile]').innerHTML = AcoliaProfile.render(p, {
-        actions: '<a class="btn" href="/entrar?next=' + encodeURIComponent('/app#conversar/' + id) + '">' + ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"') + ' Enviar mensagem</a>',
+        next: here,
+        actions: '<button class="btn secondary" data-fav>' + heart + ' <span>' + (p.favorite ? 'Favorito' : 'Favoritar') + '</span></button>'
+          + '<button class="btn" data-msg>' + chat + ' Enviar mensagem</button>',
+      });
+      let fav = !!p.favorite;
+      $('[data-fav]').addEventListener('click', async () => {
+        if (!patient) return needAccount();
+        await api('/api/patient/favorites/' + p.id, { method: fav ? 'DELETE' : 'POST' });
+        fav = !fav;
+        $('[data-fav] span').textContent = fav ? 'Favorito' : 'Favoritar';
+        toast(fav ? 'Adicionado aos favoritos' : 'Removido dos favoritos');
+      });
+      $('[data-msg]').addEventListener('click', () => {
+        if (!patient) return needAccount();
+        location.href = '/app#conversar/' + p.id;
       });
     } catch (e) {
-      $('[data-profile]').innerHTML = '<div class="empty">' + esc(e.message) + '</div>';
+      $('[data-profile]').innerHTML = '<div class="empty">' + esc(e.message === 'Profissional não encontrado.' ? 'Este profissional não está disponível no momento.' : e.message) + '</div>';
     }
   })();
   </script>

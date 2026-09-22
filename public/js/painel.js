@@ -12,7 +12,28 @@
   $('[data-logo]').innerHTML = ICONS.logo;
   $$('[data-i]').forEach((el) => { el.outerHTML = ICONS[el.dataset.i]; });
 
+  function renderLink() {
+    const url = `${location.origin}/${me.slug}`;
+    $('[data-my-link]').textContent = url;
+    $('[data-open-link]').href = `/${me.slug}`;
+    $('[data-origin]').textContent = `${location.host}/`;
+    $('[data-slug-form]').slug.value = me.slug || '';
+  }
+  $('[data-copy-link]').addEventListener('click', () => copyText(`${location.origin}/${me.slug}`));
+  $('[data-share-link]').addEventListener('click', async () => {
+    const url = `${location.origin}/${me.slug}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: `${me.name} — Acolia`, text: 'Agende sua consulta online comigo pela Acolia:', url }); } catch { /* cancelado */ }
+    } else copyText(url);
+  });
+  handleForm($('[data-slug-form]'), async (d) => {
+    me = await api('/api/professional/slug', { method: 'POST', body: d });
+    renderLink();
+    toast('Link atualizado! O link antigo deixou de funcionar.');
+  });
+
   function renderMe() {
+    renderLink();
     $('[data-me-avatar]').innerHTML = `<a href="#perfil" aria-label="Meu perfil">${avatar(me.name, me.photo, 'sm')}</a>`;
     $('[data-photo]').innerHTML = avatar(me.name, me.photo, 'lg');
     $('[data-my-code]').textContent = me.code;

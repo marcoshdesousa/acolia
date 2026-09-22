@@ -109,10 +109,10 @@ function insertProfessional(d, passwordHash, status, subscriptionUntil = null) {
   const code = newProfessionalCode();
   const info = db.prepare(`INSERT INTO professionals
     (code, name, profession, registry, email, phone, password_hash, status, state, city, city_norm, subscription_until,
-     document_file, registry_verified, legal_name)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+     document_file, registry_verified, legal_name, slug)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(code, d.name, d.profession, d.registry, d.email, d.phone, passwordHash, status, d.state, d.city, U.norm(d.city), subscriptionUntil,
-      d.document_file || null, d.registry_verified ? 1 : 0, d.name);
+      d.document_file || null, d.registry_verified ? 1 : 0, d.name, require('../slug').uniqueSlug(db, d.name));
   return { id: Number(info.lastInsertRowid), code };
 }
 

@@ -165,6 +165,7 @@
         </div></div>
         <table style="font-size:.9rem"><tbody>
           <tr><th>Código único</th><td><code style="font-size:1.05rem;font-weight:800">${esc(p.code)}</code> <button type="button" class="btn ghost sm" data-copy-code>Copiar</button></td></tr>
+          <tr><th>Link</th><td>${p.slug ? `<a href="/${esc(p.slug)}" target="_blank" rel="noopener">${esc(location.host)}/${esc(p.slug)}</a>` : '—'}</td></tr>
           <tr><th>Nome na carteirinha</th><td>${esc(p.legal_name)}</td></tr>
           <tr><th>Registro</th><td><div class="row" style="gap:6px"><input data-registry value="${esc(p.registry)}" maxlength="40" style="width:auto;min-height:34px;padding:4px 8px">
             <button type="button" class="btn ghost sm" data-save-registry>Salvar</button></div>

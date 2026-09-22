@@ -40,6 +40,9 @@
     const { $, api, ICONS, handleForm, maskCpf, isValidCpf, ufOptions, bindUfCity } = Acolia;
     $('[data-logo]').innerHTML = ICONS.logo;
     const form = $('[data-form]');
+    const next = new URLSearchParams(location.search).get('next');
+    const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+    if (safeNext) $('a[href="/entrar"]').href = '/entrar?next=' + encodeURIComponent(safeNext);
     form.state.innerHTML = ufOptions('', 'UF');
     bindUfCity(form.state, form.city);
     maskCpf(form.cpf);
@@ -53,7 +56,7 @@
       if (d.password !== d.password2) throw new Error('As senhas não são iguais.');
       if (!d.terms) throw new Error('Para continuar, aceite o uso dos dados.');
       await api('/api/auth/patient/register', { method: 'POST', body: d });
-      location.href = '/app';
+      location.href = safeNext || '/app';
     });
   })();
   </script>

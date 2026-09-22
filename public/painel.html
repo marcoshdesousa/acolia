@@ -54,6 +54,22 @@
       <section data-view="perfil" class="hidden" style="max-width:820px">
         <h1 style="font-size:1.5rem">Meu perfil</h1>
         <p class="muted">É assim que os pacientes veem você na vitrine. <a href="#" data-preview>Ver como paciente</a></p>
+        <div class="card stack" style="margin-bottom:16px;border-color:var(--primary)">
+          <h2 style="margin:0">Seu link de divulgação</h2>
+          <p class="small muted" style="margin:0">Coloque na bio do Instagram, no WhatsApp ou onde quiser. Quem abrir vê seu perfil com valores e pode te mandar mensagem. Se a pessoa ainda não tiver conta, cria na hora e volta direto para o seu perfil.</p>
+          <div class="link-box"><span data-my-link></span></div>
+          <div class="row">
+            <button class="btn" type="button" data-copy-link>Copiar link</button>
+            <a class="btn secondary" data-open-link target="_blank" rel="noopener">Abrir</a>
+            <button class="btn ghost" type="button" data-share-link>Compartilhar</button>
+          </div>
+          <form class="row" data-slug-form style="align-items:flex-end">
+            <div class="field grow" style="margin:0"><label for="slug">Personalizar o final do link</label>
+              <div class="slug-input"><span data-origin></span><input id="slug" name="slug" maxlength="40" required autocomplete="off" spellcheck="false"></div>
+              <div class="hint">Só letras, números e hífen. Ex.: dra-ana-lima</div></div>
+            <button class="btn secondary" type="submit">Salvar link</button>
+          </form>
+        </div>
         <div class="card stack">
           <div class="row"><span data-photo></span>
             <div class="stack"><label class="btn secondary sm" style="margin:0;width:max-content">Trocar foto de perfil<input type="file" accept="image/jpeg,image/png,image/webp" data-photo-input hidden></label>

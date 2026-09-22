@@ -4,13 +4,13 @@
   const { esc, ICONS, avatar, money } = window.Acolia;
   const ic = (name, s = 18) => ICONS[name].replace('<svg', `<svg style="width:${s}px;height:${s}px;vertical-align:-4px"`);
 
-  function render(p, { actions = '' } = {}) {
+  function render(p, { actions = '', next = '' } = {}) {
     const specialties = (p.specialties || '').split(',').map((s) => s.trim()).filter(Boolean);
     let details;
     if (p.locked) {
       details = `<div class="card flat stack">
         <div class="locked">${ic('lock')} Valores, pacotes e localização aparecem somente para quem tem conta.</div>
-        <div class="row"><a class="btn" href="/cadastro-paciente">Criar conta grátis</a><a class="btn secondary" href="/entrar?next=${encodeURIComponent('/app#perfil/' + p.id)}">Já tenho conta</a></div></div>`;
+        <div class="row"><a class="btn" href="/cadastro-paciente${next ? `?next=${encodeURIComponent(next)}` : ''}">Criar conta grátis</a><a class="btn secondary" href="/entrar?next=${encodeURIComponent(next || '/app#perfil/' + p.id)}">Já tenho conta</a></div></div>`;
     } else {
       const pk = p.packages || [];
       details = `

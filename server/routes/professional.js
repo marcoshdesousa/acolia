@@ -87,6 +87,14 @@ router.post('/delete', (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/slug', (req, res) => {
+  const slug = require('../slug').validateSlug(req.body.slug);
+  const taken = db.prepare('SELECT 1 FROM professionals WHERE slug = ? AND id <> ?').get(slug, req.auth.user.id);
+  if (taken) throw new U.HttpError(409, 'Este link já está em uso por outro profissional. Tente outro.');
+  db.prepare('UPDATE professionals SET slug = ? WHERE id = ?').run(slug, req.auth.user.id);
+  res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
+});
+
 router.post('/password', (req, res) => {
   if (!U.verifyPassword(req.body.current || '', req.auth.user.password_hash)) throw new U.HttpError(400, 'Senha atual incorreta.');
   requirePassword(req.body.password);

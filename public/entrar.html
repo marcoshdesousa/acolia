@@ -55,6 +55,7 @@
     maskCpf($('#cpf'));
     const next = new URLSearchParams(location.search).get('next');
     const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+    if (safeNext) $('a[href="/cadastro-paciente"]').href = '/cadastro-paciente?next=' + encodeURIComponent(safeNext);
     handleForm($('[data-login-patient]'), async (d) => {
       await api('/api/auth/patient/login', { method: 'POST', body: d });
       location.href = safeNext || '/app';

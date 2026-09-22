@@ -70,6 +70,26 @@ function createApp() {
   app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
   const pub = path.join(__dirname, '..', 'public');
   app.use(express.static(pub, { extensions: ['html'] }));
+  // Link próprio do profissional: site.com/<slug> abre o perfil dele
+  const profileHtml = require('node:fs').readFileSync(path.join(pub, 'profissional.html'), 'utf8');
+  app.get(/^\/([a-zA-Z0-9-]{3,40})\/?$/, (req, res, next) => {
+    const { db } = require('./db');
+    const slug = req.params[0].toLowerCase();
+    const p = db.prepare("SELECT name, profession, registry, city, state FROM professionals WHERE slug = ? AND status <> 'excluido'").get(slug);
+    if (!p) return next();
+    const title = U.cleanText(`${p.name} — ${p.profession} | Acolia`, 160).replace(/[<>&"]/g, '');
+    const desc = U.cleanText(`${p.profession} (${p.registry}). Veja o perfil, valores e agende sua consulta online pela Acolia.`, 300).replace(/[<>&"]/g, '');
+    const html = profileHtml
+      .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>
+  <meta name="description" content="${desc}">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${desc}">
+  <meta property="og:image" content="/img/app-icon-512.png">
+  <meta property="og:type" content="profile">`)
+      .replace('<body>', `<body data-slug="${slug}">`);
+    res.type('html').send(html);
+  });
+
   app.use((_req, res) => res.status(404).sendFile(path.join(pub, '404.html')));
 
   // eslint-disable-next-line no-unused-vars
