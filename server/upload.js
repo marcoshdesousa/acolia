@@ -70,6 +70,38 @@ function removeDocument(name) {
   cloud.removeFile('documents', name);
 }
 
+// Áudios do chat: pasta PRIVADA (só quem participa da conversa ouve)
+const AUDIO_DIR = path.join(DATA_DIR, 'audio');
+fs.mkdirSync(AUDIO_DIR, { recursive: true });
+const AUDIO_EXT = {
+  'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/aac': '.aac', 'audio/mpeg': '.mp3',
+};
+const audioUpload = multer({
+  storage: multer.diskStorage({
+    destination: AUDIO_DIR,
+    filename: (_req, file, cb) => cb(null, crypto.randomBytes(16).toString('hex') + AUDIO_EXT[file.mimetype.split(';')[0]]),
+  }),
+  limits: { fileSize: 12 * 1024 * 1024, files: 1, fields: 5 },
+  fileFilter: (_req, file, cb) => {
+    if (file.fieldname !== 'audio' || !AUDIO_EXT[file.mimetype.split(';')[0]]) return cb(new HttpError(400, 'Formato de áudio não suportado.'));
+    cb(null, true);
+  },
+}).single('audio');
+
+function handleAudio(req, res) {
+  return new Promise((resolve, reject) => {
+    audioUpload(req, res, (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') return reject(new HttpError(400, 'Áudio muito longo. Grave até 5 minutos.'));
+        return reject(err.status ? err : new HttpError(400, 'Não foi possível enviar o áudio.'));
+      }
+      if (!req.file) return reject(new HttpError(400, 'Grave um áudio.'));
+      cloud.uploadFile('audio', req.file.path);
+      resolve(req.file.filename);
+    });
+  });
+}
+
 function removePhoto(url) {
   if (!url || !url.startsWith('/uploads/')) return;
   const file = path.join(UPLOAD_DIR, path.basename(url));
@@ -77,4 +109,4 @@ function removePhoto(url) {
   cloud.removeFile('uploads', url);
 }
 
-module.exports = { handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };
+module.exports = { handleAudio, AUDIO_DIR, handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };

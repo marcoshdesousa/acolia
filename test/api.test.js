@@ -709,3 +709,40 @@ test('clínica: link do Google Maps vira mini mapa, só para quem tem conta', as
   assert.equal(none.map_embed, '');
   assert.equal((await dp.get('/api/professional/me')).data.maps_url, '', 'sem clínica o link é descartado');
 });
+
+test('mensagem de voz: paciente e profissional mandam áudio; só quem participa ouve', async () => {
+  const created = await admin.post('/api/admin/professionals', {
+    name: 'Eva Prado', profession: 'Psicólogo(a)', registry: 'X-12', email: 'eva@example.com', phone: '11944443333', state: 'SP', city: 'Campinas',
+  });
+  const ep = client();
+  await ep.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
+  const pt = client();
+  await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+  const conv = (await pt.post('/api/chat/conversations', { professional_id: created.data.id })).data;
+  const sendAudio = async (who, type = 'audio/webm;codecs=opus') => {
+    const fd = new FormData();
+    fd.append('duration', '7');
+    fd.append('audio', new Blob([Buffer.from('OggS-fake-audio')], { type }), 'a.webm');
+    const res = await fetch(`${base}/api/chat/conversations/${conv.id}/audio`, { method: 'POST', body: fd, headers: { Cookie: who.cookie } });
+    return { status: res.status, data: await res.json() };
+  };
+  let r = await sendAudio(ep);
+  assert.equal(r.status, 404, 'profissional não manda áudio antes do paciente escrever');
+  r = await sendAudio(pt);
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.kind, 'audio');
+  const [file, secs] = r.data.body.split('|');
+  assert.equal(secs, '7');
+  r = await sendAudio(ep, 'audio/mp4');
+  assert.equal(r.status, 201, 'profissional responde com áudio (formato do iPhone)');
+  assert.equal((await sendAudio(pt, 'video/mp4')).status, 400, 'vídeo não é aceito');
+
+  const listen = (who) => fetch(`${base}/api/chat/audio/${file}`, { headers: who.cookie ? { Cookie: who.cookie } : {} });
+  assert.equal((await listen(pt)).status, 200);
+  assert.equal((await listen(ep)).status, 200);
+  assert.equal((await listen(anon)).status, 401, 'sem login não ouve');
+  const other = client();
+  const reg = await other.post('/api/auth/patient/register', { name: 'Tomas Reis', cpf: '987.654.320-29', state: 'SP', city: 'Campinas', password: '123456' });
+  assert.equal(reg.status, 201);
+  assert.equal((await listen(other)).status, 404, 'outro paciente logado não ouve');
+});

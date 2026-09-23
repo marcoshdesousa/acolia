@@ -46,6 +46,7 @@
       const prefix = m.sender_role === role ? 'Você: ' : '';
       if (m.kind === 'pix') return `${prefix}Chave Pix enviada`;
       if (m.kind === 'call') return `${prefix}Código de atendimento`;
+      if (m.kind === 'audio') return `${prefix}🎤 Áudio (${fmtSecs(audioParts(m.body).secs)})`;
       return prefix + m.body;
     }
 
@@ -104,6 +105,7 @@
     }
 
     function closeThread() {
+      stopRecording(false);
       state.current = null;
       chatEl.classList.remove('open');
       threadWrap.classList.add('hidden');
@@ -136,7 +138,10 @@
         </div>
         <form class="composer" data-composer>
           <textarea rows="1" placeholder="${c.peer.active ? 'Digite uma mensagem' : 'Esta conta não está mais ativa'}" aria-label="Mensagem" ${c.peer.active ? '' : 'disabled'} maxlength="4000"></textarea>
-          <button class="btn send" type="submit" aria-label="Enviar" ${c.peer.active ? '' : 'disabled'}>${ICONS.send}</button>
+          <div class="rec-bar" aria-live="polite"><span class="rec-dot"></span> Gravando <b data-rec-time>0:00</b></div>
+          <button class="icon-btn rec-cancel" type="button" data-rec-cancel aria-label="Cancelar áudio" title="Cancelar">${ICONS.trash}</button>
+          <button class="btn send mic" type="button" data-mic aria-label="Gravar áudio" title="Gravar áudio" ${c.peer.active ? '' : 'disabled'}>${ICONS.mic}</button>
+          <button class="btn send" type="submit" data-send aria-label="Enviar" ${c.peer.active ? '' : 'disabled'}>${ICONS.send}</button>
         </form>`;
       renderMessages(true);
 
@@ -146,6 +151,12 @@
       $('[data-call]', threadWrap)?.addEventListener('click', createCall);
       const form = $('[data-composer]', threadWrap);
       const ta = $('textarea', form);
+      // Igual ao WhatsApp: campo vazio mostra o microfone; com texto, o botão de enviar
+      const syncButtons = () => form.classList.toggle('has-text', ta.value.trim().length > 0);
+      syncButtons();
+      $('[data-mic]', form).addEventListener('click', () => startRecording(form));
+      $('[data-rec-cancel]', form).addEventListener('click', () => stopRecording(false));
+      ta.addEventListener('input', syncButtons);
       ta.addEventListener('input', () => {
         ta.style.height = 'auto';
         ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
@@ -159,10 +170,12 @@
       });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (form.classList.contains('recording')) { stopRecording(true); return; }
         const body = ta.value.trim();
         if (!body) return;
         ta.value = '';
         ta.style.height = 'auto';
+        syncButtons();
         try {
           addMessage(await api(`/api/chat/conversations/${c.id}/messages`, { method: 'POST', body: { body } }));
         } catch (ex) { ta.value = body; toast(ex.message, 'error'); }
@@ -170,6 +183,76 @@
       });
       const box = $('[data-messages]', threadWrap);
       box.addEventListener('scroll', () => { if (box.scrollTop < 60) loadOlder(); });
+    }
+
+    // ---------- Áudio (mensagem de voz) ----------
+    function audioParts(body) {
+      const [file, secs] = String(body).split('|');
+      return { file, secs: Number(secs) || 0 };
+    }
+    function fmtSecs(t) { return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`; }
+
+    const MAX_REC_SECS = 300; // 5 minutos
+    const rec = { recorder: null, stream: null, chunks: [], started: 0, timer: null, send: false };
+
+    function pickMime() {
+      const opts = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm'];
+      return opts.find((t) => window.MediaRecorder?.isTypeSupported?.(t)) || '';
+    }
+
+    async function startRecording(form) {
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+        toast('Seu navegador não permite gravar áudio. Atualize o navegador ou use o Chrome/Safari.', 'error');
+        return;
+      }
+      try {
+        rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      } catch {
+        toast('Libere o microfone no navegador para gravar áudio.', 'error');
+        return;
+      }
+      const mime = pickMime();
+      rec.recorder = new MediaRecorder(rec.stream, mime ? { mimeType: mime } : undefined);
+      rec.chunks = [];
+      rec.send = false;
+      rec.recorder.ondataavailable = (e) => { if (e.data.size) rec.chunks.push(e.data); };
+      rec.recorder.onstop = () => finishRecording(form);
+      rec.recorder.start(250);
+      rec.started = Date.now();
+      form.classList.add('recording');
+      const clock = $('[data-rec-time]', form);
+      clock.textContent = '0:00';
+      rec.timer = setInterval(() => {
+        const t = (Date.now() - rec.started) / 1000;
+        clock.textContent = fmtSecs(t);
+        if (t >= MAX_REC_SECS) stopRecording(true);
+      }, 250);
+    }
+
+    function stopRecording(send) {
+      if (!rec.recorder || rec.recorder.state === 'inactive') return;
+      rec.send = send;
+      clearInterval(rec.timer);
+      rec.recorder.stop();
+    }
+
+    async function finishRecording(form) {
+      rec.stream?.getTracks().forEach((t) => t.stop());
+      form.classList.remove('recording');
+      const secs = (Date.now() - rec.started) / 1000;
+      const type = rec.recorder.mimeType || rec.chunks[0]?.type || 'audio/webm';
+      rec.recorder = null;
+      if (!rec.send) return;
+      if (secs < 1) { toast('Áudio muito curto.'); return; }
+      const blob = new Blob(rec.chunks, { type });
+      const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm';
+      const fd = new FormData();
+      fd.append('duration', String(Math.round(secs)));
+      fd.append('audio', blob, `audio.${ext}`);
+      const c = state.current;
+      try {
+        addMessage(await api(`/api/chat/conversations/${c.id}/audio`, { method: 'POST', form: fd }));
+      } catch (ex) { toast(ex.message, 'error'); }
     }
 
     function msgHtml(m) {
@@ -187,6 +270,11 @@
           <span class="small muted">Use este código em “Entrar no atendimento”. Ele deixa de valer quando o atendimento for finalizado.</span>
           ${mine ? `<button type="button" class="btn secondary sm" data-copy="${esc(link)}">${ICONS.copy} Copiar link</button>`
             : `<a class="btn sm" href="${esc(link)}" target="_blank" rel="noopener">${ICONS.video} Entrar no atendimento</a>`}</div>`;
+      } else if (m.kind === 'audio') {
+        const a = audioParts(m.body);
+        inner = `<div class="msg-audio">${ICONS.mic.replace('<svg', '<svg style="width:18px;height:18px;flex:none"')}
+          <audio controls preload="metadata" src="/api/chat/audio/${encodeURIComponent(a.file)}"></audio>
+          <span class="small muted">${fmtSecs(a.secs)}</span></div>`;
       } else {
         inner = esc(m.body);
       }

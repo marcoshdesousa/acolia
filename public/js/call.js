@@ -78,17 +78,149 @@
     $('[data-join-audio]').onclick = () => { setCamera(false); join(); };
   }
 
-  // ---------- Chamada em segundo plano (janelinha flutuante) ----------
-  // Ao sair da tela (WhatsApp, Instagram…) a chamada continua. Quando o navegador permite,
-  // o vídeo da outra pessoa vai para uma janelinha flutuante (picture-in-picture).
+  // ---------- Quem é quem (nome e foto para o avatar quando a câmera desliga) ----------
+  const safePhoto = (u) => (typeof u === 'string' && u.startsWith('/uploads/') ? u : null);
+  function myIdentity() {
+    if (S.role === 'host') return { name: S.info.professional.name, photo: safePhoto(S.info.professional.photo) };
+    return S.meIdentity || { name: S.info.call.patient_label, photo: null };
+  }
+  function peerIdentity() {
+    if (S.peerIdentity) return S.peerIdentity;
+    return S.role === 'host' ? { name: S.info.call.patient_label, photo: null } : { name: S.info.professional.name, photo: safePhoto(S.info.professional.photo) };
+  }
+  const myCamLive = () => S.camOn && S.local?.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
+
+  // ---------- Janelinha flutuante (picture-in-picture) com os DOIS vídeos ----------
+  // O navegador só põe UM vídeo na janelinha. Então desenhamos numa tela (canvas) a outra
+  // pessoa grande e você pequeno no canto — com o avatar de quem estiver com a câmera
+  // desligada — e é essa imagem que vai para a janelinha. O som continua normal.
   const remoteEl = () => $('#remoteVideo');
-  const pipSupported = () => !!(document.pictureInPictureEnabled || remoteEl().webkitSupportsPresentationMode);
+  const pipEl = () => $('#pipVideo');
+  const PIP = { canvas: null, ctx: null, tick: null, fast: false, images: {} };
+  const pipSupported = () => !!(document.pictureInPictureEnabled || pipEl().webkitSupportsPresentationMode);
+  const inPip = () => document.pictureInPictureElement === pipEl() || pipEl().webkitPresentationMode === 'picture-in-picture';
+
+  function photoImage(url) {
+    if (!url) return null;
+    if (!PIP.images[url]) { const img = new Image(); img.src = url; PIP.images[url] = img; }
+    const img = PIP.images[url];
+    return img.complete && img.naturalWidth ? img : null;
+  }
+
+  // Fundo da marca + foto de perfil (ou as iniciais), igual ao WhatsApp com a câmera desligada
+  function drawAvatar(ctx, x, y, w, h, who) {
+    const g = ctx.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, '#3f5550');
+    g.addColorStop(1, '#6f8a83');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+    const r = Math.min(w, h) * 0.24;
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.closePath();
+    const img = photoImage(who.photo);
+    if (img) {
+      ctx.clip();
+      const s = Math.max((2 * r) / img.naturalWidth, (2 * r) / img.naturalHeight);
+      ctx.drawImage(img, cx - (img.naturalWidth * s) / 2, cy - (img.naturalHeight * s) / 2, img.naturalWidth * s, img.naturalHeight * s);
+    } else {
+      ctx.fillStyle = '#e5ebe8';
+      ctx.fill();
+      ctx.fillStyle = '#3f5550';
+      ctx.font = `800 ${Math.round(r * 0.9)}px Nunito, system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(Acolia.initials ? Acolia.initials(who.name) : (who.name || '?').slice(0, 2).toUpperCase(), cx, cy + r * 0.05);
+    }
+    ctx.restore();
+  }
+
+  function drawVideo(ctx, v, x, y, w, h, mirror) {
+    const vw = v.videoWidth;
+    const vh = v.videoHeight;
+    const s = Math.max(w / vw, h / vh); // preenche o quadro (corta as sobras)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    if (mirror) { ctx.translate(x + w, y); ctx.scale(-1, 1); x = 0; y = 0; }
+    ctx.drawImage(v, x + (w - vw * s) / 2, y + (h - vh * s) / 2, vw * s, vh * s);
+    ctx.restore();
+  }
+
+  function drawPip() {
+    const { canvas, ctx } = PIP;
+    const remote = remoteEl();
+    const peerVideo = !S.peerCamOff && remote.videoWidth > 0 && S.pc?.connectionState === 'connected';
+    // A janelinha acompanha o formato do vídeo da outra pessoa (em pé ou deitado)
+    const portrait = peerVideo && remote.videoHeight > remote.videoWidth;
+    const W = portrait ? 360 : 640;
+    const H = portrait ? 640 : 360;
+    if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+    if (peerVideo) drawVideo(ctx, remote, 0, 0, W, H, false);
+    else drawAvatar(ctx, 0, 0, W, H, peerIdentity());
+    // Você, pequeno no canto
+    const tw = Math.round(Math.min(W, H) * 0.34);
+    const th = Math.round(tw * 4 / 3);
+    const tx = W - tw - 10;
+    const ty = H - th - 10;
+    const local = $('#localVideo');
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.fillRect(tx - 2, ty - 2, tw + 4, th + 4);
+    ctx.restore();
+    if (myCamLive() && local.videoWidth > 0) drawVideo(ctx, local, tx, ty, tw, th, true);
+    else drawAvatar(ctx, tx, ty, tw, th, myIdentity());
+  }
+
+  // Relógio num "worker": continua batendo mesmo com a aba em segundo plano
+  function startPipClock(fps) {
+    stopPipClock();
+    const ms = Math.round(1000 / fps);
+    try {
+      const src = `let t=setInterval(()=>postMessage(0),${ms});onmessage=()=>{clearInterval(t)}`;
+      PIP.tick = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      PIP.tick.onmessage = drawPip;
+    } catch {
+      PIP.tick = { interval: setInterval(drawPip, ms) };
+    }
+  }
+  function stopPipClock() {
+    if (!PIP.tick) return;
+    if (PIP.tick.interval) clearInterval(PIP.tick.interval);
+    else PIP.tick.terminate();
+    PIP.tick = null;
+  }
+
+  // Prepara a imagem da janelinha desde o início (devagar), para ela abrir na hora
+  function setupPipSource() {
+    PIP.canvas = document.createElement('canvas');
+    PIP.canvas.width = 640;
+    PIP.canvas.height = 360;
+    PIP.ctx = PIP.canvas.getContext('2d');
+    drawPip();
+    if (!PIP.canvas.captureStream) return false;
+    const v = pipEl();
+    v.srcObject = PIP.canvas.captureStream(24);
+    v.play().catch(() => {});
+    startPipClock(4);
+    v.addEventListener('enterpictureinpicture', () => startPipClock(24));
+    v.addEventListener('leavepictureinpicture', () => startPipClock(4));
+    v.addEventListener('webkitpresentationmodechanged', () => startPipClock(inPip() ? 24 : 4));
+    return true;
+  }
 
   async function enterPip() {
-    const v = remoteEl();
-    if (!v.srcObject || S.ended) return;
+    if (S.ended || !PIP.canvas) return;
+    const v = pipEl();
     try {
-      if (document.pictureInPictureElement === v) return;
+      if (inPip()) return;
+      startPipClock(24);
+      drawPip();
+      if (v.paused) await v.play().catch(() => {});
       if (v.requestPictureInPicture) await v.requestPictureInPicture();
       else if (v.webkitSetPresentationMode) v.webkitSetPresentationMode('picture-in-picture');
     } catch { /* o navegador não deixou (precisa de um toque) */ }
@@ -96,17 +228,17 @@
   async function exitPip() {
     try {
       if (document.pictureInPictureElement) await document.exitPictureInPicture();
-      else if (remoteEl().webkitPresentationMode === 'picture-in-picture') remoteEl().webkitSetPresentationMode('inline');
+      else if (pipEl().webkitPresentationMode === 'picture-in-picture') pipEl().webkitSetPresentationMode('inline');
     } catch { /* ignora */ }
   }
 
   function setupBackground() {
-    const v = remoteEl();
-    v.autoPictureInPicture = true; // Safari (iPhone/iPad/Mac): entra sozinho na janelinha ao sair
-    v.setAttribute('autopictureinpicture', '');
+    const ok = setupPipSource();
+    const v = pipEl();
+    v.autoPictureInPicture = true; // Safari: entra sozinho na janelinha ao sair
     const ms = navigator.mediaSession;
     if (ms) {
-      try { ms.metadata = new MediaMetadata({ title: 'Atendimento Acolia', artist: $('[data-top-name]').textContent, artwork: [{ src: '/img/app-icon-512.png', sizes: '512x512', type: 'image/png' }] }); } catch { /* ignora */ }
+      try { ms.metadata = new MediaMetadata({ title: 'Atendimento Acolia', artist: peerIdentity().name, artwork: [{ src: '/img/app-icon-512.png', sizes: '512x512', type: 'image/png' }] }); } catch { /* ignora */ }
       const on = (action, fn) => { try { ms.setActionHandler(action, fn); } catch { /* não suportado */ } };
       on('enterpictureinpicture', enterPip); // Chrome: janelinha automática ao trocar de app/aba
       on('togglemicrophone', () => $('[data-mic]').click());
@@ -116,12 +248,12 @@
     // Tentativa extra ao sair da tela (funciona em alguns navegadores)
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') enterPip();
-      else if (!S.ended) { v.play().catch(() => {}); $('#localVideo').play().catch(() => {}); }
+      else if (!S.ended) { remoteEl().play().catch(() => {}); $('#localVideo').play().catch(() => {}); }
     });
     const btn = $('[data-pip]');
-    btn.classList.toggle('hidden', !pipSupported());
+    btn.classList.toggle('hidden', !ok || !pipSupported());
     btn.innerHTML = ICONS.pip;
-    btn.addEventListener('click', () => (document.pictureInPictureElement ? exitPip() : enterPip()));
+    btn.addEventListener('click', () => (inPip() ? exitPip() : enterPip()));
   }
 
   // ---------- 3. Sala ----------
@@ -130,12 +262,16 @@
     document.body.classList.add('call-page');
     $('#localVideo').srcObject = S.local;
     const host = S.role === 'host';
-    const peerName = host ? S.info.call.patient_label : S.info.professional.name;
-    const peerPhoto = host ? null : S.info.professional.photo;
-    $('[data-top-avatar]').innerHTML = avatar(peerName, peerPhoto, 'sm');
-    $('[data-top-name]').textContent = peerName;
-    $('[data-overlay-avatar]').innerHTML = avatar(peerName, peerPhoto, 'xl');
-    $('[data-overlay-title]').textContent = peerName;
+    renderPeerIdentity();
+    // Paciente logado: usa o nome e a foto do perfil dele no avatar (quando a câmera desliga)
+    if (!host) {
+      api('/api/auth/me').then((r) => {
+        if (r.role !== 'patient') return;
+        S.meIdentity = { name: r.user.display_name || r.user.name, photo: safePhoto(r.user.photo) };
+        renderControls();
+        sendMediaState();
+      }).catch(() => {});
+    }
     overlay(host ? 'Aguardando o paciente entrar…' : 'Aguardando o profissional…');
 
     renderControls();
@@ -168,6 +304,14 @@
     window.addEventListener('beforeunload', () => S.socket?.emit('call:leave'));
   }
 
+  function renderPeerIdentity() {
+    const who = peerIdentity();
+    $('[data-top-avatar]').innerHTML = avatar(who.name, who.photo, 'sm');
+    $('[data-top-name]').textContent = who.name;
+    $('[data-overlay-avatar]').innerHTML = avatar(who.name, who.photo, 'xl');
+    $('[data-overlay-title]').textContent = who.name;
+  }
+
   function overlay(sub) {
     const o = $('[data-overlay]');
     if (sub === null) { o.classList.add('hidden'); return; }
@@ -192,7 +336,7 @@
     };
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState;
-      if (st === 'connected') { status('Em atendimento'); overlay(S.peerCamOff ? 'Câmera desligada' : null); startTimer(); }
+      if (st === 'connected') { status('Em atendimento'); overlay(S.peerCamOff ? 'Câmera desligada' : null); startTimer(); sendMediaState(); }
       if (st === 'disconnected') status('Conexão instável…');
       if (st === 'failed') {
         status('Falha na conexão');
@@ -268,7 +412,12 @@
     cam.disabled = false;
     if (!hasVideo && !S.camOn) cam.title = 'Ligar câmera';
     $('[data-end]').innerHTML = `${ICONS.phoneEnd} ${host ? 'Finalizar atendimento' : 'Sair'}`;
-    $('#localVideo').classList.toggle('hidden', !S.local.getVideoTracks().some((t) => t.enabled && t.readyState === 'live'));
+    // Sua câmera desligada: no lugar da imagem (nada de tela preta), aparece a sua foto ou as suas iniciais
+    const off = !myCamLive();
+    $('#localVideo').classList.toggle('hidden', off);
+    const tile = $('#localOff');
+    tile.classList.toggle('hidden', !off);
+    if (off) { const me = myIdentity(); tile.innerHTML = avatar(me.name, me.photo, 'lg'); }
   }
 
   $('[data-mic]').addEventListener('click', () => {
@@ -325,16 +474,21 @@
   }
 
   function sendMediaState() {
-    S.socket?.emit('call:media-state', { mic: S.micOn, cam: S.camOn });
+    const me = myIdentity();
+    S.socket?.emit('call:media-state', { mic: S.micOn, cam: S.camOn, name: me.name, photo: me.photo });
   }
 
-  function showPeerFlags({ mic, cam }) {
+  function showPeerFlags({ mic, cam, name, photo }) {
     S.peerCamOff = !cam;
+    if (typeof name === 'string' && name.trim()) {
+      S.peerIdentity = { name: name.trim().slice(0, 80), photo: safePhoto(photo) };
+      renderPeerIdentity();
+    }
     const f = [];
     if (!mic) f.push('<span>Microfone desligado</span>');
     if (!cam) f.push('<span>Câmera desligada</span>');
     $('[data-peer-flags]').innerHTML = f.join('');
-    if (S.pc?.connectionState === 'connected') overlay(cam ? null : 'Câmera desligada — atendimento por voz');
+    if (S.pc?.connectionState === 'connected') overlay(cam ? null : 'Câmera desligada');
   }
 
   $('[data-end]').addEventListener('click', async () => {
@@ -363,6 +517,7 @@
     if (S.ended) return;
     S.ended = true;
     exitPip();
+    stopPipClock();
     stopTimer();
     closePc();
     S.local?.getTracks().forEach((t) => t.stop());

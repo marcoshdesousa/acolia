@@ -98,7 +98,8 @@ function postMessage(req, c, kind, body) {
   // Notificação no aparelho de quem recebe
   const to = role === 'patient' ? ['professional', c.professional_id, `/painel#conversas/${c.id}`] : ['patient', c.patient_id, `/app#chat/${c.id}`];
   const from = role === 'patient' ? (sender.display_name || sender.name) : sender.name;
-  const text = kind === 'pix' ? 'Enviou a chave Pix para pagamento' : kind === 'call' ? 'Enviou um código de atendimento' : body;
+  const text = kind === 'pix' ? 'Enviou a chave Pix para pagamento' : kind === 'call' ? 'Enviou um código de atendimento'
+    : kind === 'audio' ? '🎤 Enviou um áudio' : body;
   require('../push').notify(to[0], to[1], {
     title: from, body: text.length > 140 ? `${text.slice(0, 137)}…` : text, url: to[2], tag: `conversa-${c.id}`,
   });
@@ -119,6 +120,34 @@ router.post('/conversations/:id/messages', (req, res) => {
   }
   if (!body) throw new U.HttpError(400, 'Mensagem vazia.');
   res.status(201).json(postMessage(req, c, kind, body));
+});
+
+// Mensagem de voz (os dois podem mandar; fotos e vídeos não existem no chat).
+// body = "arquivo|segundos"
+router.post('/conversations/:id/audio', async (req, res) => {
+  const c = loadConversation(req, req.params.id);
+  const peer = peerOf(req.auth.role, c);
+  if (!peer.active) throw new U.HttpError(403, 'Esta conta não está mais ativa na plataforma.');
+  const { handleAudio } = require('../upload');
+  const file = await handleAudio(req, res);
+  const secs = Math.max(1, Math.min(600, Math.round(Number(req.body.duration) || 0)));
+  res.status(201).json(postMessage(req, c, 'audio', `${file}|${secs}`));
+});
+
+// Ouvir um áudio: só quem participa da conversa
+router.get('/audio/:file', async (req, res) => {
+  const file = String(req.params.file);
+  if (!/^[a-f0-9]{32}\.(webm|ogg|m4a|aac|mp3)$/.test(file)) throw new U.HttpError(404, 'Áudio não encontrado.');
+  const s = side(req);
+  const ok = db.prepare(`SELECT 1 FROM messages m JOIN conversations c ON c.id = m.conversation_id
+    WHERE m.kind = 'audio' AND m.body LIKE ? AND c.${s.col} = ?`).get(`${file}|%`, req.auth.user.id);
+  if (!ok) throw new U.HttpError(404, 'Áudio não encontrado.');
+  const { AUDIO_DIR } = require('../upload');
+  const full = require('node:path').join(AUDIO_DIR, file);
+  if (!(await require('../cloud').ensureLocalFile('audio', full))) throw new U.HttpError(404, 'Áudio não encontrado.');
+  const types = { webm: 'audio/webm', ogg: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac', mp3: 'audio/mpeg' };
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.sendFile(full, { headers: { 'Content-Type': types[file.split('.').pop()] } });
 });
 
 router.post('/conversations/:id/read', (req, res) => {
