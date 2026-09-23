@@ -91,6 +91,7 @@ Testes: `npm test`
 - Logo e ícones otimizados (ex.: símbolo 86 KB → 11 KB) e a logo vem direto na página (aparece na hora).
 - O app guarda no aparelho: CSS/JS/ícones (abre na hora e atualiza por baixo), as páginas principais (sem internet abre a última versão) e as **fotos já vistas** (até 300; não baixa de novo). Vídeos não são guardados (tocam aos pouquinhos).
 - Grade do perfil usa a miniatura (600 px) em vez da foto inteira; foto de perfil é enviada com 640 px.
+- **Espaço usado**: na Visão geral do admin aparece "Espaço usado no disco" (X GB de 3 GB, com a barrinha) e quanto é de fotos, vídeos, áudios, documentos e banco; fica vermelho acima de 80%.
 - **Sem internet**: aparece a faixa "Você está sem internet" no topo; quando volta, "Conexão de volta" por 2 s e some. Se o app abrir sem internet, ele espera e recarrega sozinho quando a conexão voltar.
 
 ## Bloquear e apagar contas

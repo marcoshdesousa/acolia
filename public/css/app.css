@@ -863,3 +863,8 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .net-bar.on { background: var(--primary); color: var(--on-primary); }
 .net-dot { width: 9px; height: 9px; border-radius: 50%; background: #ff6b6b; flex: none; }
 .net-bar.on .net-dot { background: #7bd69a; }
+/* Admin: espaço usado no disco */
+.usage-card { padding: 14px 16px; }
+.usage-track { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin-top: 8px; }
+.usage-track i { display: block; height: 100%; border-radius: 99px; background: var(--primary); }
+.usage-track.warn i { background: var(--danger); }

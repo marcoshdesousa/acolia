@@ -54,6 +54,46 @@ function filterRows(rows, q) {
 // Onde os dados estão sendo guardados (para o admin conferir se é permanente)
 const storageInfo = () => require('../paths').storageStatus();
 
+// Quanto espaço está sendo usado no disco (fotos, vídeos, áudios, documentos, banco).
+// Conta os arquivos de verdade; guarda o resultado por 1 minuto para não pesar.
+let usageCache = { at: 0, data: null };
+function diskUsage() {
+  if (Date.now() - usageCache.at < 60e3 && usageCache.data) return usageCache.data;
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { DATA_DIR } = require('../paths');
+  const sizeOf = (dir, pick = () => true) => {
+    let total = 0;
+    let count = 0;
+    try {
+      for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (!f.isFile() || !pick(f.name)) continue;
+        try { total += fs.statSync(path.join(dir, f.name)).size; count++; } catch { /* sumiu */ }
+      }
+    } catch { /* pasta não existe */ }
+    return { bytes: total, count };
+  };
+  const up = path.join(DATA_DIR, 'uploads');
+  const isVideo = (n) => /\.(mp4|mov|webm)$/i.test(n);
+  const parts = {
+    fotos: sizeOf(up, (n) => !isVideo(n)),
+    videos: sizeOf(up, isVideo),
+    audios: sizeOf(path.join(DATA_DIR, 'audio')),
+    documentos: sizeOf(path.join(DATA_DIR, 'documents')),
+    envios: sizeOf(path.join(DATA_DIR, 'uploads-parts')),
+    banco: sizeOf(DATA_DIR, (n) => /\.db(-wal|-shm)?$/.test(n)),
+  };
+  let disk = null;
+  // Tamanho do disco só quando é o disco permanente (no Render: /var/data); fora dele seria o disco da máquina
+  if (['disco'].includes(require('../paths').storageStatus().mode)) try {
+    const st = fs.statfsSync(DATA_DIR);
+    disk = { total: st.blocks * st.bsize, free: st.bavail * st.bsize };
+  } catch { /* sem informação do disco */ }
+  const used = Object.values(parts).reduce((a, b) => a + b.bytes, 0);
+  usageCache = { at: Date.now(), data: { used, parts, disk } };
+  return usageCache.data;
+}
+
 router.get('/stats', (_req, res) => {
   const g = (sql) => db.prepare(sql).get().n;
   res.json({
@@ -67,6 +107,7 @@ router.get('/stats', (_req, res) => {
     conversations: g('SELECT COUNT(*) n FROM conversations'),
     messages: g('SELECT COUNT(*) n FROM messages'),
     storage: storageInfo(),
+    usage: diskUsage(),
   });
 });
 

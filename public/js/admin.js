@@ -78,6 +78,23 @@
       ? `<div class="notice ok">✓ Dados salvos de forma permanente — ${esc(st.label)}. Contas, logins, mensagens e fotos não se perdem em atualizações. (${s.patients} pacientes, ${s.professionals} profissionais, ${s.messages} mensagens guardadas)</div>`
       : `<div class="notice danger"><b>Atenção: os dados ainda não estão num disco permanente</b> (${esc(st.label)}). Contas criadas agora podem sumir na próxima atualização.<br>
           <b>Como resolver (uma vez só):</b> no Render, abra o serviço → <b>Disks</b> → <b>Add Disk</b> → Mount Path: <code>/var/data</code> → tamanho 1 GB → <b>Save</b>. O site encontra o disco sozinho e este aviso fica verde.</div>`;
+    // Espaço usado no disco
+    const u = s.usage;
+    if (u) {
+      const gb = (b) => (b / 1024 ** 3).toLocaleString('pt-BR', { maximumFractionDigits: b < 1024 ** 3 ? 3 : 2 });
+      const mb = (b) => (!b ? '0' : b < 1024 ** 2 ? `${Math.max(1, Math.round(b / 1024))} KB` : b < 1024 ** 3 ? `${(b / 1024 ** 2).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB` : `${gb(b)} GB`);
+      const total = u.disk?.total || 0;
+      const usedDisk = total ? total - u.disk.free : u.used;
+      const pct = total ? Math.min(100, Math.round((usedDisk / total) * 100)) : 0;
+      const P = u.parts;
+      const chip = (label, x) => `<span class="badge">${label}: <b>${mb(x.bytes)}</b>${x.count ? ` <span class="muted">(${x.count.toLocaleString('pt-BR')})</span>` : ''}</span>`;
+      $('[data-storage]').insertAdjacentHTML('beforeend', `<div class="card usage-card" style="margin-top:10px">
+          <div class="row between"><b>Espaço usado no disco</b><span>${total ? `<b>${gb(usedDisk)} GB</b> de ${gb(total)} GB (${pct}%)` : `<b>${mb(u.used)}</b>`}</span></div>
+          ${total ? `<div class="usage-track ${pct >= 80 ? 'warn' : ''}"><i style="width:${Math.max(1, pct)}%"></i></div>` : ''}
+          <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px">${chip('Fotos', P.fotos)}${chip('Vídeos', P.videos)}${chip('Áudios do chat', P.audios)}${chip('Documentos', P.documentos)}${chip('Banco de dados', P.banco)}${P.envios.bytes ? chip('Envios em andamento', P.envios) : ''}</div>
+          ${pct >= 80 ? '<p class="small" style="margin:8px 0 0;color:var(--danger)"><b>Disco quase cheio.</b> No Render: serviço → Disks → aumente o tamanho (os dados continuam).</p>' : ''}
+        </div>`);
+    }
     const pend = (await api('/api/admin/professionals?status=pendente')).items;
     $('[data-pending-list]').innerHTML = pend.length ? `<div class="table-wrap"><table><tbody>${pend.map(proRow).join('')}</tbody></table></div>`
       : '<p class="muted">Nenhum cadastro pendente. 🎉</p>';
