@@ -23,7 +23,9 @@
       <div class="field"><label for="name">Nome completo</label><input id="name" name="name" autocomplete="name" required maxlength="120">
         <div class="hint">Igual ao que consta no seu CPF.</div></div>
       <div class="field"><label for="cpf">CPF</label><input id="cpf" name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" required>
-        <div class="hint" data-cpf-hint>Precisa ser um CPF válido. Você vai usá-lo para entrar.</div></div>
+        <div class="hint" data-cpf-hint>Precisa ser um CPF válido. Você vai usá-lo para entrar. Não dá para mudar depois.</div></div>
+      <div class="field"><label for="birth">Data de nascimento</label><input id="birth" name="birth_date" type="date" required max="">
+        <div class="hint">Igual à do seu documento. Não dá para mudar depois.</div></div>
       <div class="field"><label>Onde você mora</label>
         <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
       <div class="field"><label for="pw">Crie uma senha</label><input id="pw" name="password" type="password" autocomplete="new-password" minlength="6" required>
@@ -51,6 +53,7 @@
     if (safeNext) $('a[href="/entrar"]').href = '/entrar?next=' + encodeURIComponent(safeNext);
     form.state.innerHTML = ufOptions('', 'UF');
     bindUfCity(form.state, form.city);
+    form.birth_date.max = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
     maskCpf(form.cpf);
     form.cpf.addEventListener('blur', () => {
       const bad = form.cpf.value && !isValidCpf(form.cpf.value);
@@ -59,6 +62,7 @@
     });
     handleForm(form, async (d) => {
       if (!isValidCpf(d.cpf)) throw new Error('CPF inválido. Confira os números digitados.');
+      if (!d.birth_date) throw new Error('Informe sua data de nascimento.');
       if (d.password !== d.password2) throw new Error('As senhas não são iguais.');
       if (!d.terms) throw new Error('Para continuar, aceite o uso dos dados.');
       await api('/api/auth/patient/register', { method: 'POST', body: d });

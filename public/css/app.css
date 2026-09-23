@@ -109,6 +109,8 @@ input, select, textarea {
 }
 textarea { resize: vertical; min-height: 90px; }
 input:focus, select:focus, textarea:focus, .btn:focus-visible, .icon-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+input.ro { background: var(--surface-2); color: var(--muted); cursor: default; }
+input.ro:focus { outline: none; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .grid-uf { display: grid; grid-template-columns: 110px 1fr; gap: 12px; }
 @media (max-width: 560px) { .grid-2 { grid-template-columns: 1fr; } }

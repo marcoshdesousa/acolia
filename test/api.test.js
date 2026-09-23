@@ -85,13 +85,13 @@ test('validação de CPF', () => {
 });
 
 test('paciente: cadastro exige CPF válido e nome completo', async () => {
-  let r = await pat.post('/api/auth/patient/register', { name: 'Maria Souza', cpf: '123.456.789-00', state: 'PA', city: 'Parauapebas', password: '123456' });
+  let r = await pat.post('/api/auth/patient/register', { name: 'Maria Souza', cpf: '123.456.789-00', state: 'PA', city: 'Parauapebas', birth_date: '1990-05-10', password: '123456' });
   assert.equal(r.status, 400);
-  r = await pat.post('/api/auth/patient/register', { name: 'Maria', cpf: CPF_A, state: 'PA', city: 'Parauapebas', password: '123456' });
+  r = await pat.post('/api/auth/patient/register', { name: 'Maria', cpf: CPF_A, state: 'PA', city: 'Parauapebas', birth_date: '1990-05-10', password: '123456' });
   assert.equal(r.status, 400);
-  r = await pat.post('/api/auth/patient/register', { name: 'Maria Souza', cpf: CPF_A, state: 'PA', city: 'Parauapebas', password: '123456' });
+  r = await pat.post('/api/auth/patient/register', { name: 'Maria Souza', cpf: CPF_A, state: 'PA', city: 'Parauapebas', birth_date: '1990-05-10', password: '123456' });
   assert.equal(r.status, 201);
-  r = await anon.post('/api/auth/patient/register', { name: 'Outra Pessoa', cpf: CPF_A, state: 'PA', city: 'Parauapebas', password: '123456' });
+  r = await anon.post('/api/auth/patient/register', { name: 'Outra Pessoa', cpf: CPF_A, state: 'PA', city: 'Parauapebas', birth_date: '1990-05-10', password: '123456' });
   assert.equal(r.status, 409, 'CPF duplicado');
   r = await pat.get('/api/auth/me');
   assert.equal(r.data.role, 'patient');
@@ -266,7 +266,7 @@ test('mensagens não podem ser editadas (só apagadas)', async () => {
 
 test('outro paciente não acessa a conversa', async () => {
   const other = client();
-  await other.post('/api/auth/patient/register', { name: 'Carlos Lima', cpf: CPF_B, state: 'SP', city: 'São Paulo', password: '123456' });
+  await other.post('/api/auth/patient/register', { name: 'Carlos Lima', cpf: CPF_B, state: 'SP', city: 'São Paulo', birth_date: '1990-05-10', password: '123456' });
   const r = await other.get(`/api/chat/conversations/${convId}/messages`);
   assert.equal(r.status, 404);
   // e o paciente de SP vê o profissional do PA depois dos locais (sem "near")
@@ -467,7 +467,7 @@ test('páginas estáticas', async () => {
 test('a própria pessoa exclui a conta (paciente e profissional)', async () => {
   const CPF_C = '714.285.039-60';
   const p = client();
-  await p.post('/api/auth/patient/register', { name: 'Paula Lima', cpf: CPF_C, state: 'SP', city: 'Campinas', password: '123456' });
+  await p.post('/api/auth/patient/register', { name: 'Paula Lima', cpf: CPF_C, state: 'SP', city: 'Campinas', birth_date: '1990-05-10', password: '123456' });
   let r = await p.post('/api/patient/delete', { password: 'errada' });
   assert.equal(r.status, 400);
   r = await p.post('/api/patient/delete', { password: '123456' });
@@ -475,7 +475,7 @@ test('a própria pessoa exclui a conta (paciente e profissional)', async () => {
   assert.equal((await p.get('/api/auth/me')).data.role, null, 'saiu da conta');
   r = await client().post('/api/auth/patient/login', { cpf: CPF_C, password: '123456' });
   assert.equal(r.status, 401);
-  r = await client().post('/api/auth/patient/register', { name: 'Paula Lima', cpf: CPF_C, state: 'SP', city: 'Campinas', password: '123456' });
+  r = await client().post('/api/auth/patient/register', { name: 'Paula Lima', cpf: CPF_C, state: 'SP', city: 'Campinas', birth_date: '1990-05-10', password: '123456' });
   assert.equal(r.status, 201, 'o CPF pode criar conta de novo');
 
   const created = await admin.post('/api/admin/professionals', {
@@ -638,7 +638,7 @@ test('profissional só vê a conversa depois que o paciente manda mensagem', asy
   const cp = client();
   await cp.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
   const pt = client();
-  await pt.post('/api/auth/patient/register', { name: 'Rita Souza', cpf: '453.178.287-91', state: 'SP', city: 'Campinas', password: '123456' });
+  await pt.post('/api/auth/patient/register', { name: 'Rita Souza', cpf: '453.178.287-91', state: 'SP', city: 'Campinas', birth_date: '1990-05-10', password: '123456' });
   const conv = (await pt.post('/api/chat/conversations', { professional_id: created.data.id })).data;
   assert.equal((await cp.get('/api/chat/conversations')).data.items.length, 0, 'só abrir o chat não aparece para o profissional');
   let r = await cp.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Oi' });
@@ -769,7 +769,7 @@ test('mensagem de voz: paciente e profissional mandam áudio; só quem participa
   assert.equal((await listen(ep)).status, 200);
   assert.equal((await listen(anon)).status, 401, 'sem login não ouve');
   const other = client();
-  const reg = await other.post('/api/auth/patient/register', { name: 'Tomas Reis', cpf: '987.654.320-29', state: 'SP', city: 'Campinas', password: '123456' });
+  const reg = await other.post('/api/auth/patient/register', { name: 'Tomas Reis', cpf: '987.654.320-29', state: 'SP', city: 'Campinas', birth_date: '1990-05-10', password: '123456' });
   assert.equal(reg.status, 201);
   assert.equal((await listen(other)).status, 404, 'outro paciente logado não ouve');
 });
@@ -828,14 +828,14 @@ test('vitrine do paciente: filtro automático pelo estado e, se houver, pelo mun
   assert.equal(r.data.city, null, 'sem filtro: todos');
   // Paciente de uma cidade sem profissionais: fica só o estado
   const other = client();
-  const reg = await other.post('/api/auth/patient/register', { name: 'Ivo Lima', cpf: '123.456.700-88', state: 'SP', city: 'Sorocaba', password: '123456' });
+  const reg = await other.post('/api/auth/patient/register', { name: 'Ivo Lima', cpf: '123.456.700-88', state: 'SP', city: 'Sorocaba', birth_date: '1990-05-10', password: '123456' });
   assert.equal(reg.status, 201, JSON.stringify(reg.data));
   r = await other.get('/api/professionals?auto=1');
   assert.equal(r.data.state, 'SP');
   assert.equal(r.data.city, null, 'sem profissionais no município, filtra só o estado');
   // Paciente de um estado sem nenhum profissional: mostra o Brasil todo
   const far = client();
-  assert.equal((await far.post('/api/auth/patient/register', { name: 'Ana Acre', cpf: '987.654.321-00', state: 'AC', city: 'Rio Branco', password: '123456' })).status, 201);
+  assert.equal((await far.post('/api/auth/patient/register', { name: 'Ana Acre', cpf: '987.654.321-00', state: 'AC', city: 'Rio Branco', birth_date: '1990-05-10', password: '123456' })).status, 201);
   r = await far.get('/api/professionals?auto=1');
   assert.equal(r.data.state, null);
   assert.equal(r.data.widened, 'brasil');
@@ -1270,7 +1270,7 @@ test('admin apaga a conta de verdade: some tudo e a pessoa pode criar a conta de
   // Paciente novo que curte, comenta, segue e conversa
   const CPF = '583.920.174-04';
   const pt = client();
-  const regR = await pt.post("/api/auth/patient/register", { name: "Caio Apagado", cpf: CPF, state: "SP", city: "Campinas", password: "123456" });
+  const regR = await pt.post("/api/auth/patient/register", { name: "Caio Apagado", cpf: CPF, state: "SP", city: "Campinas", birth_date: "1990-05-10", password: "123456" });
   assert.equal(regR.status, 201, JSON.stringify(regR.data));
   await pt.post(`/api/social/posts/${post.id}/like`);
   await pt.post(`/api/social/posts/${post.id}/comments`, { body: 'Oi' });
@@ -1286,7 +1286,7 @@ test('admin apaga a conta de verdade: some tudo e a pessoa pode criar a conta de
   assert.equal(db.prepare("SELECT COUNT(*) n FROM follows WHERE follower_role = 'patient' AND follower_id = ?").get(ptId).n, 0);
   assert.equal(db.prepare("SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND sender_role = 'patient' AND kind <> 'deleted'").get(conv.id).n, 0);
   assert.equal((await pt.get('/api/auth/me')).data.role, null, 'sessão encerrada');
-  assert.equal((await client().post('/api/auth/patient/register', { name: 'Caio Apagado', cpf: CPF, state: 'SP', city: 'Campinas', password: '123456' })).status, 201, 'pode criar a conta de novo');
+  assert.equal((await client().post('/api/auth/patient/register', { name: 'Caio Apagado', cpf: CPF, state: 'SP', city: 'Campinas', birth_date: '1990-05-10', password: '123456' })).status, 201, 'pode criar a conta de novo');
 
   // Apaga o profissional: publicações somem (com o arquivo) e e-mail/registro ficam livres
   const file = require('node:path').join(tmp, 'uploads', require('node:path').basename(post.image));
@@ -1302,7 +1302,7 @@ test('admin apaga a conta de verdade: some tudo e a pessoa pode criar a conta de
 test('conta bloqueada pode se excluir pela tela de bloqueio', async () => {
   const CPF = '862.314.110-52';
   const pt = client();
-  assert.equal((await pt.post('/api/auth/patient/register', { name: 'Dora Bloqueada', cpf: CPF, state: 'SP', city: 'Campinas', password: '123456' })).status, 201);
+  assert.equal((await pt.post('/api/auth/patient/register', { name: 'Dora Bloqueada', cpf: CPF, state: 'SP', city: 'Campinas', birth_date: '1990-05-10', password: '123456' })).status, 201);
   const { db } = require('../server/db');
   const id = db.prepare('SELECT id FROM patients WHERE cpf = ?').get(CPF.replace(/\D/g, '')).id;
   await admin.post(`/api/admin/patients/${id}/status`, { status: 'bloqueado' });
@@ -1466,6 +1466,8 @@ test('documentos: quem pode emitir o quê, envio no chat, verificação pública
   assert.deepEqual(await kinds(analista, cAna), ['encaminhamento'], 'psicanalista: só encaminhamento');
   const opt = (await psiq.cl.get(`/api/docs/options/${cPsiq}`)).data;
   assert.equal(opt.patient.cpf, CPF, 'CPF do paciente já vem preenchido');
+  assert.equal(opt.patient.name, 'Rita Souza', 'nome oficial do cadastro');
+  assert.equal(opt.patient.birth_date, '1990-05-10', 'nascimento do cadastro');
 
   const SIG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
   assert.equal((await psiq.cl.post('/api/docs', { patient_name: 'Rita Souza Lima', cpf: CPF, birth_date: '1990-05-10', attended_at: '2026-09-20T14:30', conversation_id: cPsiq, kind: 'atestado' })).status, 400, 'sem assinatura não envia');
@@ -1475,7 +1477,7 @@ test('documentos: quem pode emitir o quê, envio no chat, verificação pública
   assert.equal((await psiq.cl.post('/api/docs', { ...base0, conversation_id: cPsiq, kind: 'atestado', cid: 'F41.1' })).status, 400, 'CID só com autorização');
 
   // Receita do psiquiatra: vai no chat e o paciente abre completa
-  let r = await psiq.cl.post('/api/docs', { ...base0, conversation_id: cPsiq, kind: 'receita', items: [{ name: 'Sertralina', dose: '50 mg', qty: '30 comprimidos', instructions: '1 comprimido pela manhã' }] });
+  let r = await psiq.cl.post('/api/docs', { ...base0, patient_name: 'Outro Nome', cpf: '529.982.247-25', birth_date: '2001-01-01', conversation_id: cPsiq, kind: 'receita', items: [{ name: 'Sertralina', dose: '50 mg', qty: '30 comprimidos', instructions: '1 comprimido pela manhã' }] });
   assert.equal(r.status, 201, JSON.stringify(r.data));
   const code = r.data.code;
   assert.match(code, /^AC-[A-Z2-9]{8}$/);
@@ -1484,6 +1486,8 @@ test('documentos: quem pode emitir o quê, envio no chat, verificação pública
   const full = (await pt.get(`/api/docs/${code}`)).data;
   assert.equal(full.masked, false);
   assert.equal(full.data.cpf, CPF);
+  assert.equal(full.data.patient_name, 'Rita Souza', 'o nome vem do cadastro, não do que o profissional digitar');
+  assert.equal(full.data.birth_date, '1990-05-10', 'o nascimento vem do cadastro');
   assert.equal(full.data.professional.registry, 'CRM-SP 123456');
   assert.equal(full.data.items[0].name, 'Sertralina');
   assert.ok(full.qr.includes('<svg'), 'QR Code');
@@ -1508,4 +1512,26 @@ test('documentos: quem pode emitir o quê, envio no chat, verificação pública
   assert.equal((await anon.get(`/api/docs/${code}`)).data.revoked, true);
   // Outro profissional não emite na conversa dos outros
   assert.equal((await psico.cl.post('/api/docs', { ...base0, conversation_id: cPsiq, kind: 'atestado' })).status, 404);
+});
+
+test('paciente: nascimento obrigatório no cadastro (menor pode), não muda; região muda', async () => {
+  const pt = client();
+  const CPF = '714.602.380-01';
+  const base1 = { name: 'Lia Menor Silva', cpf: CPF, state: 'SP', city: 'Campinas', password: '123456' };
+  assert.equal((await pt.post('/api/auth/patient/register', base1)).status, 400, 'sem nascimento não cria');
+  assert.equal((await pt.post('/api/auth/patient/register', { ...base1, birth_date: '2999-01-01' })).status, 400, 'data no futuro');
+  assert.equal((await pt.post('/api/auth/patient/register', { ...base1, birth_date: '2013-02-30' })).status, 400, 'data que não existe');
+  const kid = new Date(Date.now() - 10 * 365 * 864e5).toISOString().slice(0, 10);
+  assert.equal((await pt.post('/api/auth/patient/register', { ...base1, birth_date: kid })).status, 201, 'menor de idade pode criar conta');
+  let me = (await pt.get('/api/auth/me')).data.user;
+  assert.equal(me.birth_date, kid);
+  assert.equal((await pt.post('/api/patient/birth-date', { birth_date: '2000-01-01' })).status, 400, 'não muda depois');
+  const r = await pt.put('/api/patient/profile', { display_name: 'Lia', state: 'RJ', city: 'Niterói', name: 'Outro Nome', cpf: '52998224725', birth_date: '2000-01-01' });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.state, 'RJ');
+  assert.equal(r.data.city, 'Niterói');
+  assert.equal(r.data.name, 'Lia Menor Silva', 'nome do CPF não muda');
+  assert.equal(r.data.birth_date, kid, 'nascimento não muda');
+  me = (await pt.get('/api/auth/me')).data.user;
+  assert.equal(me.cpf_masked, '***.602.380-**', 'CPF não muda');
 });

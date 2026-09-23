@@ -31,6 +31,8 @@ router.post('/patient/register', async (req, res) => {
   const cpf = U.onlyDigits(req.body.cpf);
   if (!U.isFullName(name)) throw new HttpError(400, 'Informe seu nome completo (nome e sobrenome), igual ao do CPF.');
   if (!U.isValidCpf(cpf)) throw new HttpError(400, 'CPF inválido. Confira os números digitados.');
+  const birth = String(req.body.birth_date || '');
+  if (!U.isValidBirthDate(birth)) throw new HttpError(400, 'Informe sua data de nascimento.');
   const { state, city } = validateLocation(req.body.state, req.body.city);
   requirePassword(req.body.password);
   if (db.prepare('SELECT 1 FROM patients WHERE cpf = ?').get(cpf)) throw new HttpError(409, 'Já existe uma conta com este CPF. Faça login ou recupere sua senha.');
@@ -43,8 +45,8 @@ router.post('/patient/register', async (req, res) => {
     verified = 1;
   }
 
-  const info = db.prepare(`INSERT INTO patients (name, cpf, cpf_name_verified, state, city, city_norm, password_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(name, cpf, verified, state, city, U.norm(city), U.hashPassword(req.body.password));
+  const info = db.prepare(`INSERT INTO patients (name, cpf, cpf_name_verified, birth_date, state, city, city_norm, password_hash)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(name, cpf, verified, birth, state, city, U.norm(city), U.hashPassword(req.body.password));
   A.createSession(res, 'patient', Number(info.lastInsertRowid));
   res.status(201).json({ ok: true });
 });

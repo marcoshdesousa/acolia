@@ -43,12 +43,15 @@
         <div class="card stack">
           <div class="row">
             <span data-photo></span>
-            <div class="grow"><div style="font-weight:800" data-name></div><div class="muted small" data-cpf></div><div class="muted small" data-loc></div></div>
+            <div class="grow"><div style="font-weight:800" data-name></div><div class="muted small" data-cpf></div><div class="muted small" data-birth></div><div class="muted small" data-loc></div></div>
           </div>
           <label class="btn secondary sm" style="width:max-content;margin:0">Trocar foto<input type="file" accept="image/jpeg,image/png,image/webp" data-photo-input hidden></label>
           <form data-profile-form>
             <div class="field"><label for="dn">Nome exibido no chat</label><input id="dn" name="display_name" maxlength="60" placeholder="Como quer ser chamado(a)">
-              <div class="hint">Seu nome completo (do CPF) continua registrado na plataforma.</div></div>
+              <div class="hint">Seu nome completo (do CPF) continua registrado e é ele que vai nos documentos (atestado, receita, encaminhamento).</div></div>
+            <div class="field"><label>Onde você mora</label>
+              <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
+            <p class="small muted" style="margin:0 0 12px">Nome completo, CPF e data de nascimento não podem ser alterados.</p>
             <button class="btn" type="submit">Salvar</button>
           </form>
         </div>
@@ -110,10 +113,37 @@
       $('[data-photo]').innerHTML = avatar(me.name, me.photo, 'lg');
       $('[data-name]').textContent = me.name;
       $('[data-cpf]').textContent = 'CPF ' + me.cpf_masked;
+      $('[data-birth]').textContent = me.birth_date ? 'Nascimento ' + me.birth_date.split('-').reverse().join('/') : '';
       $('[data-loc]').textContent = me.city + ' - ' + me.state;
-      $('[data-profile-form]').display_name.value = me.display_name;
+      const pf = $('[data-profile-form]');
+      pf.display_name.value = me.display_name;
+      pf.state.value = me.state; pf.city.value = me.city;
     }
+    const pf0 = $('[data-profile-form]');
+    pf0.state.innerHTML = Acolia.ufOptions(me.state, 'UF');
+    Acolia.bindUfCity(pf0.state, pf0.city);
     renderMe();
+    askBirthDate();
+
+    // Conta antiga sem data de nascimento: pede uma vez (depois não muda mais)
+    function askBirthDate() {
+      if (me.birth_date) return;
+      const max = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+      Acolia.modal({
+        title: 'Sua data de nascimento',
+        html: '<p class="small muted" style="margin-top:0">Precisamos dela para os documentos que o profissional emite para você (atestado, receita, encaminhamento). Coloque igual à do seu documento: depois não dá para mudar.</p>'
+          + '<div class="form-error hidden" data-err></div><div class="field"><input type="date" data-birth-input max="' + max + '" required></div>',
+        actions: [{ label: 'Depois', value: null, class: 'secondary' }, {
+          label: 'Salvar',
+          handler: async (dlg) => {
+            const err = $('[data-err]', dlg);
+            const v = $('[data-birth-input]', dlg).value;
+            if (!v) { err.textContent = 'Informe a data.'; err.classList.remove('hidden'); return false; }
+            try { me = await api('/api/patient/birth-date', { method: 'POST', body: { birth_date: v } }); renderMe(); toast('Salvo!'); return true; } catch (e) { err.textContent = e.message; err.classList.remove('hidden'); return false; }
+          },
+        }],
+      });
+    }
 
     const socket = io();
     socket.on('account:blocked', () => location.reload()); // o admin bloqueou: mostra a tela de bloqueio na hora

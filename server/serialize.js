@@ -157,6 +157,7 @@ function ownPatient(p) {
     name: p.name,
     display_name: p.display_name || '',
     cpf_masked: `***.${p.cpf.slice(3, 6)}.${p.cpf.slice(6, 9)}-**`,
+    birth_date: p.birth_date || '',
     state: p.state,
     city: p.city,
     photo: p.photo,

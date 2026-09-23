@@ -31,8 +31,8 @@ function ensureTestAccounts() {
     created.professional = true;
   }
   if (!db.prepare('SELECT 1 FROM patients WHERE cpf = ?').get(PATIENT.cpf)) {
-    db.prepare(`INSERT INTO patients (name, cpf, state, city, city_norm, password_hash, is_test)
-      VALUES ('Paciente Teste', ?, 'SP', 'São Paulo', ?, ?, 1)`)
+    db.prepare(`INSERT INTO patients (name, cpf, birth_date, state, city, city_norm, password_hash, is_test)
+      VALUES ('Paciente Teste', ?, '1995-01-01', 'SP', 'São Paulo', ?, ?, 1)`)
       .run(PATIENT.cpf, U.norm('São Paulo'), U.hashPassword(PATIENT.password));
     created.patient = true;
   }

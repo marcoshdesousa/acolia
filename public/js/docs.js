@@ -6,7 +6,7 @@
      da Acolia provando que foi gerado pela plataforma. */
 (function () {
   'use strict';
-  const { $, $$, esc, api, toast, modal, maskCpf, isValidCpf } = window.Acolia;
+  const { $, $$, esc, api, toast, modal } = window.Acolia;
 
   const W = 1240;
   const H = 1754;
@@ -326,11 +326,16 @@
     const title = opt.kinds.find((k) => k.kind === kind).title;
     const att = opt.attended_at ? localInput(fromServer(opt.attended_at)) : localInput(new Date());
     const common = `
-      <div class="field"><label>Nome completo do paciente</label><input data-f="patient_name" value="${esc(opt.patient.name)}" required></div>
+      <div class="field"><label>Nome completo do paciente</label><input value="${esc(opt.patient.name)}" readonly class="ro"></div>
       <div class="grid-2">
-        <div class="field"><label>CPF</label><input data-f="cpf" value="${esc(opt.patient.cpf)}" inputmode="numeric" required></div>
-        <div class="field"><label>Data de nascimento</label><input data-f="birth_date" type="date" required></div>
+        <div class="field"><label>CPF</label><input value="${esc(opt.patient.cpf)}" readonly class="ro"></div>
+        <div class="field"><label>Data de nascimento</label>${opt.patient.birth_date
+          ? `<input value="${esc(brDate(opt.patient.birth_date))}" readonly class="ro">`
+          : `<input data-f="birth_date" type="date" max="${new Date().toISOString().slice(0, 10)}" required>`}</div>
       </div>
+      <small class="muted" style="display:block;margin:-6px 0 10px">${opt.patient.birth_date
+        ? 'Dados do cadastro do paciente (iguais aos do documento dele). Não podem ser alterados.'
+        : 'Nome e CPF vêm do cadastro do paciente. Ele ainda não informou a data de nascimento: preencha conforme o documento dele.'}</small>
       <div class="field"><label>Data e horário do atendimento</label><input data-f="attended_at" type="datetime-local" value="${att}" required>
         <small class="muted">${opt.attended_at ? 'Preenchido com o seu último atendimento com este paciente.' : 'Nenhum atendimento encontrado — confira a data e o horário.'}</small></div>`;
     let extra = '';
@@ -362,8 +367,7 @@
         handler: async (dlg) => {
           const v = (k) => { const el = $(`[data-f="${k}"]`, dlg); return el ? (el.type === 'checkbox' ? el.checked : el.value) : undefined; };
           const err = $('[data-err]', dlg);
-          const body = { conversation_id: conversationId, kind, signature, patient_name: v('patient_name'), cpf: v('cpf'), birth_date: v('birth_date'), attended_at: v('attended_at') };
-          if (!isValidCpf(body.cpf)) { err.textContent = 'CPF inválido.'; err.classList.remove('hidden'); return false; }
+          const body = { conversation_id: conversationId, kind, signature, birth_date: v('birth_date'), attended_at: v('attended_at') };
           if (kind === 'atestado') Object.assign(body, { cid: v('cid'), cid_authorized: v('cid_authorized') });
           if (kind === 'receita') body.items = $$('[data-item]', dlg).map((it) => Object.fromEntries($$('[data-i]', it).map((x) => [x.dataset.i, x.value])));
           if (kind === 'encaminhamento') Object.assign(body, { specialty: v('specialty'), modality: v('modality'), reason: v('reason') });
@@ -376,7 +380,6 @@
         },
       }],
       onOpen: (dlg) => {
-        maskCpf($('[data-f="cpf"]', dlg));
         const box = $('[data-items]', dlg);
         if (box) {
           const add = () => { if (box.children.length < 10) box.insertAdjacentHTML('beforeend', itemHtml(box.children.length)); };

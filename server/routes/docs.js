@@ -101,10 +101,12 @@ router.use(A.requireRole('professional'));
 // O que este profissional pode emitir para este paciente + dados já preenchidos
 router.get('/options/:conversationId', (req, res) => {
   const c = require('./chat').loadConversation(req, req.params.conversationId);
-  const pat = db.prepare('SELECT name, cpf FROM patients WHERE id = ?').get(c.patient_id);
+  const pat = db.prepare('SELECT name, cpf, birth_date FROM patients WHERE id = ?').get(c.patient_id);
   res.json({
     kinds: allowedKinds(req.auth.user.profession).map((k) => ({ kind: k, title: titleOf(k, req.auth.user.profession) })),
-    patient: { name: pat.name, cpf: U.formatCpf(pat.cpf) },
+    // Dados oficiais da conta do paciente (nome do CPF, CPF e nascimento): vão no documento
+    // exatamente como estão no cadastro, sem o profissional poder mudar.
+    patient: { name: pat.name, cpf: U.formatCpf(pat.cpf), birth_date: pat.birth_date || '' },
     attended_at: lastAttendance(c),
     professional: proInfo(req.auth.user),
   });
@@ -126,12 +128,14 @@ router.post('/', (req, res) => {
   const signature = String(req.body.signature || '');
   if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(signature)) throw new U.HttpError(400, 'Assine o documento antes de enviar.');
   if (signature.length > SIGNATURE_MAX) throw new U.HttpError(400, 'Assinatura muito grande. Assine de novo.');
-  const name = U.cleanText(req.body.patient_name, 120);
-  if (name.split(/\s+/).length < 2) throw new U.HttpError(400, 'Informe o nome completo do paciente.');
-  const cpf = U.onlyDigits(req.body.cpf);
-  if (!U.isValidCpf(cpf)) throw new U.HttpError(400, 'CPF do paciente inválido.');
-  const birth = String(req.body.birth_date || '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(birth) || birth >= U.todayISO() || birth < '1900-01-01') throw new U.HttpError(400, 'Informe a data de nascimento do paciente.');
+  // Nome, CPF e nascimento vêm do cadastro do paciente (tem que bater com o documento dele).
+  // Só a data de nascimento de conta antiga, que ainda não tem, o profissional informa.
+  const pat = db.prepare('SELECT name, cpf, birth_date FROM patients WHERE id = ?').get(c.patient_id);
+  if (!pat || !U.isValidCpf(pat.cpf)) throw new U.HttpError(400, 'Conta do paciente indisponível.');
+  const name = pat.name;
+  const cpf = pat.cpf;
+  const birth = pat.birth_date || String(req.body.birth_date || '');
+  if (!U.isValidBirthDate(birth)) throw new U.HttpError(400, 'Informe a data de nascimento do paciente.');
   const attended = String(req.body.attended_at || '');
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(attended)) throw new U.HttpError(400, 'Informe a data e o horário do atendimento.');
 

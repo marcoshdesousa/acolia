@@ -5,18 +5,33 @@ const U = require('../util');
 const A = require('../auth');
 const { handlePhoto, removePhoto } = require('../upload');
 const { ownPatient, VISIBLE_SQL } = require('../serialize');
-const { requirePassword } = require('./auth');
+const { requirePassword, validateLocation } = require('./auth');
 const rt = require('../realtime');
 
 const router = express.Router();
 router.use(A.requireRole('patient'));
 
+// Pode mudar: nome exibido e onde mora (estado/município).
+// Não muda: nome completo do CPF, CPF e data de nascimento (vão nos documentos).
 router.put('/profile', (req, res) => {
   const display = U.cleanText(req.body.display_name, 60);
   db.prepare('UPDATE patients SET display_name = ? WHERE id = ?').run(display, req.auth.user.id);
+  if (req.body.state !== undefined || req.body.city !== undefined) {
+    const { state, city } = validateLocation(req.body.state, req.body.city);
+    db.prepare('UPDATE patients SET state = ?, city = ?, city_norm = ? WHERE id = ?').run(state, city, U.norm(city), req.auth.user.id);
+  }
   const me = db.prepare('SELECT * FROM patients WHERE id = ?').get(req.auth.user.id);
   broadcastIdentity(me);
   res.json(ownPatient(me));
+});
+
+// Contas antigas (sem data de nascimento): informa uma vez só. Depois não muda mais.
+router.post('/birth-date', (req, res) => {
+  if (req.auth.user.birth_date) throw new U.HttpError(400, 'A data de nascimento já foi informada e não pode ser alterada.');
+  const birth = String(req.body.birth_date || '');
+  if (!U.isValidBirthDate(birth)) throw new U.HttpError(400, 'Informe uma data de nascimento válida.');
+  db.prepare('UPDATE patients SET birth_date = ? WHERE id = ? AND birth_date IS NULL').run(birth, req.auth.user.id);
+  res.json(ownPatient(db.prepare('SELECT * FROM patients WHERE id = ?').get(req.auth.user.id)));
 });
 
 router.post('/photo', async (req, res) => {
@@ -49,7 +64,7 @@ function wipePatient(me) {
   require('./chat').eraseMessagesOf('patient', me.id);
   removePhoto(me.photo);
   db.prepare("DELETE FROM favorites WHERE patient_id = ?").run(me.id);
-  db.prepare(`UPDATE patients SET status = 'excluido', name = 'Conta excluída', display_name = '', cpf = ?, cpf_name_verified = 0,
+  db.prepare(`UPDATE patients SET status = 'excluido', name = 'Conta excluída', display_name = '', cpf = ?, cpf_name_verified = 0, birth_date = NULL,
     state = '', city = '', city_norm = '', photo = NULL, password_hash = '!' WHERE id = ?`).run(`excluido-${me.id}`, me.id);
   broadcastIdentity(me);
   A.destroyUserSessions('patient', me.id);

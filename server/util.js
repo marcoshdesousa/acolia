@@ -100,6 +100,14 @@ function addDaysISO(dateISO, days) {
   return d.toISOString().slice(0, 10);
 }
 
+// Data de nascimento AAAA-MM-DD válida e no passado (sem idade mínima: menor de idade pode ter conta)
+function isValidBirthDate(d) {
+  const s = String(d || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || s < '1900-01-01' || s >= todayISO()) return false;
+  const dt = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(dt.getTime()) && dt.toISOString().slice(0, 10) === s;
+}
+
 function isValidEmail(e) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(e || ''));
 }
@@ -114,5 +122,5 @@ class HttpError extends Error {
 module.exports = {
   randomCode, randomMixedCode, randomPassword, hashPassword, verifyPassword,
   onlyDigits, isValidCpf, formatCpf, norm, cleanText, isFullName, UFS, isUf,
-  todayISO, addDaysISO, isValidEmail, HttpError,
+  todayISO, addDaysISO, isValidBirthDate, isValidEmail, HttpError,
 };

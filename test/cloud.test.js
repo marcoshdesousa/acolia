@@ -70,7 +70,7 @@ async function post(base, url, body, cookie) {
 test('contas e fotos continuam depois de reiniciar com o disco apagado', async () => {
   const s1 = startServer();
   const base1 = await s1.ready;
-  const reg = await post(base1, '/api/auth/patient/register', { name: 'Maria Souza', cpf: '52998224725', state: 'PA', city: 'Parauapebas', password: '123456' });
+  const reg = await post(base1, '/api/auth/patient/register', { name: 'Maria Souza', cpf: '52998224725', state: 'PA', city: 'Parauapebas', birth_date: '1990-05-10', password: '123456' });
   assert.equal(reg.status, 201);
   const fd = new FormData();
   fd.append('photo', new Blob([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])], { type: 'image/jpeg' }), 'foto.jpg');
