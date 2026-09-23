@@ -1311,3 +1311,20 @@ test('conta bloqueada pode se excluir pela tela de bloqueio', async () => {
   assert.equal((await pt.post('/api/patient/delete', { cpf: CPF })).status, 200, 'confirma com o próprio CPF');
   assert.equal(db.prepare('SELECT status FROM patients WHERE id = ?').get(id).status, 'excluido');
 });
+
+test('espaço do disco: só o administrador vê (paciente, profissional e visitante não)', async () => {
+  const a = await admin.get('/api/admin/stats');
+  assert.equal(a.status, 200);
+  assert.ok(a.data.usage && a.data.usage.parts, 'admin vê o espaço usado');
+  const pat = client();
+  await pat.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: '123456789', password: '123456789' });
+  for (const who of [anon, pat, pro]) {
+    const r = await who.get('/api/admin/stats');
+    assert.equal(r.status, 401);
+    assert.equal(r.data.usage, undefined);
+    const me = await who.get('/api/auth/me');
+    assert.ok(!JSON.stringify(me.data).includes('usage'), 'nada de espaço no /me');
+  }
+});
