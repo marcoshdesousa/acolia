@@ -849,3 +849,8 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 /* Aviso de renovação da assinatura */
 .renew-banner { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .renew-banner .btn { flex: none; }
+/* "Excluir conta": só um textinho discreto (não é para incentivar) */
+.link-danger { appearance: none; border: 0; background: none; padding: 4px 2px; font: inherit; font-size: .82rem; font-weight: 600; color: var(--danger);
+  opacity: .8; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; width: max-content; }
+.link-danger:hover { opacity: 1; }
+.blocked-card .link-danger { margin-top: 6px; }

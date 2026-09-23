@@ -123,7 +123,10 @@ router.delete('/gallery/:slot', (req, res) => {
 // e as conversas continuam para os pacientes com o nome "Profissional removido".
 router.post('/delete', (req, res) => {
   const me = req.auth.user;
-  if (!U.verifyPassword(req.body.password || '', me.password_hash)) throw new U.HttpError(400, 'Senha incorreta.');
+  // Confirmação: o código de acesso da conta (ou a senha)
+  const byCode = req.body.code !== undefined;
+  const ok = byCode ? String(req.body.code).trim().toUpperCase() === String(me.code).toUpperCase() : U.verifyPassword(req.body.password || '', me.password_hash);
+  if (!ok) throw new U.HttpError(400, byCode ? 'Código não confere com o da sua conta.' : 'Senha incorreta.');
   wipeProfessional(me);
   A.destroySession(req, res);
   res.json({ ok: true });

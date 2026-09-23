@@ -1307,6 +1307,7 @@ test('conta bloqueada pode se excluir pela tela de bloqueio', async () => {
   const id = db.prepare('SELECT id FROM patients WHERE cpf = ?').get(CPF.replace(/\D/g, '')).id;
   await admin.post(`/api/admin/patients/${id}/status`, { status: 'bloqueado' });
   assert.equal((await pt.get('/api/auth/me')).data.account.blocked, 'admin');
-  assert.equal((await pt.post('/api/patient/delete', { password: '123456' })).status, 200);
+  assert.equal((await pt.post('/api/patient/delete', { cpf: '111.111.111-11' })).status, 400, 'CPF errado não apaga');
+  assert.equal((await pt.post('/api/patient/delete', { cpf: CPF })).status, 200, 'confirma com o próprio CPF');
   assert.equal(db.prepare('SELECT status FROM patients WHERE id = ?').get(id).status, 'excluido');
 });

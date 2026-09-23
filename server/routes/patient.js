@@ -32,7 +32,10 @@ router.post('/photo', async (req, res) => {
 // continuam para o profissional (não podem ser apagadas), com o nome "Conta excluída".
 router.post('/delete', (req, res) => {
   const me = req.auth.user;
-  if (!U.verifyPassword(req.body.password || '', me.password_hash)) throw new U.HttpError(400, 'Senha incorreta.');
+  // Confirmação: o próprio CPF (ou a senha)
+  const byCpf = req.body.cpf !== undefined;
+  const ok = byCpf ? U.onlyDigits(req.body.cpf) === me.cpf : U.verifyPassword(req.body.password || '', me.password_hash);
+  if (!ok) throw new U.HttpError(400, byCpf ? 'CPF não confere com o da sua conta.' : 'Senha incorreta.');
   wipePatient(me);
   A.destroySession(req, res);
   res.json({ ok: true });

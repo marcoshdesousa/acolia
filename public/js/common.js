@@ -48,33 +48,47 @@
           <h1>Perfil bloqueado</h1>
           <p>${text}</p>
           <a class="btn block" href="${esc(supportLink(a.support, msg))}" target="_blank" rel="noopener">${ICONS.send} ${btn}</a>
-          <button type="button" class="btn danger-outline block" data-blocked-delete>Excluir conta permanentemente</button>
           <button type="button" class="btn ghost sm" data-blocked-logout>Sair</button>
+          <button type="button" class="link-danger" data-blocked-delete>Excluir conta permanentemente</button>
         </div>
       </main>`;
     $('[data-blocked-logout]').onclick = () => logout('/');
-    $('[data-blocked-delete]').onclick = async () => {
-      await modal({
-        title: 'Excluir conta permanentemente',
-        html: `<p>Isso apaga <b>tudo</b>: seus dados, fotos${isPro ? ', publicações, reels e stories' : ''}, curtidas, comentários e o conteúdo das mensagens que você enviou. Não dá para desfazer.</p>
-          <div class="field"><label for="del-pw">Digite sua senha para confirmar</label><input id="del-pw" type="password" autocomplete="current-password" data-del-pw></div>`,
-        actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
-          label: 'Excluir para sempre',
-          class: 'danger',
-          handler: async (dlg) => {
-            const password = dlg.querySelector('[data-del-pw]').value;
-            if (!password) { toast('Digite sua senha.', 'error'); return false; }
-            try {
-              await api(isPro ? '/api/professional/delete' : '/api/patient/delete', { method: 'POST', body: { password } });
-              toast('Conta excluída.');
-              setTimeout(() => location.replace('/'), 900);
-              return true;
-            } catch (e) { toast(e.message, 'error'); return false; }
-          },
-        }],
-      });
-    };
+    $('[data-blocked-delete]').onclick = () => deleteAccountFlow(me.role);
   }
+  // Excluir a própria conta: 3 passos para não apagar sem querer
+  //   1) "Excluir sua conta?"  2) "Tem certeza? Se apagar, já era"  3) digitar o CPF (paciente)
+  //   ou o código de acesso (profissional). Só então apaga tudo.
+  async function deleteAccountFlow(role) {
+    const isPro = role === 'professional';
+    const plain = (title, html, ok) => modal({ title, html, actions: [{ label: 'Não', value: false, class: 'secondary' }, { label: ok, value: true, class: 'danger' }] });
+    if (!await plain('Excluir sua conta?', '<p>Você quer mesmo excluir a sua conta da Acolia?</p>', 'Sim')) return;
+    if (!await plain('Tem certeza?', `<p><b>Se apagar, já era.</b> Some tudo: seus dados, fotos${isPro ? ', publicações, reels, stories e o seu perfil' : ''}, curtidas, comentários e o conteúdo das mensagens que você enviou. <b>Não dá para recuperar.</b></p>`, 'Sim, quero apagar')) return;
+    const done = await modal({
+      title: 'Última confirmação',
+      html: `<p>${isPro ? 'Digite o seu <b>código de acesso</b> (o código da sua conta, que você usa para entrar).' : 'Digite o seu <b>CPF</b> para confirmar.'}</p>
+        <div class="form-error hidden" data-err></div>
+        <div class="field"><label for="delKey">${isPro ? 'Código de acesso' : 'CPF'}</label>
+          <input id="delKey" data-del-key autocomplete="off" ${isPro ? 'autocapitalize="characters" spellcheck="false" placeholder="Ex.: K74HD92P"' : 'inputmode="numeric" placeholder="000.000.000-00"'}></div>`,
+      actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, {
+        label: 'Apagar minha conta',
+        class: 'danger',
+        handler: async (dlg) => {
+          const v = dlg.querySelector('[data-del-key]').value.trim();
+          const err = dlg.querySelector('[data-err]');
+          if (!v) { err.textContent = isPro ? 'Digite o seu código de acesso.' : 'Digite o seu CPF.'; err.classList.remove('hidden'); return false; }
+          try {
+            await api(isPro ? '/api/professional/delete' : '/api/patient/delete', { method: 'POST', body: isPro ? { code: v } : { cpf: v } });
+            return true;
+          } catch (e) { err.textContent = e.message; err.classList.remove('hidden'); return false; }
+        },
+      }],
+      onOpen: (dlg) => { if (!isPro) maskCpf(dlg.querySelector('[data-del-key]')); },
+    });
+    if (!done) return;
+    await modal({ title: 'Conta excluída', html: '<p>Sua conta foi excluída. Obrigado por ter usado a Acolia.</p>' });
+    location.replace('/');
+  }
+
   // Aviso de renovação (profissional): 2 dias antes do vencimento até o último dia
   function renewBanner(me, where) {
     const a = me.account || {};
@@ -615,6 +629,6 @@
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
     confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
-    handleForm, logout, showBlocked, renewBanner, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
+    handleForm, logout, showBlocked, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
   };
 })();
