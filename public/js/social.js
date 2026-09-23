@@ -476,7 +476,7 @@
         <div class="home-top">
           <div class="ht-side left">${isPro ? `<button type="button" class="icon-btn create-btn" data-create aria-label="Criar: publicar fotos ou story" title="Publicar fotos ou story">${ic('plus', 28)}</button>` : ''}</div>
           <h1 class="ht-title"><button type="button" class="feed-logo" data-home-top title="Voltar ao topo e atualizar">
-            <img class="fl-symbol" src="/img/logo-simbolo.png" alt="" width="34" height="34"><span class="fl-words"><img class="fl-name brand-word" src="/img/logo-nome.png" alt="Acolia"><span class="fl-feed">Feed</span></span></button></h1>
+            <span class="fl-words"><img class="fl-name brand-word" src="/img/logo-nome.png" alt="Acolia"><span class="fl-feed">Feed</span></span></button></h1>
           <div class="ht-side right"><button type="button" class="icon-btn bell" data-bell aria-label="Notificações" title="Notificações">${ic('bell', 27)}<span class="nav-badge" data-bell-count></span></button></div>
         </div>
         <div class="stories-bar" data-stories></div>

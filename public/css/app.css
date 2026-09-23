@@ -632,11 +632,9 @@ dialog.post-dialog .dlg-actions:empty, dialog.sheet .dlg-actions:empty { display
 .home-top .ht-side.right { justify-content: flex-end; }
 .home-top .ht-title { margin: 0; text-align: center; font-size: inherit; }
 .feed-logo { display: inline-flex; align-items: center; gap: 9px; border: 0; background: none; padding: 4px 6px; cursor: pointer; color: var(--text); line-height: 1; }
-.feed-logo .fl-symbol { width: 34px; height: 34px; object-fit: contain; }
 /* mesmo desenho da logo: ACOLIA (a arte original) e "FEED" pequeno e espaçado, como o "saúde mental ao seu alcance" */
 .feed-logo .fl-words { display: inline-flex; flex-direction: column; align-items: stretch; gap: 4px; }
 .feed-logo .fl-name { height: 19px; width: auto; display: block; }
 .feed-logo .fl-feed { font-family: 'Jost', system-ui, sans-serif; font-weight: 400; font-size: .62rem; text-transform: uppercase; letter-spacing: .62em; margin-right: -.62em; text-align: center; color: var(--primary); }
 .feed-logo:active { transform: scale(.97); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .feed-logo .fl-symbol { filter: brightness(1.6); } }
-:root[data-theme="dark"] .feed-logo .fl-symbol { filter: brightness(1.6); }
+
