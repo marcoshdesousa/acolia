@@ -213,6 +213,16 @@ addColumn('stories', 'post_id', 'INTEGER'); // story que mostra uma publicação
 addColumn('posts', 'kind', "TEXT NOT NULL DEFAULT 'photo'");
 addColumn('posts', 'video', 'TEXT');
 addColumn('posts', 'duration', 'REAL');
+// Envio de vídeo em pedaços (continua de onde parou se a internet cair ou o app for para o fundo)
+db.exec(`CREATE TABLE IF NOT EXISTS upload_sessions (
+  id TEXT PRIMARY KEY,
+  professional_id INTEGER NOT NULL,
+  kind TEXT NOT NULL,                      -- reel
+  mime TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  received INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
 // Carrossel: até 10 fotos por publicação (a 1ª também fica em posts.image, como capa)
 db.exec(`CREATE TABLE IF NOT EXISTS post_images (
   post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,

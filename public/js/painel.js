@@ -120,6 +120,7 @@
     if (b) { await AcoliaSocial.openPost(Number(b.dataset.postOpen)); loadMyPosts(); }
   });
   loadMyPosts();
+  window.addEventListener('acolia:posted', loadMyPosts); // terminou um envio em segundo plano
 
   $('[data-photo-input]').addEventListener('change', async (e) => {
     const file = e.target.files[0];

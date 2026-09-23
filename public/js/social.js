@@ -329,22 +329,8 @@
         label: 'Publicar',
         handler: async (dlg) => {
           if (!files.length) { toast('Escolha pelo menos uma foto.', 'error'); return false; }
-          const btn = $$('.dlg-actions .btn', dlg).at(-1);
-          btn.disabled = true;
-          btn.textContent = 'Publicando…';
-          const fd = new FormData();
-          fd.append('caption', $('[data-cap]', dlg).value);
-          for (const f of files) fd.append('photos', await shrinkImage(f, 1600));
-          try {
-            const p = await api(base, { method: 'POST', form: fd });
-            // Miniatura leve (da 1ª foto) para a prévia do link no WhatsApp
-            const tf = new FormData();
-            tf.append('photo', await shrinkImage(files[0], 600));
-            api(`${base}/${p.id}/thumb`, { method: 'POST', form: tf }).catch(() => {});
-            toast('Publicado!');
-            onDone?.(p);
-            return true;
-          } catch (e) { toast(e.message, 'error'); btn.disabled = false; btn.textContent = 'Publicar'; return false; }
+          Uploads.add({ type: 'photos', label: 'Publicação', files: [...files], caption: $('[data-cap]', dlg).value, base: base === '/api/social/posts' ? null : base, onDone });
+          return true;
         },
       }],
       onOpen: (dlg) => {
@@ -419,15 +405,7 @@
         });
         if (duration > MAX_STORY_SECS + 0.9) { toast(`O vídeo do story pode ter no máximo ${MAX_STORY_SECS} segundos. Este tem ${Math.round(duration)} s.`, 'error'); return; }
       }
-      const fd = new FormData();
-      fd.append('duration', String(duration));
-      fd.append('media', f.type.startsWith('image/') ? await shrinkImage(f, 1600) : f);
-      toast('Enviando story…');
-      try {
-        await api('/api/social/stories', { method: 'POST', form: fd });
-        toast('Story publicado!');
-        onDone?.();
-      } catch (e) { toast(e.message, 'error'); }
+      Uploads.add({ type: 'story', label: 'Story', file: f, duration, onDone });
     });
     input.click();
   }
@@ -548,6 +526,249 @@
     });
   }
 
+  // ---------- Envios em segundo plano ----------
+  // Tocou em Publicar: a janela fecha na hora e o envio segue sozinho, com a barrinha no topo.
+  // A pessoa continua usando o app (feed, Reels, mensagens…). Se a internet cair ou o app for
+  // para o fundo (WhatsApp, Instagram…), o envio pausa e continua de onde parou ao voltar.
+  // O vídeo do reel vai em pedaços e fica guardado no aparelho: mesmo fechando a aba, ao abrir
+  // o painel de novo ele continua. Quando termina, aparece "Publicado! Ver".
+  const Uploads = (() => {
+    const CHUNK = 1.5 * 1024 * 1024;
+    const jobs = new Map();
+    let dbp = null;
+    function idb() {
+      if (dbp) return dbp;
+      dbp = new Promise((resolve) => {
+        try {
+          const r = indexedDB.open('acolia-envios', 1);
+          r.onupgradeneeded = () => r.result.createObjectStore('jobs', { keyPath: 'lid' });
+          r.onsuccess = () => resolve(r.result);
+          r.onerror = () => resolve(null);
+        } catch { resolve(null); }
+      });
+      return dbp;
+    }
+    async function store(op, val) {
+      try {
+        const d = await idb();
+        if (!d) return null;
+        return await new Promise((resolve, reject) => {
+          const tx = d.transaction('jobs', op === 'all' ? 'readonly' : 'readwrite');
+          const st = tx.objectStore('jobs');
+          const rq = op === 'put' ? st.put(val) : op === 'del' ? st.delete(val) : st.getAll();
+          rq.onsuccess = () => resolve(rq.result);
+          rq.onerror = () => reject(rq.error);
+        });
+      } catch { return null; }
+    }
+    const saved = (j) => ({ lid: j.lid, type: j.type, base: j.base, label: j.label, caption: j.caption, duration: j.duration,
+      files: j.files, file: j.file, poster: j.poster, serverId: j.serverId, meId: j.meId, created: j.created });
+
+    function dock() {
+      let b = document.querySelector('.up-dock');
+      if (!b) { b = document.createElement('div'); b.className = 'up-dock'; b.setAttribute('role', 'status'); document.body.appendChild(b); }
+      return b;
+    }
+    function chip(j) {
+      let el = document.querySelector(`[data-up="${j.lid}"]`);
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'up-chip';
+        el.dataset.up = j.lid;
+        const thumb = j.poster || j.files?.[0] || (j.file && j.file.type.startsWith('image/') ? j.file : null);
+        el.innerHTML = `${thumb ? `<img alt="" src="${URL.createObjectURL(thumb)}">` : `<span class="up-ic">${ic(j.type === 'reel' ? 'reel' : 'image', 20)}</span>`}
+          <div class="grow"><b data-up-txt></b><div class="up-track"><i data-up-fill></i></div></div>
+          <button type="button" class="up-x" data-up-cancel aria-label="Cancelar envio" title="Cancelar envio">×</button>`;
+        el.querySelector('[data-up-cancel]').onclick = () => cancel(j);
+        dock().appendChild(el);
+      }
+      return el;
+    }
+    function render(j) {
+      const el = chip(j);
+      const pct = Math.round((j.progress || 0) * 100);
+      el.classList.toggle('waiting', j.state === 'wait');
+      el.querySelector('[data-up-txt]').textContent = j.state === 'wait' ? `${j.label}: aguardando a internet… (continua sozinho)`
+        : pct >= 100 ? `${j.label}: finalizando…` : `Enviando ${j.label.toLowerCase()}… ${pct}%`;
+      el.querySelector('[data-up-fill]').style.width = `${Math.max(3, pct)}%`;
+    }
+    function finished(j, post) {
+      jobs.delete(j.lid);
+      store('del', j.lid);
+      const el = chip(j);
+      el.classList.add('done');
+      el.querySelector('.grow').innerHTML = `<b>${j.type === 'reel' ? 'Seu reel foi publicado!' : j.type === 'story' ? 'Seu story foi publicado!' : 'Sua publicação está no ar!'}</b>`;
+      const x = el.querySelector('[data-up-cancel]');
+      x.onclick = () => el.remove();
+      x.setAttribute('aria-label', 'Fechar');
+      if (post?.id && !j.base) {
+        const ver = document.createElement('button');
+        ver.type = 'button';
+        ver.className = 'btn sm';
+        ver.textContent = 'Ver';
+        ver.onclick = () => { el.remove(); openPost(post.id); };
+        x.before(ver);
+      }
+      setTimeout(() => el.remove(), 12000);
+      j.onDone?.(post);
+      window.dispatchEvent(new CustomEvent('acolia:posted', { detail: { type: j.type, post } }));
+      if (j.type === 'story') window.dispatchEvent(new Event('acolia:stories'));
+    }
+    function failed(j, msg) {
+      jobs.delete(j.lid);
+      store('del', j.lid);
+      if (j.serverId) api(`/api/social/uploads/${j.serverId}`, { method: 'DELETE' }).catch(() => {});
+      document.querySelector(`[data-up="${j.lid}"]`)?.remove();
+      toast(`${j.label} não foi publicado: ${msg}`, 'error');
+    }
+    function cancel(j) {
+      j.cancelled = true;
+      j.xhr?.abort();
+      jobs.delete(j.lid);
+      store('del', j.lid);
+      if (j.serverId) api(`/api/social/uploads/${j.serverId}`, { method: 'DELETE' }).catch(() => {});
+      document.querySelector(`[data-up="${j.lid}"]`)?.remove();
+      toast('Envio cancelado.');
+    }
+    // Sem internet (ou servidor reiniciando): espera e tenta de novo sozinho
+    const retryable = (e) => !e.status || e.status >= 500 || e.status === 408 || e.status === 429;
+    function later(j) {
+      j.state = 'wait';
+      j.tries = (j.tries || 0) + 1;
+      render(j);
+      clearTimeout(j.timer);
+      j.timer = setTimeout(() => run(j), Math.min(30000, 2000 * 2 ** Math.min(j.tries, 4)));
+    }
+
+    function xhrSend(j, url, method, body, headers, onProgress) {
+      return new Promise((resolve, reject) => {
+        const x = new XMLHttpRequest();
+        j.xhr = x;
+        x.open(method, url);
+        Object.entries(headers || {}).forEach(([k, v]) => x.setRequestHeader(k, v));
+        if (onProgress) x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+        x.onload = () => {
+          let d = {};
+          try { d = JSON.parse(x.responseText); } catch { /* ignora */ }
+          if (x.status < 400) resolve(d); else reject(Object.assign(new Error(d.error || 'Não foi possível enviar.'), { status: x.status, data: d }));
+        };
+        x.onerror = () => reject(Object.assign(new Error('Sem conexão.'), { status: 0 }));
+        x.onabort = () => reject(Object.assign(new Error('Cancelado.'), { status: -1 }));
+        x.send(body);
+      });
+    }
+
+    async function runReel(j) {
+      if (!j.serverId) {
+        const s0 = await api('/api/social/uploads', { method: 'POST', body: { mime: j.file.type || 'video/mp4', size: j.file.size } });
+        j.serverId = s0.id;
+        await store('put', saved(j));
+      }
+      let { received } = await api(`/api/social/uploads/${j.serverId}`);
+      while (received < j.file.size) {
+        if (j.cancelled) return;
+        j.state = 'send';
+        const part = j.file.slice(received, received + CHUNK);
+        const base = received;
+        try {
+          const d = await xhrSend(j, `/api/social/uploads/${j.serverId}?offset=${received}`, 'PUT', part, { 'Content-Type': 'application/octet-stream' },
+            (f) => { j.progress = (base + f * part.size) / j.file.size; render(j); });
+          received = d.received;
+        } catch (e) {
+          if (e.status === 409) { received = e.data.received; continue; }
+          throw e;
+        }
+        j.progress = received / j.file.size;
+        j.tries = 0;
+        render(j);
+      }
+      j.progress = 1;
+      render(j);
+      const fd = new FormData();
+      fd.append('caption', j.caption || '');
+      if (j.duration) fd.append('duration', String(j.duration));
+      fd.append('photo', j.poster, 'capa.jpg');
+      return api(`/api/social/uploads/${j.serverId}/finish`, { method: 'POST', form: fd });
+    }
+
+    async function runPhotos(j) {
+      const base = j.base || '/api/social/posts';
+      const fd = new FormData();
+      fd.append('caption', j.caption || '');
+      for (const f of j.files) fd.append('photos', await shrinkImage(f, 1600));
+      const p = await xhrSend(j, base, 'POST', fd, null, (f) => { j.progress = f * 0.98; render(j); });
+      // Miniatura leve (da 1ª foto) para a prévia do link no WhatsApp
+      const tf = new FormData();
+      tf.append('photo', await shrinkImage(j.files[0], 600));
+      api(`${base}/${p.id}/thumb`, { method: 'POST', form: tf }).catch(() => {});
+      return p;
+    }
+
+    async function runStory(j) {
+      const fd = new FormData();
+      fd.append('duration', String(j.duration || 0));
+      fd.append('media', j.file.type.startsWith('image/') ? await shrinkImage(j.file, 1600) : j.file);
+      return xhrSend(j, '/api/social/stories', 'POST', fd, null, (f) => { j.progress = f * 0.98; render(j); });
+    }
+
+    async function run(j) {
+      if (j.running || j.cancelled) return;
+      j.running = true;
+      clearTimeout(j.timer);
+      j.state = 'send';
+      render(j);
+      try {
+        const post = j.type === 'reel' ? await runReel(j) : j.type === 'story' ? await runStory(j) : await runPhotos(j);
+        j.running = false;
+        if (!j.cancelled) finished(j, post);
+      } catch (e) {
+        j.running = false;
+        if (j.cancelled || e.status === -1) return;
+        if (e.status === 404 && j.type === 'reel') { j.serverId = null; store('put', saved(j)); later(j); return; } // envio vencido: recomeça
+        if (retryable(e)) later(j); else failed(j, e.message);
+      }
+    }
+
+    function add(job) {
+      const j = { lid: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, created: Date.now(), meId: ctx.me?.id || null, progress: 0, ...job };
+      jobs.set(j.lid, j);
+      if (!j.base) store('put', saved(j)); // publicação do admin (perfil oficial) não fica guardada no aparelho
+      else j.noPersist = true;
+      render(j);
+      run(j);
+      toast('Enviando em segundo plano — pode continuar usando o app.');
+      return j;
+    }
+
+    // Voltou para o app / a internet voltou: continua na hora
+    const wake = () => jobs.forEach((j) => { if (!j.running) run(j); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wake(); });
+    window.addEventListener('online', wake);
+    window.addEventListener('pageshow', wake);
+
+    // Abriu o painel de novo: continua os envios que ficaram guardados no aparelho
+    let resumed = false;
+    async function resume() {
+      if (resumed) return;
+      resumed = true;
+      const list = (await store('all')) || [];
+      for (const s0 of list) {
+        if (jobs.has(s0.lid)) continue;
+        if (s0.meId && ctx.me?.id && s0.meId !== ctx.me.id) continue; // de outra conta neste aparelho
+        if (Date.now() - (s0.created || 0) > 3 * 864e5) { store('del', s0.lid); continue; }
+        const j = { ...s0, progress: 0 };
+        jobs.set(j.lid, j);
+        render(j);
+        run(j);
+      }
+    }
+    window.addEventListener('beforeunload', (e) => {
+      // Aviso só se algo não puder continuar depois (sem guardar no aparelho)
+      if ([...jobs.values()].some((j) => j.noPersist)) { e.preventDefault(); e.returnValue = ''; }
+    });
+    return { add, resume };
+  })();
+
   // ---------- Novo reel (profissional): vídeo de até 5 minutos ----------
   const REEL_MAX_SECS = 5 * 60;
   const REEL_MAX_MB = 200;
@@ -592,21 +813,6 @@
     g.beginPath(); g.moveTo(300, 540); g.lineTo(300, 740); g.lineTo(460, 640); g.closePath(); g.fill();
     return c;
   }
-  // Envio com barra de progresso (vídeo pode ser grande)
-  function uploadWithProgress(url, fd, onProgress) {
-    return new Promise((resolve, reject) => {
-      const x = new XMLHttpRequest();
-      x.open('POST', url);
-      x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
-      x.onload = () => {
-        let d = {};
-        try { d = JSON.parse(x.responseText); } catch { /* ignora */ }
-        if (x.status < 400) resolve(d); else reject(new Error(d.error || 'Não foi possível enviar o vídeo.'));
-      };
-      x.onerror = () => reject(new Error('A conexão caiu durante o envio. Tente de novo.'));
-      x.send(fd);
-    });
-  }
   const fmtSecs = (t) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
 
   async function newReel(onDone) {
@@ -618,34 +824,14 @@
           <span data-empty-pick>${ic('reel', 40)}<b>Escolher vídeo</b><small class="muted">Até 5 minutos (máximo ${REEL_MAX_MB} MB)</small></span></label>
         <div class="reel-preview hidden" data-prev><video playsinline muted controls data-pv></video><small class="muted" data-dur></small></div>
         <div class="field" style="margin-top:12px"><label for="rcap">Descrição (opcional)</label><textarea id="rcap" rows="3" maxlength="2200" placeholder="Escreva algo sobre este vídeo…" data-cap></textarea></div>
-        <div class="upload-bar hidden" data-bar><i data-fill></i><span data-pct>0%</span></div>`,
+        <p class="muted small" style="margin:10px 0 0">Depois de tocar em Publicar, o vídeo envia em segundo plano — você pode continuar usando o app.</p>`,
       actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
         label: 'Publicar',
         handler: async (dlg) => {
           if (!file || !meta) { toast('Escolha um vídeo.', 'error'); return false; }
-          const btn = $$('.dlg-actions .btn', dlg).at(-1);
-          btn.disabled = true;
-          btn.textContent = 'Enviando…';
-          $('[data-bar]', dlg).classList.remove('hidden');
-          const fd = new FormData();
-          fd.append('caption', $('[data-cap]', dlg).value);
-          if (meta.duration) fd.append('duration', String(Math.round(meta.duration * 10) / 10));
-          fd.append('poster', meta.poster, 'capa.jpg');
-          fd.append('video', file, file.name || 'video.mp4');
-          try {
-            const p = await uploadWithProgress('/api/social/reels', fd, (f) => {
-              $('[data-fill]', dlg).style.width = `${Math.round(f * 100)}%`;
-              $('[data-pct]', dlg).textContent = f >= 1 ? 'Finalizando…' : `${Math.round(f * 100)}%`;
-            });
-            toast('Reel publicado!');
-            onDone?.(p);
-            return true;
-          } catch (e) {
-            toast(e.message, 'error');
-            btn.disabled = false; btn.textContent = 'Publicar';
-            $('[data-bar]', dlg).classList.add('hidden');
-            return false;
-          }
+          Uploads.add({ type: 'reel', label: 'Reel', file, poster: meta.poster, caption: $('[data-cap]', dlg).value,
+            duration: meta.duration ? Math.round(meta.duration * 10) / 10 : null, onDone });
+          return true;
         },
       }],
       onOpen: (dlg) => {
@@ -909,6 +1095,8 @@
     }
     opts.socket?.on('social:notification', refreshBell);
     window.addEventListener('acolia:stories', loadStories);
+    window.addEventListener('acolia:posted', () => loadFeed(true));
+    if (isPro) Uploads.resume();
 
     const topBar = $('.home-top', root);
     window.addEventListener('scroll', () => { topBar.classList.toggle('stuck', window.scrollY > 40); }, { passive: true });
@@ -1068,5 +1256,5 @@
     load();
   }
 
-  window.AcoliaSocial = { openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
+  window.AcoliaSocial = { resumeUploads: () => Uploads.resume(), openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
 })();

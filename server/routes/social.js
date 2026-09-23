@@ -214,6 +214,75 @@ router.post('/reels', async (req, res) => {
   res.status(201).json(postOut(createReel(req.auth.user.id, media, req.body.caption, secs || null), who(req)));
 });
 
+// ---------- Envio do reel em pedaços (segundo plano, continua de onde parou) ----------
+// 1) start: reserva o envio  2) PUT de pedaços em ordem  3) finish: capa + descrição → publica.
+// Se a internet cair ou o app for para o fundo, o aparelho pergunta quanto já chegou e continua.
+const UP = require('../upload');
+const CHUNK_MAX = 8 * 1024 * 1024;
+function ownUpload(req) {
+  const u = db.prepare('SELECT * FROM upload_sessions WHERE id = ? AND professional_id = ?').get(String(req.params.id), req.auth.user.id);
+  if (!u) throw new U.HttpError(404, 'Envio não encontrado. Comece de novo.');
+  return u;
+}
+
+router.post('/uploads', (req, res) => {
+  if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
+  const mime = String(req.body.mime || '').split(';')[0];
+  const size = Number(req.body.size);
+  if (!UP.VIDEO_EXT[mime]) throw new U.HttpError(400, 'Envie um vídeo MP4, MOV ou WEBM.');
+  if (!(size > 0) || size > UP.REEL_MAX_MB * 1024 * 1024) throw new U.HttpError(400, `Vídeo muito grande (máximo ${UP.REEL_MAX_MB} MB).`);
+  const id = require('node:crypto').randomBytes(16).toString('hex');
+  require('node:fs').writeFileSync(UP.partPath(id), Buffer.alloc(0));
+  db.prepare("INSERT INTO upload_sessions (id, professional_id, kind, mime, size) VALUES (?, ?, 'reel', ?, ?)").run(id, req.auth.user.id, mime, size);
+  res.status(201).json({ id, received: 0, size });
+});
+
+router.get('/uploads/:id', (req, res) => {
+  const u = ownUpload(req);
+  res.json({ id: u.id, received: u.received, size: u.size });
+});
+
+// Um pedaço: ?offset= tem que ser exatamente o que já chegou (senão responde quanto chegou)
+router.put('/uploads/:id', express.raw({ type: 'application/octet-stream', limit: CHUNK_MAX }), (req, res) => {
+  const u = ownUpload(req);
+  const offset = Number(req.query.offset);
+  const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+  if (offset !== u.received) return res.status(409).json({ received: u.received, size: u.size });
+  if (u.received + buf.length > u.size) throw new U.HttpError(400, 'O vídeo ficou maior do que o informado.');
+  require('node:fs').appendFileSync(UP.partPath(u.id), buf);
+  db.prepare('UPDATE upload_sessions SET received = received + ? WHERE id = ?').run(buf.length, u.id);
+  res.json({ received: u.received + buf.length, size: u.size });
+});
+
+router.post('/uploads/:id/finish', async (req, res) => {
+  const u = ownUpload(req);
+  if (u.received !== u.size) return res.status(409).json({ error: 'O vídeo ainda não chegou inteiro.', received: u.received, size: u.size });
+  const poster = await handlePhoto(req, res); // campo "photo" = capa; junto vêm caption e duration
+  const secs = Number(req.body.duration) || 0;
+  if (secs > REEL_MAX_SECS + 1) {
+    removePhoto(poster);
+    discardUpload(u.id);
+    throw new U.HttpError(400, 'O vídeo pode ter no máximo 5 minutos.');
+  }
+  const video = UP.finishPart(u.id, u.mime);
+  db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(u.id);
+  res.status(201).json(postOut(createReel(req.auth.user.id, { video, poster }, req.body.caption, secs || null), who(req)));
+});
+
+router.delete('/uploads/:id', (req, res) => {
+  discardUpload(ownUpload(req).id);
+  res.json({ ok: true });
+});
+
+function discardUpload(id) {
+  db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(id);
+  require('node:fs').promises.unlink(UP.partPath(id)).catch(() => {});
+}
+// Envios abandonados há mais de 3 dias são apagados (roda junto com a limpeza dos stories)
+function cleanupUploads() {
+  for (const u of db.prepare("SELECT id FROM upload_sessions WHERE created_at < datetime('now', '-3 days')").all()) discardUpload(u.id);
+}
+
 // Aba Reels: vídeos de todos os profissionais (e da Acolia Brasil) em ordem aleatória,
 // primeiro os que a pessoa ainda não viu. ?sug=1,2,3 = já mostrados (não repete).
 router.get('/reels', (req, res) => {
@@ -426,6 +495,7 @@ router.delete('/stories/:id/like', (req, res) => {
 
 // Apaga stories vencidos (e os arquivos) — roda de hora em hora
 function cleanupStories() {
+  cleanupUploads();
   const old = db.prepare(`SELECT * FROM stories WHERE NOT (${STORY_ALIVE})`).all();
   for (const s of old) {
     db.prepare('DELETE FROM notifications WHERE story_id = ?').run(s.id);

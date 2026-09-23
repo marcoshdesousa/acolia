@@ -144,6 +144,18 @@ const reelUpload = multer({
   },
 }).fields([{ name: 'video', maxCount: 1 }, { name: 'poster', maxCount: 1 }]);
 
+// Envio em pedaços: o arquivo vai sendo montado aqui e, no fim, vira um arquivo de /uploads
+const PART_DIR = path.join(DATA_DIR, 'uploads-parts');
+fs.mkdirSync(PART_DIR, { recursive: true });
+const partPath = (id) => path.join(PART_DIR, `${id.replace(/[^a-f0-9]/g, '')}.part`);
+function finishPart(id, mime) {
+  const name = crypto.randomBytes(16).toString('hex') + VIDEO_EXT[mime];
+  const dest = path.join(UPLOAD_DIR, name);
+  fs.renameSync(partPath(id), dest);
+  cloud.uploadFile('uploads', dest);
+  return `/uploads/${name}`;
+}
+
 function handleReel(req, res) {
   return new Promise((resolve, reject) => {
     reelUpload(req, res, (err) => {
@@ -203,4 +215,4 @@ function removePhoto(url) {
   cloud.removeFile('uploads', url);
 }
 
-module.exports = { handleReel, REEL_MAX_MB, handlePhotos, handleMedia, handleAudio, AUDIO_DIR, handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };
+module.exports = { handleReel, REEL_MAX_MB, VIDEO_EXT, partPath, finishPart, handlePhotos, handleMedia, handleAudio, AUDIO_DIR, handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };

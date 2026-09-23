@@ -1157,3 +1157,47 @@ test('Reels: profissional publica vídeo de até 5 min; aparece no feed, na aba 
   await new Promise((ok) => setTimeout(ok, 50));
   assert.equal(fs.existsSync(file), false, 'arquivo do vídeo apagado');
 });
+
+test('reel em pedaços: continua de onde parou (internet caiu / app no fundo) e publica no fim', async () => {
+  const c = await admin.post('/api/admin/professionals', { name: 'Pedro Pedaços', profession: 'Psicólogo(a)', registry: 'R-chunk', email: 'pedaco@example.com', phone: '11955550000', state: 'SP', city: 'Campinas' });
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+  const video = Buffer.from('0123456789'.repeat(1000)); // 10 KB
+  let r = await pro.post('/api/social/uploads', { mime: 'video/mp4', size: video.length });
+  assert.equal(r.status, 201);
+  const id = r.data.id;
+  const put = async (offset, buf) => {
+    const res = await fetch(`${base}/api/social/uploads/${id}?offset=${offset}`, { method: 'PUT', body: buf, headers: { Cookie: pro.cookie, 'Content-Type': 'application/octet-stream' } });
+    return { status: res.status, data: await res.json() };
+  };
+  assert.equal((await put(0, video.subarray(0, 4000))).data.received, 4000);
+  // Pedaço fora de ordem (ex.: reenvio depois da internet cair): responde quanto já chegou
+  const wrong = await put(1000, video.subarray(1000, 2000));
+  assert.equal(wrong.status, 409);
+  assert.equal(wrong.data.received, 4000);
+  // O aparelho pergunta quanto chegou e continua
+  assert.equal((await pro.get(`/api/social/uploads/${id}`)).data.received, 4000);
+  const finish = async () => {
+    const fd = new FormData();
+    fd.append('caption', 'Enviado aos poucos');
+    fd.append('duration', '42');
+    fd.append('photo', new Blob([Buffer.from([0xff, 0xd8, 0xff, 2])], { type: 'image/jpeg' }), 'capa.jpg');
+    const res = await fetch(`${base}/api/social/uploads/${id}/finish`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } });
+    return { status: res.status, data: await res.json() };
+  };
+  assert.equal((await finish()).status, 409, 'ainda não chegou inteiro');
+  assert.equal((await put(4000, video.subarray(4000))).data.received, video.length);
+  // Outro profissional não mexe no envio
+  const other = client();
+  await other.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+  const done = await finish();
+  assert.equal(done.status, 201, JSON.stringify(done.data));
+  assert.equal(done.data.kind, 'reel');
+  assert.equal(done.data.caption, 'Enviado aos poucos');
+  const saved = fs.readFileSync(require('node:path').join(tmp, 'uploads', require('node:path').basename(done.data.video)));
+  assert.ok(saved.equals(video), 'o vídeo chegou inteiro e igual');
+  assert.equal((await pro.get(`/api/social/uploads/${id}`)).status, 404, 'envio encerrado');
+  const pt = client();
+  await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+  assert.equal((await pt.post('/api/social/uploads', { mime: 'video/mp4', size: 10 })).status, 403, 'paciente não envia');
+});
