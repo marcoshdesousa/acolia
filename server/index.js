@@ -55,6 +55,14 @@ function createApp() {
 
   // Respostas da API nunca ficam guardadas no navegador (ex.: depois de sair, não mostra a conta antiga)
   app.use('/api', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
+  // Conta bloqueada: só consegue ver quem é (tela de bloqueio), sair e excluir a própria conta
+  const BLOCKED_OK = ['/auth/me', '/auth/logout', '/config', '/professional/delete', '/patient/delete', '/push/unsubscribe'];
+  app.use('/api', (req, _res, next) => {
+    if (req.auth?.blocked && !BLOCKED_OK.includes(req.path)) {
+      return next(Object.assign(new U.HttpError(423, 'Perfil bloqueado. Fale com a administração.'), { blocked: true }));
+    }
+    next();
+  });
   app.use('/api/auth', require('./routes/auth').router);
   app.use('/api', require('./routes/public').router);
   app.use('/api/patient', require('./routes/patient').router);
@@ -127,7 +135,7 @@ function createApp() {
   app.use((err, _req, res, _next) => {
     const status = err.status || err.statusCode || 500;
     if (status >= 500) console.error(err);
-    res.status(status).json({ error: status >= 500 ? 'Erro interno. Tente novamente.' : err.message });
+    res.status(status).json({ error: status >= 500 ? 'Erro interno. Tente novamente.' : err.message, ...(err.blocked ? { blocked: true } : {}) });
   });
   return app;
 }

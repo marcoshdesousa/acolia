@@ -58,7 +58,8 @@ router.post('/patient/login', (req, res) => {
     A.registerLoginFailure(key);
     throw new HttpError(401, 'CPF ou senha incorretos.');
   }
-  if (p.status !== 'ativo') throw new HttpError(403, 'Sua conta está bloqueada. Fale com a administração.');
+  // Bloqueado entra, mas só vê a tela de bloqueio (falar com a administração / excluir a conta)
+  if (!['ativo', 'bloqueado'].includes(p.status)) throw new HttpError(403, 'Esta conta foi excluída.');
   A.clearLoginFailures(key);
   A.createSession(res, 'patient', p.id);
   res.json({ ok: true });
@@ -156,7 +157,7 @@ router.post('/professional/login', (req, res) => {
   A.clearLoginFailures(key);
   if (p.status === 'pendente') throw new HttpError(403, 'Seu cadastro ainda está em análise. Você poderá entrar assim que a administração aprovar.');
   if (p.status === 'recusado') throw new HttpError(403, 'Seu cadastro não foi aprovado. Fale com a administração.');
-  if (p.status === 'bloqueado') throw new HttpError(403, 'Seu acesso está bloqueado. Fale com a administração.');
+  if (p.status === 'excluido') throw new HttpError(401, 'Código/e-mail ou senha incorretos.');
   A.createSession(res, 'professional', p.id);
   res.json({ ok: true });
 });
@@ -186,8 +187,10 @@ router.get('/me', (req, res) => {
   if (!req.auth) return res.json({ role: null });
   const { role, user } = req.auth;
   if (role === 'admin') return res.json({ role, user: { id: user.id, username: user.username } });
-  if (role === 'professional') return res.json({ role, user: ownProfessional(user) });
-  return res.json({ role, user: ownPatient(user) });
+  // account: bloqueio e aviso de renovação (+ WhatsApp do atendimento da Acolia)
+  const account = { ...require('../accountState').stateOf(role, user), support: require('../accountState').SUPPORT_WHATSAPP };
+  if (role === 'professional') return res.json({ role, user: ownProfessional(user), account });
+  return res.json({ role, user: ownPatient(user), account });
 });
 
 module.exports = { router, PROFESSIONS, validateProfessionalInput, insertProfessional, requirePassword, validateLocation };

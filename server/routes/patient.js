@@ -40,6 +40,10 @@ router.post('/delete', (req, res) => {
 
 // Apaga os dados pessoais (usado pela própria pessoa e, nas contas de teste, pelo admin)
 function wipePatient(me) {
+  // Apaga tudo: curtidas, comentários, quem seguia e o conteúdo das mensagens que mandou.
+  // O CPF fica livre para criar uma conta nova.
+  require('./social').purgeUserSocial('patient', me.id);
+  require('./chat').eraseMessagesOf('patient', me.id);
   removePhoto(me.photo);
   db.prepare("DELETE FROM favorites WHERE patient_id = ?").run(me.id);
   db.prepare(`UPDATE patients SET status = 'excluido', name = 'Conta excluída', display_name = '', cpf = ?, cpf_name_verified = 0,

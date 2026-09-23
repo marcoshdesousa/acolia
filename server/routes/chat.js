@@ -199,4 +199,24 @@ router.get('/unread', (req, res) => {
   res.json({ unread: n });
 });
 
-module.exports = { router, postMessage, loadConversation };
+// Conta apagada: o conteúdo de tudo o que a pessoa mandou é apagado (texto, áudio, Pix…).
+// Para a outra pessoa fica "Mensagem apagada".
+function eraseMessagesOf(role, userId) {
+  const col = role === 'patient' ? 'patient_id' : 'professional_id';
+  const rows = db.prepare(`SELECT m.id, m.kind, m.body FROM messages m JOIN conversations c ON c.id = m.conversation_id
+    WHERE c.${col} = ? AND m.sender_role = ? AND m.kind <> 'deleted'`).all(userId, role);
+  for (const m of rows) {
+    if (m.kind === 'audio') {
+      const file = m.body.split('|')[0];
+      if (/^[a-f0-9]{32}\.[a-z0-9]+$/.test(file)) {
+        const { AUDIO_DIR } = require('../upload');
+        require('node:fs').promises.unlink(require('node:path').join(AUDIO_DIR, file)).catch(() => {});
+        require('../cloud').removeFile('audio', file);
+      }
+    }
+    db.prepare("UPDATE messages SET kind = 'deleted', body = '' WHERE id = ?").run(m.id);
+  }
+  return rows.length;
+}
+
+module.exports = { router, postMessage, loadConversation, eraseMessagesOf };

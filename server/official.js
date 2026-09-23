@@ -39,7 +39,7 @@ const officialRow = () => db.prepare('SELECT * FROM professionals WHERE id = ?')
 function followerCounts() {
   const patients = db.prepare("SELECT COUNT(*) n FROM patients WHERE status = 'ativo' AND is_test = 0").get().n;
   const professionals = db.prepare(`SELECT COUNT(*) n FROM professionals p WHERE is_test = 0 AND
-    p.status = 'aprovado' AND p.subscription_until IS NOT NULL AND p.subscription_until >= date('now')`).get().n;
+    p.status = 'aprovado' AND p.subscription_until IS NOT NULL AND p.subscription_until >= date('now', '-1 day')`).get().n;
   return { patients, professionals };
 }
 

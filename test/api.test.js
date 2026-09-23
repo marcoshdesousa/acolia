@@ -351,22 +351,45 @@ test('atendimento: sinalização WebRTC via socket e encerramento', async () => 
   }
 });
 
-test('mensalidade vencida tira da vitrine; restrito/bloqueado', async () => {
+test('mensalidade: vence no dia, funciona mais 1 dia e depois bloqueia; aviso 2 dias antes; restrito/bloqueado', async () => {
+  const day = (n) => { const d = new Date(); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  // Venceu há muito tempo: some da vitrine e a conta fica bloqueada (só vê a tela de bloqueio)
   await admin.post(`/api/admin/professionals/${proId}/subscription`, { until: '2020-01-01' });
   assert.equal((await anon.get('/api/professionals')).data.items.length, 0);
-  assert.equal((await pro.get('/api/professional/me')).status, 200, 'ainda entra no painel');
-  await admin.post(`/api/admin/professionals/${proId}/subscription`, { add_days: 30 });
-  assert.equal((await anon.get('/api/professionals')).data.items.length, 1);
+  let r = await pro.get('/api/professional/me');
+  assert.equal(r.status, 423, 'bloqueado');
+  assert.equal(r.data.blocked, true);
+  r = await pro.get('/api/auth/me');
+  assert.equal(r.data.account.blocked, 'vencido');
+  assert.equal(r.data.account.until, '2020-01-01');
+  assert.ok(r.data.account.support, 'WhatsApp do atendimento');
+  // Venceu ontem: ainda funciona hoje (dia a mais), com aviso
+  await admin.post(`/api/admin/professionals/${proId}/subscription`, { until: day(-1) });
+  assert.equal((await anon.get('/api/professionals')).data.items.length, 1, 'ainda aparece no dia a mais');
+  r = await pro.get('/api/auth/me');
+  assert.equal(r.data.account.blocked, undefined);
+  assert.equal(r.data.account.warn, true);
+  // Vence daqui a 2 dias: aviso de renovação; daqui a 10: sem aviso
+  await admin.post(`/api/admin/professionals/${proId}/subscription`, { until: day(2) });
+  assert.equal((await pro.get('/api/auth/me')).data.account.warn, true);
+  await admin.post(`/api/admin/professionals/${proId}/subscription`, { until: day(10) });
+  assert.equal((await pro.get('/api/auth/me')).data.account.warn, undefined);
+  assert.equal((await pro.get('/api/professional/me')).status, 200);
 
   await admin.post(`/api/admin/professionals/${proId}/status`, { status: 'restrito' });
   assert.equal((await anon.get('/api/professionals')).data.items.length, 0);
   assert.equal((await pro.get('/api/professional/me')).status, 200);
 
+  // Bloqueado pelo admin: entra, mas só vê a tela de bloqueio
   await admin.post(`/api/admin/professionals/${proId}/status`, { status: 'bloqueado' });
-  assert.equal((await pro.get('/api/professional/me')).status, 401, 'sessão derrubada');
-  const r = await client().post('/api/auth/professional/login', { login: proCode, password: 'segredo1' });
-  assert.equal(r.status, 403);
+  assert.equal((await pro.get('/api/professional/me')).status, 423);
+  const again = client();
+  r = await again.post('/api/auth/professional/login', { login: proCode, password: 'segredo1' });
+  assert.equal(r.status, 200, 'consegue entrar');
+  assert.equal((await again.get('/api/auth/me')).data.account.blocked, 'admin');
+  assert.equal((await again.get('/api/social/feed')).status, 423, 'não vê o feed');
   await admin.post(`/api/admin/professionals/${proId}/status`, { status: 'aprovado' });
+  assert.equal((await pro.get('/api/professional/me')).status, 200, 'desbloqueado volta ao normal');
 });
 
 test('paciente: recuperar senha com CPF + nome gera senha aleatória', async () => {
@@ -387,8 +410,12 @@ test('admin bloqueia paciente', async () => {
   const id = list.data.items[0].id;
   await admin.post(`/api/admin/patients/${id}/status`, { status: 'bloqueado' });
   const r = await admin.post(`/api/admin/patients/${id}/reset-password`);
-  const login = await client().post('/api/auth/patient/login', { cpf: CPF_A, password: r.data.password });
-  assert.equal(login.status, 403);
+  const blocked = client();
+  const login = await blocked.post('/api/auth/patient/login', { cpf: CPF_A, password: r.data.password });
+  assert.equal(login.status, 200, 'entra, mas só vê a tela de bloqueio');
+  assert.equal((await blocked.get('/api/auth/me')).data.account.blocked, 'admin');
+  assert.equal((await blocked.get('/api/chat/conversations')).status, 423, 'sem acesso a nada');
+  assert.equal((await blocked.get('/api/professionals')).status, 423);
 });
 
 test('admin cadastra profissional já aprovado', async () => {
@@ -439,7 +466,7 @@ test('páginas estáticas', async () => {
 });
 
 test('a própria pessoa exclui a conta (paciente e profissional)', async () => {
-  const CPF_C = '390.533.447-05';
+  const CPF_C = '714.285.039-60';
   const p = client();
   await p.post('/api/auth/patient/register', { name: 'Paula Lima', cpf: CPF_C, state: 'SP', city: 'Campinas', password: '123456' });
   let r = await p.post('/api/patient/delete', { password: 'errada' });
@@ -1065,7 +1092,7 @@ test('Acolia Brasil: o admin publica, todos seguem (sem deixar de seguir) e o pe
   // Perfil: seguidores pacientes (ativos) e profissionais (licença em dia); sai quem perde a licença
   const count = () => ({
     patients: db.prepare("SELECT COUNT(*) n FROM patients WHERE status = 'ativo' AND is_test = 0").get().n,
-    pros: db.prepare("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND subscription_until >= date('now') AND is_test = 0").get().n,
+    pros: db.prepare("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND subscription_until >= date('now', '-1 day') AND is_test = 0").get().n,
   });
   let prof = (await pt.get('/api/professionals/acolia')).data;
   assert.equal(prof.official, true);
@@ -1076,7 +1103,7 @@ test('Acolia Brasil: o admin publica, todos seguem (sem deixar de seguir) e o pe
   assert.equal(prof.following, true);
   assert.equal(prof.price_cents, undefined, 'sem valores/consulta');
   const before = prof.followers_professionals;
-  db.prepare("UPDATE professionals SET subscription_until = date('now', '-1 day') WHERE id = ?").run(P.id);
+  db.prepare("UPDATE professionals SET subscription_until = date('now', '-2 day') WHERE id = ?").run(P.id); // venceu e passou o dia a mais
   prof = (await pt.get(`/api/professionals/${offId}`)).data;
   assert.equal(prof.followers_professionals, before - 1, 'licença vencida some da contagem');
   db.prepare("UPDATE professionals SET subscription_until = date('now', '+30 day') WHERE id = ?").run(P.id);
@@ -1229,4 +1256,57 @@ test('fotos antigas: o sistema mede a foto e grava o formato do feed mais próxi
   await require('../server/routes/social').fixOldAspects();
   assert.equal(db.prepare('SELECT aspect FROM posts WHERE id = ?').get(a).aspect, '1.91:1');
   assert.equal(db.prepare('SELECT aspect FROM posts WHERE id = ?').get(b).aspect, '4:5');
+});
+
+test('admin apaga a conta de verdade: some tudo e a pessoa pode criar a conta de novo', async () => {
+  const { db } = require('../server/db');
+  // Profissional com publicação, seguidor e conversa
+  const c = await admin.post('/api/admin/professionals', { name: 'Bia Apagada', profession: 'Psicólogo(a)', registry: 'CRP 06/99999', email: 'bia.apagar@example.com', phone: '11966660000', state: 'SP', city: 'Campinas' });
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+  const fd = new FormData();
+  fd.append('photos', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'f.png');
+  const post = await (await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } })).json();
+  // Paciente novo que curte, comenta, segue e conversa
+  const CPF = '583.920.174-04';
+  const pt = client();
+  const regR = await pt.post("/api/auth/patient/register", { name: "Caio Apagado", cpf: CPF, state: "SP", city: "Campinas", password: "123456" });
+  assert.equal(regR.status, 201, JSON.stringify(regR.data));
+  await pt.post(`/api/social/posts/${post.id}/like`);
+  await pt.post(`/api/social/posts/${post.id}/comments`, { body: 'Oi' });
+  await pt.post(`/api/social/follow/${c.data.id}`);
+  const conv = (await pt.post('/api/chat/conversations', { professional_id: c.data.id })).data;
+  await pt.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Mensagem do paciente' });
+  const ptId = db.prepare('SELECT id FROM patients WHERE cpf = ?').get(CPF.replace(/\D/g, '')).id;
+
+  // Apaga o paciente: curtidas, comentários, seguir e o conteúdo das mensagens somem; CPF livre
+  assert.equal((await admin.post(`/api/admin/patients/${ptId}/delete`)).status, 200);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM post_likes WHERE role = 'patient' AND user_id = ?").get(ptId).n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM post_comments WHERE role = 'patient' AND user_id = ?").get(ptId).n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM follows WHERE follower_role = 'patient' AND follower_id = ?").get(ptId).n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND sender_role = 'patient' AND kind <> 'deleted'").get(conv.id).n, 0);
+  assert.equal((await pt.get('/api/auth/me')).data.role, null, 'sessão encerrada');
+  assert.equal((await client().post('/api/auth/patient/register', { name: 'Caio Apagado', cpf: CPF, state: 'SP', city: 'Campinas', password: '123456' })).status, 201, 'pode criar a conta de novo');
+
+  // Apaga o profissional: publicações somem (com o arquivo) e e-mail/registro ficam livres
+  const file = require('node:path').join(tmp, 'uploads', require('node:path').basename(post.image));
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/delete`)).status, 200);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(c.data.id).n, 0);
+  await new Promise((ok) => setTimeout(ok, 50));
+  assert.equal(fs.existsSync(file), false, 'foto apagada');
+  assert.equal((await client().post('/api/auth/professional/login', { login: c.data.code, password: c.data.password })).status, 401);
+  const again = await admin.post('/api/admin/professionals', { name: 'Bia Apagada', profession: 'Psicólogo(a)', registry: 'CRP 06/99999', email: 'bia.apagar@example.com', phone: '11966660000', state: 'SP', city: 'Campinas' });
+  assert.equal(again.status, 201, 'pode ser cadastrada de novo com o mesmo e-mail e registro');
+});
+
+test('conta bloqueada pode se excluir pela tela de bloqueio', async () => {
+  const CPF = '862.314.110-52';
+  const pt = client();
+  assert.equal((await pt.post('/api/auth/patient/register', { name: 'Dora Bloqueada', cpf: CPF, state: 'SP', city: 'Campinas', password: '123456' })).status, 201);
+  const { db } = require('../server/db');
+  const id = db.prepare('SELECT id FROM patients WHERE cpf = ?').get(CPF.replace(/\D/g, '')).id;
+  await admin.post(`/api/admin/patients/${id}/status`, { status: 'bloqueado' });
+  assert.equal((await pt.get('/api/auth/me')).data.account.blocked, 'admin');
+  assert.equal((await pt.post('/api/patient/delete', { password: '123456' })).status, 200);
+  assert.equal(db.prepare('SELECT status FROM patients WHERE id = ?').get(id).status, 'excluido');
 });

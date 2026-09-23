@@ -9,6 +9,92 @@
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+
+  // ---------- Conta bloqueada / assinatura ----------
+  // Bloqueado (pelo admin, ou profissional com a assinatura vencida): a tela inteira vira o aviso
+  // "Perfil bloqueado", com o botão para falar com a administração (WhatsApp de atendimento) e
+  // "Excluir conta permanentemente". Não dá para ver feed, Reels, pacientes nem editar o perfil.
+  const brDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
+  function supportLink(support, text) {
+    return `https://wa.me/${String(support || '').replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+  }
+  function showBlocked(me) {
+    const a = me.account || {};
+    const isPro = me.role === 'professional';
+    const u = me.user || {};
+    const who = isPro ? `${u.name || ''}${u.code ? ` (código ${u.code})` : ''}` : (u.name || '');
+    let text;
+    let btn;
+    let msg;
+    if (isPro && a.blocked === 'vencido') {
+      text = `Sua assinatura terminou em <b>${brDate(a.until)}</b> e não foi renovada. Seu perfil está bloqueado e não aparece para ninguém — seus dados continuam guardados.<br>Para reativar a conta, renove sua assinatura com a nossa equipe.`;
+      btn = 'Renovar assinatura';
+      msg = `Olá! Sou ${who}, profissional da Acolia. Minha assinatura venceu e quero renovar para reativar a conta.`;
+    } else if (isPro) {
+      text = 'Seu perfil foi bloqueado pela administração e não aparece para ninguém — seus dados continuam guardados.<br>Converse com o administrador para resolver o problema.';
+      btn = 'Falar com o administrador';
+      msg = `Olá! Sou ${who}, profissional da Acolia. Meu perfil está bloqueado e quero resolver.`;
+    } else {
+      text = 'Seu perfil foi bloqueado. Converse com o administrador para resolver o problema.';
+      btn = 'Falar com o administrador';
+      msg = `Olá! Sou ${who}, paciente da Acolia. Meu perfil está bloqueado e quero resolver.`;
+    }
+    document.body.className = 'blocked-page';
+    document.body.innerHTML = `
+      <header class="topbar"><div class="container"><a class="brand" href="/">${ICONS.logo}<img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a></div></header>
+      <main class="blocked-wrap">
+        <div class="card blocked-card">
+          <span class="blocked-ic">${ICONS.lock}</span>
+          <h1>Perfil bloqueado</h1>
+          <p>${text}</p>
+          <a class="btn block" href="${esc(supportLink(a.support, msg))}" target="_blank" rel="noopener">${ICONS.send} ${btn}</a>
+          <button type="button" class="btn danger-outline block" data-blocked-delete>Excluir conta permanentemente</button>
+          <button type="button" class="btn ghost sm" data-blocked-logout>Sair</button>
+        </div>
+      </main>`;
+    $('[data-blocked-logout]').onclick = () => logout('/');
+    $('[data-blocked-delete]').onclick = async () => {
+      await modal({
+        title: 'Excluir conta permanentemente',
+        html: `<p>Isso apaga <b>tudo</b>: seus dados, fotos${isPro ? ', publicações, reels e stories' : ''}, curtidas, comentários e o conteúdo das mensagens que você enviou. Não dá para desfazer.</p>
+          <div class="field"><label for="del-pw">Digite sua senha para confirmar</label><input id="del-pw" type="password" autocomplete="current-password" data-del-pw></div>`,
+        actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
+          label: 'Excluir para sempre',
+          class: 'danger',
+          handler: async (dlg) => {
+            const password = dlg.querySelector('[data-del-pw]').value;
+            if (!password) { toast('Digite sua senha.', 'error'); return false; }
+            try {
+              await api(isPro ? '/api/professional/delete' : '/api/patient/delete', { method: 'POST', body: { password } });
+              toast('Conta excluída.');
+              setTimeout(() => location.replace('/'), 900);
+              return true;
+            } catch (e) { toast(e.message, 'error'); return false; }
+          },
+        }],
+      });
+    };
+  }
+  // Aviso de renovação (profissional): 2 dias antes do vencimento até o último dia
+  function renewBanner(me, where) {
+    const a = me.account || {};
+    if (!a.warn || !where) return;
+    const u = me.user || {};
+    const el = document.createElement('div');
+    el.className = 'notice warn renew-banner';
+    el.innerHTML = `<div class="grow"><b>${a.ended ? 'Sua assinatura terminou' : 'Sua assinatura está acabando'}</b>
+        <div class="small">${a.ended ? `O plano finalizou em <b>${brDate(a.until)}</b>. Renove agora para continuar aparecendo para os pacientes.` : `O plano finaliza em <b>${brDate(a.until)}</b>. Renove para continuar aparecendo para os pacientes.`}</div></div>
+      <a class="btn sm" target="_blank" rel="noopener" href="${esc(supportLink(a.support, `Olá! Sou ${u.name || ''}${u.code ? ` (código ${u.code})` : ''}, profissional da Acolia, e quero renovar minha assinatura.`))}">Renovar</a>`;
+    where.prepend(el);
+  }
+  // Qualquer chamada respondeu "bloqueado": mostra a tela de bloqueio (uma vez só)
+  let blockedShown = false;
+  async function onBlocked() {
+    if (blockedShown) return;
+    blockedShown = true;
+    try { const me = await api('/api/auth/me'); if (me.account?.blocked) showBlocked(me); } catch { /* ignora */ }
+  }
+
   async function api(path, { method = 'GET', body, form } = {}) {
     const opts = { method, headers: {}, credentials: 'same-origin' };
     if (form) opts.body = form;
@@ -23,6 +109,7 @@
       throw Object.assign(new Error('Sem conexão com o servidor. Verifique sua internet.'), { status: 0 });
     }
     const data = await res.json().catch(() => ({}));
+    if (res.status === 423 && data.blocked) onBlocked();
     if (!res.ok) throw Object.assign(new Error(data.error || 'Algo deu errado.'), { status: res.status });
     return data;
   }
@@ -528,6 +615,6 @@
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
     confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
-    handleForm, logout, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
+    handleForm, logout, showBlocked, renewBanner, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
   };
 })();

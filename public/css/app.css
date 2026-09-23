@@ -835,3 +835,17 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   background: rgba(255,255,255,.18); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 .rv-act.rv-msg svg { width: 24px; height: 24px; }
 .rv-act.rv-msg span { display: block; max-width: 100%; font-size: .64rem; line-height: 1.1; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+
+/* Tela "Perfil bloqueado" */
+.blocked-wrap { min-height: calc(100dvh - 70px); display: grid; place-items: center; padding: 24px 16px 48px; }
+.blocked-card { max-width: 440px; width: 100%; text-align: center; display: grid; gap: 12px; justify-items: center; padding: 28px 22px; }
+.blocked-card h1 { font-size: 1.6rem; margin: 4px 0 0; }
+.blocked-card p { margin: 0 0 6px; color: var(--muted); line-height: 1.5; }
+.blocked-card .btn.block { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.blocked-card .btn svg { width: 18px; height: 18px; }
+.blocked-ic { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: var(--danger-soft); color: var(--danger); }
+.blocked-ic svg { width: 34px; height: 34px; }
+.btn.danger-outline { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+/* Aviso de renovação da assinatura */
+.renew-banner { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.renew-banner .btn { flex: none; }

@@ -52,6 +52,26 @@
     f.city.innerHTML = '<option value="">Todos os municípios</option>' + list.map((c) => `<option ${c === cur ? 'selected' : ''}>${esc(c)}</option>`).join('');
   }
 
+  // Apagar conta: confirmação forte (digitar APAGAR)
+  async function confirmDelete(name) {
+    let ok = false;
+    await modal({
+      title: 'Apagar conta permanentemente',
+      html: `<p>Apagar a conta de <b>${esc(name || '')}</b>? Some <b>tudo</b>: dados, fotos, publicações, curtidas, comentários e o conteúdo das mensagens. Não dá para desfazer. A pessoa poderá criar uma conta nova depois.</p>
+        <div class="field"><label for="del-word">Para confirmar, digite <b>APAGAR</b></label><input id="del-word" autocomplete="off" data-del-word></div>`,
+      actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
+        label: 'Apagar conta',
+        class: 'danger',
+        handler: (dlg) => {
+          if ($('[data-del-word]', dlg).value.trim().toUpperCase() !== 'APAGAR') { toast('Digite APAGAR para confirmar.', 'error'); return false; }
+          ok = true;
+          return true;
+        },
+      }],
+    });
+    return ok;
+  }
+
   // ---------- Visão geral ----------
   async function loadStats() {
     const s = await api('/api/admin/stats');
@@ -82,7 +102,7 @@
       <td><div class="row" style="flex-wrap:nowrap">${avatar(p.name, p.photo, 'sm')}<div><b>${esc(p.name)}</b>${p.is_test ? ' <span class="badge warn">Teste</span>' : ''}<div class="small muted">${esc(p.profession)} · ${esc(p.email)}</div></div></div></td>
       <td>${esc(p.registry)}</td>
       <td>${esc(p.city)} - ${esc(p.state)}</td>
-      <td>${p.is_test && p.status === 'excluido' ? '<span class="badge">Apagada</span>' : (STATUS_BADGE[p.status] || esc(p.status))}</td>
+      <td>${p.status === 'excluido' ? '<span class="badge">Apagada</span>' : (STATUS_BADGE[p.status] || esc(p.status))}</td>
       <td>${subBadge(p)}</td>
       <td><button class="btn secondary sm" data-pro="${p.id}">Gerenciar</button></td></tr>`;
   }
@@ -99,11 +119,11 @@
         <td style="white-space:nowrap">${esc(p.cpf)} ${p.cpf_name_verified ? '<span class="badge ok" title="Nome conferido com a Receita">conferido</span>' : ''}</td>
         <td>${esc(p.city)} - ${esc(p.state)}</td>
         <td>${fmtDT(p.created_at)}</td>
-        <td>${p.is_test && p.status === 'excluido' ? '<span class="badge">Apagada</span>' : STATUS_BADGE[p.status]}</td>
+        <td>${p.status === 'excluido' ? '<span class="badge">Apagada</span>' : STATUS_BADGE[p.status]}</td>
         <td>${p.status === 'excluido' ? '' : `<div class="row">
           <button class="btn secondary sm" data-pat-status="${p.id}" data-to="${p.status === 'ativo' ? 'bloqueado' : 'ativo'}">${p.status === 'ativo' ? 'Bloquear' : 'Desbloquear'}</button>
           <button class="btn ghost sm" data-pat-reset="${p.id}" data-name="${esc(p.name)}">Gerar nova senha</button>
-          ${p.is_test ? `<button class="btn danger sm" data-pat-del="${p.id}">Apagar conta</button>` : ''}</div>`}</td></tr>`).join('')
+          <button class="btn danger sm" data-pat-del="${p.id}" data-name="${esc(p.name)}">Apagar conta</button></div>`}</td></tr>`).join('')
         : '<tr><td colspan="6" class="center muted">Nenhum paciente encontrado.</td></tr>';
     }
     $(`[data-count="${kind}"]`).textContent = `${items.length} resultado${items.length === 1 ? '' : 's'}`;
@@ -128,16 +148,18 @@
     const ps = e.target.closest('[data-pat-status]');
     if (ps) {
       const to = ps.dataset.to;
-      if (!await confirmDialog(to === 'bloqueado' ? 'Bloquear este paciente? Ele não conseguirá mais entrar.' : 'Desbloquear este paciente?', { okLabel: to === 'bloqueado' ? 'Bloquear' : 'Desbloquear', danger: to === 'bloqueado' })) return;
+      if (!await confirmDialog(to === 'bloqueado' ? 'Bloquear este paciente? Ele entra, mas só vê a tela "Perfil bloqueado" (com o botão para falar com vocês no WhatsApp). Os dados ficam guardados.' : 'Desbloquear este paciente?', { okLabel: to === 'bloqueado' ? 'Bloquear' : 'Desbloquear', danger: to === 'bloqueado' })) return;
       await api(`/api/admin/patients/${ps.dataset.patStatus}/status`, { method: 'POST', body: { status: to } });
       toast('Atualizado');
       loadList('patients');
     }
     const pd = e.target.closest('[data-pat-del]');
     if (pd) {
-      if (!await confirmDialog('Apagar esta conta de teste? Ela não poderá mais entrar.', { okLabel: 'Apagar', danger: true })) return;
-      await api(`/api/admin/patients/${pd.dataset.patDel}/delete-test`, { method: 'POST' });
-      toast('Conta de teste apagada');
+      if (!await confirmDelete(pd.dataset.name)) return;
+      try {
+        await api(`/api/admin/patients/${pd.dataset.patDel}/delete`, { method: 'POST' });
+        toast('Conta apagada');
+      } catch (ex) { toast(ex.message, 'error'); }
       reloadAll();
     }
     const tb = e.target.closest('[data-test-accounts]');
@@ -221,8 +243,9 @@
         <textarea data-note rows="2" maxlength="1000">${esc(p.admin_note)}</textarea>
         <div class="row" style="margin-top:6px"><button type="button" class="btn secondary sm" data-save-note>Salvar observação</button>
           <button type="button" class="btn ghost sm" data-reset-pw>Gerar nova senha</button></div>
-        ${p.is_test && p.status !== 'excluido' ? `<h3 style="margin-top:16px">Conta de teste</h3>
-          <button type="button" class="btn danger sm" data-del-test>Apagar conta de teste</button>` : ''}`,
+        ${p.status !== 'excluido' ? `<h3 style="margin-top:16px">Apagar conta</h3>
+          <p class="small muted" style="margin:0 0 8px">Apaga tudo: dados, fotos, publicações, reels, stories, curtidas, comentários e o conteúdo das mensagens que ele mandou. Não dá para desfazer. Ele pode criar uma conta nova depois.</p>
+          <button type="button" class="btn danger sm" data-del-test>Apagar conta</button>` : ''}`,
       actions: [{ label: 'Fechar' }],
       onOpen: (dlg) => {
         const refresh = async () => { dlg.close(); dlg.remove(); await reloadAll(); openPro(id); };
@@ -235,7 +258,7 @@
         });
         $$('[data-set]', dlg).forEach((b) => b.addEventListener('click', async () => {
           const s = b.dataset.set;
-          const msgs = { aprovado: 'Aprovar/reativar este profissional?', recusado: 'Recusar este cadastro?', restrito: 'Restringir? Ele sai da vitrine mas continua respondendo conversas.', bloqueado: 'Bloquear? Ele não conseguirá mais entrar.' };
+          const msgs = { aprovado: 'Aprovar/reativar este profissional?', recusado: 'Recusar este cadastro?', restrito: 'Restringir? Ele sai da vitrine mas continua respondendo conversas.', bloqueado: 'Bloquear? Ele entra, mas só vê a tela "Perfil bloqueado" (com o botão para falar com vocês). Sai da vitrine e os dados ficam guardados.' };
           if (!await confirmDialog(msgs[s], { danger: s !== 'aprovado' })) return;
           await api(`/api/admin/professionals/${id}/status`, { method: 'POST', body: { status: s } });
           toast('Situação atualizada');
@@ -258,9 +281,9 @@
         });
         const del = $('[data-del-test]', dlg);
         if (del) del.addEventListener('click', async () => {
-          if (!await confirmDialog('Apagar esta conta de teste? Ela sai da vitrine e não poderá mais entrar.', { okLabel: 'Apagar', danger: true })) return;
-          await api(`/api/admin/professionals/${id}/delete-test`, { method: 'POST' });
-          toast('Conta de teste apagada');
+          if (!await confirmDelete(p.name)) return;
+          await api(`/api/admin/professionals/${id}/delete`, { method: 'POST' });
+          toast('Conta apagada');
           dlg.close(); dlg.remove(); reloadAll();
         });
         $('[data-reset-pw]', dlg).addEventListener('click', async () => {

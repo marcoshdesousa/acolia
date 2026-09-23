@@ -97,6 +97,7 @@
     const auth = await api('/api/auth/me').catch(() => ({}));
     // Sem conta conectada: página inicial (ou o login, se veio de um link para um lugar específico)
     if (auth.role !== 'patient') { location.replace(location.hash ? '/entrar?next=' + encodeURIComponent('/app' + location.hash) : '/'); return; }
+    if (auth.account?.blocked) { Acolia.showBlocked(auth); return; } // perfil bloqueado: só a tela de bloqueio
     let me = auth.user;
     $('[data-logo]').innerHTML = ICONS.logo;
     $$('[data-i]').forEach((el) => { el.outerHTML = ICONS[el.dataset.i]; });
@@ -112,6 +113,7 @@
     renderMe();
 
     const socket = io();
+    socket.on('account:blocked', () => location.reload()); // o admin bloqueou: mostra a tela de bloqueio na hora
     const setUnread = (n) => { $('[data-unread]').textContent = n ? String(n) : ''; };
     const chat = AcoliaChat.mount($('[data-chat]'), {
       role: 'patient', me, socket, onUnreadChange: setUnread,

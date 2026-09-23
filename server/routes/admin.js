@@ -62,8 +62,8 @@ router.get('/stats', (_req, res) => {
     professionals: g("SELECT COUNT(*) n FROM professionals WHERE status <> 'oficial'"),
     pending: g("SELECT COUNT(*) n FROM professionals WHERE status = 'pendente'"),
     approved: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado'"),
-    visible: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND subscription_until >= date('now')"),
-    overdue: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND (subscription_until IS NULL OR subscription_until < date('now'))"),
+    visible: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND subscription_until >= date('now', '-1 day')"),
+    overdue: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND (subscription_until IS NULL OR subscription_until < date('now', '-1 day'))"),
     conversations: g('SELECT COUNT(*) n FROM conversations'),
     messages: g('SELECT COUNT(*) n FROM messages'),
     storage: storageInfo(),
@@ -118,8 +118,10 @@ router.post('/professionals/:id/status', (req, res) => {
   // Na primeira aprovação, libera o primeiro período de mensalidade
   if (status === 'aprovado' && !until) until = U.addDaysISO(U.todayISO(), 30);
   db.prepare('UPDATE professionals SET status = ?, subscription_until = ? WHERE id = ?').run(status, until, p.id);
+  // Bloqueado: continua conseguindo entrar, mas só vê a tela de bloqueio (o aparelho recarrega na hora)
+  if (status === 'bloqueado') require('../realtime').emit(`professional:${p.id}`, 'account:blocked', {});
+  if (status === 'recusado') A.destroyUserSessions('professional', p.id);
   if (['bloqueado', 'recusado'].includes(status)) {
-    A.destroyUserSessions('professional', p.id);
     const active = db.prepare("SELECT * FROM calls WHERE professional_id = ? AND status = 'ativo'").get(p.id);
     if (active) endCall(active);
   }
@@ -197,6 +199,25 @@ router.post('/professionals/:id/delete-test', (req, res) => {
   res.json({ ok: true });
 });
 
+// Apagar a conta de verdade (qualquer conta): some tudo — fotos, publicações, reels, stories,
+// curtidas, comentários, dados pessoais e o conteúdo das mensagens que a pessoa mandou.
+// CPF / e-mail / registro ficam livres: a pessoa pode criar uma conta nova depois.
+router.post('/professionals/:id/delete', (req, res) => {
+  const p = db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id));
+  if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
+  if (p.status === 'excluido') throw new U.HttpError(400, 'Esta conta já foi apagada.');
+  require('./professional').wipeProfessional(p);
+  res.json({ ok: true });
+});
+
+router.post('/patients/:id/delete', (req, res) => {
+  const p = db.prepare('SELECT * FROM patients WHERE id = ?').get(Number(req.params.id));
+  if (!p) throw new U.HttpError(404, 'Paciente não encontrado.');
+  if (p.status === 'excluido') throw new U.HttpError(400, 'Esta conta já foi apagada.');
+  require('./patient').wipePatient(p);
+  res.json({ ok: true });
+});
+
 router.post('/patients/:id/delete-test', (req, res) => {
   const p = db.prepare('SELECT * FROM patients WHERE id = ?').get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Paciente não encontrado.');
@@ -219,7 +240,7 @@ router.post('/patients/:id/status', (req, res) => {
   if (!['ativo', 'bloqueado'].includes(status)) throw new U.HttpError(400, 'Status inválido.');
   const r = db.prepare("UPDATE patients SET status = ? WHERE id = ? AND status <> 'excluido'").run(status, Number(req.params.id));
   if (!r.changes) throw new U.HttpError(404, 'Paciente não encontrado.');
-  if (status === 'bloqueado') A.destroyUserSessions('patient', Number(req.params.id));
+  if (status === 'bloqueado') require('../realtime').emit(`patient:${Number(req.params.id)}`, 'account:blocked', {});
   res.json({ ok: true, status });
 });
 

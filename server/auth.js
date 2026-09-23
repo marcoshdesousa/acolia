@@ -34,8 +34,10 @@ function destroyUserSessions(role, userId) {
   db.prepare('DELETE FROM sessions WHERE role = ? AND user_id = ?').run(role, userId);
 }
 
-// Retorna {role, user} a partir do cabeçalho Cookie, validando se a conta continua ativa
-function sessionFromCookie(cookieHeader) {
+// Retorna {role, user} a partir do cabeçalho Cookie, validando se a conta continua ativa.
+// Conta bloqueada (pelo admin ou assinatura vencida) só volta com allowBlocked (as páginas
+// mostram a tela de bloqueio); chat, chamadas e o resto da API não aceitam.
+function sessionFromCookie(cookieHeader, { allowBlocked = false } = {}) {
   const token = parseCookies(cookieHeader)[COOKIE];
   if (!token) return null;
   const s = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
@@ -48,17 +50,19 @@ function sessionFromCookie(cookieHeader) {
   if (s.role === 'admin') user = db.prepare('SELECT id, username FROM admins WHERE id = ?').get(s.user_id);
   else if (s.role === 'professional') {
     user = db.prepare('SELECT * FROM professionals WHERE id = ?').get(s.user_id);
-    if (user && !['aprovado', 'restrito'].includes(user.status)) user = null;
+    if (user && !['aprovado', 'restrito', 'bloqueado'].includes(user.status)) user = null;
   } else if (s.role === 'patient') {
     user = db.prepare('SELECT * FROM patients WHERE id = ?').get(s.user_id);
-    if (user && user.status !== 'ativo') user = null;
+    if (user && !['ativo', 'bloqueado'].includes(user.status)) user = null;
   }
   if (!user) return null;
-  return { role: s.role, user, token };
+  const blocked = require('./accountState').stateOf(s.role, user).blocked || null;
+  if (blocked && !allowBlocked) return null;
+  return { role: s.role, user, token, blocked };
 }
 
 function attachSession(req, _res, next) {
-  req.auth = sessionFromCookie(req.headers.cookie);
+  req.auth = sessionFromCookie(req.headers.cookie, { allowBlocked: true });
   next();
 }
 

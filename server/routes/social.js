@@ -582,4 +582,28 @@ router.post('/notifications/read', (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };
+// Conta apagada: some tudo o que ela fez no Acolia Feed (publicações, reels e stories com os
+// arquivos, curtidas, comentários, seguidores, notificações e envios pela metade)
+function purgeUserSocial(role, id) {
+  if (role === 'professional') {
+    for (const p of db.prepare('SELECT * FROM posts WHERE professional_id = ?').all(id)) deletePostFully(p);
+    for (const st of db.prepare('SELECT * FROM stories WHERE professional_id = ?').all(id)) {
+      db.prepare('DELETE FROM notifications WHERE story_id = ?').run(st.id);
+      db.prepare('DELETE FROM stories WHERE id = ?').run(st.id);
+      if (st.kind !== 'post') removePhoto(st.media);
+    }
+    db.prepare('DELETE FROM follows WHERE professional_id = ?').run(id);
+    for (const u of db.prepare('SELECT id FROM upload_sessions WHERE professional_id = ?').all(id)) discardUpload(u.id);
+  }
+  for (const c of db.prepare('SELECT id FROM post_comments WHERE role = ? AND user_id = ?').all(role, id)) {
+    db.prepare('DELETE FROM notifications WHERE comment_id = ?').run(c.id);
+  }
+  db.prepare('DELETE FROM post_comments WHERE role = ? AND user_id = ?').run(role, id);
+  db.prepare('DELETE FROM post_likes WHERE role = ? AND user_id = ?').run(role, id);
+  db.prepare('DELETE FROM story_likes WHERE role = ? AND user_id = ?').run(role, id);
+  db.prepare('DELETE FROM post_views WHERE role = ? AND user_id = ?').run(role, id);
+  db.prepare('DELETE FROM follows WHERE follower_role = ? AND follower_id = ?').run(role, id);
+  db.prepare('DELETE FROM notifications WHERE (recipient_role = ? AND recipient_id = ?) OR (actor_role = ? AND actor_id = ?)').run(role, id, role, id);
+}
+
+module.exports = { purgeUserSocial, fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };

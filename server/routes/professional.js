@@ -136,9 +136,15 @@ function wipeProfessional(me) {
   removePhoto(me.photo);
   parseGallery(me.gallery).forEach(removePhoto);
   removeDocument(me.document_file);
+  // Apaga tudo: publicações, reels, stories, curtidas, comentários, seguidores e o conteúdo das
+  // mensagens que ele mandou. E-mail, registro, código e link ficam livres para um cadastro novo.
+  require('./social').purgeUserSocial('professional', me.id);
+  require('./chat').eraseMessagesOf('professional', me.id);
   db.prepare(`UPDATE professionals SET status = 'excluido', name = 'Profissional removido', legal_name = NULL, registry = ?, email = ?,
     phone = '', bio = '', specialties = '', photo = NULL, document_file = NULL, pix_key = '', clinic_name = '', clinic_address = '',
-    has_clinic = 0, instagram = '', gallery = '[]', maps_url = '', maps_query = '', password_hash = '!' WHERE id = ?`).run(`excluido-${me.id}`, `excluido-${me.id}@removido.acolia`, me.id);
+    has_clinic = 0, instagram = '', gallery = '[]', maps_url = '', maps_query = '', password_hash = '!', code = ?, slug = NULL,
+    packages = '[]', price_cents = NULL, session_minutes = NULL, admin_note = '', city = '', city_norm = '', state = '' WHERE id = ?`)
+    .run(`excluido-${me.id}`, `excluido-${me.id}@removido.acolia`, `excluido-${me.id}`, me.id);
   db.prepare('DELETE FROM favorites WHERE professional_id = ?').run(me.id);
   for (const c of db.prepare('SELECT id, patient_id FROM conversations WHERE professional_id = ?').all(me.id)) {
     rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });

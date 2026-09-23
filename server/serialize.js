@@ -1,5 +1,5 @@
 'use strict';
-const { todayISO } = require('./util');
+const { todayISO, addDaysISO } = require('./util');
 const maps = require('./maps');
 
 // Mapa da clínica (só para quem tem conta): usa o link do Google Maps ou, sem link, o endereço
@@ -10,11 +10,12 @@ function clinicMap(p) {
   return { maps_url: p.maps_url || (query ? maps.searchUrl(query) : ''), map_embed: maps.embedUrl(query) };
 }
 
-// Profissional aparece na vitrine se estiver aprovado e com a mensalidade em dia
-const VISIBLE_SQL = "p.status = 'aprovado' AND p.subscription_until IS NOT NULL AND p.subscription_until >= date('now')";
+// Profissional aparece na vitrine se estiver aprovado e com a mensalidade em dia.
+// A assinatura vale até o dia do vencimento e mais 1 dia (no outro dia a conta é bloqueada).
+const VISIBLE_SQL = "p.status = 'aprovado' AND p.subscription_until IS NOT NULL AND p.subscription_until >= date('now', '-1 day')";
 
 function isVisible(p) {
-  return p.status === 'aprovado' && !!p.subscription_until && p.subscription_until >= todayISO();
+  return p.status === 'aprovado' && !!p.subscription_until && p.subscription_until >= addDaysISO(todayISO(), -1);
 }
 
 function parsePackages(json) {

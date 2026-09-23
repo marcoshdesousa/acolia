@@ -6,6 +6,7 @@
 
   const auth = await api('/api/auth/me').catch(() => ({}));
   if (auth.role !== 'professional') { location.replace(location.hash ? '/entrar?next=' + encodeURIComponent('/painel' + location.hash) + '#profissional' : '/'); return; }
+  if (auth.account?.blocked) { Acolia.showBlocked(auth); return; } // bloqueado (admin ou assinatura vencida)
   let me = auth.user;
   const cfg = await api('/api/config');
 
@@ -149,6 +150,7 @@
   AcoliaDeleteAccount($('[data-delete-account]'), '/api/professional/delete');
   $('[data-install-btn]').addEventListener('click', installApp);
   Acolia.setupNotifications($('.panel-main'));
+  Acolia.renewBanner(auth, $('.panel-main')); // aviso: assinatura acabando (2 dias antes)
 
   // ---------- Atendimento ----------
   async function loadCalls() {
@@ -192,6 +194,7 @@
 
   // ---------- Chat ----------
   const socket = io();
+  socket.on('account:blocked', () => location.reload());
   const setUnread = (n) => $$('[data-unread]').forEach((el) => { el.textContent = n ? String(n) : ''; });
   const chat = AcoliaChat.mount($('[data-chat]'), {
     role: 'professional', me: () => me, socket, onUnreadChange: setUnread,
