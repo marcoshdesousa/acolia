@@ -88,6 +88,12 @@
       const pct = total ? Math.min(100, Math.round((usedDisk / total) * 100)) : 0;
       const P = u.parts;
       const chip = (label, x) => `<span class="badge">${label}: <b>${mb(x.bytes)}</b>${x.count ? ` <span class="muted">(${x.count.toLocaleString('pt-BR')})</span>` : ''}</span>`;
+      // No topo (sempre visível): quanto do disco já foi usado
+      const pill = $('[data-disk-pill]');
+      pill.classList.remove('hidden', 'warn', 'full');
+      if (pct >= 80) pill.classList.add('full'); else if (pct >= 60) pill.classList.add('warn');
+      pill.innerHTML = `<span class="disk-ic" aria-hidden="true"></span><span><b>${total ? `${gb(usedDisk)} de ${gb(total)} GB` : mb(u.used)}</b>${total ? ` <small>(${pct}%)</small>` : ''}</span>
+        ${total ? `<span class="disk-mini"><i style="width:${Math.max(2, pct)}%"></i></span>` : ''}`;
       $('[data-storage]').insertAdjacentHTML('beforeend', `<div class="card usage-card" style="margin-top:10px">
           <div class="row between"><b>Espaço usado no disco</b><span>${total ? `<b>${gb(usedDisk)} GB</b> de ${gb(total)} GB (${pct}%)` : `<b>${mb(u.used)}</b>`}</span></div>
           ${total ? `<div class="usage-track ${pct >= 80 ? 'warn' : ''}"><i style="width:${Math.max(1, pct)}%"></i></div>` : ''}

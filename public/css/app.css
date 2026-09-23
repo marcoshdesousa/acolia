@@ -868,3 +868,18 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .usage-track { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin-top: 8px; }
 .usage-track i { display: block; height: 100%; border-radius: 99px; background: var(--primary); }
 .usage-track.warn i { background: var(--danger); }
+/* Admin: espaço do disco no topo */
+.topbar .container:has(.disk-pill) { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.disk-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--ok-soft); color: var(--ok);
+  text-decoration: none; font-size: .82rem; white-space: nowrap; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); }
+.disk-pill small { opacity: .8; font-weight: 700; }
+.disk-pill.warn { background: var(--warn-soft); color: var(--warn); }
+.disk-pill.full { background: var(--danger-soft); color: var(--danger); }
+.disk-ic { width: 14px; height: 10px; border: 2px solid currentColor; border-radius: 3px; position: relative; flex: none; }
+.disk-ic::after { content: ""; position: absolute; right: 2px; top: 2px; width: 2px; height: 2px; background: currentColor; border-radius: 50%; }
+.disk-mini { width: 46px; height: 6px; border-radius: 99px; background: color-mix(in srgb, currentColor 18%, transparent); overflow: hidden; }
+.disk-mini i { display: block; height: 100%; background: currentColor; border-radius: 99px; }
+@media (max-width: 520px) { .disk-pill .disk-mini { display: none; } .disk-pill { padding: 5px 10px; font-size: .76rem; } }
+.topbar .container:has(.disk-pill) .brand { min-width: 0; flex: 0 1 auto; }
+.disk-pill { flex: none; }
+@media (max-width: 560px) { .topbar .container:has(.disk-pill) .brand .badge { display: none; } }
