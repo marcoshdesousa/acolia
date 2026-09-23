@@ -474,11 +474,10 @@
     root.innerHTML = `
       <div class="home">
         <div class="home-top">
-          <h1><button type="button" class="home-title" data-home-top title="Voltar ao topo e atualizar">Início</button></h1>
-          <div class="row" style="gap:4px">
-            ${isPro ? `<button type="button" class="icon-btn create-btn" data-create aria-label="Criar: publicar fotos ou story" title="Publicar fotos ou story">${ic('plus', 26)}</button>` : ''}
-            <button type="button" class="icon-btn bell" data-bell aria-label="Notificações" title="Notificações">${ic('bell', 26)}<span class="nav-badge" data-bell-count></span></button>
-          </div>
+          <div class="ht-side left">${isPro ? `<button type="button" class="icon-btn create-btn" data-create aria-label="Criar: publicar fotos ou story" title="Publicar fotos ou story">${ic('plus', 28)}</button>` : ''}</div>
+          <h1 class="ht-title"><button type="button" class="feed-logo" data-home-top title="Voltar ao topo e atualizar">
+            <img src="/img/logo-simbolo.png" alt="" width="30" height="30"><span class="fl-name">Acolia</span><span class="fl-feed">Feed</span></button></h1>
+          <div class="ht-side right"><button type="button" class="icon-btn bell" data-bell aria-label="Notificações" title="Notificações">${ic('bell', 27)}<span class="nav-badge" data-bell-count></span></button></div>
         </div>
         <div class="stories-bar" data-stories></div>
         <div class="feed" data-feed></div>

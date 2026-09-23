@@ -625,3 +625,15 @@ dialog.post-dialog .dlg-actions:empty, dialog.sheet .dlg-actions:empty { display
   .bottom-nav.icons.compact { width: 340px; bottom: 14px; }
 }
 .app-main { padding-bottom: 110px; }
+
+/* Topo do feed: + à esquerda, "Acolia Feed" no centro, sininho à direita */
+.home-top { display: grid; grid-template-columns: 48px 1fr 48px; align-items: center; }
+.home-top .ht-side { display: flex; }
+.home-top .ht-side.right { justify-content: flex-end; }
+.home-top .ht-title { margin: 0; text-align: center; font-size: inherit; }
+.feed-logo { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 4px 6px; cursor: pointer; color: var(--text); font-family: 'Jost', system-ui, sans-serif; line-height: 1; }
+.feed-logo img { width: 30px; height: 30px; object-fit: contain; }
+.feed-logo .fl-name { font-size: 1.55rem; font-weight: 500; letter-spacing: .02em; }
+.feed-logo .fl-feed { font-size: 1.55rem; font-weight: 400; font-style: italic; color: var(--primary); opacity: .9; }
+.feed-logo:active { transform: scale(.97); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .feed-logo img { filter: brightness(1.6); } }
