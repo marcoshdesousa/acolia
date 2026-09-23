@@ -265,18 +265,22 @@
   }
 
   // Janela modal simples. actions: [{label, value, class}]
-  function modal({ title = '', html = '', actions = [{ label: 'OK', value: true }], onOpen } = {}) {
+  // locked: não fecha pelo X, pelo Esc nem tocando fora (só pelos botões)
+  function modal({ title = '', html = '', actions = [{ label: 'OK', value: true }], onOpen, locked = false } = {}) {
     return new Promise((resolve) => {
       const dlg = document.createElement('dialog');
-      dlg.innerHTML = `<button type="button" class="dlg-close" data-dlg-close aria-label="Fechar" title="Fechar">✕</button>
+      dlg.innerHTML = `${locked ? '' : '<button type="button" class="dlg-close" data-dlg-close aria-label="Fechar" title="Fechar">✕</button>'}
         <div class="dlg-body">${title ? `<h2>${esc(title)}</h2>` : ''}${html}</div>
         <div class="dlg-actions">${actions.map((a, i) => `<button type="button" class="btn ${a.class || ''}" data-i="${i}">${esc(a.label)}</button>`).join('')}</div>`;
       document.body.appendChild(dlg);
-      const close = (v) => { dlg.close(); dlg.remove(); resolve(v); };
-      dlg.addEventListener('cancel', (e) => { e.preventDefault(); close(undefined); });
+      let done = false;
+      const close = (v) => { done = true; dlg.close(); dlg.remove(); resolve(v); };
+      dlg.addEventListener('cancel', (e) => { e.preventDefault(); if (!locked) close(undefined); });
+      // O navegador pode fechar mesmo assim (Esc duas vezes, botão voltar do Android): se é obrigatória, abre de novo
+      dlg.addEventListener('close', () => { if (locked && !done) setTimeout(() => { if (!done && dlg.isConnected) dlg.showModal(); }, 0); });
       // X no canto: fecha e volta para onde a pessoa estava
-      $('[data-dlg-close]', dlg).addEventListener('click', () => close(undefined));
-      dlg.addEventListener('click', (e) => { if (e.target === dlg) close(undefined); }); // toque fora da janela
+      $('[data-dlg-close]', dlg)?.addEventListener('click', () => close(undefined));
+      dlg.addEventListener('click', (e) => { if (e.target === dlg && !locked) close(undefined); }); // toque fora da janela
       $$('.dlg-actions button', dlg).forEach((b) => b.addEventListener('click', async () => {
         const a = actions[b.dataset.i];
         if (a.handler) {

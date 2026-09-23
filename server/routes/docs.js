@@ -39,7 +39,10 @@ const SIGNATURE_MAX = 250 * 1024;
 
 const MEDICO = ['Psiquiatra'];
 const PSICO = ['Psicólogo(a)', 'Neuropsicólogo(a)'];
-function allowedKinds(profession) {
+// Conta de teste do profissional: emite tudo (para testar), mas o documento sai marcado
+// "TESTE — SEM VALIDADE" e com o nome/registro de teste, então não vale como documento real.
+function allowedKinds(profession, isTest = false) {
+  if (isTest) return ['atestado', 'receita', 'encaminhamento'];
   const kinds = [];
   if (MEDICO.includes(profession) || PSICO.includes(profession)) kinds.push('atestado');
   if (MEDICO.includes(profession)) kinds.push('receita');
@@ -103,7 +106,7 @@ router.get('/options/:conversationId', (req, res) => {
   const c = require('./chat').loadConversation(req, req.params.conversationId);
   const pat = db.prepare('SELECT name, cpf, birth_date FROM patients WHERE id = ?').get(c.patient_id);
   res.json({
-    kinds: allowedKinds(req.auth.user.profession).map((k) => ({ kind: k, title: titleOf(k, req.auth.user.profession) })),
+    kinds: allowedKinds(req.auth.user.profession, !!req.auth.user.is_test).map((k) => ({ kind: k, title: titleOf(k, req.auth.user.profession) })),
     // Dados oficiais da conta do paciente (nome do CPF, CPF e nascimento): vão no documento
     // exatamente como estão no cadastro, sem o profissional poder mudar.
     patient: { name: pat.name, cpf: U.formatCpf(pat.cpf), birth_date: pat.birth_date || '' },
@@ -118,7 +121,7 @@ router.post('/', (req, res) => {
   const c = chat.loadConversation(req, req.body.conversation_id);
   const kind = String(req.body.kind || '');
   if (!['atestado', 'receita', 'encaminhamento'].includes(kind)) throw new U.HttpError(400, 'Tipo de documento inválido.');
-  if (!allowedKinds(pro.profession).includes(kind)) {
+  if (!allowedKinds(pro.profession, !!pro.is_test).includes(kind)) {
     throw new U.HttpError(403, kind === 'receita'
       ? 'Só médico (psiquiatra, com CRM) pode emitir receita de medicamentos.'
       : 'Sua profissão não permite emitir atestado. Você pode fazer um encaminhamento.');
@@ -131,7 +134,7 @@ router.post('/', (req, res) => {
   // Nome, CPF e nascimento vêm do cadastro do paciente (tem que bater com o documento dele).
   // Só a data de nascimento de conta antiga, que ainda não tem, o profissional informa.
   const pat = db.prepare('SELECT name, cpf, birth_date FROM patients WHERE id = ?').get(c.patient_id);
-  if (!pat || !U.isValidCpf(pat.cpf)) throw new U.HttpError(400, 'Conta do paciente indisponível.');
+  if (!pat) throw new U.HttpError(400, 'Conta do paciente indisponível.');
   const name = pat.name;
   const cpf = pat.cpf;
   const birth = pat.birth_date || String(req.body.birth_date || '');
@@ -147,6 +150,7 @@ router.post('/', (req, res) => {
     birth_date: birth,
     attended_at: attended.slice(0, 16), // horário local de quem emitiu (AAAA-MM-DDTHH:MM)
   };
+  if (pro.is_test) data.test = true;
   if (kind === 'atestado') {
     data.days = 1; // um atendimento = um dia
     const cid = U.cleanText(req.body.cid, 20).toUpperCase();

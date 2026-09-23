@@ -69,7 +69,7 @@
     g.fillText(p.name, M, 120);
     g.fillStyle = MUTED;
     g.font = font(28, 600);
-    g.fillText(`${p.profession} · ${p.registry}`, M, 165);
+    g.fillText(p.registry ? `${p.profession} · ${p.registry}` : p.profession, M, 165);
     if (p.city) g.fillText(`${p.city}${p.state ? ` - ${p.state}` : ''} · Atendimento online`, M, 205);
     g.fillStyle = '#e3e2dc';
     g.fillRect(M, 240, W - 2 * M, 3);
@@ -145,7 +145,7 @@
     g.fillText(p.name, W / 2, sy + 45);
     g.font = font(27, 600);
     g.fillStyle = MUTED;
-    g.fillText(`${p.profession} · ${p.registry}`, W / 2, sy + 85);
+    g.fillText(p.registry ? `${p.profession} · ${p.registry}` : p.profession, W / 2, sy + 85);
     g.font = font(23, 400);
     g.fillText(`Assinado eletronicamente pelo profissional em ${pad(issued.getDate())}/${pad(issued.getMonth() + 1)}/${issued.getFullYear()} às ${pad(issued.getHours())}h${pad(issued.getMinutes())}`, W / 2, sy + 122);
     g.textAlign = 'left';
@@ -164,6 +164,18 @@
     g.font = font(24, 400);
     g.fillStyle = MUTED;
     wrap(g, `Confira a autenticidade apontando a câmera para o QR Code ou em ${location.host}/v/${doc.code}`, M + 210, vy + 105, W - 2 * M - 230, 34);
+    if (doc.data.test && !doc.revoked) {
+      g.save();
+      g.translate(W / 2, 800);
+      g.rotate(-0.35);
+      g.fillStyle = 'rgba(200, 120, 0, .22)';
+      g.font = font(110, 900);
+      g.textAlign = 'center';
+      g.fillText('TESTE', 0, -40);
+      g.font = font(64, 900);
+      g.fillText('SEM VALIDADE', 0, 50);
+      g.restore();
+    }
     if (doc.revoked) {
       g.save();
       g.translate(W / 2, 800);

@@ -23,7 +23,7 @@
         : `<button class="icon-btn fav ${p.favorite ? 'on' : ''}" data-fav aria-pressed="${p.favorite}" aria-label="${p.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}">${ICONS.heart}</button>`}
       <div class="head">${avatar(p.name, p.photo, 'lg')}
         <div style="min-width:0;padding-right:28px"><div class="name">${esc(p.name)}</div><div class="muted small">${esc(p.profession)}</div>
-        <div class="small">${ICONS.badge.replace('<svg', '<svg style="width:15px;height:15px;vertical-align:-3px"')} ${esc(p.registry)}</div></div>
+        ${p.registry ? `<div class="small">${ICONS.badge.replace('<svg', '<svg style="width:15px;height:15px;vertical-align:-3px"')} ${esc(p.registry)}</div>` : ''}</div>
       </div>
       ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}
       ${p.specialties ? `<div class="meta">${p.specialties.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 4).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}

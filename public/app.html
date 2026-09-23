@@ -125,16 +125,17 @@
     renderMe();
     askBirthDate();
 
-    // Conta antiga sem data de nascimento: pede uma vez (depois não muda mais)
+    // Conta antiga sem data de nascimento: é obrigatório informar para continuar (depois não muda mais)
     function askBirthDate() {
       if (me.birth_date) return;
       const max = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
       Acolia.modal({
         title: 'Sua data de nascimento',
-        html: '<p class="small muted" style="margin-top:0">Precisamos dela para os documentos que o profissional emite para você (atestado, receita, encaminhamento). Coloque igual à do seu documento: depois não dá para mudar.</p>'
+        html: '<p class="small muted" style="margin-top:0">Agora é obrigatório para continuar usando a Acolia. Ela vai nos documentos que o profissional emite para você (atestado, receita, encaminhamento). Coloque igual à do seu documento: depois não dá para mudar.</p>'
           + '<div class="form-error hidden" data-err></div><div class="field"><input type="date" data-birth-input max="' + max + '" required></div>',
-        actions: [{ label: 'Depois', value: null, class: 'secondary' }, {
-          label: 'Salvar',
+        locked: true,
+        actions: [{
+          label: 'Salvar e continuar',
           handler: async (dlg) => {
             const err = $('[data-err]', dlg);
             const v = $('[data-birth-input]', dlg).value;

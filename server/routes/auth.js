@@ -100,7 +100,8 @@ function validateProfessionalInput(body) {
   const phone = U.onlyDigits(body.phone);
   if (!U.isFullName(name)) throw new HttpError(400, 'Informe nome e sobrenome.');
   if (!PROFESSIONS.includes(profession)) throw new HttpError(400, 'Selecione sua profissão.');
-  if (registry.length < 3) throw new HttpError(400, 'Informe o número do seu registro profissional (CRP, CRM etc.).');
+  // Registro/carteirinha: obrigatório só para quem tem conselho (CRP: psicólogo e neuropsicólogo; CRM: psiquiatra)
+  if (require('../registry').councilFor(profession) && registry.length < 3) throw new HttpError(400, 'Informe o número do seu registro profissional (CRP ou CRM).');
   if (!U.isValidEmail(email)) throw new HttpError(400, 'E-mail inválido.');
   if (phone.length < 10 || phone.length > 13) throw new HttpError(400, 'Informe o WhatsApp com DDD.');
   const { state, city } = validateLocation(body.state, body.city);
@@ -119,16 +120,18 @@ function insertProfessional(d, passwordHash, status, subscriptionUntil = null) {
   return { id: Number(info.lastInsertRowid), code };
 }
 
-// Autocadastro: o registro (CRP/CRM) precisa ser válido e do mesmo estado, e a
-// foto da carteirinha é obrigatória. (Cadastro feito pelo admin não passa por aqui.)
+// Autocadastro: para psicólogo, neuropsicólogo (CRP) e psiquiatra (CRM) o registro precisa ser
+// válido e do mesmo estado, e a foto da carteirinha é obrigatória. Psicanalista, psicoterapeuta e
+// terapeuta não têm conselho: não precisam de carteirinha. (Cadastro feito pelo admin não passa por aqui.)
 router.post('/professional/register', async (req, res) => {
   const documentFile = await handleDocument(req, res);
   try {
-    if (!documentFile) throw new HttpError(400, 'Envie a foto da sua carteirinha profissional (frente, com nome e número legíveis).');
     const d = validateProfessionalInput(req.body);
+    const needsCard = !!require('../registry').councilFor(d.profession);
+    if (needsCard && !documentFile) throw new HttpError(400, 'Envie a foto da sua carteirinha profissional (frente, com nome e número legíveis).');
     requirePassword(req.body.password);
     const reg = validateRegistry(d.profession, req.body.registry, d.state);
-    if (db.prepare('SELECT 1 FROM professionals WHERE registry = ?').get(reg.registry)) {
+    if (reg.registry && db.prepare('SELECT 1 FROM professionals WHERE registry = ?').get(reg.registry)) {
       throw new HttpError(409, `Já existe um cadastro com o ${reg.registry}. Se é você, entre na sua conta ou fale com a administração.`);
     }
     let verified = false;
@@ -138,7 +141,8 @@ router.post('/professional/register', async (req, res) => {
       if (!r.match) throw new HttpError(400, r.message || 'Registro não confere.');
       verified = true;
     }
-    const { code } = insertProfessional({ ...d, registry: reg.registry, document_file: documentFile, registry_verified: verified },
+    if (!needsCard && documentFile) removeDocument(documentFile); // quem não tem conselho não precisa (nem guarda) carteirinha
+    const { code } = insertProfessional({ ...d, registry: reg.registry, document_file: needsCard ? documentFile : null, registry_verified: verified },
       U.hashPassword(req.body.password), 'pendente');
     res.status(201).json({ ok: true, code });
   } catch (e) {

@@ -58,7 +58,7 @@ function validateRegistry(profession, raw, state) {
     return { registry: `CRM-${state} ${num[1]}`, council, uf: state, number: num[1] };
   }
   // Profissões sem conselho federal (psicanalista, terapeuta…): registro da entidade/associação
-  if (text.length < 3) throw new U.HttpError(400, 'Informe o número do seu registro na entidade de classe.');
+  // Não é obrigatório: só CRP e CRM exigem carteirinha. Se informar, fica no perfil.
   return { registry: U.cleanText(raw, 40), council: null, uf: state, number: text };
 }
 

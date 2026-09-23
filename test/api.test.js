@@ -117,6 +117,13 @@ test('profissional: registro precisa ser válido, do mesmo estado, e com carteir
   assert.match(r.data.error, /SP/);
   r = await anon.form('/api/auth/professional/register', { ...PRO, profession: 'Psiquiatra', registry: 'CRM-SP 123456' }, DOC);
   assert.equal(r.status, 400, 'CRM de outro estado');
+  // Psicanalista (sem conselho): não precisa de carteirinha nem de número de registro
+  r = await anon.form('/api/auth/professional/register', { ...PRO, profession: 'Psicanalista', registry: '', email: 'psicanalista.semcart@example.com' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const row = require('../server/db').db.prepare('SELECT registry, document_file FROM professionals WHERE email = ?').get('psicanalista.semcart@example.com');
+  assert.equal(row.registry, '');
+  assert.equal(row.document_file, null);
+  require('../server/db').db.prepare('DELETE FROM professionals WHERE email = ?').run('psicanalista.semcart@example.com'); // não atrapalha os próximos testes
 });
 
 test('profissional: cadastro fica pendente e não entra até aprovação', async () => {
@@ -1512,6 +1519,15 @@ test('documentos: quem pode emitir o quê, envio no chat, verificação pública
   assert.equal((await anon.get(`/api/docs/${code}`)).data.revoked, true);
   // Outro profissional não emite na conversa dos outros
   assert.equal((await psico.cl.post('/api/docs', { ...base0, conversation_id: cPsiq, kind: 'atestado' })).status, 404);
+  // Conta de teste: emite tudo, mas sai marcado como teste (sem validade)
+  const { db } = require('../server/db');
+  db.prepare('UPDATE professionals SET is_test = 1 WHERE id = ?').run(analista.id);
+  assert.deepEqual(await kinds(analista, cAna), ['atestado', 'receita', 'encaminhamento'], 'conta de teste: tudo');
+  r = await analista.cl.post('/api/docs', { ...base0, conversation_id: cAna, kind: 'receita', items: [{ name: 'Teste', instructions: '1 ao dia' }] });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const tdoc = (await anon.get(`/api/docs/${r.data.code}`)).data;
+  assert.equal(tdoc.data.test, true, 'marcado como teste');
+  db.prepare('UPDATE professionals SET is_test = 0 WHERE id = ?').run(analista.id);
 });
 
 test('paciente: nascimento obrigatório no cadastro (menor pode), não muda; região muda', async () => {

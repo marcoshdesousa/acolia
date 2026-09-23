@@ -140,7 +140,7 @@
             <h1 style="font-size:1.6rem;margin-bottom:4px">${esc(p.name)}</h1>
             ${counts}
             <div class="muted" style="font-weight:700">${esc(p.profession)}</div>
-            <div class="row" style="margin-top:6px;gap:6px"><span class="badge ok">${ic('badge', 15)} ${esc(p.registry)}</span>
+            <div class="row" style="margin-top:6px;gap:6px">${p.registry ? `<span class="badge ok">${ic('badge', 15)} ${esc(p.registry)}</span>` : ''}
               ${p.session_minutes ? `<span class="badge">${ic('clock', 15)} Sessão de ${duration(p.session_minutes)}</span>` : ''}
               ${p.locked && p.has_session_minutes ? `<a class="lock-link" href="${signup}">${ic('clock', 15)} Duração: crie conta para ver</a>` : ''}</div>
             ${p.instagram ? `<a class="insta-btn" href="https://www.instagram.com/${encodeURIComponent(p.instagram)}/" target="_blank" rel="noopener">${ic('instagram', 18)} @${esc(p.instagram)}</a>` : ''}

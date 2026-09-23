@@ -24,10 +24,11 @@
         <div class="field"><label for="name">Nome completo (igual ao da carteirinha)</label><input id="name" name="name" autocomplete="name" required maxlength="120"></div>
         <div class="grid-2">
           <div class="field"><label for="profession">Profissão</label><select id="profession" name="profession" required><option value="">Selecione</option></select></div>
-          <div class="field"><label for="registry">Número da carteirinha</label><input id="registry" name="registry" placeholder="Ex.: CRP 10/12345" required maxlength="40">
+          <div class="field" data-reg-field><label for="registry">Número da carteirinha</label><input id="registry" name="registry" placeholder="Ex.: CRP 10/12345" required maxlength="40">
             <div class="hint" data-reg-hint>CRP, CRM ou registro da sua área.</div></div>
         </div>
-        <div class="field"><label for="doc">Foto da carteirinha profissional</label>
+        <p class="small notice info hidden" data-no-card style="margin:0 0 12px">Para esta profissão não é preciso carteirinha: só psicólogo e neuropsicólogo (CRP) e psiquiatra (CRM) enviam.</p>
+        <div class="field" data-doc-field><label for="doc">Foto da carteirinha profissional</label>
           <input id="doc" name="document" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required>
           <div class="hint">Frente da carteirinha, com nome e número legíveis (JPG, PNG ou PDF, até 8 MB). Só a administração vê este arquivo.</div></div>
         <div class="field"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="email" required></div>
@@ -74,13 +75,24 @@
       'Neuropsicólogo(a)': 'Seu CRP com região e número. Ex.: CRP 10/12345.',
       Psiquiatra: 'Seu CRM com estado e número. Ex.: CRM-PA 12345.',
     };
+    // Carteirinha só para quem tem conselho: CRP (psicólogo, neuropsicólogo) e CRM (psiquiatra)
+    const needsCard = () => !!HINTS[form.profession.value];
+    const syncCard = () => {
+      const hide = form.profession.value && !needsCard();
+      $('[data-reg-field]').classList.toggle('hidden', !!hide);
+      $('[data-doc-field]').classList.toggle('hidden', !!hide);
+      form.registry.required = !hide; form.document.required = !hide;
+      if (hide) { form.registry.value = ''; form.document.value = ''; }
+      $('[data-no-card]').classList.toggle('hidden', !hide);
+    };
     form.profession.addEventListener('change', () => {
+      syncCard();
       $('[data-reg-hint]').textContent = HINTS[form.profession.value] || 'Número do seu registro na entidade de classe.';
       form.registry.placeholder = form.profession.value === 'Psiquiatra' ? 'Ex.: CRM-PA 12345' : HINTS[form.profession.value] ? 'Ex.: CRP 10/12345' : 'Número do registro';
     });
     handleForm(form, async (d) => {
       if (d.password !== d.password2) throw new Error('As senhas não são iguais.');
-      if (!form.document.files.length) throw new Error('Envie a foto da sua carteirinha profissional.');
+      if (needsCard() && !form.document.files.length) throw new Error('Envie a foto da sua carteirinha profissional.');
       const fd = new FormData(form);
       fd.delete('password2');
       const r = await api('/api/auth/professional/register', { method: 'POST', form: fd });

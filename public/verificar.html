@@ -40,8 +40,8 @@
         const doc = await api(`/api/docs/${encodeURIComponent(code)}`);
         const p = doc.data.professional;
         const canvas = await AcoliaDocs.render(doc);
-        out.innerHTML = `<div class="notice ${doc.revoked ? 'danger' : 'ok'}" style="margin-bottom:12px">
-            ${doc.revoked ? `<b>Documento CANCELADO</b> pelo profissional em ${esc(brDate(doc.revoked_at))}.` : '<b>✓ Documento válido</b>, emitido pela plataforma Acolia.'}</div>
+        out.innerHTML = `<div class="notice ${doc.revoked ? 'danger' : doc.data.test ? 'warn' : 'ok'}" style="margin-bottom:12px">
+            ${doc.revoked ? `<b>Documento CANCELADO</b> pelo profissional em ${esc(brDate(doc.revoked_at))}.` : doc.data.test ? '<b>Documento de TESTE</b>, emitido por uma conta de teste da Acolia. <b>Não tem validade.</b>' : '<b>✓ Documento válido</b>, emitido pela plataforma Acolia.'}</div>
           <div class="card" style="padding:16px">
             <p style="margin:0 0 6px"><b>${esc(doc.title)}</b> · código <b>${esc(doc.code)}</b></p>
             <p style="margin:0 0 6px">Emitido por <b>${esc(p.name)}</b> — ${esc(p.profession)} · <b>${esc(p.registry)}</b></p>
