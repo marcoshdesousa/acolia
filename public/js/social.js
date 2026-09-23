@@ -808,10 +808,11 @@
           <h1 class="ht-title"><button type="button" class="feed-logo" data-home-top title="Voltar ao topo e atualizar">
             <span class="fl-words"><img class="fl-name brand-word" src="/img/logo-nome.png" alt="Acolia"><span class="fl-feed">Feed</span></span></button></h1>
           <div class="ht-side right"><button type="button" class="icon-btn bell" data-bell aria-label="Notificações" title="Notificações">${ic('bell', 27)}<span class="nav-badge" data-bell-count></span></button></div>
-        </div>
-        <div class="home-tabs" role="tablist" aria-label="Feed ou Reels">
-          <button type="button" class="active" role="tab" aria-selected="true" data-home-tab="feed">${ic('grid', 18)} Feed</button>
-          <button type="button" role="tab" aria-selected="false" data-home-tab="reels">${ic('reel', 18)} Reels</button>
+          <!-- Feed | Reels: ficam sempre à mão no topo (encolhem ao rolar) -->
+          <div class="home-tabs" role="tablist" aria-label="Feed ou Reels">
+            <button type="button" class="active" role="tab" aria-selected="true" data-home-tab="feed">${ic('grid', 18)}<span>Feed</span></button>
+            <button type="button" role="tab" aria-selected="false" data-home-tab="reels">${ic('reel', 18)}<span>Reels</span></button>
+          </div>
         </div>
         <div class="stories-bar" data-stories></div>
         <div class="feed" data-feed></div>
@@ -900,7 +901,7 @@
       if (e.target.closest('[data-create]')) return createMenu(() => newPost(() => loadFeed(true)), () => newStory(loadStories), () => newReel(() => loadFeed(true)));
       if (e.target.closest('[data-home-tab="reels"]')) return openReels();
       if (e.target.closest('[data-bell]')) return openNotifications(refreshBell);
-      if (e.target.closest('[data-home-top]')) return toTop();
+      if (e.target.closest('[data-home-top]') || e.target.closest('[data-home-tab="feed"]')) return toTop();
     });
 
     if ('IntersectionObserver' in window) {

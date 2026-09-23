@@ -760,3 +760,13 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .upload-bar { position: relative; margin-top: 12px; height: 26px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
 .upload-bar i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--primary); transition: width .2s; }
 .upload-bar span { position: relative; display: block; text-align: center; font-weight: 800; font-size: .8rem; line-height: 26px; color: var(--text); mix-blend-mode: normal; }
+
+/* Feed | Reels dentro do topo fixo: sempre visíveis; ao rolar ficam pequenos (bolinhas de vidro) */
+.home-top .home-tabs { grid-column: 1 / -1; margin: 8px 0 0; transition: margin .25s; }
+.home-top .home-tabs button { transition: padding .25s, font-size .25s, background-color .25s, border-color .25s; }
+.home-top.stuck .home-tabs { justify-content: center; margin-top: 4px; }
+.home-top.stuck .home-tabs button { flex: 0 0 auto; padding: 5px 14px; font-size: .8rem; border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.8); backdrop-filter: blur(16px) saturate(1.8);
+  border-color: color-mix(in srgb, var(--text) 14%, transparent); box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+.home-top.stuck .home-tabs button.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.home-top.stuck .home-tabs button svg { width: 15px; height: 15px; }
