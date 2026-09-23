@@ -15,7 +15,7 @@
 <body>
   <div class="app-shell">
     <header class="topbar"><div class="container">
-      <a class="brand" href="/app"><span data-logo></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
+      <a class="brand" href="/app"><span data-logo><img class="brand-mark" src="/img/logo-simbolo.png" alt="" width="34" height="34"></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
       <nav><a class="btn ghost sm" href="/atendimento" target="_blank" rel="noopener">Entrar no atendimento</a><span data-me-avatar></span></nav>
     </div></header>
 
@@ -94,7 +94,9 @@
   <script>
   (async function () {
     const { $, $$, api, ICONS, avatar, esc, toast, handleForm, logout, installApp } = Acolia;
-    const auth = await api('/api/auth/me').catch(() => ({}));
+    const auth = await api('/api/auth/me').catch((e) => ({ offline: e.status === 0 }));
+    // Sem internet: não tira a pessoa do app — espera a conexão voltar e recarrega
+    if (auth.offline) { window.addEventListener('online', () => location.reload(), { once: true }); return; }
     // Sem conta conectada: página inicial (ou o login, se veio de um link para um lugar específico)
     if (auth.role !== 'patient') { location.replace(location.hash ? '/entrar?next=' + encodeURIComponent('/app' + location.hash) : '/'); return; }
     if (auth.account?.blocked) { Acolia.showBlocked(auth); return; } // perfil bloqueado: só a tela de bloqueio
@@ -203,7 +205,7 @@
     $('[data-photo-input]').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const fd = new FormData(); fd.append('photo', file);
+      const fd = new FormData(); fd.append('photo', await Acolia.shrinkImage(file, 640)); // foto de perfil leve
       try { me = await api('/api/patient/photo', { method: 'POST', form: fd }); renderMe(); toast('Foto atualizada!'); } catch (ex) { toast(ex.message, 'error'); }
       e.target.value = '';
     });

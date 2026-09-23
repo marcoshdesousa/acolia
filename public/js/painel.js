@@ -4,7 +4,8 @@
   const { $, $$, api, ICONS, avatar, esc, toast, handleForm, logout, installApp, ufOptions, bindUfCity, maskPhone, fmtPhone,
     fmtDate, parseDate, copyText, confirmDialog, modal } = Acolia;
 
-  const auth = await api('/api/auth/me').catch(() => ({}));
+  const auth = await api('/api/auth/me').catch((e) => ({ offline: e.status === 0 }));
+  if (auth.offline) { window.addEventListener('online', () => location.reload(), { once: true }); return; } // sem internet: espera voltar
   if (auth.role !== 'professional') { location.replace(location.hash ? '/entrar?next=' + encodeURIComponent('/painel' + location.hash) + '#profissional' : '/'); return; }
   if (auth.account?.blocked) { Acolia.showBlocked(auth); return; } // bloqueado (admin ou assinatura vencida)
   let me = auth.user;
@@ -127,7 +128,7 @@
     const file = e.target.files[0];
     if (!file) return;
     const fd = new FormData();
-    fd.append('photo', await Acolia.shrinkImage(file));
+    fd.append('photo', await Acolia.shrinkImage(file, 640)); // foto de perfil aparece pequena: 640 px basta
     try { me = await api('/api/professional/photo', { method: 'POST', form: fd }); renderMe(); toast('Foto atualizada!'); } catch (ex) { toast(ex.message, 'error'); }
     e.target.value = '';
   });

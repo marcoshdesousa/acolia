@@ -1,33 +1,70 @@
 /* Service worker — permite instalar o app e abre mais rápido.
    Dados (API, chat, chamadas) nunca são guardados em cache. */
-const VERSION = 'acolia-v43';
-const SHELL = ['/css/app.css', '/js/common.js', '/js/chat.js', '/js/voice.js', '/js/social.js', '/js/catalog.js', '/js/profile-view.js', '/img/logo-simbolo.png', '/img/logo-nome.png', '/img/favicon.png', '/img/app-icon-192.png', '/offline.html'];
+const VERSION = 'acolia-v46';
+const SHELL = ['/css/app.css', '/js/common.js', '/js/chat.js', '/js/voice.js', '/js/social.js', '/js/catalog.js', '/js/profile-view.js', '/js/call.js', '/js/painel.js', '/js/delete-account.js',
+  '/img/logo-simbolo.png', '/img/logo-nome.png', '/img/logo-completo-branco.png', '/img/favicon.png', '/img/app-icon-192.png', '/offline.html'];
+// Páginas guardadas para abrir rápido (e sem internet mostrar a última versão)
+const PAGES = ['/', '/app', '/painel', '/entrar'];
+const MEDIA = 'acolia-fotos'; // fotos já vistas (/uploads) ficam no aparelho: não baixa de novo
+const MEDIA_MAX = 300;
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL).then(() => Promise.all(PAGES.map((u) => c.add(u).catch(() => {}))))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== MEDIA).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
+
+// Guarda no máximo MEDIA_MAX fotos (as mais antigas saem)
+async function trimMedia() {
+  const c = await caches.open(MEDIA);
+  const keys = await c.keys();
+  for (let i = 0; i < keys.length - MEDIA_MAX; i++) await c.delete(keys[i]);
+}
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/socket.io/') || url.pathname.startsWith('/uploads/')) return;
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/socket.io/')) return;
 
-  if (e.request.mode === 'navigate') {
-    // Páginas: sempre da rede; sem internet, mostra aviso
-    e.respondWith(fetch(e.request).catch(() => caches.match('/offline.html')));
+  // Fotos enviadas (nome único, nunca mudam): do aparelho primeiro; vídeos vão direto (streaming)
+  if (url.pathname.startsWith('/uploads/')) {
+    if (!/\.(jpe?g|png|webp)$/i.test(url.pathname)) return;
+    e.respondWith(caches.open(MEDIA).then(async (c) => {
+      const hit = await c.match(e.request);
+      if (hit) return hit;
+      const res = await fetch(e.request);
+      if (res.ok) { c.put(e.request, res.clone()).then(trimMedia).catch(() => {}); }
+      return res;
+    }));
     return;
   }
-  // Arquivos estáticos: rede primeiro, cache como reserva
-  e.respondWith(
-    fetch(e.request).then((res) => {
-      if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); }
+
+  if (e.request.mode === 'navigate') {
+    // Páginas: busca na internet (até 4 s); se estiver lenta ou sem internet, abre a versão guardada
+    e.respondWith((async () => {
+      const cache = await caches.open(VERSION);
+      const net = fetch(e.request).then((res) => {
+        if (res.ok && PAGES.includes(url.pathname)) cache.put(url.pathname, res.clone()).catch(() => {});
+        return res;
+      });
+      const saved = await cache.match(url.pathname);
+      if (!saved) return net.catch(() => caches.match('/offline.html'));
+      const timeout = new Promise((r) => setTimeout(() => r(saved), 4000));
+      return Promise.race([net.catch(() => saved), timeout]);
+    })());
+    return;
+  }
+  // CSS, JS e imagens do site: abre na hora o que está guardado e atualiza por baixo
+  e.respondWith(caches.open(VERSION).then(async (c) => {
+    const hit = await c.match(e.request);
+    const net = fetch(e.request).then((res) => {
+      if (res.ok) c.put(e.request, res.clone()).catch(() => {});
       return res;
-    }).catch(() => caches.match(e.request)),
-  );
+    }).catch(() => hit);
+    return hit || net;
+  }));
 });
 
 // ---------- Notificações de mensagem (Web Push) ----------

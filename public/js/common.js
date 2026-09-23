@@ -10,6 +10,37 @@
   }
 
 
+  // ---------- Sem internet ----------
+  // Faixa no topo "Você está sem internet"; quando a conexão volta, some (com um "De volta!" rápido)
+  (function offlineBar() {
+    let bar = null;
+    let timer = null;
+    const show = (on) => {
+      if (!document.body) return;
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.className = 'net-bar';
+        bar.setAttribute('role', 'status');
+        bar.setAttribute('aria-live', 'polite');
+        document.body.appendChild(bar);
+      }
+      if (on) {
+        clearTimeout(timer);
+        bar.className = 'net-bar off show';
+        bar.innerHTML = '<span class="net-dot"></span> Você está sem internet — assim que voltar, tudo continua';
+      } else if (bar.classList.contains('off')) {
+        clearTimeout(timer);
+        bar.className = 'net-bar on show';
+        bar.innerHTML = '<span class="net-dot"></span> Conexão de volta';
+        timer = setTimeout(() => { bar.classList.remove('show'); }, 2500);
+      }
+    };
+    window.addEventListener('offline', () => show(true));
+    window.addEventListener('online', () => show(false));
+    const init = () => { if (navigator.onLine === false) show(true); };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  })();
+
   // ---------- Conta bloqueada / assinatura ----------
   // Bloqueado (pelo admin, ou profissional com a assinatura vencida): a tela inteira vira o aviso
   // "Perfil bloqueado", com o botão para falar com a administração (WhatsApp de atendimento) e

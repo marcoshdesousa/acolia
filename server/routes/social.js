@@ -104,7 +104,7 @@ router.get('/professionals/:id/posts', (req, res) => {
   }
   const offset = Math.max(0, Number(req.query.offset) || 0);
   const limit = Math.min(60, Number(req.query.limit) || PAGE);
-  const rows = db.prepare(`SELECT id, image, kind FROM posts WHERE professional_id = ? ${kindSql} ORDER BY id DESC LIMIT ? OFFSET ?`).all(proId, limit, offset);
+  const rows = db.prepare(`SELECT id, image, thumb, kind FROM posts WHERE professional_id = ? ${kindSql} ORDER BY id DESC LIMIT ? OFFSET ?`).all(proId, limit, offset);
   res.json({ locked: false, total, items: rows.map((r) => ({ ...r, count: r.kind === 'reel' ? 1 : imageCount(r.id) })), has_more: offset + rows.length < total });
 });
 

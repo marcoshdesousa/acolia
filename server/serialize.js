@@ -60,12 +60,12 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
   // No perfil aparecem só as 4 publicações mais recentes; "Ver todas" abre a página de publicações
   const { db } = require('./db');
   // Fotos e vídeos (Reels) ficam separados no perfil: 4 de cada, cada um na sua aba
-  const recent = db.prepare(`SELECT id, image FROM posts WHERE professional_id = ? AND kind = 'photo' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id);
-  const recentReels = db.prepare(`SELECT id, image FROM posts WHERE professional_id = ? AND kind = 'reel' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id);
+  const recent = db.prepare(`SELECT id, image, thumb FROM posts WHERE professional_id = ? AND kind = 'photo' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id);
+  const recentReels = db.prepare(`SELECT id, image, thumb FROM posts WHERE professional_id = ? AND kind = 'reel' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id);
   const postsCount = db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(p.id).n;
   const photosCount = db.prepare("SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = 'photo'").get(p.id).n;
   const reelsCount = postsCount - photosCount;
-  const gallery = recent.map((r) => r.image);
+  const gallery = recent.map((r) => r.thumb || r.image); // miniatura leve (600 px) quando existe
   const social = {
     posts_count: postsCount,
     photos_count: photosCount,

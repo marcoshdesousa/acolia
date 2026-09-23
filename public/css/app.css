@@ -854,3 +854,12 @@ html.rv-open, html.rv-open body { overflow: hidden; }
   opacity: .8; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; width: max-content; }
 .link-danger:hover { opacity: 1; }
 .blocked-card .link-danger { margin-top: 6px; }
+
+/* Faixa "sem internet" no topo */
+.net-bar { position: fixed; left: 50%; top: calc(8px + env(safe-area-inset-top, 0px)); z-index: 130; transform: translate(-50%, -140%); transition: transform .3s ease;
+  display: inline-flex; align-items: center; gap: 8px; max-width: calc(100% - 24px); padding: 8px 14px; border-radius: 999px; font-weight: 800; font-size: .84rem;
+  color: #fff; background: #3a3a3a; box-shadow: 0 6px 18px rgba(0,0,0,.25); pointer-events: none; }
+.net-bar.show { transform: translate(-50%, 0); }
+.net-bar.on { background: var(--primary); color: var(--on-primary); }
+.net-dot { width: 9px; height: 9px; border-radius: 50%; background: #ff6b6b; flex: none; }
+.net-bar.on .net-dot { background: #7bd69a; }

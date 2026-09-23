@@ -82,7 +82,7 @@
   // Ícone de "várias fotos" na grade do perfil
   const multiIcon = '<span class="multi-ic" aria-label="Várias fotos"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 3h11a3 3 0 0 1 3 3v11a1 1 0 0 1-1 1h-1V6a1 1 0 0 0-1-1H6V4a1 1 0 0 1 1-1z"/><rect x="3" y="7" width="13" height="14" rx="2.5"/></svg></span>';
   const reelIcon = `<span class="multi-ic" aria-label="Vídeo">${ICONS.play}</span>`;
-  const gridTile = (x) => `<button type="button" class="gallery-item ${x.kind === 'reel' ? 'is-reel' : ''}" data-post-open="${x.id}" aria-label="${x.kind === 'reel' ? 'Abrir vídeo' : `Abrir publicação${x.count > 1 ? ` (${x.count} fotos)` : ''}`}"><img src="${esc(x.image)}" alt="" loading="lazy">${x.kind === 'reel' ? reelIcon : x.count > 1 ? multiIcon : ''}</button>`;
+  const gridTile = (x) => `<button type="button" class="gallery-item ${x.kind === 'reel' ? 'is-reel' : ''}" data-post-open="${x.id}" aria-label="${x.kind === 'reel' ? 'Abrir vídeo' : `Abrir publicação${x.count > 1 ? ` (${x.count} fotos)` : ''}`}"><img src="${esc(x.thumb || x.image)}" alt="" loading="lazy" decoding="async">${x.kind === 'reel' ? reelIcon : x.count > 1 ? multiIcon : ''}</button>`;
 
   // ---------- Vídeos: tocam sozinhos quando aparecem na tela ----------
   let feedSound = false; // no feed começam sem som (tocar no vídeo liga)

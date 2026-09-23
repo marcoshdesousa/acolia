@@ -86,6 +86,13 @@ Testes: `npm test`
 - **LGPD**: a plataforma guarda CPF e dados de saúde sensíveis. Tenha termos de uso e política de privacidade redigidos por um profissional.
 
 
+## Leve e rápido (menos internet)
+- Páginas, CSS e JS vão **compactados** (Brotli/gzip, ~75% menores) e com ETag: o que não mudou volta como "304" (quase 0 bytes). JSON grande da API também vai compactado.
+- Logo e ícones otimizados (ex.: símbolo 86 KB → 11 KB) e a logo vem direto na página (aparece na hora).
+- O app guarda no aparelho: CSS/JS/ícones (abre na hora e atualiza por baixo), as páginas principais (sem internet abre a última versão) e as **fotos já vistas** (até 300; não baixa de novo). Vídeos não são guardados (tocam aos pouquinhos).
+- Grade do perfil usa a miniatura (600 px) em vez da foto inteira; foto de perfil é enviada com 640 px.
+- **Sem internet**: aparece a faixa "Você está sem internet" no topo; quando volta, "Conexão de volta" por 2 s e some. Se o app abrir sem internet, ele espera e recarrega sozinho quando a conexão voltar.
+
 ## Bloquear e apagar contas
 - **Apagar** (admin, qualquer conta, em Pacientes ou no detalhe do profissional → "Apagar conta", com dois avisos: "Apagar esta conta?" e "Tem certeza?"; o admin não digita CPF nem código): some tudo — dados pessoais, foto, publicações, reels e stories (com os arquivos), curtidas, comentários, seguidores e o conteúdo das mensagens que a pessoa mandou (para o outro lado fica "Mensagem apagada"). CPF, e-mail, registro, código e link ficam livres: a pessoa pode criar uma conta nova.
 - **Bloquear** (admin): a pessoa ainda entra, mas só vê a tela **"Perfil bloqueado"** com o botão **"Falar com o administrador"** (abre o WhatsApp de atendimento, 11 93902-3938; dá para trocar pela variável `SUPPORT_WHATSAPP`) e, embaixo, um link pequeno "Excluir conta permanentemente" (3 confirmações: "Excluir sua conta?" → "Tem certeza? Se apagar, já era" → digitar o CPF (paciente) ou o código de acesso (profissional)). Não vê feed, Reels, pacientes nem edita o perfil. Os dados ficam guardados e o perfil some para todos. Quem está com o app aberto vê a tela de bloqueio na hora.

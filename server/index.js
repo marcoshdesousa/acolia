@@ -36,6 +36,8 @@ function createApp() {
     next();
   });
   app.use(express.json({ limit: '100kb' }));
+  // Menos internet: JSON da API compactado
+  app.use('/api', require('./compress').compressJson);
   // Depois de qualquer alteração bem-sucedida, agenda uma cópia do banco na nuvem
   app.use((req, res, next) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
@@ -81,7 +83,9 @@ function createApp() {
   });
   app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
   const pub = path.join(__dirname, '..', 'public');
-  app.use(express.static(pub, { extensions: ['html'] }));
+  // Páginas, CSS e JS já compactados (Brotli/gzip) e imagens com cache no aparelho
+  app.use(require('./compress').staticCompressed(pub));
+  app.use(express.static(pub, { extensions: ['html'], maxAge: '1d' }));
   // Publicação compartilhada (aviãozinho): qualquer pessoa vê. A página já sai com a prévia
   // (foto, nome e descrição) para aparecer bonita no WhatsApp e em outras redes.
   const postHtml = require('node:fs').readFileSync(path.join(pub, 'post.html'), 'utf8');
