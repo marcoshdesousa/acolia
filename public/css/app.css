@@ -738,7 +738,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .rv-slide.paused .rv-paused { display: block; }
 .rv-sound { position: absolute; right: 12px; top: calc(64px + env(safe-area-inset-top, 0px)); z-index: 2; width: 40px; height: 40px; border-radius: 50%; border: 0; display: grid; place-items: center; color: #fff; background: rgba(0,0,0,.45); cursor: pointer; }
 .rv-side { position: absolute; right: 8px; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 14px; }
-.rv-act.msg { background: rgba(255,255,255,.16); border-radius: 14px; padding: 8px 4px 6px; }
+.rv-act.rv-msg { background: rgba(255,255,255,.16); border-radius: 14px; padding: 8px 4px 6px; }
 .rv-act { display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; background: none; color: #fff; font: inherit; font-weight: 800; font-size: .74rem; cursor: pointer;
   text-shadow: 0 1px 4px rgba(0,0,0,.6); filter: drop-shadow(0 1px 3px rgba(0,0,0,.5)); min-width: 48px; }
 .rv-act svg { width: 30px; height: 30px; }
@@ -830,3 +830,8 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .pick-thumb.current { outline: 3px solid var(--primary); outline-offset: 1px; }
 .pick-thumb canvas { width: 100%; height: 100%; display: block; }
 .pick-strip .pick-thumb { aspect-ratio: auto; align-self: start; cursor: pointer; }
+/* Reels: caixinha "Mensagem" do tamanho certo (texto sempre dentro), no celular e no computador */
+.rv-act.rv-msg { box-sizing: border-box; width: 76px; min-width: 0; padding: 10px 6px 8px; gap: 4px; border-radius: 14px;
+  background: rgba(255,255,255,.18); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.rv-act.rv-msg svg { width: 24px; height: 24px; }
+.rv-act.rv-msg span { display: block; max-width: 100%; font-size: .64rem; line-height: 1.1; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: clip; }

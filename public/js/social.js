@@ -1052,7 +1052,7 @@
         <div class="rv-act">${likeBtn(p.liked, `data-like="${p.id}"`)}<span data-lnum="${p.id}">${p.likes || ''}</span></div>
         <button type="button" class="rv-act" data-comments="${p.id}" aria-label="Comentários">${ic('comment', 30)}<span data-ccount="${p.id}">${p.comments || ''}</span></button>
         <button type="button" class="rv-act" data-share="${p.id}" aria-label="Compartilhar">${ic('plane', 30)}</button>
-        ${canMsg(p) ? `<button type="button" class="rv-act msg" data-msg-pro="${p.author.id}" aria-label="Enviar mensagem para marcar a consulta">${ic('send', 26)}<span>Mensagem</span></button>` : ''}
+        ${canMsg(p) ? `<button type="button" class="rv-act rv-msg" data-msg-pro="${p.author.id}" aria-label="Enviar mensagem para marcar a consulta">${ic('send', 26)}<span>Mensagem</span></button>` : ''}
         ${p.mine ? `<button type="button" class="rv-act" data-to-story="${p.id}" aria-label="Colocar no meu story">${ic('storyAdd', 30)}</button>
           <button type="button" class="rv-act" data-post-menu="${p.id}" aria-label="Opções"><span style="font-size:1.6rem;line-height:1">⋮</span></button>` : ''}
       </div>
