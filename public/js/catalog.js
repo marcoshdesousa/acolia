@@ -39,7 +39,8 @@
   function mount(root, opts) {
     const logged = opts.loggedIn;
     const me = opts.me;
-    const defaultState = logged && me ? me.state : 'todos';
+    // Paciente logado: a vitrine já começa filtrada (estado e, se houver, município dele) —
+    // o número no botão Filtrar mostra isso. Sem filtro nenhum = todos os profissionais.
     root.innerHTML = `
       <form data-form role="search">
         <div class="search-row">
@@ -80,7 +81,7 @@
     const panel = $('[data-panel]', root);
     const toggle = $('[data-toggle]', root);
     form.state.insertAdjacentHTML('beforeend', ufOptions('', '').replace('<option value=""></option>', ''));
-    form.state.value = defaultState;
+    form.state.value = 'todos';
     api('/api/config').then((c) => {
       form.profession.insertAdjacentHTML('beforeend', c.professions.map((p) => `<option>${esc(p)}</option>`).join(''));
     }).catch(() => {});
@@ -92,14 +93,15 @@
     });
     $('[data-clear]', root).addEventListener('click', () => {
       form.reset();
-      form.state.value = defaultState;
+      form.state.value = 'todos';
+      form.city.value = '';
       load();
     });
 
     function activeFilters() {
       let n = 0;
       if (form.profession.value) n++;
-      if (form.state.value !== defaultState) n++;
+      if (form.state.value && form.state.value !== 'todos') n++;
       if (form.city.value.trim()) n++;
       if (form.place.value.trim()) n++;
       if (form.sort.value) n++;
@@ -111,24 +113,37 @@
     function hint(data) {
       const h = $('[data-hint]', root);
       if (!logged) { h.innerHTML = 'Profissionais em destaque. <a href="/cadastro-paciente">Crie sua conta</a> para ver valores, localização e conversar.'; return; }
-      if (form.city.value.trim() || form.place.value.trim() || form.sort.value || form.q.value.trim()) { h.textContent = ''; return; }
-      if (data.state && data.state === me?.state) {
-        h.innerHTML = `Profissionais de <b>${esc(me.state)}</b>, com os de <b>${esc(me.city)}</b> primeiro. Para ver outros estados, use <b>Filtrar</b>.`;
-      } else h.textContent = data.state ? `Profissionais de ${data.state}.` : 'Profissionais de todo o Brasil.';
+      if (form.place.value.trim() || form.sort.value || form.q.value.trim()) { h.textContent = ''; return; }
+      if (data.city && data.state) {
+        h.innerHTML = `Mostrando profissionais de <b>${esc(data.city)} - ${esc(data.state)}</b>, perto de você. Para ver outros lugares, use <b>Filtrar</b> ou <a href="#" data-clear-link>ver todos</a>.`;
+      } else if (data.state) {
+        h.innerHTML = `Mostrando profissionais de <b>${esc(data.state)}</b>. Para ver outros estados, use <b>Filtrar</b> ou <a href="#" data-clear-link>ver todos</a>.`;
+      } else h.textContent = 'Profissionais de todo o Brasil.';
+      $('[data-clear-link]', h)?.addEventListener('click', (e) => { e.preventDefault(); $('[data-clear]', root).click(); });
     }
 
     let items = [];
-    async function load() {
+    const showCount = () => { const n = activeFilters(); $('[data-count]', root).textContent = n ? String(n) : ''; };
+    async function load({ auto = false } = {}) {
       const params = new URLSearchParams();
-      for (const [k, v] of new FormData(form).entries()) if (v) params.set(k, v);
-      const n = activeFilters();
-      $('[data-count]', root).textContent = n ? String(n) : '';
+      for (const [k, v] of new FormData(form).entries()) {
+        if (!v || (auto && (k === 'state' || k === 'city'))) continue;
+        params.set(k, v);
+      }
+      if (auto) params.set('auto', '1');
+      showCount();
       grid.innerHTML = '<div class="spinner"></div>';
       let data;
       try {
         data = await api(`/api/professionals?${params}`);
         items = data.items;
       } catch (e) { grid.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+      if (auto) {
+        // Mostra no painel o filtro que foi aplicado automaticamente
+        form.state.value = data.state || 'todos';
+        form.city.value = data.city || '';
+        showCount();
+      }
       hint(data);
       if (!items.length) {
         const other = logged && form.state.value !== 'todos'
@@ -170,9 +185,9 @@
       }
     });
     form.addEventListener('submit', (e) => { e.preventDefault(); load(); });
-    $$('select, input[type=checkbox]', panel).forEach((el) => el.addEventListener('change', load));
-    load();
-    return { reload: load };
+    $$('select, input[type=checkbox]', panel).forEach((el) => el.addEventListener('change', () => load()));
+    load({ auto: logged });
+    return { reload: () => load() };
   }
 
   window.AcoliaCatalog = { mount, card };

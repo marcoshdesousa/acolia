@@ -788,3 +788,22 @@ test('apagar mensagem: só quem enviou, para todos; o conteúdo sai do banco', a
   const { AUDIO_DIR } = require('../server/upload');
   assert.equal(fs.existsSync(path.join(AUDIO_DIR, file)), false, 'arquivo do áudio removido');
 });
+
+test('vitrine do paciente: filtro automático pelo estado e, se houver, pelo município', async () => {
+  // Rita mora em Campinas-SP; há profissionais em Campinas criados nos testes anteriores
+  const pt = client();
+  await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+  let r = await pt.get('/api/professionals?auto=1');
+  assert.equal(r.data.state, 'SP');
+  assert.equal(r.data.city, 'Campinas', 'município do paciente aplicado');
+  assert.ok(r.data.items.length > 0 && r.data.items.every((p) => p.city === 'Campinas'));
+  r = await pt.get('/api/professionals?state=todos');
+  assert.equal(r.data.city, null, 'sem filtro: todos');
+  // Paciente de uma cidade sem profissionais: fica só o estado
+  const other = client();
+  const reg = await other.post('/api/auth/patient/register', { name: 'Ivo Lima', cpf: '123.456.700-88', state: 'SP', city: 'Sorocaba', password: '123456' });
+  assert.equal(reg.status, 201, JSON.stringify(reg.data));
+  r = await other.get('/api/professionals?auto=1');
+  assert.equal(r.data.state, 'SP');
+  assert.equal(r.data.city, null, 'sem profissionais no município, filtra só o estado');
+});
