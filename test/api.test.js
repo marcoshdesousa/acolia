@@ -641,22 +641,19 @@ test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitan
   assert.equal(r.status, 400, 'duração fora da lista');
   await lp.put('/api/professional/profile', { ...pf, session_minutes: 50, instagram: '@lia.psi' });
 
-  const upload = async (slot) => {
+  // A galeria do perfil agora são as publicações (versão 1.2)
+  const upload = async (caption = '') => {
     const fd = new FormData();
+    fd.append('caption', caption);
     fd.append('photo', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'f.png');
-    const res = await fetch(`${base_}/api/professional/gallery/${slot}`, { method: 'POST', body: fd, headers: { Cookie: lp.cookie } });
+    const res = await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: lp.cookie } });
     return { status: res.status, data: await res.json() };
   };
-  const base_ = base;
-  r = await upload(1);
-  assert.equal(r.status, 200, JSON.stringify(r.data));
-  r = await upload(3);
-  assert.equal(r.data.gallery.filter(Boolean).length, 2);
-  assert.equal(r.data.gallery.length, 6, 'sempre 6 posições');
-  assert.equal((await upload(7)).status, 400, 'no máximo 6');
-  r = await lp.del('/api/professional/gallery/1');
-  assert.equal(r.data.gallery[0], null);
-  assert.ok(r.data.gallery[2]);
+  r = await upload('Primeira foto');
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const first = r.data;
+  r = await upload();
+  assert.equal((await lp.del(`/api/social/posts/${r.data.id}`)).status, 200, 'apaga a própria publicação');
 
   const anonView = (await anon.get(`/api/professionals/${created.data.id}`)).data;
   assert.equal(anonView.session_minutes, undefined, 'duração só com conta');
@@ -664,7 +661,7 @@ test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitan
   assert.equal(anonView.instagram, 'lia.psi', 'Instagram aparece para todos');
   assert.equal(anonView.gallery.length, 0, 'com 1 foto, ela fica bloqueada');
   assert.equal(anonView.gallery_hidden, 1);
-  for (const s of [1, 2, 4]) await upload(s);
+  for (let i = 0; i < 3; i++) await upload();
   const anon2 = (await anon.get(`/api/professionals/${created.data.id}`)).data;
   assert.equal(anon2.gallery.length, 2, 'com 4 fotos, 2 abertas');
   assert.equal(anon2.gallery_hidden, 2, 'e sabe quantas faltam');
@@ -675,6 +672,8 @@ test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitan
   const patView = (await pt.get(`/api/professionals/${created.data.id}`)).data;
   assert.equal(patView.session_minutes, 50);
   assert.equal(patView.gallery.length, 4, 'paciente vê todas as fotos colocadas');
+  assert.equal(patView.posts_count, 4);
+  assert.equal(patView.gallery_posts.at(-1).id, first.id, 'a mais antiga fica por último');
   assert.equal(patView.gallery_hidden, 0);
   assert.equal(patView.instagram, 'lia.psi');
 });
@@ -806,4 +805,110 @@ test('vitrine do paciente: filtro automático pelo estado e, se houver, pelo mun
   r = await other.get('/api/professionals?auto=1');
   assert.equal(r.data.state, 'SP');
   assert.equal(r.data.city, null, 'sem profissionais no município, filtra só o estado');
+});
+
+test('v1.2 — seguir, feed (não vistas primeiro), curtir, comentar, stories e notificações', async () => {
+  const mk = async (name, email) => {
+    const c = await admin.post('/api/admin/professionals', { name, profession: 'Psicólogo(a)', registry: `R-${email}`, email, phone: '11922221111', state: 'SP', city: 'Campinas' });
+    const cl = client();
+    await cl.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+    return { id: c.data.id, cl };
+  };
+  const A = await mk('Ana Feed', 'anafeed@example.com');
+  const B = await mk('Bruno Feed', 'brunofeed@example.com');
+  const post = async (who, caption) => {
+    const fd = new FormData();
+    fd.append('caption', caption);
+    fd.append('photo', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'f.png');
+    const res = await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: who.cl.cookie } });
+    return res.json();
+  };
+  const p1 = await post(A, 'Post 1');
+  const p2 = await post(A, 'Post 2');
+  const pt = client();
+  await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+
+  // Sem seguir, o feed fica vazio; paciente não publica
+  assert.equal((await pt.get('/api/social/feed')).data.items.length, 0);
+  let r = await pt.post('/api/social/posts');
+  assert.equal(r.status, 403);
+
+  // Seguir (paciente e profissional); contadores no perfil, sem lista de quem segue
+  r = await pt.post(`/api/social/follow/${A.id}`);
+  assert.deepEqual(r.data, { followers: 1, following: true });
+  await B.cl.post(`/api/social/follow/${A.id}`);
+  assert.equal((await A.cl.post(`/api/social/follow/${A.id}`)).status, 400, 'não segue a si mesmo');
+  const prof = (await pt.get(`/api/professionals/${A.id}`)).data;
+  assert.equal(prof.followers_count, 2);
+  assert.equal(prof.following, true);
+  assert.equal((await pt.get(`/api/professionals/${B.id}`)).data.following_count, 1, 'Bruno segue 1');
+
+  // Feed: não vistas primeiro
+  let feed = (await pt.get('/api/social/feed')).data.items;
+  assert.deepEqual(feed.map((p) => p.id), [p2.id, p1.id]);
+  await pt.post('/api/social/seen', { ids: [p2.id] });
+  feed = (await pt.get('/api/social/feed')).data.items;
+  assert.deepEqual(feed.map((p) => p.id), [p1.id, p2.id], 'a já vista desce');
+
+  // Curtir (sem mostrar quem) e comentar
+  r = await pt.post(`/api/social/posts/${p1.id}/like`);
+  assert.equal(r.data.likes, 1);
+  assert.equal(r.data.liked, true);
+  const cPat = (await pt.post(`/api/social/posts/${p1.id}/comments`, { body: 'Muito bom!' })).data;
+  assert.equal(cPat.author.name, 'Rita Souza', 'paciente aparece com 1º e 2º nome');
+  assert.equal(cPat.author.subtitle, 'Campinas - SP');
+  const cPro = (await B.cl.post(`/api/social/posts/${p1.id}/comments`, { body: 'Parabéns' })).data;
+  assert.equal((await pt.del(`/api/social/comments/${cPro.id}`)).status, 403, 'não apaga comentário dos outros');
+  assert.equal((await A.cl.del(`/api/social/comments/${cPro.id}`)).status, 200, 'o dono da publicação apaga qualquer comentário');
+  assert.equal((await pt.del(`/api/social/comments/${cPat.id}`)).status, 200, 'cada um apaga o seu');
+  assert.equal((await pt.get(`/api/social/posts/${p1.id}`)).data.comments, 0);
+
+  // Stories: só profissional posta; vídeo com mais de 20 s é recusado; quem segue vê e curte
+  const story = async (who, type, duration) => {
+    const fd = new FormData();
+    fd.append('duration', String(duration));
+    fd.append('media', new Blob([Buffer.from('fake')], { type }), type.startsWith('video') ? 'v.mp4' : 'f.png');
+    const res = await fetch(`${base}/api/social/stories`, { method: 'POST', body: fd, headers: { Cookie: who.cookie } });
+    return { status: res.status, data: await res.json() };
+  };
+  assert.equal((await story(pt, 'image/png', 0)).status, 403);
+  assert.equal((await story(A.cl, 'video/mp4', 25)).status, 400, 'no máximo 20 s');
+  const s1 = await story(A.cl, 'video/mp4', 15);
+  assert.equal(s1.status, 201);
+  assert.equal(s1.data.kind, 'video');
+  const groups = (await pt.get('/api/social/stories')).data.groups;
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].professional.id, A.id);
+  await B.cl.post(`/api/social/stories/${s1.data.id}/like`);
+  const mine = (await A.cl.get('/api/social/stories')).data.groups[0];
+  assert.equal(mine.mine, true, 'o próprio profissional aparece primeiro');
+  assert.equal(mine.items[0].likes, 1);
+
+  // Notificações do profissional A
+  const n = (await A.cl.get('/api/social/notifications')).data;
+  const texts = n.items.map((x) => x.text);
+  assert.ok(texts.includes('Um paciente começou a seguir você.'), 'seguidor sem nome');
+  assert.ok(texts.includes('Um profissional começou a seguir você.'));
+  assert.ok(texts.includes('Sua publicação recebeu uma curtida.'), 'curtida sem nome');
+  assert.ok(texts.includes('Bruno Feed curtiu seu story.'));
+  assert.ok(n.unread >= 4);
+  await A.cl.post('/api/social/notifications/read');
+  assert.equal((await A.cl.get('/api/social/notifications/unread')).data.unread, 0);
+
+  // Visitante: grade limitada; sem conta não vê a publicação
+  const vis = (await anon.get(`/api/social/professionals/${A.id}/posts`)).data;
+  assert.equal(vis.locked, true);
+  assert.equal(vis.items.length, 1, 'com 2 fotos, 1 aberta');
+  assert.equal(vis.items[0].id, undefined, 'visitante não abre a publicação');
+  assert.equal((await anon.get(`/api/social/posts/${p1.id}`)).status, 401);
+  const shared = await fetch(`${base}/p/${p1.id}`);
+  assert.equal(shared.status, 200, 'link compartilhado abre a página (que pede login)');
+
+  // Profissional não inicia conversa com profissional
+  assert.equal((await B.cl.post('/api/chat/conversations', { professional_id: A.id })).status, 403);
+
+  // Deixar de seguir
+  r = await pt.del(`/api/social/follow/${A.id}`);
+  assert.deepEqual(r.data, { followers: 1, following: false });
+  assert.equal((await pt.get('/api/social/feed')).data.items.length, 0);
 });

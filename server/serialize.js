@@ -55,7 +55,16 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     specialties: p.specialties,
     photo: p.photo,
   };
-  const gallery = parseGallery(p.gallery).filter(Boolean);
+  // A galeria do perfil agora são as publicações (as 6 mais recentes aparecem primeiro)
+  const { db } = require('./db');
+  const recent = db.prepare('SELECT id, image FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT 6').all(p.id);
+  const postsCount = db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(p.id).n;
+  const gallery = recent.map((r) => r.image);
+  const social = {
+    posts_count: postsCount,
+    followers_count: db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(p.id).n,
+    following_count: db.prepare("SELECT COUNT(*) n FROM follows WHERE follower_role = 'professional' AND follower_id = ?").get(p.id).n,
+  };
   const common = {
     state: p.state,
     city: p.city,
@@ -69,13 +78,14 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     return {
       ...rest,
       ...common,
+      ...social,
       locked: true,
       has_bio: !!bio,
       has_price: p.price_cents != null,
       package_sessions: packages.map((k) => k.sessions),
       has_session_minutes: !!p.session_minutes,
       gallery: gallery.slice(0, free),
-      gallery_hidden: gallery.length - free,
+      gallery_hidden: postsCount - free,
     };
   }
   return {
@@ -83,6 +93,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     locked: false,
     favorite: !!favorite,
     ...common,
+    ...social,
     session_minutes: p.session_minutes || null,
     price_cents: p.price_cents,
     packages: parsePackages(p.packages),
@@ -90,6 +101,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     clinic_address: p.has_clinic ? p.clinic_address : '',
     ...clinicMap(p),
     gallery,
+    gallery_posts: recent,
     gallery_hidden: 0,
   };
 }

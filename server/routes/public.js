@@ -32,6 +32,7 @@ function popularity() {
 
 router.get('/professionals', (req, res) => {
   const isPatient = req.auth?.role === 'patient';
+  const viewerIsPro = req.auth?.role === 'professional'; // profissional vê a vitrine completa (sem filtro automático)
   const me = isPatient ? req.auth.user : null;
   const where = [VISIBLE_SQL];
   const params = [];
@@ -80,7 +81,7 @@ router.get('/professionals', (req, res) => {
     city: city ? cityLabel : null,
     items: rows.map((p) => (me
       ? { ...publicProfessional(p, { loggedIn: true, favorite: favSet.has(p.id) }), near: near(p) === 0 }
-      : publicProfessional(p))),
+      : publicProfessional(p, { loggedIn: viewerIsPro }))),
   });
 });
 
@@ -89,9 +90,17 @@ router.get('/professionals/:id', (req, res) => {
     ? db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id))
     : db.prepare('SELECT * FROM professionals WHERE slug = ?').get(String(req.params.id).toLowerCase());
   if (!p || !isVisible(p)) throw new U.HttpError(404, 'Profissional não encontrado.');
-  const isPatient = req.auth?.role === 'patient';
+  const role = req.auth?.role;
+  const isPatient = role === 'patient';
+  const logged = isPatient || role === 'professional'; // profissionais também veem o perfil completo
   const favorite = isPatient && !!db.prepare('SELECT 1 FROM favorites WHERE patient_id = ? AND professional_id = ?').get(req.auth.user.id, p.id);
-  res.json(publicProfessional(p, { loggedIn: isPatient, favorite }));
+  const out = publicProfessional(p, { loggedIn: logged, favorite });
+  if (logged) {
+    out.following = !!db.prepare('SELECT 1 FROM follows WHERE follower_role = ? AND follower_id = ? AND professional_id = ?').get(role, req.auth.user.id, p.id);
+    out.is_self = role === 'professional' && req.auth.user.id === p.id;
+    out.viewer_role = role;
+  }
+  res.json(out);
 });
 
 module.exports = { router };

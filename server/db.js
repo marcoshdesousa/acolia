@@ -145,6 +145,87 @@ fs.mkdirSync(path.join(DATA_DIR, 'documents'), { recursive: true });
   }
 }
 
+// ---------- Versão 1.2: Início estilo Instagram (só acrescenta tabelas) ----------
+db.exec(`
+CREATE TABLE IF NOT EXISTS posts (
+  id INTEGER PRIMARY KEY,
+  professional_id INTEGER NOT NULL REFERENCES professionals(id),
+  image TEXT NOT NULL,                     -- /uploads/...
+  caption TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_posts_pro ON posts(professional_id, id);
+CREATE TABLE IF NOT EXISTS post_likes (
+  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  role TEXT NOT NULL, user_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (post_id, role, user_id)
+);
+CREATE TABLE IF NOT EXISTS post_comments (
+  id INTEGER PRIMARY KEY,
+  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  role TEXT NOT NULL, user_id INTEGER NOT NULL,
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_comments_post ON post_comments(post_id, id);
+CREATE TABLE IF NOT EXISTS post_views (
+  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  role TEXT NOT NULL, user_id INTEGER NOT NULL,
+  PRIMARY KEY (post_id, role, user_id)
+);
+CREATE TABLE IF NOT EXISTS follows (
+  follower_role TEXT NOT NULL, follower_id INTEGER NOT NULL,
+  professional_id INTEGER NOT NULL REFERENCES professionals(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (follower_role, follower_id, professional_id)
+);
+CREATE INDEX IF NOT EXISTS idx_follows_pro ON follows(professional_id);
+CREATE TABLE IF NOT EXISTS stories (
+  id INTEGER PRIMARY KEY,
+  professional_id INTEGER NOT NULL REFERENCES professionals(id),
+  media TEXT NOT NULL,                     -- /uploads/...
+  kind TEXT NOT NULL,                      -- image | video
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_stories_pro ON stories(professional_id, id);
+CREATE TABLE IF NOT EXISTS story_likes (
+  story_id INTEGER NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  role TEXT NOT NULL, user_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (story_id, role, user_id)
+);
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY,
+  recipient_role TEXT NOT NULL, recipient_id INTEGER NOT NULL,
+  type TEXT NOT NULL,                      -- follow | like_post | comment | like_story
+  actor_role TEXT, actor_id INTEGER,
+  post_id INTEGER, story_id INTEGER, comment_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+  read_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_notif_to ON notifications(recipient_role, recipient_id, id);
+`);
+
+// Uma vez só: as fotos da galeria antiga viram as primeiras publicações do profissional
+{
+  db.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+  if (!db.prepare("SELECT 1 FROM settings WHERE key = 'gallery_to_posts_v1'").get()) {
+    const pros = db.prepare("SELECT id, gallery, created_at FROM professionals WHERE gallery IS NOT NULL AND gallery <> '[]'").all();
+    for (const p of pros) {
+      let g = [];
+      try { g = JSON.parse(p.gallery) || []; } catch { g = []; }
+      const has = db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(p.id).n;
+      if (has) continue;
+      g.filter((u) => typeof u === 'string' && u.startsWith('/uploads/')).reverse().forEach((u, i) => {
+        db.prepare('INSERT INTO posts (professional_id, image, caption, created_at) VALUES (?, ?, \'\', datetime(?, ?))')
+          .run(p.id, u, p.created_at, `+${i} seconds`);
+      });
+    }
+    db.prepare("INSERT INTO settings (key, value) VALUES ('gallery_to_posts_v1', ?)").run(new Date().toISOString());
+  }
+}
+
 require('./cloud').attachDb(db);
 
 function tx(fn) {

@@ -84,3 +84,32 @@ Testes: `npm test`
   `[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.seudominio.com:3478","username":"u","credential":"s"}]`
 - **Recuperação de senha do paciente** usa CPF + nome completo, como pedido. Esses dados não são segredo; se quiser mais segurança, dá para trocar por código via e-mail/SMS.
 - **LGPD**: a plataforma guarda CPF e dados de saúde sensíveis. Tenha termos de uso e política de privacidade redigidos por um profissional.
+
+
+## Versões
+
+| Versão | Commit | O que tem |
+|---|---|---|
+| **1.1** | `81011a7` | Vitrine, chat com áudio, atendimento por vídeo, painel do admin |
+| **1.2** | (esta) | Tudo da 1.1 + **Início estilo Instagram** |
+
+### Versão 1.2 — Início estilo Instagram (só para quem tem conta)
+- Navegação só com símbolos: 🏠 Início, 👤 Profissionais, 💬 Mensagens, ⚙️ Configurações (o profissional tem também 🎥 Atendimento e o próprio perfil). A barra fica fixa enquanto a pessoa rola a tela.
+- **Início**: stories no topo e o feed de quem a pessoa segue. As publicações que ela ainda não viu aparecem primeiro; as já vistas descem.
+- **Publicações**: só profissionais publicam (só fotos, com descrição opcional). No perfil aparecem as 6 mais recentes e o botão "Ver todas as fotos"; a descrição, as curtidas e os comentários aparecem ao abrir a foto.
+- **Stories**: só profissionais postam (foto ou vídeo de até 20 s, quantos quiserem). Somem depois de 24 h. Quem segue vê e curte; o paciente também tem "Enviar mensagem".
+- **Seguir**: pacientes e profissionais seguem profissionais. O perfil mostra só os números (seguidores / seguindo), nunca a lista.
+- **Curtir** com o símbolo da Acolia (fica vermelho). Não mostra quem curtiu.
+- **Comentários** (só texto). Paciente aparece com o 1º e o 2º nome e a cidade; profissional com o nome, que abre o perfil. Cada um apaga o próprio comentário; o dono da publicação apaga qualquer um.
+- **Compartilhar** (aviãozinho): manda o link `site.com/p/<número>` (por exemplo, pelo WhatsApp). Quem recebe só vê a publicação se entrar ou criar conta.
+- **Notificações** (sininho no Início): "Um paciente/profissional começou a seguir você", "Sua publicação recebeu uma curtida", "<nome> comentou…", "<nome> curtiu seu story".
+- Profissional **não** manda mensagem para profissional (só segue, curte e comenta).
+- A página inicial do site (sem conta) continua igual.
+- As fotos da antiga galeria de 6 fotos viraram as primeiras publicações de cada profissional.
+
+### Voltar para a versão 1.1
+O banco só **ganhou** tabelas novas na 1.2 — nenhuma conta, mensagem ou dado da 1.1 foi alterado. Por isso dá para voltar e depois vir de novo sem perder nada (na 1.1 as publicações e stories só ficam guardados, sem aparecer).
+1. No Render, abra o serviço **acolia** → **Events** (ou **Deploys**).
+2. Ache o deploy do commit **`81011a7`** ("Vitrine do paciente: filtro automático aparece no botão Filtrar").
+3. Clique em **Rollback** e confirme. Em alguns minutos o site volta para a 1.1.
+4. Para voltar para a 1.2, faça o mesmo com o deploy mais recente (ou clique em **Manual Deploy → Deploy latest commit**).

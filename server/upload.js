@@ -70,6 +70,34 @@ function removeDocument(name) {
   cloud.removeFile('documents', name);
 }
 
+// Stories: foto ou vídeo curto (até 20 s, conferido no aparelho; aqui o limite é o tamanho)
+const MEDIA_EXT = { ...EXT, 'video/mp4': '.mp4', 'video/quicktime': '.mov', 'video/webm': '.webm' };
+const mediaUpload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (_req, file, cb) => cb(null, crypto.randomBytes(16).toString('hex') + MEDIA_EXT[file.mimetype.split(';')[0]]),
+  }),
+  limits: { fileSize: 60 * 1024 * 1024, files: 1, fields: 5 },
+  fileFilter: (_req, file, cb) => {
+    if (file.fieldname !== 'media' || !MEDIA_EXT[file.mimetype.split(';')[0]]) return cb(new HttpError(400, 'Envie uma foto (JPG, PNG, WEBP) ou um vídeo (MP4, MOV, WEBM).'));
+    cb(null, true);
+  },
+}).single('media');
+
+function handleMedia(req, res) {
+  return new Promise((resolve, reject) => {
+    mediaUpload(req, res, (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') return reject(new HttpError(400, 'Arquivo muito grande. Envie um vídeo de até 20 segundos.'));
+        return reject(err.status ? err : new HttpError(400, 'Não foi possível enviar o arquivo.'));
+      }
+      if (!req.file) return reject(new HttpError(400, 'Escolha uma foto ou um vídeo.'));
+      cloud.uploadFile('uploads', req.file.path);
+      resolve({ url: `/uploads/${req.file.filename}`, kind: req.file.mimetype.startsWith('video/') ? 'video' : 'image' });
+    });
+  });
+}
+
 // Áudios do chat: pasta PRIVADA (só quem participa da conversa ouve)
 const AUDIO_DIR = path.join(DATA_DIR, 'audio');
 fs.mkdirSync(AUDIO_DIR, { recursive: true });
@@ -109,4 +137,4 @@ function removePhoto(url) {
   cloud.removeFile('uploads', url);
 }
 
-module.exports = { handleAudio, AUDIO_DIR, handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };
+module.exports = { handleMedia, handleAudio, AUDIO_DIR, handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };

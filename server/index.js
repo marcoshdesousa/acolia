@@ -58,6 +58,7 @@ function createApp() {
   app.use('/api/patient', require('./routes/patient').router);
   app.use('/api/professional', require('./routes/professional').router);
   app.use('/api/chat', require('./routes/chat').router);
+  app.use('/api/social', require('./routes/social').router);
   app.use('/api/push', require('./routes/push').router);
   app.use('/api/calls', require('./routes/calls').router);
   app.use('/api/admin', require('./routes/admin').router);
@@ -71,6 +72,8 @@ function createApp() {
   app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
   const pub = path.join(__dirname, '..', 'public');
   app.use(express.static(pub, { extensions: ['html'] }));
+  // Publicação compartilhada (aviãozinho): só abre para quem tem conta
+  app.get('/p/:id', (_req, res) => res.sendFile(path.join(pub, 'post.html')));
   // Link próprio do profissional: site.com/<slug> abre o perfil dele
   const profileHtml = require('node:fs').readFileSync(path.join(pub, 'profissional.html'), 'utf8');
   app.get(/^\/([a-zA-Z0-9-]{3,40})\/?$/, (req, res, next) => {
@@ -110,6 +113,10 @@ async function start(port = Number(process.env.PORT) || 3000) {
   const { setupSocket } = require('./socket');
   ensureAdmin();
   if (process.env.TEST_ACCOUNTS !== '0') require('./testAccounts').seedOnce();
+  // Stories somem depois de 24 h
+  const { cleanupStories } = require('./routes/social');
+  cleanupStories();
+  setInterval(cleanupStories, 60 * 60 * 1000).unref();
   const app = createApp();
   const server = http.createServer(app);
   setupSocket(server);

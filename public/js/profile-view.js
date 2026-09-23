@@ -60,16 +60,28 @@
     if (p.locked && p.has_bio) about = `<div><h3>Sobre</h3>${lockLink()}</div>`;
     else if (p.bio) about = `<div><h3>Sobre</h3><p style="white-space:pre-wrap">${esc(p.bio)}</p></div>`;
 
-    // ---------- Galeria (visitante vê as 2 primeiras) ----------
-    const photos = p.gallery || [];
-    const hidden = p.gallery_hidden || 0;
+    // ---------- Publicações (as 6 mais recentes; "Ver todas as fotos" carrega o resto) ----------
+    // Visitante: no máximo 2 abertas (sem ampliar) e o resto com "Crie conta para ver"
+    const total = p.posts_count ?? ((p.gallery || []).length + (p.gallery_hidden || 0));
     let gallery = '';
-    if (photos.length || hidden) {
-      gallery = `<div><h3>Galeria</h3><div class="gallery-grid">${photos.map((src, i) => `
-          <button type="button" class="gallery-item" ${p.locked ? `data-gallery-need-account="${esc(next || '')}"` : `data-gallery-open="${esc(src)}"`} aria-label="${p.locked ? 'Crie conta para ampliar' : `Abrir foto ${i + 1}`}"><img src="${esc(src)}" alt="Foto ${i + 1} de ${esc(p.name)}" loading="lazy"></button>`).join('')}
-        ${Array.from({ length: hidden }, () => `<a class="gallery-item gallery-locked" href="${signup}">${ic('lock', 20)}<span>Crie conta para ver</span></a>`).join('')}
-        </div></div>`;
+    if (total) {
+      let tiles;
+      if (p.locked) {
+        const photos = p.gallery || [];
+        const lockedTiles = Math.min(p.gallery_hidden || 0, 6 - photos.length);
+        tiles = photos.map((src, i) => `<button type="button" class="gallery-item" data-gallery-need-account="${esc(next || '')}" aria-label="Crie conta para ampliar"><img src="${esc(src)}" alt="Foto ${i + 1} de ${esc(p.name)}" loading="lazy"></button>`).join('')
+          + Array.from({ length: lockedTiles }, () => `<a class="gallery-item gallery-locked" href="${signup}">${ic('lock', 20)}<span>Crie conta para ver</span></a>`).join('');
+      } else {
+        tiles = (p.gallery_posts || []).map((x) => `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação"><img src="${esc(x.image)}" alt="" loading="lazy"></button>`).join('');
+      }
+      const more = total > 6 ? `<button type="button" class="btn secondary sm" data-all-posts style="margin-top:10px">${ic('image', 16)} Ver todas as fotos (${total})</button>` : '';
+      gallery = `<div><h3>Publicações</h3><div class="gallery-grid" data-post-grid>${tiles}</div>${more}</div>`;
     }
+
+    // Seguidores / seguindo (só os números) e botão Seguir
+    const counts = `<div class="pro-counts"><span><b>${total}</b> ${total === 1 ? 'publicação' : 'publicações'}</span>
+      <span><b data-followers>${p.followers_count || 0}</b> seguidores</span><span><b>${p.following_count || 0}</b> seguindo</span></div>`;
+    const followBtn = p.is_self ? '' : `<button type="button" class="btn ${p.following ? 'following' : ''}" data-follow>${p.following ? 'Seguindo' : 'Seguir'}</button>`;
 
     return `
       <div class="card stack">
@@ -77,6 +89,7 @@
           ${avatar(p.name, p.photo, 'xl')}
           <div class="grow" style="min-width:220px">
             <h1 style="font-size:1.6rem;margin-bottom:4px">${esc(p.name)}</h1>
+            ${counts}
             <div class="muted" style="font-weight:700">${esc(p.profession)}</div>
             <div class="row" style="margin-top:6px;gap:6px"><span class="badge ok">${ic('badge', 15)} ${esc(p.registry)}</span>
               ${p.session_minutes ? `<span class="badge">${ic('clock', 15)} Sessão de ${duration(p.session_minutes)}</span>` : ''}
@@ -84,7 +97,7 @@
             ${p.instagram ? `<a class="insta-btn" href="https://www.instagram.com/${encodeURIComponent(p.instagram)}/" target="_blank" rel="noopener">${ic('instagram', 18)} @${esc(p.instagram)}</a>` : ''}
             ${specialties.length ? `<div class="meta row" style="gap:6px;margin-top:10px">${specialties.map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
           </div>
-          <div class="row">${actions}</div>
+          <div class="row">${followBtn}${actions}</div>
         </div>
         ${about}
         ${gallery}

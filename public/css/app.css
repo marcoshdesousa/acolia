@@ -445,3 +445,102 @@ dialog .dlg-body h2 { padding-right: 28px; }
 .vplayer.loading .vplay { animation: vpulse .9s ease-in-out infinite; }
 @keyframes vpulse { 50% { opacity: .55; } }
 .vhint { font-size: .58rem; line-height: 1.2; color: var(--muted); opacity: .75; margin: 2px 0 0 2px; }
+
+/* ===================== Versão 1.2 — Início estilo Instagram ===================== */
+/* Navegação só com símbolos (o nome aparece ao passar o mouse / leitor de tela) */
+.bottom-nav.icons a { font-size: 0; gap: 0; padding: 10px 4px; }
+.bottom-nav.icons a svg { width: 27px; height: 27px; }
+.bottom-nav.icons .nav-badge { font-size: .7rem; top: 4px; }
+@media (min-width: 801px) {
+  .panel.rail { grid-template-columns: 76px 1fr; }
+  .panel.rail .sidebar { padding: 12px 10px; display: flex; flex-direction: column; gap: 6px; align-items: center; position: sticky; top: 60px; height: calc(100dvh - 60px); }
+  .panel.rail .sidebar a { font-size: 0; gap: 0; width: 52px; height: 52px; justify-content: center; padding: 0; }
+  .panel.rail .sidebar a svg { width: 26px; height: 26px; }
+  .panel.rail .sidebar .nav-badge { position: absolute; top: 4px; right: 2px; font-size: .7rem; margin: 0; }
+}
+
+.home { max-width: 560px; margin: 0 auto; }
+.home-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.home-top h1 { font-size: 1.5rem; margin: 0; }
+.icon-btn.bell { position: relative; }
+.icon-btn.bell .nav-badge { top: 0; right: -2px; }
+
+.stories-bar { display: flex; gap: 12px; overflow-x: auto; padding: 6px 2px 12px; margin-bottom: 8px; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.stories-bar::-webkit-scrollbar { display: none; }
+.story-bubble { flex: none; border: 0; background: none; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; width: 76px; color: var(--text); }
+.story-bubble small { font-size: .72rem; max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.story-bubble .ring { position: relative; padding: 3px; border-radius: 50%; background: var(--line); }
+.story-bubble.unseen .ring { background: conic-gradient(from 200deg, #3f5550, #8fb3a8, #c9a86a, #3f5550); }
+.story-bubble .ring .avatar { width: 64px; height: 64px; font-size: 1.3rem; border: 3px solid var(--bg); }
+.story-bubble .plus { position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; border: 2px solid var(--bg); }
+
+.feed { display: flex; flex-direction: column; gap: 18px; }
+.post-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.post-card header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; }
+.post-author { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; min-width: 0; }
+.post-author .who { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.post-author .who small { font-size: .74rem; color: var(--muted); }
+.post-img { background: #0c1211; }
+.post-img img { width: 100%; max-height: 80vh; object-fit: contain; display: block; }
+.post-actions { display: flex; align-items: center; gap: 6px; padding: 6px 8px 0; }
+.post-actions .icon-btn { display: inline-flex; align-items: center; gap: 4px; }
+.post-actions .cnt { font-weight: 700; font-size: .9rem; }
+.post-likes { font-weight: 700; font-size: .9rem; padding: 2px 14px 0; min-height: 4px; }
+.post-caption { padding: 4px 14px 12px; margin: 0; white-space: pre-wrap; word-wrap: break-word; }
+.post-card > :last-child:not(.post-caption) { padding-bottom: 10px; }
+
+/* Curtir com o símbolo da Acolia: transparente → vermelho */
+.like-btn { border: 0; background: none; padding: 6px; cursor: pointer; display: inline-grid; place-items: center; }
+.like-btn .mind { width: 28px; height: 28px; display: block; background: var(--text); opacity: .38;
+  -webkit-mask: url(/img/logo-simbolo.png) center / contain no-repeat; mask: url(/img/logo-simbolo.png) center / contain no-repeat; transition: background .15s, opacity .15s; }
+.like-btn.on .mind { background: #e0245e; opacity: 1; }
+.like-btn.pop .mind { animation: likepop .35s ease; }
+@keyframes likepop { 40% { transform: scale(1.3); } }
+.like-btn[disabled] { cursor: default; }
+
+dialog.sheet { max-width: min(560px, calc(100vw - 16px)); }
+dialog.post-dialog { max-width: min(560px, calc(100vw - 16px)); }
+dialog.post-dialog .dlg-body { padding: 0; }
+dialog.post-dialog .post-card { border: 0; border-radius: 0; }
+dialog.post-dialog .dlg-actions:empty, dialog.sheet .dlg-actions:empty { display: none; }
+.comments { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 14px; max-height: 55dvh; overflow-y: auto; }
+.comment { display: flex; gap: 10px; align-items: flex-start; }
+.comment a { color: inherit; text-decoration: none; }
+.comment .c-head { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.comment .c-head small { font-size: .7rem; }
+.comment .c-body { white-space: pre-wrap; word-wrap: break-word; }
+.comment-form { display: flex; gap: 8px; position: sticky; bottom: 0; background: var(--surface); padding-top: 6px; }
+.comment-form input { flex: 1; min-width: 0; border-radius: 22px; }
+
+.notifs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.notifs li { display: flex; gap: 10px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--line); }
+.notifs li.unread { background: var(--primary-soft); border-radius: 10px; padding: 10px 8px; }
+.notifs li[data-open-post] { cursor: pointer; }
+.notif-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; flex: none; }
+.notif-ic { color: var(--primary); }
+
+.pro-counts { display: flex; gap: 14px; flex-wrap: wrap; font-size: .9rem; margin: 2px 0 6px; color: var(--muted); }
+.pro-counts b { color: var(--text); }
+.btn.following { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); }
+
+.pick-media { display: grid; place-items: center; min-height: 200px; border: 2px dashed var(--line); border-radius: 14px; cursor: pointer; text-align: center; overflow: hidden; }
+.pick-media span { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); }
+.pick-media img { width: 100%; max-height: 50vh; object-fit: contain; display: block; }
+
+/* Stories em tela cheia */
+.story-viewer { position: fixed; inset: 0; z-index: 100; background: #000; color: #fff; display: flex; flex-direction: column; outline: none; }
+.sv-bars { display: flex; gap: 4px; padding: calc(10px + env(safe-area-inset-top, 0px)) 10px 6px; position: relative; z-index: 3; }
+.sv-bars i { flex: 1; height: 3px; background: rgba(255,255,255,.35); border-radius: 3px; overflow: hidden; }
+.sv-bars i b { display: block; height: 100%; width: 0; background: #fff; }
+.sv-bars i.done b { width: 100% !important; transition: none !important; }
+.sv-head { display: flex; align-items: center; gap: 10px; padding: 4px 12px; position: relative; z-index: 3; }
+.sv-head small { opacity: .75; }
+.sv-close { margin-left: auto; border: 0; background: none; color: #fff; cursor: pointer; padding: 6px; }
+.sv-media { position: absolute; inset: 0; display: grid; place-items: center; }
+.sv-media img, .sv-media video { max-width: 100%; max-height: 100%; object-fit: contain; }
+.sv-nav { position: absolute; top: 90px; bottom: 90px; width: 35%; border: 0; background: transparent; z-index: 2; cursor: pointer; }
+.sv-nav.prev { left: 0; } .sv-nav.next { right: 0; width: 65%; }
+.sv-foot { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(transparent, rgba(0,0,0,.55)); }
+.sv-foot .like-btn .mind { background: #fff; opacity: .8; width: 32px; height: 32px; }
+.sv-foot .like-btn.on .mind { background: #ff3b6b; opacity: 1; }
+.sv-likes { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }

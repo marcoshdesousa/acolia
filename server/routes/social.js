@@ -1,0 +1,325 @@
+'use strict';
+// Versão 1.2 — Início estilo Instagram: publicações (fotos com legenda), stories (foto ou
+// vídeo de até 20 s, somem em 24 h), seguir profissionais, curtir, comentar e notificações.
+// Só profissionais publicam; pacientes e profissionais seguem, curtem e comentam.
+const express = require('express');
+const { db } = require('../db');
+const U = require('../util');
+const A = require('../auth');
+const rt = require('../realtime');
+const { VISIBLE_SQL, freeGalleryCount } = require('../serialize');
+const { handlePhoto, handleMedia, removePhoto } = require('../upload');
+
+const router = express.Router();
+const STORY_HOURS = 24;
+const PAGE = 12;
+
+// ---------- Quem é quem ----------
+const who = (req) => ({ role: req.auth.role, id: req.auth.user.id });
+const isPro = (req) => req.auth?.role === 'professional';
+
+// Nome público: profissional com nome completo; paciente só com o 1º e o 2º nome + cidade
+function actor(role, id) {
+  if (role === 'professional') {
+    const p = db.prepare('SELECT id, name, photo, profession, slug FROM professionals WHERE id = ?').get(id);
+    if (!p) return { role, id, name: 'Profissional', subtitle: '', photo: null };
+    return { role, id: p.id, name: p.name, subtitle: p.profession, photo: p.photo, slug: p.slug };
+  }
+  const p = db.prepare('SELECT id, name, display_name, photo, city, state, status FROM patients WHERE id = ?').get(id);
+  if (!p || p.status === 'excluido') return { role, id, name: 'Conta excluída', subtitle: '', photo: null };
+  const words = String(p.display_name || p.name).trim().split(/\s+/).slice(0, 2).join(' ');
+  return { role, id: p.id, name: words, subtitle: p.city && p.state ? `${p.city} - ${p.state}` : '', photo: p.photo };
+}
+
+function notify(toRole, toId, type, from, extra = {}) {
+  if (toRole === from.role && toId === from.id) return; // não avisa a própria pessoa
+  const info = db.prepare(`INSERT INTO notifications (recipient_role, recipient_id, type, actor_role, actor_id, post_id, story_id, comment_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(toRole, toId, type, from.role, from.id, extra.post_id || null, extra.story_id || null, extra.comment_id || null);
+  rt.emit(`${toRole}:${toId}`, 'social:notification', { id: Number(info.lastInsertRowid), type });
+}
+
+// ---------- Publicações ----------
+function visiblePro(id) {
+  return db.prepare(`SELECT * FROM professionals p WHERE id = ? AND ${VISIBLE_SQL}`).get(id);
+}
+
+function postOut(p, me) {
+  const likes = db.prepare('SELECT COUNT(*) n FROM post_likes WHERE post_id = ?').get(p.id).n;
+  const comments = db.prepare('SELECT COUNT(*) n FROM post_comments WHERE post_id = ?').get(p.id).n;
+  const liked = me ? !!db.prepare('SELECT 1 FROM post_likes WHERE post_id = ? AND role = ? AND user_id = ?').get(p.id, me.role, me.id) : false;
+  return {
+    id: p.id, image: p.image, caption: p.caption, created_at: p.created_at,
+    likes, comments, liked,
+    mine: !!me && me.role === 'professional' && me.id === p.professional_id,
+    author: actor('professional', p.professional_id),
+  };
+}
+
+function loadPost(req, id) {
+  const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(id));
+  if (!p) throw new U.HttpError(404, 'Publicação não encontrada.');
+  const mine = isPro(req) && req.auth.user.id === p.professional_id;
+  if (!mine && !visiblePro(p.professional_id)) throw new U.HttpError(404, 'Publicação não encontrada.');
+  return p;
+}
+
+// Grade do perfil: visitante vê só até 2 fotos (regra da galeria) e não abre nenhuma
+router.get('/professionals/:id/posts', (req, res) => {
+  const proId = Number(req.params.id);
+  const mine = isPro(req) && req.auth.user.id === proId;
+  if (!mine && !visiblePro(proId)) throw new U.HttpError(404, 'Profissional não encontrado.');
+  const total = db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(proId).n;
+  if (!req.auth || !['patient', 'professional'].includes(req.auth.role)) {
+    const first = db.prepare('SELECT image FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT 6').all(proId);
+    const free = freeGalleryCount(first.length);
+    return res.json({ locked: true, total, items: first.slice(0, free).map((r) => ({ image: r.image })), hidden: total - free });
+  }
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  const limit = Math.min(60, Number(req.query.limit) || PAGE);
+  const rows = db.prepare('SELECT id, image FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT ? OFFSET ?').all(proId, limit, offset);
+  res.json({ locked: false, total, items: rows, has_more: offset + rows.length < total });
+});
+
+router.use(A.requireRole('patient', 'professional'));
+
+// Feed: publicações de quem a pessoa segue (e as próprias, no caso do profissional).
+// Primeiro as que ela ainda não viu (mais novas no topo), depois as já vistas.
+router.get('/feed', (req, res) => {
+  const me = who(req);
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  const rows = db.prepare(`
+    SELECT po.*, (SELECT 1 FROM post_views v WHERE v.post_id = po.id AND v.role = ? AND v.user_id = ?) AS seen
+    FROM posts po JOIN professionals p ON p.id = po.professional_id
+    WHERE (${VISIBLE_SQL} AND po.professional_id IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?))
+       OR (? = 'professional' AND po.professional_id = ?)
+    ORDER BY seen IS NOT NULL, po.id DESC
+    LIMIT ? OFFSET ?`).all(me.role, me.id, me.role, me.id, me.role, me.id, PAGE + 1, offset);
+  const more = rows.length > PAGE;
+  const following = db.prepare('SELECT COUNT(*) n FROM follows WHERE follower_role = ? AND follower_id = ?').get(me.role, me.id).n;
+  res.json({ items: rows.slice(0, PAGE).map((p) => ({ ...postOut(p, me), seen: !!p.seen })), has_more: more, following });
+});
+
+// O aparelho avisa quais publicações apareceram na tela
+router.post('/seen', (req, res) => {
+  const me = who(req);
+  const ids = (Array.isArray(req.body.ids) ? req.body.ids : []).slice(0, 100).map(Number).filter(Number.isInteger);
+  const ins = db.prepare('INSERT OR IGNORE INTO post_views (post_id, role, user_id) SELECT id, ?, ? FROM posts WHERE id = ?');
+  for (const id of ids) ins.run(me.role, me.id, id);
+  res.json({ ok: true });
+});
+
+router.get('/posts/:id', (req, res) => res.json(postOut(loadPost(req, req.params.id), who(req))));
+
+router.post('/posts', async (req, res) => {
+  if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
+  const url = await handlePhoto(req, res);
+  const caption = U.cleanText(req.body.caption, 2200);
+  const info = db.prepare('INSERT INTO posts (professional_id, image, caption) VALUES (?, ?, ?)').run(req.auth.user.id, url, caption);
+  res.status(201).json(postOut(db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(info.lastInsertRowid)), who(req)));
+});
+
+router.delete('/posts/:id', (req, res) => {
+  const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(req.params.id));
+  if (!p || !isPro(req) || p.professional_id !== req.auth.user.id) throw new U.HttpError(404, 'Publicação não encontrada.');
+  db.prepare('DELETE FROM notifications WHERE post_id = ?').run(p.id);
+  db.prepare('DELETE FROM posts WHERE id = ?').run(p.id);
+  removePhoto(p.image);
+  res.json({ ok: true });
+});
+
+router.post('/posts/:id/like', (req, res) => {
+  const p = loadPost(req, req.params.id);
+  const me = who(req);
+  const r = db.prepare('INSERT OR IGNORE INTO post_likes (post_id, role, user_id) VALUES (?, ?, ?)').run(p.id, me.role, me.id);
+  if (r.changes) notify('professional', p.professional_id, 'like_post', me, { post_id: p.id });
+  res.json(postOut(p, me));
+});
+
+router.delete('/posts/:id/like', (req, res) => {
+  const p = loadPost(req, req.params.id);
+  const me = who(req);
+  db.prepare('DELETE FROM post_likes WHERE post_id = ? AND role = ? AND user_id = ?').run(p.id, me.role, me.id);
+  res.json(postOut(p, me));
+});
+
+// ---------- Comentários (só texto) ----------
+function commentOut(c, me, postOwner) {
+  return {
+    id: c.id, body: c.body, created_at: c.created_at, author: actor(c.role, c.user_id),
+    can_delete: (c.role === me.role && c.user_id === me.id) || (me.role === 'professional' && me.id === postOwner),
+  };
+}
+
+router.get('/posts/:id/comments', (req, res) => {
+  const p = loadPost(req, req.params.id);
+  const rows = db.prepare('SELECT * FROM post_comments WHERE post_id = ? ORDER BY id').all(p.id);
+  res.json({ items: rows.map((c) => commentOut(c, who(req), p.professional_id)) });
+});
+
+router.post('/posts/:id/comments', (req, res) => {
+  const p = loadPost(req, req.params.id);
+  const me = who(req);
+  const body = U.cleanText(req.body.body, 500);
+  if (!body) throw new U.HttpError(400, 'Escreva um comentário.');
+  const info = db.prepare('INSERT INTO post_comments (post_id, role, user_id, body) VALUES (?, ?, ?, ?)').run(p.id, me.role, me.id, body);
+  const c = db.prepare('SELECT * FROM post_comments WHERE id = ?').get(Number(info.lastInsertRowid));
+  notify('professional', p.professional_id, 'comment', me, { post_id: p.id, comment_id: c.id });
+  res.status(201).json(commentOut(c, me, p.professional_id));
+});
+
+// Quem comentou apaga o próprio comentário; o dono da publicação apaga qualquer um
+router.delete('/comments/:id', (req, res) => {
+  const me = who(req);
+  const c = db.prepare('SELECT c.*, p.professional_id AS owner FROM post_comments c JOIN posts p ON p.id = c.post_id WHERE c.id = ?').get(Number(req.params.id));
+  if (!c) throw new U.HttpError(404, 'Comentário não encontrado.');
+  const allowed = (c.role === me.role && c.user_id === me.id) || (me.role === 'professional' && me.id === c.owner);
+  if (!allowed) throw new U.HttpError(403, 'Você só pode apagar os seus comentários.');
+  db.prepare('DELETE FROM notifications WHERE comment_id = ?').run(c.id);
+  db.prepare('DELETE FROM post_comments WHERE id = ?').run(c.id);
+  res.json({ ok: true });
+});
+
+// ---------- Seguir ----------
+function followInfo(proId, me) {
+  return {
+    followers: db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(proId).n,
+    following: me ? !!db.prepare('SELECT 1 FROM follows WHERE follower_role = ? AND follower_id = ? AND professional_id = ?').get(me.role, me.id, proId) : false,
+  };
+}
+
+router.post('/follow/:id', (req, res) => {
+  const me = who(req);
+  const proId = Number(req.params.id);
+  if (me.role === 'professional' && me.id === proId) throw new U.HttpError(400, 'Você não pode seguir a si mesmo.');
+  if (!visiblePro(proId)) throw new U.HttpError(404, 'Profissional não encontrado.');
+  const r = db.prepare('INSERT OR IGNORE INTO follows (follower_role, follower_id, professional_id) VALUES (?, ?, ?)').run(me.role, me.id, proId);
+  if (r.changes) notify('professional', proId, 'follow', me);
+  res.json(followInfo(proId, me));
+});
+
+router.delete('/follow/:id', (req, res) => {
+  const me = who(req);
+  const proId = Number(req.params.id);
+  db.prepare('DELETE FROM follows WHERE follower_role = ? AND follower_id = ? AND professional_id = ?').run(me.role, me.id, proId);
+  res.json(followInfo(proId, me));
+});
+
+// ---------- Stories ----------
+const STORY_ALIVE = `created_at >= strftime('%Y-%m-%d %H:%M:%f', 'now', '-${STORY_HOURS} hours')`;
+
+function storyOut(s, me) {
+  return {
+    id: s.id, media: s.media, kind: s.kind, created_at: s.created_at,
+    liked: !!db.prepare('SELECT 1 FROM story_likes WHERE story_id = ? AND role = ? AND user_id = ?').get(s.id, me.role, me.id),
+    likes: me.role === 'professional' && me.id === s.professional_id
+      ? db.prepare('SELECT COUNT(*) n FROM story_likes WHERE story_id = ?').get(s.id).n : undefined,
+  };
+}
+
+// Barra de stories: o próprio profissional primeiro, depois quem a pessoa segue
+router.get('/stories', (req, res) => {
+  const me = who(req);
+  const pros = db.prepare(`SELECT DISTINCT s.professional_id AS id FROM stories s JOIN professionals p ON p.id = s.professional_id
+    WHERE s.${STORY_ALIVE} AND ((${VISIBLE_SQL} AND s.professional_id IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?))
+      OR (? = 'professional' AND s.professional_id = ?))`).all(me.role, me.id, me.role, me.id);
+  const groups = pros.map(({ id }) => {
+    const items = db.prepare(`SELECT * FROM stories WHERE professional_id = ? AND ${STORY_ALIVE} ORDER BY id`).all(id);
+    return { professional: actor('professional', id), mine: me.role === 'professional' && me.id === id, items: items.map((s) => storyOut(s, me)), last: items.at(-1)?.id || 0 };
+  });
+  groups.sort((a, b) => (b.mine - a.mine) || (b.last - a.last));
+  res.json({ groups, can_post: me.role === 'professional' });
+});
+
+router.post('/stories', async (req, res) => {
+  if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais postam stories.');
+  const m = await handleMedia(req, res);
+  const secs = Number(req.body.duration) || 0;
+  if (m.kind === 'video' && secs > 20.9) {
+    removePhoto(m.url);
+    throw new U.HttpError(400, 'O vídeo do story pode ter no máximo 20 segundos.');
+  }
+  const info = db.prepare('INSERT INTO stories (professional_id, media, kind) VALUES (?, ?, ?)').run(req.auth.user.id, m.url, m.kind);
+  res.status(201).json(storyOut(db.prepare('SELECT * FROM stories WHERE id = ?').get(Number(info.lastInsertRowid)), who(req)));
+});
+
+router.delete('/stories/:id', (req, res) => {
+  const s = db.prepare('SELECT * FROM stories WHERE id = ?').get(Number(req.params.id));
+  if (!s || !isPro(req) || s.professional_id !== req.auth.user.id) throw new U.HttpError(404, 'Story não encontrado.');
+  db.prepare('DELETE FROM notifications WHERE story_id = ?').run(s.id);
+  db.prepare('DELETE FROM stories WHERE id = ?').run(s.id);
+  removePhoto(s.media);
+  res.json({ ok: true });
+});
+
+function loadStory(id) {
+  const s = db.prepare(`SELECT * FROM stories WHERE id = ? AND ${STORY_ALIVE}`).get(Number(id));
+  if (!s) throw new U.HttpError(404, 'Este story não está mais disponível.');
+  return s;
+}
+
+router.post('/stories/:id/like', (req, res) => {
+  const s = loadStory(req.params.id);
+  const me = who(req);
+  const r = db.prepare('INSERT OR IGNORE INTO story_likes (story_id, role, user_id) VALUES (?, ?, ?)').run(s.id, me.role, me.id);
+  if (r.changes) notify('professional', s.professional_id, 'like_story', me, { story_id: s.id });
+  res.json(storyOut(s, me));
+});
+
+router.delete('/stories/:id/like', (req, res) => {
+  const s = loadStory(req.params.id);
+  const me = who(req);
+  db.prepare('DELETE FROM story_likes WHERE story_id = ? AND role = ? AND user_id = ?').run(s.id, me.role, me.id);
+  res.json(storyOut(s, me));
+});
+
+// Apaga stories vencidos (e os arquivos) — roda de hora em hora
+function cleanupStories() {
+  const old = db.prepare(`SELECT * FROM stories WHERE NOT (${STORY_ALIVE})`).all();
+  for (const s of old) {
+    db.prepare('DELETE FROM notifications WHERE story_id = ?').run(s.id);
+    db.prepare('DELETE FROM stories WHERE id = ?').run(s.id);
+    removePhoto(s.media);
+  }
+  return old.length;
+}
+
+// ---------- Notificações (no Início, no sininho) ----------
+// Curtida em publicação e novo seguidor não mostram quem foi; comentário e curtida no story mostram.
+function notifOut(n) {
+  const a = n.actor_role ? actor(n.actor_role, n.actor_id) : null;
+  const kindOf = n.actor_role === 'patient' ? 'Um paciente' : 'Um profissional';
+  let text;
+  let showActor = false;
+  if (n.type === 'follow') text = `${kindOf} começou a seguir você.`;
+  else if (n.type === 'like_post') text = 'Sua publicação recebeu uma curtida.';
+  else if (n.type === 'like_story') { text = `${a.name} curtiu seu story.`; showActor = true; }
+  else if (n.type === 'comment') {
+    const c = n.comment_id ? db.prepare('SELECT body FROM post_comments WHERE id = ?').get(n.comment_id) : null;
+    text = `${a.name} comentou: ${c ? c.body.slice(0, 80) : ''}`;
+    showActor = true;
+  } else text = 'Nova atividade.';
+  const post = n.post_id ? db.prepare('SELECT id, image FROM posts WHERE id = ?').get(n.post_id) : null;
+  return {
+    id: n.id, type: n.type, text, created_at: n.created_at, read: !!n.read_at,
+    actor: showActor ? a : null, post: post ? { id: post.id, image: post.image } : null,
+  };
+}
+
+router.get('/notifications', (req, res) => {
+  const me = who(req);
+  const rows = db.prepare('SELECT * FROM notifications WHERE recipient_role = ? AND recipient_id = ? ORDER BY id DESC LIMIT 60').all(me.role, me.id);
+  res.json({ items: rows.map(notifOut), unread: rows.filter((r) => !r.read_at).length });
+});
+
+router.get('/notifications/unread', (req, res) => {
+  const me = who(req);
+  res.json({ unread: db.prepare('SELECT COUNT(*) n FROM notifications WHERE recipient_role = ? AND recipient_id = ? AND read_at IS NULL').get(me.role, me.id).n });
+});
+
+router.post('/notifications/read', (req, res) => {
+  const me = who(req);
+  db.prepare("UPDATE notifications SET read_at = datetime('now') WHERE recipient_role = ? AND recipient_id = ? AND read_at IS NULL").run(me.role, me.id);
+  res.json({ ok: true });
+});
+
+module.exports = { router, followInfo, cleanupStories, actor };

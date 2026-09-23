@@ -19,16 +19,31 @@
     <nav><span data-me-avatar></span></nav>
   </div></header>
 
-  <div class="panel">
+  <div class="panel rail">
     <aside class="sidebar" aria-label="Menu">
-      <a href="#conversas" data-nav="conversas"><span data-i="chat"></span>Conversas<span class="nav-badge" data-unread></span></a>
-      <a href="#atendimento" data-nav="atendimento"><span data-i="video"></span>Atendimento</a>
-      <a href="#perfil" data-nav="perfil"><span data-i="user"></span>Meu perfil</a>
-      <a href="#conta" data-nav="conta"><span data-i="gear"></span>Conta</a>
+      <a href="#inicio" data-nav="inicio" title="Início" aria-label="Início"><span data-i="home"></span><span class="nav-badge" data-home-badge></span></a>
+      <a href="#profissionais" data-nav="profissionais" title="Profissionais" aria-label="Profissionais"><span data-i="therapist"></span></a>
+      <a href="#conversas" data-nav="conversas" title="Mensagens" aria-label="Mensagens"><span data-i="chat"></span><span class="nav-badge" data-unread></span></a>
+      <a href="#atendimento" data-nav="atendimento" title="Atendimento" aria-label="Atendimento"><span data-i="video"></span></a>
+      <a href="#perfil" data-nav="perfil" title="Meu perfil" aria-label="Meu perfil"><span data-i="user"></span></a>
+      <a href="#conta" data-nav="conta" title="Configurações" aria-label="Configurações"><span data-i="gear"></span></a>
     </aside>
 
     <main class="panel-main">
       <div data-status-notice></div>
+
+      <section data-view="inicio" class="hidden"><div data-home></div></section>
+
+      <section data-view="profissionais" class="hidden" style="max-width:1100px">
+        <h1 style="font-size:1.5rem">Profissionais</h1>
+        <p class="muted small">Siga outros profissionais para ver as publicações e os stories deles no Início.</p>
+        <div data-catalog></div>
+      </section>
+
+      <section data-view="verpro" class="hidden" style="max-width:1000px">
+        <a href="#profissionais" class="btn ghost sm" style="margin-bottom:12px" data-back>← Voltar</a>
+        <div data-pro-view></div>
+      </section>
 
       <section data-view="conversas" class="chat-wrap hidden"><div data-chat></div></section>
 
@@ -77,9 +92,10 @@
             <span class="small muted">JPG, PNG ou WEBP, até 3 MB.</span></div></div>
         </div>
         <div class="card stack" style="margin-top:16px">
-          <h2 style="margin:0">Galeria de fotos</h2>
-          <p class="small muted" style="margin:0">Até 6 fotos (consultório, eventos, certificados…). Aparecem no seu perfil em 3 linhas de 2, só para pacientes com conta. Se não colocar nenhuma, a galeria não aparece.</p>
-          <div class="gallery-edit" data-gallery-edit></div>
+          <div class="row between"><h2 style="margin:0">Minhas publicações</h2>
+            <button type="button" class="btn sm" data-my-new-post>+ Nova publicação</button></div>
+          <p class="small muted" style="margin:0">As fotos que você publica aparecem no Início de quem segue você e no seu perfil (as 6 mais recentes primeiro). Toque numa foto para ver curtidas e comentários ou apagar.</p>
+          <div class="gallery-grid" data-my-posts></div>
         </div>
         <form class="card" data-profile-form style="margin-top:16px" novalidate>
           <h2>Dados profissionais</h2>
@@ -151,20 +167,25 @@
           <p class="small muted" style="margin:0">Seu perfil sai da vitrine, seus dados e a carteirinha são apagados e você não consegue mais entrar. As conversas continuam com os pacientes, sem o seu nome. Não dá para desfazer.</p>
           <button class="btn danger" data-delete-account style="width:max-content">Excluir minha conta</button>
         </div>
+        <p class="small muted center" style="margin-top:16px">Acolia · versão 1.2</p>
       </section>
     </main>
   </div>
 
-  <nav class="bottom-nav mobile-only" aria-label="Navegação">
-    <a href="#conversas" data-nav="conversas"><span data-i="chat"></span>Conversas<span class="nav-badge" data-unread></span></a>
-    <a href="#atendimento" data-nav="atendimento"><span data-i="video"></span>Atendimento</a>
-    <a href="#perfil" data-nav="perfil"><span data-i="user"></span>Perfil</a>
-    <a href="#conta" data-nav="conta"><span data-i="gear"></span>Conta</a>
+  <nav class="bottom-nav mobile-only icons" aria-label="Navegação">
+    <a href="#inicio" data-nav="inicio" title="Início" aria-label="Início"><span data-i="home"></span><span class="nav-badge" data-home-badge></span></a>
+    <a href="#profissionais" data-nav="profissionais" title="Profissionais" aria-label="Profissionais"><span data-i="therapist"></span></a>
+    <a href="#conversas" data-nav="conversas" title="Mensagens" aria-label="Mensagens"><span data-i="chat"></span><span class="nav-badge" data-unread></span></a>
+    <a href="#atendimento" data-nav="atendimento" title="Atendimento" aria-label="Atendimento"><span data-i="video"></span></a>
+    <a href="#perfil" data-nav="perfil" title="Meu perfil" aria-label="Meu perfil"><span data-i="user"></span></a>
+    <a href="#conta" data-nav="conta" title="Configurações" aria-label="Configurações"><span data-i="gear"></span></a>
   </nav>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/common.js"></script>
+  <script src="/js/catalog.js"></script>
   <script src="/js/profile-view.js"></script>
+  <script src="/js/social.js"></script>
   <script src="/js/voice.js"></script>
   <script src="/js/chat.js"></script>
   <script src="/js/delete-account.js"></script>

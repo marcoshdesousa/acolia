@@ -16,9 +16,10 @@
     return `<div>${bits.join(' ')}</div>${where}`;
   }
 
-  function card(p, { profileHref }) {
+  function card(p, { profileHref, viewerRole }) {
+    const pro = viewerRole === 'professional'; // profissional vê a vitrine, mas não favorita nem manda mensagem
     return `<article class="card pro-card" data-id="${p.id}">
-      ${p.locked ? `<button class="icon-btn fav" data-need-account aria-label="Favoritar (precisa de conta)">${ICONS.heart}</button>`
+      ${pro ? '' : p.locked ? `<button class="icon-btn fav" data-need-account aria-label="Favoritar (precisa de conta)">${ICONS.heart}</button>`
         : `<button class="icon-btn fav ${p.favorite ? 'on' : ''}" data-fav aria-pressed="${p.favorite}" aria-label="${p.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}">${ICONS.heart}</button>`}
       <div class="head">${avatar(p.name, p.photo, 'lg')}
         <div style="min-width:0;padding-right:28px"><div class="name">${esc(p.name)}</div><div class="muted small">${esc(p.profession)}</div>
@@ -27,8 +28,8 @@
       ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}
       ${p.specialties ? `<div class="meta">${p.specialties.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 4).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
       ${priceLine(p)}
-      <div class="actions"><a class="btn secondary sm grow" href="${profileHref(p)}">Ver perfil</a>
-        <button class="btn sm grow" ${p.locked ? 'data-need-account' : 'data-msg'}>${ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"')} Mensagem</button></div>
+      <div class="actions"><a class="btn ${pro ? '' : 'secondary'} sm grow" href="${profileHref(p)}">Ver perfil</a>
+        ${pro ? '' : `<button class="btn sm grow" ${p.locked ? 'data-need-account' : 'data-msg'}>${ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"')} Mensagem</button>`}</div>
     </article>`;
   }
 
@@ -112,6 +113,7 @@
 
     function hint(data) {
       const h = $('[data-hint]', root);
+      if (opts.viewerRole === 'professional') { h.textContent = ''; return; }
       if (!logged) { h.innerHTML = 'Profissionais em destaque. <a href="/cadastro-paciente">Crie sua conta</a> para ver valores, localização e conversar.'; return; }
       if (form.place.value.trim() || form.sort.value || form.q.value.trim()) { h.textContent = ''; return; }
       if (data.city && data.state) {

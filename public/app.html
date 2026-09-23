@@ -20,13 +20,15 @@
     </div></header>
 
     <main class="app-main">
+      <section data-view="inicio" class="container hidden"><div data-home></div></section>
+
       <section data-view="buscar" class="container hidden">
         <h1 style="font-size:1.5rem">Encontre seu profissional</h1>
         <div data-catalog></div>
       </section>
 
       <section data-view="perfil" class="container hidden">
-        <a href="#buscar" class="btn ghost sm" style="margin-bottom:12px">← Voltar</a>
+        <a href="#buscar" class="btn ghost sm" style="margin-bottom:12px" data-back>← Voltar</a>
         <div data-profile></div>
       </section>
 
@@ -67,13 +69,15 @@
           <button class="btn danger" data-delete-account style="width:max-content">Excluir minha conta</button>
         </div>
         <p class="small muted center" style="margin-top:16px">Em caso de crise ou risco de vida, ligue 188 (CVV) ou 192 (SAMU).</p>
+        <p class="small muted center" style="margin:4px 0 0">Acolia · versão 1.2</p>
       </section>
     </main>
 
-    <nav class="bottom-nav" aria-label="Navegação">
-      <a href="#buscar" data-nav="buscar"><span data-i="therapist"></span>Profissionais</a>
-      <a href="#chat" data-nav="chat"><span data-i="chat"></span>Conversas<span class="nav-badge" data-unread></span></a>
-      <a href="#config" data-nav="config"><span data-i="gear"></span>Configurações</a>
+    <nav class="bottom-nav icons" aria-label="Navegação">
+      <a href="#inicio" data-nav="inicio" title="Início" aria-label="Início"><span data-i="home"></span><span class="nav-badge" data-home-badge></span></a>
+      <a href="#buscar" data-nav="buscar" title="Profissionais" aria-label="Profissionais"><span data-i="therapist"></span></a>
+      <a href="#chat" data-nav="chat" title="Mensagens" aria-label="Mensagens"><span data-i="chat"></span><span class="nav-badge" data-unread></span></a>
+      <a href="#config" data-nav="config" title="Configurações" aria-label="Configurações"><span data-i="gear"></span></a>
     </nav>
   </div>
 
@@ -81,6 +85,7 @@
   <script src="/js/common.js"></script>
   <script src="/js/catalog.js"></script>
   <script src="/js/profile-view.js"></script>
+  <script src="/js/social.js"></script>
   <script src="/js/voice.js"></script>
   <script src="/js/chat.js"></script>
   <script src="/js/delete-account.js"></script>
@@ -110,9 +115,15 @@
       onNavigate: (id) => { const h = id ? '#chat/' + id : '#chat'; if (location.hash !== h && location.hash.startsWith('#chat')) history.replaceState(null, '', h); },
     });
 
+    // Início estilo Instagram (versão 1.2)
+    let home = null;
+    const openPro = (id) => { location.hash = 'perfil/' + id; };
+    AcoliaSocial.setContext({ role: 'patient', me, onOpenProfile: openPro, onMessage: (id) => { location.hash = 'conversar/' + id; } });
+
     let catalogMounted = false;
+    let backTo = '#buscar';
     async function route() {
-      const [view, arg] = (location.hash.slice(1) || 'buscar').split('/');
+      const [view, arg] = (location.hash.slice(1) || 'inicio').split('/');
       if (view === 'conversar' && arg) {
         try {
           const c = await api('/api/chat/conversations', { method: 'POST', body: { professional_id: Number(arg) } });
@@ -120,9 +131,19 @@
         } catch (e) { toast(e.message, 'error'); location.replace('#buscar'); }
         return;
       }
-      const v = ['buscar', 'perfil', 'chat', 'config'].includes(view) ? view : 'buscar';
+      const v = ['inicio', 'buscar', 'perfil', 'chat', 'config'].includes(view) ? view : 'inicio';
+      if (v === 'inicio' || v === 'buscar') backTo = '#' + v;
       $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
-      $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'perfil' ? 'buscar' : v)));
+      $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'perfil' ? backTo.slice(1) : v)));
+      $('[data-back]').setAttribute('href', backTo);
+      if (v === 'inicio' && !home) {
+        home = AcoliaSocial.mountHome($('[data-home]'), {
+          role: 'patient', me, socket, onOpenProfile: openPro,
+          onMessage: (id) => { location.hash = 'conversar/' + id; },
+          onFindPros: () => { location.hash = 'buscar'; },
+          onUnread: (n) => { $('[data-home-badge]').textContent = n ? String(n) : ''; },
+        });
+      }
       if (v === 'buscar' && !catalogMounted) {
         catalogMounted = true;
         AcoliaCatalog.mount($('[data-catalog]'), {
@@ -139,6 +160,7 @@
             actions: '<button class="btn secondary" data-fav>' + ICONS.heart.replace('<svg', '<svg style="width:18px;height:18px"') + ' <span>' + (p.favorite ? 'Favorito' : 'Favoritar') + '</span></button>'
               + '<a class="btn" href="#conversar/' + p.id + '">' + ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"') + ' Enviar mensagem</a>',
           });
+          AcoliaSocial.bindProfile($('[data-profile]'), p);
           const fb = $('[data-fav]');
           let fav = p.favorite;
           fb.addEventListener('click', async () => {

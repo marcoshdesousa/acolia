@@ -105,36 +105,22 @@
     toast('Perfil salvo!');
   });
 
-  // ---------- Galeria (Foto 1 a Foto 6) ----------
-  function renderGallery() {
-    $('[data-gallery-edit]').innerHTML = (me.gallery || []).map((src, i) => `
-      <div class="gallery-slot">
-        <div class="lbl">Foto ${i + 1}</div>
-        <div class="thumb">${src ? `<img src="${esc(src)}" alt="Foto ${i + 1}">` : 'Vazia'}</div>
-        <label class="btn secondary sm" style="margin:0">${src ? 'Trocar' : 'Adicionar'}<input type="file" accept="image/jpeg,image/png,image/webp" data-gallery-input="${i + 1}" hidden></label>
-        ${src ? `<button type="button" class="btn ghost sm" data-gallery-remove="${i + 1}">Remover</button>` : ''}
-      </div>`).join('');
-  }
-  renderGallery();
-  $('[data-gallery-edit]').addEventListener('change', async (e) => {
-    const input = e.target.closest('[data-gallery-input]');
-    if (!input?.files[0]) return;
-    const fd = new FormData();
-    fd.append('photo', await Acolia.shrinkImage(input.files[0]));
+  // ---------- Minhas publicações (versão 1.2: substituem a galeria de 6 fotos) ----------
+  async function loadMyPosts() {
+    const box = $('[data-my-posts]');
     try {
-      me = await api(`/api/professional/gallery/${input.dataset.galleryInput}`, { method: 'POST', form: fd });
-      renderGallery();
-      toast('Foto adicionada à galeria!');
-    } catch (ex) { toast(ex.message, 'error'); }
+      const data = await api(`/api/social/professionals/${me.id}/posts?limit=60`);
+      box.innerHTML = data.items.length
+        ? data.items.map((x) => `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação"><img src="${esc(x.image)}" alt="" loading="lazy"></button>`).join('')
+        : '<p class="muted small" style="grid-column:1/-1;margin:0">Você ainda não publicou nada.</p>';
+    } catch (e) { box.innerHTML = `<p class="muted small">${esc(e.message)}</p>`; }
+  }
+  $('[data-my-posts]').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-post-open]');
+    if (b) { await AcoliaSocial.openPost(Number(b.dataset.postOpen)); loadMyPosts(); }
   });
-  $('[data-gallery-edit]').addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-gallery-remove]');
-    if (!b) return;
-    if (!await confirmDialog(`Remover a Foto ${b.dataset.galleryRemove} da galeria?`, { okLabel: 'Remover', danger: true })) return;
-    me = await api(`/api/professional/gallery/${b.dataset.galleryRemove}`, { method: 'DELETE' });
-    renderGallery();
-    toast('Foto removida');
-  });
+  $('[data-my-new-post]').addEventListener('click', () => AcoliaSocial.openNewPost(loadMyPosts));
+  loadMyPosts();
 
   $('[data-photo-input]').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -212,12 +198,41 @@
     onNavigate: (id) => { const h = id ? `#conversas/${id}` : '#conversas'; if (location.hash.startsWith('#conversas') && location.hash !== h) history.replaceState(null, '', h); },
   });
 
+  // ---------- Início estilo Instagram e outros profissionais (versão 1.2) ----------
+  const openPro = (id) => { location.hash = id === me.id ? 'perfil' : `verpro/${id}`; };
+  AcoliaSocial.setContext({ role: 'professional', me, onOpenProfile: openPro });
+  let home = null;
+  let catalogMounted = false;
+
+  async function showPro(id) {
+    const box = $('[data-pro-view]');
+    box.innerHTML = '<div class="spinner"></div>';
+    try {
+      const p = await api(`/api/professionals/${id}`);
+      // Profissional não manda mensagem para profissional: só segue, curte e comenta
+      box.innerHTML = AcoliaProfile.render(p);
+      AcoliaSocial.bindProfile(box, p);
+    } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  }
+
   // ---------- Rotas ----------
   function route() {
-    const [view, arg] = (location.hash.slice(1) || 'conversas').split('/');
-    const v = ['conversas', 'atendimento', 'perfil', 'conta'].includes(view) ? view : 'conversas';
+    const [view, arg] = (location.hash.slice(1) || 'inicio').split('/');
+    const v = ['inicio', 'profissionais', 'verpro', 'conversas', 'atendimento', 'perfil', 'conta'].includes(view) ? view : 'inicio';
     $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
-    $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === v));
+    $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'verpro' ? 'profissionais' : v)));
+    if (v === 'inicio' && !home) {
+      home = AcoliaSocial.mountHome($('[data-home]'), {
+        role: 'professional', me, socket, onOpenProfile: openPro,
+        onFindPros: () => { location.hash = 'profissionais'; },
+        onUnread: (n) => $$('[data-home-badge]').forEach((el) => { el.textContent = n ? String(n) : ''; }),
+      });
+    }
+    if (v === 'profissionais' && !catalogMounted) {
+      catalogMounted = true;
+      AcoliaCatalog.mount($('[data-catalog]'), { loggedIn: false, viewerRole: 'professional', profileHref: (p) => `#verpro/${p.id}` });
+    }
+    if (v === 'verpro' && arg) showPro(Number(arg));
     if (v === 'atendimento') loadCalls().catch((e) => toast(e.message, 'error'));
     if (v === 'conversas') {
       if (arg && chat.current?.id !== Number(arg)) chat.open(Number(arg));
