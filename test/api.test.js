@@ -272,8 +272,9 @@ test('outro paciente não acessa a conversa', async () => {
   assert.equal(r.status, 404);
   // e o paciente de SP vê o profissional do PA depois dos locais (sem "near")
   let list = await other.get('/api/professionals');
-  assert.equal(list.data.items.length, 0, 'por padrão só aparecem os do estado do paciente (SP)');
-  assert.equal(list.data.state, 'SP');
+  assert.equal(list.data.state, null, 'ninguém em SP ainda: mostra o Brasil todo');
+  assert.equal(list.data.widened, 'brasil');
+  assert.ok(list.data.items.length > 0);
   list = await other.get('/api/professionals?state=todos');
   assert.equal(list.data.items[0].near, false, 'pelo filtro vê outros estados');
 });
@@ -805,6 +806,13 @@ test('vitrine do paciente: filtro automático pelo estado e, se houver, pelo mun
   r = await other.get('/api/professionals?auto=1');
   assert.equal(r.data.state, 'SP');
   assert.equal(r.data.city, null, 'sem profissionais no município, filtra só o estado');
+  // Paciente de um estado sem nenhum profissional: mostra o Brasil todo
+  const far = client();
+  assert.equal((await far.post('/api/auth/patient/register', { name: 'Ana Acre', cpf: '987.654.321-00', state: 'AC', city: 'Rio Branco', password: '123456' })).status, 201);
+  r = await far.get('/api/professionals?auto=1');
+  assert.equal(r.data.state, null);
+  assert.equal(r.data.widened, 'brasil');
+  assert.ok(r.data.items.length > 0 && r.data.items.some((p) => p.state === 'SP'), 'vê profissionais de outros estados');
 });
 
 test('v1.2 — seguir, feed (não vistas primeiro), curtir, comentar, stories e notificações', async () => {

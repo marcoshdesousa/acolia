@@ -116,7 +116,9 @@
       if (opts.viewerRole === 'professional') { h.textContent = ''; return; }
       if (!logged) { h.innerHTML = 'Profissionais em destaque. <a href="/cadastro-paciente">Crie sua conta</a> para ver valores, localização e conversar.'; return; }
       if (form.place.value.trim() || form.sort.value || form.q.value.trim()) { h.textContent = ''; return; }
-      if (data.city && data.state) {
+      if (data.widened === 'brasil') {
+        h.innerHTML = `Ainda não temos profissionais em <b>${esc(data.my_city)} - ${esc(data.my_state)}</b>, então mostramos os de <b>todo o Brasil</b> — todos atendem online.`;
+      } else if (data.city && data.state) {
         h.innerHTML = `Mostrando profissionais de <b>${esc(data.city)} - ${esc(data.state)}</b>, perto de você. Para ver outros lugares, use <b>Filtrar</b> ou <a href="#" data-clear-link>ver todos</a>.`;
       } else if (data.state) {
         h.innerHTML = `Mostrando profissionais de <b>${esc(data.state)}</b>. Para ver outros estados, use <b>Filtrar</b> ou <a href="#" data-clear-link>ver todos</a>.`;

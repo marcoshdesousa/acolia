@@ -45,7 +45,13 @@ router.get('/professionals', (req, res) => {
 
   // Estado: paciente logado começa no próprio estado; "todos" libera o Brasil inteiro
   let state = U.isUf(req.query.state) ? req.query.state.toUpperCase() : '';
-  if (!state && me && req.query.state === undefined && !q) state = me.state;
+  let widened = null;
+  if (!state && me && req.query.state === undefined && !q) {
+    state = me.state;
+    // Plataforma nova: se ainda não há ninguém no estado do paciente, mostra o Brasil todo
+    // (todos atendem online), para ele não dar de cara com a vitrine vazia
+    if (!rows.some((p) => p.state === state)) { state = ''; widened = 'brasil'; }
+  }
   let city = U.norm(req.query.city);
   let cityLabel = U.cleanText(req.query.city, 80);
   // Filtro automático do paciente: o estado dele e, se houver profissionais no município dele, só eles
@@ -79,6 +85,9 @@ router.get('/professionals', (req, res) => {
     loggedIn: !!me,
     state: state || null,
     city: city ? cityLabel : null,
+    widened,
+    my_state: me ? me.state : null,
+    my_city: me ? me.city : null,
     items: rows.map((p) => (me
       ? { ...publicProfessional(p, { loggedIn: true, favorite: favSet.has(p.id) }), near: near(p) === 0 }
       : publicProfessional(p, { loggedIn: viewerIsPro }))),
