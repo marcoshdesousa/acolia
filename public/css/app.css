@@ -390,3 +390,6 @@ footer.site .social { width: auto; margin: 0; }
 .gallery-slot .thumb { aspect-ratio: 1; border-radius: 8px; background: var(--primary-soft); display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--muted); font-size: .8rem; }
 .gallery-slot .thumb img { width: 100%; height: 100%; object-fit: cover; }
 .gallery-slot .lbl { font-weight: 700; font-size: .85rem; }
+.lock-link { display: inline-flex; align-items: center; gap: 5px; font-size: .85rem; font-weight: 700; color: var(--primary); text-decoration: none; background: var(--primary-soft); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.lock-link:hover { text-decoration: underline; }
+.gallery-locked { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-decoration: none; color: var(--primary); font-size: .8rem; font-weight: 700; text-align: center; padding: 8px; background: repeating-linear-gradient(45deg, var(--primary-soft), var(--primary-soft) 10px, var(--line) 10px, var(--line) 20px); cursor: pointer; }

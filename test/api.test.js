@@ -181,16 +181,21 @@ test('profissional entra (código ou e-mail) e edita o perfil', async () => {
   assert.equal(r.data.name, 'João Pereira');
 });
 
-test('vitrine: visitante não vê valores nem localização; paciente vê', async () => {
+test('vitrine: visitante vê o básico (local), mas não valores, "Sobre" nem endereço; paciente vê tudo', async () => {
   let r = await anon.get('/api/professionals');
   assert.equal(r.data.items.length, 1);
   const p = r.data.items[0];
   assert.equal(p.locked, true);
   assert.equal(p.price_cents, undefined);
-  assert.equal(p.city, undefined);
+  assert.equal(p.city, 'Parauapebas', 'localização aparece para todos');
   assert.equal(p.clinic_address, undefined);
+  assert.equal(p.bio, undefined, '"Sobre" só com conta');
+  assert.equal(p.has_bio, true);
   r = await anon.get(`/api/professionals/${proId}`);
   assert.equal(r.data.price_cents, undefined);
+  assert.equal(r.data.has_price, true);
+  assert.deepEqual(r.data.package_sessions, [4], 'mostra que tem pacote, sem o valor');
+  assert.equal(JSON.stringify(r.data).includes('520'), false, 'valor do pacote não vaza');
 
   r = await pat.get('/api/professionals');
   assert.equal(r.data.items[0].price_cents, 15000);
@@ -403,12 +408,12 @@ test('admin cadastra profissional já aprovado', async () => {
   const names = async (sort) => (await patient.get(`/api/professionals?state=todos&sort=${sort}`)).data.items.map((x) => x.name);
   assert.deepEqual(await names('preco_menor'), ['Rui Alves', 'João Pereira', 'Ana Costa']);
   assert.deepEqual(await names('preco_maior'), ['João Pereira', 'Rui Alves', 'Ana Costa']);
-  // Visitante sem conta também filtra e ordena, mas continua sem ver valor e local
+  // Visitante sem conta também filtra e ordena; vê o local, mas não o valor
   const v = client();
   let r2 = await v.get('/api/professionals?state=SP&sort=preco_menor');
   assert.deepEqual(r2.data.items.map((x) => x.name), ['Rui Alves', 'Ana Costa']);
   assert.equal(r2.data.items[0].price_cents, undefined);
-  assert.equal(r2.data.items[0].city, undefined);
+  assert.equal(r2.data.items[0].city, 'Campinas');
   r2 = await v.get('/api/professionals?max_price=100');
   assert.deepEqual(r2.data.items.map((x) => x.name), ['Rui Alves']);
   // Destaques: quem tem mais conversas/atendimentos aparece primeiro para o visitante
@@ -618,7 +623,7 @@ test('profissional só vê a conversa depois que o paciente manda mensagem', asy
   assert.equal(r.status, 201);
 });
 
-test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (galeria e Instagram só com conta)', async () => {
+test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitante vê as 2 primeiras)', async () => {
   const created = await admin.post('/api/admin/professionals', {
     name: 'Lia Campos', profession: 'Psicólogo(a)', registry: 'X-10', email: 'lia@example.com', phone: '11966665555', state: 'SP', city: 'Campinas',
   });
@@ -654,11 +659,16 @@ test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (galeria
 
   const anonView = (await anon.get(`/api/professionals/${created.data.id}`)).data;
   assert.equal(anonView.session_minutes, 50, 'duração aparece para todos');
-  assert.equal(anonView.gallery, undefined, 'visitante não vê a galeria');
-  assert.equal(anonView.instagram, undefined, 'visitante não vê o Instagram');
+  assert.equal(anonView.instagram, 'lia.psi', 'Instagram aparece para todos');
+  assert.equal(anonView.gallery.length, 1, 'visitante vê até 2 fotos');
+  for (const s of [1, 2, 4]) await upload(s);
+  const anon2 = (await anon.get(`/api/professionals/${created.data.id}`)).data;
+  assert.equal(anon2.gallery.length, 2, 'visitante vê só as 2 primeiras');
+  assert.equal(anon2.gallery_hidden, 2, 'e sabe quantas faltam');
   const pt = client();
   await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
   const patView = (await pt.get(`/api/professionals/${created.data.id}`)).data;
-  assert.equal(patView.gallery.length, 1, 'paciente vê só as fotos colocadas');
+  assert.equal(patView.gallery.length, 4, 'paciente vê todas as fotos colocadas');
+  assert.equal(patView.gallery_hidden, 0);
   assert.equal(patView.instagram, 'lia.psi');
 });

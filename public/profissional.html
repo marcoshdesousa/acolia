@@ -39,7 +39,7 @@
     function needAccount() {
       modal({
         title: 'Crie sua conta grátis',
-        html: '<p>Para mandar mensagem, favoritar e ver valores e localização, crie sua conta. Depois você volta direto para este perfil.</p>',
+        html: '<p>Para mandar mensagem, favoritar e ver os valores, o endereço, o "Sobre" e toda a galeria, crie sua conta grátis. Depois você volta direto para este perfil.</p>',
         actions: [{ label: 'Já tenho conta', value: 'entrar', class: 'secondary' }, { label: 'Criar conta', value: 'criar' }],
       }).then((v) => {
         if (v === 'criar') location.href = '/cadastro-paciente?next=' + encodeURIComponent(here);

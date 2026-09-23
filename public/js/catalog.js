@@ -4,14 +4,16 @@
   const { $, $$, esc, api, ICONS, avatar, money, toast, modal, ufOptions, bindUfCity } = window.Acolia;
 
   function priceLine(p) {
-    if (p.locked) return `<div class="locked">${ICONS.lock.replace('<svg', '<svg style="width:18px;height:18px"')} Crie sua conta grátis para ver valores e localização</div>`;
+    const where = `<div class="meta"><span class="badge ${p.near ? 'ok' : ''}">${ICONS.pin.replace('<svg', '<svg style="width:14px;height:14px"')} ${esc(p.city)} - ${esc(p.state)}</span>
+      ${p.has_clinic ? '<span class="badge">Atende presencial</span>' : '<span class="badge">Somente online</span>'}</div>`;
+    if (p.locked) {
+      return `<div class="locked">${ICONS.lock.replace('<svg', '<svg style="width:18px;height:18px"')} Valores: crie sua conta grátis para ver</div>${where}`;
+    }
     const bits = [];
     if (p.price_cents != null) bits.push(`<span class="price">${money(p.price_cents)}</span> <span class="muted small">/ sessão online</span>`);
     else bits.push('<span class="muted small">Valor a combinar</span>');
     if (p.packages?.length) bits.push(`<span class="badge primary">${p.packages.length} pacote${p.packages.length > 1 ? 's' : ''}</span>`);
-    return `<div>${bits.join(' ')}</div>
-      <div class="meta"><span class="badge ${p.near ? 'ok' : ''}">${ICONS.pin.replace('<svg', '<svg style="width:14px;height:14px"')} ${esc(p.city)} - ${esc(p.state)}</span>
-      ${p.has_clinic ? '<span class="badge">Atende presencial</span>' : '<span class="badge">Somente online</span>'}</div>`;
+    return `<div>${bits.join(' ')}</div>${where}`;
   }
 
   function card(p, { profileHref }) {
@@ -141,7 +143,7 @@
     function needAccount() {
       modal({
         title: 'Crie sua conta grátis',
-        html: '<p>Para favoritar, mandar mensagem e ver valores e localização dos profissionais, é preciso ter uma conta. É rápido.</p>',
+        html: '<p>Para favoritar, mandar mensagem e ver os valores dos profissionais, é preciso ter uma conta grátis. É rápido.</p>',
         actions: [{ label: 'Já tenho conta', value: 'entrar', class: 'secondary' }, { label: 'Criar conta', value: 'criar' }],
       }).then((v) => {
         if (v === 'criar') location.href = '/cadastro-paciente';

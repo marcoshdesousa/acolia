@@ -25,7 +25,11 @@ function parseGallery(json) {
   return Array.from({ length: GALLERY_SLOTS }, (_, i) => (typeof arr[i] === 'string' && arr[i].startsWith('/uploads/') ? arr[i] : null));
 }
 
-// Visitante sem conta vê o profissional, mas sem valores e sem localização
+// Visitante sem conta tem um acesso básico: vê localização, Instagram, duração da sessão,
+// se há pacotes e as 2 primeiras fotos da galeria. Valores, o "Sobre", o endereço da
+// clínica e o resto da galeria ficam para quem cria a conta grátis.
+const FREE_GALLERY = 2;
+
 function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
   const base = {
     id: p.id,
@@ -38,21 +42,38 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     photo: p.photo,
     session_minutes: p.session_minutes || null,
   };
-  if (!loggedIn) return { ...base, locked: true };
+  const gallery = parseGallery(p.gallery).filter(Boolean);
+  const common = {
+    state: p.state,
+    city: p.city,
+    has_clinic: !!p.has_clinic,
+    instagram: p.instagram || '',
+  };
+  if (!loggedIn) {
+    const packages = parsePackages(p.packages);
+    const { bio, ...rest } = base;
+    return {
+      ...rest,
+      ...common,
+      locked: true,
+      has_bio: !!bio,
+      has_price: p.price_cents != null,
+      package_sessions: packages.map((k) => k.sessions),
+      gallery: gallery.slice(0, FREE_GALLERY),
+      gallery_hidden: Math.max(0, gallery.length - FREE_GALLERY),
+    };
+  }
   return {
     ...base,
     locked: false,
     favorite: !!favorite,
+    ...common,
     price_cents: p.price_cents,
     packages: parsePackages(p.packages),
-    state: p.state,
-    city: p.city,
-    has_clinic: !!p.has_clinic,
     clinic_name: p.has_clinic ? p.clinic_name : '',
     clinic_address: p.has_clinic ? p.clinic_address : '',
-    // Galeria e Instagram: só para quem tem conta
-    gallery: parseGallery(p.gallery).filter(Boolean),
-    instagram: p.instagram || '',
+    gallery,
+    gallery_hidden: 0,
   };
 }
 
