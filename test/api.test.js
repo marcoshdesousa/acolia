@@ -1467,7 +1467,9 @@ test('documentos: quem pode emitir o quê, envio no chat, verificação pública
   const opt = (await psiq.cl.get(`/api/docs/options/${cPsiq}`)).data;
   assert.equal(opt.patient.cpf, CPF, 'CPF do paciente já vem preenchido');
 
-  const base0 = { patient_name: 'Rita Souza Lima', cpf: CPF, birth_date: '1990-05-10', attended_at: '2026-09-20T14:30' };
+  const SIG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  assert.equal((await psiq.cl.post('/api/docs', { patient_name: 'Rita Souza Lima', cpf: CPF, birth_date: '1990-05-10', attended_at: '2026-09-20T14:30', conversation_id: cPsiq, kind: 'atestado' })).status, 400, 'sem assinatura não envia');
+  const base0 = { patient_name: 'Rita Souza Lima', cpf: CPF, birth_date: '1990-05-10', attended_at: '2026-09-20T14:30', signature: SIG };
   assert.equal((await psico.cl.post('/api/docs', { ...base0, conversation_id: cPsico, kind: 'receita', items: [{ name: 'X', instructions: 'y' }] })).status, 403, 'psicólogo não receita');
   assert.equal((await analista.cl.post('/api/docs', { ...base0, conversation_id: cAna, kind: 'atestado' })).status, 403, 'psicanalista não dá atestado');
   assert.equal((await psiq.cl.post('/api/docs', { ...base0, conversation_id: cPsiq, kind: 'atestado', cid: 'F41.1' })).status, 400, 'CID só com autorização');
@@ -1485,6 +1487,7 @@ test('documentos: quem pode emitir o quê, envio no chat, verificação pública
   assert.equal(full.data.professional.registry, 'CRM-SP 123456');
   assert.equal(full.data.items[0].name, 'Sertralina');
   assert.ok(full.qr.includes('<svg'), 'QR Code');
+  assert.equal(full.signature, SIG, 'a assinatura vai junto');
   // Verificação pública (qualquer pessoa com o código): CPF mascarado, sem nascimento
   const pub = (await anon.get(`/api/docs/${code.toLowerCase()}`)).data;
   assert.equal(pub.masked, true);

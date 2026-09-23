@@ -125,8 +125,19 @@
     g.fillStyle = INK;
     g.fillText(`${p.city ? `${p.city}${p.state ? `/${p.state}` : ''}, ` : ''}${longDate(issued)}.`, M, Math.max(y + 60, 1040));
 
-    // Assinatura do profissional
+    // Assinatura do profissional (feita com o dedo, acima da linha)
     const sy = 1200;
+    if (doc.signature) {
+      const sig = await loadImg(doc.signature);
+      if (sig) {
+        const bw = 560;
+        const bh = 140;
+        const k = Math.min(bw / sig.width, bh / sig.height);
+        const w = sig.width * k;
+        const h = sig.height * k;
+        g.drawImage(sig, W / 2 - w / 2, sy - h - 6, w, h);
+      }
+    }
     g.fillStyle = INK;
     g.fillRect(W / 2 - 300, sy, 600, 2);
     g.textAlign = 'center';
@@ -215,6 +226,79 @@
     download(canvas.toDataURL('image/png'), name);
   }
 
+  // ---------- Assinatura com o dedo ----------
+  // Abre um quadro branco; o profissional assina com o dedo (ou mouse). Devolve a imagem PNG
+  // (fundo transparente, recortada) ou null se cancelar. A assinatura só vale para este documento.
+  function signaturePad(title) {
+    return new Promise((resolve) => {
+      let result = null;
+      modal({
+        title: 'Sua assinatura',
+        html: `<p class="small muted" style="margin-top:0">Assine com o dedo no quadro abaixo. Ela vai no ${esc(title.toLowerCase())}, acima do seu nome e registro, e só vale para este documento.</p>
+          <div class="sig-box"><canvas data-sig></canvas><span class="sig-line"></span><span class="sig-hint" data-sig-hint>Assine aqui</span></div>
+          <button type="button" class="btn ghost sm" data-sig-clear style="margin-top:6px">Limpar e assinar de novo</button>`,
+        actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
+          label: 'Continuar',
+          handler: (dlg) => {
+            const cv = $('[data-sig]', dlg);
+            if ((cv._ink || 0) < 60) { toast('Faça a sua assinatura no quadro.', 'error'); return false; }
+            result = trimCanvas(cv);
+            return true;
+          },
+        }],
+        onOpen: (dlg) => {
+          const cv = $('[data-sig]', dlg);
+          const box = cv.parentElement;
+          const ratio = Math.max(2, window.devicePixelRatio || 1);
+          const size = () => { cv.width = box.clientWidth * ratio; cv.height = box.clientHeight * ratio; };
+          size();
+          const g = cv.getContext('2d');
+          const pen = () => { g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#14213d'; g.lineWidth = 2.6 * ratio; };
+          pen();
+          cv._ink = 0;
+          let last = null;
+          const pos = (e) => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * ratio, y: (e.clientY - r.top) * ratio }; };
+          cv.addEventListener('pointerdown', (e) => { e.preventDefault(); cv.setPointerCapture(e.pointerId); last = pos(e); $('[data-sig-hint]', dlg).classList.add('hidden'); });
+          cv.addEventListener('pointermove', (e) => {
+            if (!last) return;
+            const p = pos(e);
+            g.beginPath(); g.moveTo(last.x, last.y);
+            // traço suave: curva até o meio do caminho
+            const mx = (last.x + p.x) / 2;
+            const my = (last.y + p.y) / 2;
+            g.quadraticCurveTo(last.x, last.y, mx, my); g.lineTo(p.x, p.y); g.stroke();
+            cv._ink += Math.hypot(p.x - last.x, p.y - last.y) / ratio;
+            last = p;
+          });
+          const end = () => { last = null; };
+          cv.addEventListener('pointerup', end);
+          cv.addEventListener('pointercancel', end);
+          $('[data-sig-clear]', dlg).addEventListener('click', () => { g.clearRect(0, 0, cv.width, cv.height); cv._ink = 0; $('[data-sig-hint]', dlg).classList.remove('hidden'); });
+        },
+      }).then(() => resolve(result));
+    });
+  }
+  // Recorta o espaço vazio em volta da assinatura e reduz o tamanho
+  function trimCanvas(cv) {
+    const g = cv.getContext('2d');
+    const { data, width, height } = g.getImageData(0, 0, cv.width, cv.height);
+    let x0 = width; let y0 = height; let x1 = 0; let y1 = 0;
+    for (let y = 0; y < height; y += 2) {
+      for (let x = 0; x < width; x += 2) {
+        if (data[(y * width + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      }
+    }
+    const padPx = 10;
+    x0 = Math.max(0, x0 - padPx); y0 = Math.max(0, y0 - padPx); x1 = Math.min(width, x1 + padPx); y1 = Math.min(height, y1 + padPx);
+    const w = x1 - x0;
+    const h = y1 - y0;
+    const scale = Math.min(1, 700 / w);
+    const out = document.createElement('canvas');
+    out.width = Math.round(w * scale); out.height = Math.round(h * scale);
+    out.getContext('2d').drawImage(cv, x0, y0, w, h, 0, 0, out.width, out.height);
+    return out.toDataURL('image/png');
+  }
+
   // ---------- Formulário (profissional) ----------
   async function openForm(conversationId, onSent) {
     let opt;
@@ -232,10 +316,13 @@
       },
     });
     if (!picked) return;
-    formFor(picked, opt, conversationId, onSent);
+    const title = opt.kinds.find((k) => k.kind === picked).title;
+    const signature = await signaturePad(title); // 1º assina
+    if (!signature) return; // cancelou: a assinatura não fica guardada
+    formFor(picked, opt, conversationId, onSent, signature); // 2º confere os dados e envia
   }
 
-  function formFor(kind, opt, conversationId, onSent) {
+  function formFor(kind, opt, conversationId, onSent, signature) {
     const title = opt.kinds.find((k) => k.kind === kind).title;
     const att = opt.attended_at ? localInput(fromServer(opt.attended_at)) : localInput(new Date());
     const common = `
@@ -266,14 +353,16 @@
         <input data-i="instructions" placeholder="Como tomar (ex.: 1 comprimido pela manhã, por 30 dias)" maxlength="300"></div>`;
     modal({
       title,
-      html: `<div class="form-error hidden" data-err></div>${common}${extra}
-        <p class="small muted" style="margin-bottom:0">O documento sai com o seu nome e registro (${esc(opt.professional.registry)}). Você é o responsável pelo conteúdo.</p>`,
+      html: `<div class="form-error hidden" data-err></div>
+        <div class="sig-preview"><span class="small muted">Sua assinatura</span><img src="${signature}" alt="Sua assinatura"></div>
+        ${common}${extra}
+        <p class="small muted" style="margin-bottom:0">O documento sai assinado, com o seu nome e registro (${esc(opt.professional.registry)}). Você é o responsável pelo conteúdo. Se cancelar, a assinatura é descartada.</p>`,
       actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
-        label: 'Emitir e enviar',
+        label: 'Enviar documento',
         handler: async (dlg) => {
           const v = (k) => { const el = $(`[data-f="${k}"]`, dlg); return el ? (el.type === 'checkbox' ? el.checked : el.value) : undefined; };
           const err = $('[data-err]', dlg);
-          const body = { conversation_id: conversationId, kind, patient_name: v('patient_name'), cpf: v('cpf'), birth_date: v('birth_date'), attended_at: v('attended_at') };
+          const body = { conversation_id: conversationId, kind, signature, patient_name: v('patient_name'), cpf: v('cpf'), birth_date: v('birth_date'), attended_at: v('attended_at') };
           if (!isValidCpf(body.cpf)) { err.textContent = 'CPF inválido.'; err.classList.remove('hidden'); return false; }
           if (kind === 'atestado') Object.assign(body, { cid: v('cid'), cid_authorized: v('cid_authorized') });
           if (kind === 'receita') body.items = $$('[data-item]', dlg).map((it) => Object.fromEntries($$('[data-i]', it).map((x) => [x.dataset.i, x.value])));

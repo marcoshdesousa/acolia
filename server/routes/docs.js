@@ -33,6 +33,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS documents (
   revoked_at TEXT
 )`);
 
+// Assinatura feita com o dedo na hora de emitir (imagem PNG que vai na folha, acima da linha)
+try { db.exec('ALTER TABLE documents ADD COLUMN signature TEXT'); } catch { /* já existe */ }
+const SIGNATURE_MAX = 250 * 1024;
+
 const MEDICO = ['Psiquiatra'];
 const PSICO = ['Psicólogo(a)', 'Neuropsicólogo(a)'];
 function allowedKinds(profession) {
@@ -74,7 +78,7 @@ function docOut(d, { masked = false } = {}) {
     data.cpf = data.cpf ? `***.${data.cpf.slice(4, 7)}.${data.cpf.slice(8, 11)}-**` : '';
     data.birth_date = '';
   }
-  return { code: d.code, kind: d.kind, title: data.title, created_at: d.created_at, revoked: !!d.revoked_at, revoked_at: d.revoked_at, data, masked };
+  return { code: d.code, kind: d.kind, title: data.title, created_at: d.created_at, revoked: !!d.revoked_at, revoked_at: d.revoked_at, data, masked, signature: d.signature || null };
 }
 
 async function qrSvg(code, req) {
@@ -118,6 +122,10 @@ router.post('/', (req, res) => {
       : 'Sua profissão não permite emitir atestado. Você pode fazer um encaminhamento.');
   }
   chat.assertCanSend('professional', c);
+  // Assinatura obrigatória: feita com o dedo agora, só vale para este documento
+  const signature = String(req.body.signature || '');
+  if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(signature)) throw new U.HttpError(400, 'Assine o documento antes de enviar.');
+  if (signature.length > SIGNATURE_MAX) throw new U.HttpError(400, 'Assinatura muito grande. Assine de novo.');
   const name = U.cleanText(req.body.patient_name, 120);
   if (name.split(/\s+/).length < 2) throw new U.HttpError(400, 'Informe o nome completo do paciente.');
   const cpf = U.onlyDigits(req.body.cpf);
@@ -157,8 +165,8 @@ router.post('/', (req, res) => {
     data.reason = U.cleanText(req.body.reason, 800);
   }
   const code = newCode();
-  db.prepare('INSERT INTO documents (code, conversation_id, professional_id, patient_id, kind, data) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(code, c.id, pro.id, c.patient_id, kind, JSON.stringify(data));
+  db.prepare('INSERT INTO documents (code, conversation_id, professional_id, patient_id, kind, data, signature) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(code, c.id, pro.id, c.patient_id, kind, JSON.stringify(data), signature);
   const msg = chat.postMessage(req, c, 'doc', `${code}|${data.title}`);
   res.status(201).json({ code, message: msg });
 });

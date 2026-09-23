@@ -90,7 +90,7 @@ Testes: `npm test`
 
 
 ## Documentos do profissional (no chat)
-Botão 📄 no chat do profissional → escolhe o documento; nome e CPF do paciente e o horário do último atendimento já vêm preenchidos (dá para corrigir), e a data de nascimento é digitada. O documento chega na conversa e o paciente **vê, salva a imagem ou compartilha**.
+Botão 📄 no chat do profissional → escolhe o documento → **assina com o dedo** no quadro (a assinatura vai na folha, acima do nome e do registro, e só vale para aquele documento; se cancelar, é descartada) → confere os dados → **Enviar documento**. Nome e CPF do paciente e o horário do último atendimento já vêm preenchidos (dá para corrigir), e a data de nascimento é digitada. O documento chega na conversa e o paciente **vê, salva a imagem ou compartilha**.
 - **Quem pode emitir**: **Receita** (medicamentos) → só **Psiquiatra (CRM)**. **Atestado** → Psiquiatra ("Atestado médico", CFM Res. 1.658/2002) e **Psicólogo(a) / Neuropsicólogo(a)** ("Atestado psicológico", CFP Res. 06/2019) — sempre **1 dia** (o do atendimento); CID só com autorização do paciente. **Encaminhamento** (presencial ou online) → **todos**. **Laudo**: não é feito pela plataforma.
 - A folha sai com o nome completo e o registro (CRM/CRP) do profissional, "assinado eletronicamente" com data e hora, **código de verificação + QR Code** e, no rodapé, o símbolo e o nome da Acolia com o aviso de que o conteúdo é responsabilidade do profissional.
 - **Verificação pública**: `site.com/v/CÓDIGO` (ou o QR Code) mostra se o documento é válido, quem emitiu e para quem (CPF mascarado). Se o profissional apagar a mensagem do documento para todos, ele fica **cancelado**.
