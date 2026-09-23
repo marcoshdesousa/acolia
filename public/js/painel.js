@@ -5,7 +5,7 @@
     fmtDate, parseDate, copyText, confirmDialog, modal } = Acolia;
 
   const auth = await api('/api/auth/me').catch(() => ({}));
-  if (auth.role !== 'professional') { location.replace('/entrar#profissional'); return; }
+  if (auth.role !== 'professional') { location.replace(location.hash ? '/entrar?next=' + encodeURIComponent('/painel' + location.hash) + '#profissional' : '/'); return; }
   let me = auth.user;
   const cfg = await api('/api/config');
 

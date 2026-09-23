@@ -327,14 +327,25 @@
     });
   }
 
+  // Sair: desconecta na hora e volta para a página inicial (sem precisar atualizar a página).
+  // Desligar as notificações do aparelho tem limite de tempo para nunca travar a saída.
   async function logout(to = '/') {
-    await stopPushOnThisDevice();
-    await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
-    location.href = to;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    await Promise.race([stopPushOnThisDevice().catch(() => {}), wait(1500)]);
+    await Promise.race([api('/api/auth/logout', { method: 'POST' }).catch(() => {}), wait(4000)]);
+    location.replace(to);
   }
 
   // ---------- App instalável (PWA) ----------
   const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  // App instalado: toda vez que abre, começa pela página inicial (lá tem o botão para entrar).
+  // Links de notificação (/app#chat/…, /painel#conversas/…) abrem direto onde devem.
+  try {
+    if (isStandalone() && !sessionStorage.getItem('acolia-aberto')) {
+      sessionStorage.setItem('acolia-aberto', '1');
+      if (['/app', '/painel', '/entrar', '/admin'].includes(location.pathname) && !location.hash && !location.search) location.replace('/');
+    }
+  } catch { /* sem sessionStorage: segue normal */ }
   const platform = () => {
     const ua = navigator.userAgent;
     if (/iphone|ipad|ipod/i.test(ua) || (ua.includes('Macintosh') && 'ontouchend' in document)) return 'ios';

@@ -684,3 +684,7 @@ img.avatar[src="/img/logo-simbolo.png"] { object-fit: contain; background: var(-
 .gallery-item .off-stats { position: absolute; left: 6px; bottom: 6px; font-size: .72rem; font-weight: 800; color: #fff; background: rgba(0,0,0,.55); padding: 2px 7px; border-radius: 999px; }
 .off-imgs { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; }
 .off-imgs img { width: 100%; flex: none; border-radius: 12px; scroll-snap-align: start; max-height: 60vh; object-fit: contain; background: var(--surface-2); }
+/* Página inicial com a conta já conectada: botão para abrir o app/sistema/administrativo */
+.enter-box { display: grid; gap: 10px; padding: 18px; max-width: 420px; }
+.enter-box .enter-btn { font-size: 1.05rem; padding: 14px 18px; }
+.enter-box [data-logout-home] { justify-self: start; }

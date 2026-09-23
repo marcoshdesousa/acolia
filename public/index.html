@@ -99,16 +99,27 @@
     $('[data-logo]').innerHTML = ICONS.logo;
     $('[data-year]').textContent = new Date().getFullYear();
     $$('[data-i]').forEach((el) => { if (el.classList.contains('choice-icon')) el.innerHTML = ICONS[el.dataset.i]; else el.outerHTML = ICONS[el.dataset.i]; });
+    // Voltou pelo "voltar" do navegador depois de sair/entrar: recarrega para mostrar o estado certo
+    window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
     const me = await api('/api/auth/me').catch(() => ({ role: null }));
     const nav = $('[data-nav]');
-    if (me.role === 'patient') {
-      nav.innerHTML = `<a class="btn sm" href="/app">Abrir meu app</a>`;
-      $('[data-choose]').innerHTML = '<a class="btn" href="/app">Abrir meu app</a>';
+    // Já entrou: a página inicial mostra o botão para abrir o app (paciente), o sistema
+    // (profissional) ou o administrativo (admin), e um "Sair" para trocar de conta
+    const ENTER = {
+      patient: { href: '/app', label: 'Entrar no aplicativo' },
+      professional: { href: '/painel', label: 'Entrar no sistema' },
+      admin: { href: '/admin', label: 'Entrar no administrativo' },
+    }[me.role];
+    if (ENTER) {
+      const first = String((me.user && (me.user.display_name || me.user.name || me.user.username)) || '').trim().split(/\s+/)[0];
+      nav.innerHTML = `<a class="btn sm" href="${ENTER.href}">${ENTER.label}</a>`;
+      $('[data-choose]').innerHTML = `<div class="enter-box card">
+          <div class="muted">${first ? `Olá, <b>${esc(first)}</b>! ` : ''}Você já está conectado.</div>
+          <a class="btn block enter-btn" href="${ENTER.href}" data-enter>${ENTER.label} →</a>
+          <button type="button" class="btn ghost sm" data-logout-home>Sair da conta</button>
+        </div>`;
       $('[data-have]').classList.add('hidden');
-    } else if (me.role === 'professional') {
-      nav.innerHTML = `<a class="btn sm" href="/painel">Meu painel</a>`;
-    } else if (me.role === 'admin') {
-      nav.innerHTML = `<a class="btn sm" href="/admin">Administração</a>`;
+      $('[data-logout-home]').addEventListener('click', (e) => { e.currentTarget.disabled = true; Acolia.logout('/'); });
     }
     AcoliaCatalog.mount($('[data-catalog]'), {
       loggedIn: me.role === 'patient',

@@ -12,7 +12,7 @@
     $('[data-login]').classList.remove('hidden');
     handleForm($('[data-login-form]'), async (d) => {
       await api('/api/auth/admin/login', { method: 'POST', body: d });
-      location.reload();
+      location.replace('/'); // entrou: volta para a página inicial, com o botão "Entrar no administrativo"
     });
     return;
   }
@@ -371,7 +371,7 @@
     f.reset();
     toast('Senha alterada!');
   });
-  $('[data-logout]').addEventListener('click', () => logout('/admin'));
+  $('[data-logout]').addEventListener('click', () => logout('/'));
 
   // ---------- Rotas ----------
   async function reloadAll() {

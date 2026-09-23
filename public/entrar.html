@@ -59,16 +59,18 @@
     $$('[data-tab]').forEach((b) => b.addEventListener('click', () => { show(b.dataset.tab); history.replaceState(null, '', '#' + b.dataset.tab); }));
     if (location.hash === '#profissional') show('profissional');
     maskCpf($('#cpf'));
+    // Já entrou? Volta para a página inicial (lá tem o botão para abrir o app/sistema)
+    api('/api/auth/me').then((m) => { if (m && m.role && !new URLSearchParams(location.search).get('next')) location.replace('/'); }).catch(() => {});
     const next = new URLSearchParams(location.search).get('next');
     const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
     if (safeNext) $('a[href="/cadastro-paciente"]').href = '/cadastro-paciente?next=' + encodeURIComponent(safeNext);
     handleForm($('[data-login-patient]'), async (d) => {
       await api('/api/auth/patient/login', { method: 'POST', body: d });
-      location.href = safeNext || '/app';
+      location.replace(safeNext || '/');
     });
     handleForm($('[data-login-pro]'), async (d) => {
       await api('/api/auth/professional/login', { method: 'POST', body: d });
-      location.href = safeNext || '/painel';
+      location.replace(safeNext || '/');
     });
     $('[data-recover]').addEventListener('click', async (e) => {
       e.preventDefault();

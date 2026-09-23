@@ -62,7 +62,7 @@
       if (d.password !== d.password2) throw new Error('As senhas não são iguais.');
       if (!d.terms) throw new Error('Para continuar, aceite o uso dos dados.');
       await api('/api/auth/patient/register', { method: 'POST', body: d });
-      location.href = safeNext || '/app';
+      location.replace(safeNext || '/');
     });
   })();
   </script>

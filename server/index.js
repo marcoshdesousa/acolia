@@ -53,6 +53,8 @@ function createApp() {
     next();
   });
 
+  // Respostas da API nunca ficam guardadas no navegador (ex.: depois de sair, não mostra a conta antiga)
+  app.use('/api', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   app.use('/api/auth', require('./routes/auth').router);
   app.use('/api', require('./routes/public').router);
   app.use('/api/patient', require('./routes/patient').router);

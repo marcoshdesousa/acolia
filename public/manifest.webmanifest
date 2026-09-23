@@ -4,7 +4,7 @@
   "short_name": "Acolia",
   "description": "Encontre profissionais de saúde mental, converse pelo chat e faça sua consulta online.",
   "lang": "pt-BR",
-  "start_url": "/app",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#faf9f5",
