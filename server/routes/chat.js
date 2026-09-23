@@ -123,7 +123,7 @@ router.post('/conversations/:id/messages', (req, res) => {
 });
 
 // Mensagem de voz (os dois podem mandar; fotos e vídeos não existem no chat).
-// body = "arquivo|segundos"
+// body = "arquivo|segundos|ondas" (ondas = até 64 dígitos 0-9 com a altura das barrinhas, estilo WhatsApp)
 router.post('/conversations/:id/audio', async (req, res) => {
   const c = loadConversation(req, req.params.id);
   const peer = peerOf(req.auth.role, c);
@@ -131,13 +131,14 @@ router.post('/conversations/:id/audio', async (req, res) => {
   const { handleAudio } = require('../upload');
   const file = await handleAudio(req, res);
   const secs = Math.max(1, Math.min(600, Math.round(Number(req.body.duration) || 0)));
-  res.status(201).json(postMessage(req, c, 'audio', `${file}|${secs}`));
+  const peaks = /^[0-9]{1,64}$/.test(String(req.body.peaks || '')) ? req.body.peaks : '';
+  res.status(201).json(postMessage(req, c, 'audio', `${file}|${secs}|${peaks}`));
 });
 
 // Ouvir um áudio: só quem participa da conversa
 router.get('/audio/:file', async (req, res) => {
   const file = String(req.params.file);
-  if (!/^[a-f0-9]{32}\.(webm|ogg|m4a|aac|mp3)$/.test(file)) throw new U.HttpError(404, 'Áudio não encontrado.');
+  if (!/^[a-f0-9]{32}\.(wav|webm|ogg|m4a|aac|mp3)$/.test(file)) throw new U.HttpError(404, 'Áudio não encontrado.');
   const s = side(req);
   const ok = db.prepare(`SELECT 1 FROM messages m JOIN conversations c ON c.id = m.conversation_id
     WHERE m.kind = 'audio' AND m.body LIKE ? AND c.${s.col} = ?`).get(`${file}|%`, req.auth.user.id);
@@ -145,9 +146,35 @@ router.get('/audio/:file', async (req, res) => {
   const { AUDIO_DIR } = require('../upload');
   const full = require('node:path').join(AUDIO_DIR, file);
   if (!(await require('../cloud').ensureLocalFile('audio', full))) throw new U.HttpError(404, 'Áudio não encontrado.');
-  const types = { webm: 'audio/webm', ogg: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac', mp3: 'audio/mpeg' };
+  const types = { wav: 'audio/wav', webm: 'audio/webm', ogg: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac', mp3: 'audio/mpeg' };
   res.setHeader('Cache-Control', 'private, max-age=86400');
   res.sendFile(full, { headers: { 'Content-Type': types[file.split('.').pop()] } });
+});
+
+// Apagar a própria mensagem (para todos), a qualquer momento. O conteúdo sai do banco
+// (e o arquivo do áudio é apagado); no lugar fica "Mensagem apagada".
+router.post('/messages/:id/delete', (req, res) => {
+  const role = req.auth.role;
+  const s = side(req);
+  const m = db.prepare(`SELECT m.*, c.patient_id, c.professional_id FROM messages m JOIN conversations c ON c.id = m.conversation_id
+    WHERE m.id = ? AND c.${s.col} = ?`).get(Number(req.params.id), req.auth.user.id);
+  if (!m) throw new U.HttpError(404, 'Mensagem não encontrada.');
+  if (m.sender_role !== role) throw new U.HttpError(403, 'Você só pode apagar as mensagens que você enviou.');
+  if (m.kind === 'deleted') return res.json({ ok: true });
+  if (m.kind === 'audio') {
+    const file = m.body.split('|')[0];
+    if (/^[a-f0-9]{32}\.[a-z0-9]+$/.test(file)) {
+      const { AUDIO_DIR } = require('../upload');
+      require('node:fs').promises.unlink(require('node:path').join(AUDIO_DIR, file)).catch(() => {});
+      require('../cloud').removeFile('audio', file);
+    }
+  }
+  db.prepare("UPDATE messages SET kind = 'deleted', body = '' WHERE id = ?").run(m.id);
+  const payload = { id: m.id, conversation_id: m.conversation_id };
+  rt.emit(`patient:${m.patient_id}`, 'message:deleted', payload);
+  rt.emit(`professional:${m.professional_id}`, 'message:deleted', payload);
+  require('../cloud').scheduleBackup();
+  res.json({ ok: true });
 });
 
 router.post('/conversations/:id/read', (req, res) => {

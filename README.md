@@ -22,7 +22,7 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 6. A chamada continua se a pessoa sair da tela para usar outro app: onde o navegador permite, vai para uma **janelinha flutuante** com a outra pessoa grande e você pequeno no canto (botão ao lado da câmera; no Chrome e no Safari ela também abre sozinha ao trocar de app).
 7. Câmera desligada não fica preta nem congelada: aparece a foto de perfil (ou as iniciais) num fundo da marca, na tela e na janelinha.
 
-No chat, paciente e profissional podem mandar **mensagens de voz** (até 5 minutos; ficam numa pasta privada e só quem participa da conversa ouve). Fotos e vídeos não são aceitos.
+No chat, paciente e profissional podem mandar **mensagens de voz** no estilo WhatsApp (barrinhas da voz ao vivo, parar e ouvir antes de enviar; até 5 minutos). O áudio é gravado em WAV, que toca em qualquer celular, fica numa pasta privada e só quem participa da conversa ouve. Fotos e vídeos não são aceitos.
 
 O profissional só vê uma conversa depois que o paciente manda a primeira mensagem — o profissional nunca inicia conversa.
 
@@ -34,7 +34,7 @@ O site pode ser instalado como app (Android, iPhone e computador) pelo próprio 
 
 ## Mensagens
 
-Ficam salvas no banco e **não podem ser apagadas nem editadas** (não há rota para isso e o banco tem gatilhos que impedem). Cada lado pode arquivar a conversa; ela continua disponível em "Arquivadas".
+Não podem ser editadas. Quem enviou pode **apagar a própria mensagem para todos**, a qualquer momento: o conteúdo (e o arquivo do áudio) sai do banco e no lugar fica "Mensagem apagada" (o banco tem gatilhos que impedem qualquer outra alteração). Cada lado pode arquivar a conversa; ela continua disponível em "Arquivadas".
 
 ## Colocar no ar com um clique
 

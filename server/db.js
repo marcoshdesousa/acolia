@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   UNIQUE (patient_id, professional_id)
 );
 
--- Mensagens nunca são apagadas: não existe rota de exclusão.
+-- Quem enviou pode apagar a própria mensagem: o conteúdo é apagado do banco e fica só "Mensagem apagada".
 CREATE TABLE IF NOT EXISTS messages (
   id INTEGER PRIMARY KEY,
   conversation_id INTEGER NOT NULL REFERENCES conversations(id),
@@ -111,7 +111,10 @@ CREATE INDEX IF NOT EXISTS idx_calls_active ON calls(status, patient_code);
 -- Impede que as mensagens sejam apagadas ou alteradas, mesmo por engano no código.
 CREATE TRIGGER IF NOT EXISTS messages_no_delete BEFORE DELETE ON messages
 BEGIN SELECT RAISE(ABORT, 'mensagens não podem ser apagadas'); END;
-CREATE TRIGGER IF NOT EXISTS messages_no_body_update BEFORE UPDATE OF body, sender_role, conversation_id ON messages
+-- Mensagem não pode ser editada; a única mudança permitida é apagar o conteúdo (kind = 'deleted', body vazio)
+DROP TRIGGER IF EXISTS messages_no_body_update;
+CREATE TRIGGER IF NOT EXISTS messages_only_erase BEFORE UPDATE OF body, sender_role, conversation_id, kind ON messages
+WHEN NOT (NEW.kind = 'deleted' AND NEW.body = '' AND NEW.sender_role = OLD.sender_role AND NEW.conversation_id = OLD.conversation_id)
 BEGIN SELECT RAISE(ABORT, 'mensagens não podem ser alteradas'); END;
 `);
 

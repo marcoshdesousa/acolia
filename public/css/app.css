@@ -401,19 +401,38 @@ dialog .dlg-body h2 { padding-right: 28px; }
 .mini-map { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); aspect-ratio: 16 / 10; background: var(--primary-soft); }
 .mini-map iframe { width: 100%; height: 100%; border: 0; display: block; }
 
-/* Mensagem de voz */
+/* Mensagem de voz (estilo WhatsApp) */
 .composer .mic { background: var(--primary); }
 .composer [data-send] { display: none; }
-.composer.has-text [data-send], .composer.recording [data-send] { display: inline-flex; }
-.composer.has-text .mic, .composer.recording .mic { display: none; }
-.composer .rec-bar, .composer .rec-cancel { display: none; }
-.composer.recording textarea { display: none; }
-.composer.recording .rec-bar { display: flex; align-items: center; gap: 8px; flex: 1; min-height: 44px; padding: 0 12px; font-weight: 700; color: var(--text); }
-.composer.recording .rec-cancel { display: inline-flex; color: #c0392b; }
-.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #e53935; animation: recblink 1s infinite; }
+.composer.has-text [data-send], .composer.recording [data-send], .composer.previewing [data-send] { display: inline-flex; }
+.composer.has-text .mic, .composer.recording .mic, .composer.previewing .mic { display: none; }
+.composer .rec-bar, .composer .rec-cancel, .composer .rec-preview { display: none; }
+.composer.recording textarea, .composer.previewing textarea { display: none; }
+.composer.recording .rec-bar { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; min-height: 44px; padding: 0 4px 0 10px; border-radius: 22px; background: var(--surface-2, var(--primary-soft)); font-weight: 700; color: var(--text); }
+.composer.recording .rec-cancel, .composer.previewing .rec-cancel { display: inline-flex; color: #c0392b; align-self: center; }
+.composer.previewing .rec-preview { display: flex; flex: 1; min-width: 0; align-items: center; min-height: 44px; padding: 0 10px; border-radius: 22px; background: var(--surface-2, var(--primary-soft)); }
+.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #e53935; animation: recblink 1s infinite; flex: none; }
 @keyframes recblink { 50% { opacity: .25; } }
-.msg-audio { display: flex; align-items: center; gap: 8px; white-space: normal; }
-.msg-audio audio { width: 220px; max-width: 58vw; height: 40px; }
+.rec-live { flex: 1; min-width: 0; height: 30px; display: flex; align-items: center; justify-content: flex-end; gap: 2px; overflow: hidden; }
+.rec-live i, .vwave i { display: block; width: 3px; min-height: 3px; border-radius: 3px; background: var(--primary); flex: none; transition: height .08s; }
+.rec-stop { color: #c0392b; }
+.vplayer { display: flex; align-items: center; gap: 8px; width: min(270px, 62vw); white-space: normal; }
+.rec-preview .vplayer { width: 100%; }
+.vplay { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--primary); color: #fff; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.vplay svg { width: 16px; height: 16px; }
+.vwave { flex: 1; min-width: 0; height: 30px; display: flex; align-items: center; gap: 2px; cursor: pointer; }
+.vwave i { flex: 1 1 0; width: auto; max-width: 3px; background: color-mix(in srgb, var(--muted) 55%, transparent); }
+.vwave i.on { background: var(--primary); }
+.vtime { flex: none; font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; }
+.msg-deleted { font-style: italic; color: var(--muted); }
+.msg { position: relative; }
+.msg-menu { position: absolute; top: 2px; right: 2px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; opacity: .55; }
+.msg.me { padding-right: 26px; }
+.msg-menu:hover, .msg-menu:focus { opacity: 1; background: rgba(0,0,0,.06); }
+.msg-pop { position: absolute; top: 26px; right: 4px; z-index: 5; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 4px; white-space: nowrap; }
+.msg-pop button { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; color: #c0392b; font-weight: 700; padding: 8px 12px; border-radius: 8px; cursor: pointer; font: inherit; }
+.msg-pop button svg { width: 16px; height: 16px; }
+.msg-pop button:hover { background: rgba(192,57,43,.08); }
 
 /* Sua câmera desligada: sua foto/iniciais num fundo da marca (sem tela preta) */
 .local-off { transform: none; display: grid; place-items: center; background: linear-gradient(135deg, #3f5550, #6f8a83); }

@@ -256,12 +256,13 @@ test('chat: paciente inicia, profissional responde, Pix, arquivar', async () => 
   assert.equal(r.data.items.length, 3);
 });
 
-test('mensagens não podem ser apagadas (nem pela API, nem no banco)', async () => {
+test('mensagens não podem ser editadas nem removidas do banco (só o conteúdo pode ser apagado)', async () => {
   const r = await pat.del(`/api/chat/conversations/${convId}/messages`);
   assert.equal(r.status, 404);
   const { db } = require('../server/db');
   assert.throws(() => db.prepare('DELETE FROM messages').run(), /não podem ser apagadas/);
   assert.throws(() => db.prepare("UPDATE messages SET body = 'x'").run(), /não podem ser alteradas/);
+  assert.throws(() => db.prepare("UPDATE messages SET kind = 'deleted', body = 'ainda aqui'").run(), /não podem ser alteradas/);
 });
 
 test('outro paciente não acessa a conversa', async () => {
@@ -745,4 +746,45 @@ test('mensagem de voz: paciente e profissional mandam áudio; só quem participa
   const reg = await other.post('/api/auth/patient/register', { name: 'Tomas Reis', cpf: '987.654.320-29', state: 'SP', city: 'Campinas', password: '123456' });
   assert.equal(reg.status, 201);
   assert.equal((await listen(other)).status, 404, 'outro paciente logado não ouve');
+});
+
+test('apagar mensagem: só quem enviou, para todos; o conteúdo sai do banco', async () => {
+  const created = await admin.post('/api/admin/professionals', {
+    name: 'Gil Souto', profession: 'Psicólogo(a)', registry: 'X-13', email: 'gil@example.com', phone: '11933332222', state: 'SP', city: 'Campinas',
+  });
+  const gp = client();
+  await gp.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
+  const pt = client();
+  await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+  const conv = (await pt.post('/api/chat/conversations', { professional_id: created.data.id })).data;
+  const m1 = (await pt.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'texto secreto 123' })).data;
+  const fd = new FormData();
+  fd.append('duration', '3');
+  fd.append('peaks', '0123456789');
+  fd.append('audio', new Blob([Buffer.from('RIFF....WAVEfmt ')], { type: 'audio/wav' }), 'a.wav');
+  const res = await fetch(`${base}/api/chat/conversations/${conv.id}/audio`, { method: 'POST', body: fd, headers: { Cookie: pt.cookie } });
+  const m2 = await res.json();
+  assert.equal(res.status, 201, JSON.stringify(m2));
+  assert.ok(m2.body.endsWith('|3|0123456789'), 'guarda as ondas do áudio');
+  const file = m2.body.split('|')[0];
+  assert.ok(file.endsWith('.wav'));
+
+  let r = await gp.post(`/api/chat/messages/${m1.id}/delete`);
+  assert.equal(r.status, 403, 'o profissional não apaga mensagem do paciente');
+  r = await pt.post(`/api/chat/messages/${m1.id}/delete`);
+  assert.equal(r.status, 200);
+  r = await pt.post(`/api/chat/messages/${m2.id}/delete`);
+  assert.equal(r.status, 200);
+
+  const { db } = require('../server/db');
+  const row = db.prepare('SELECT kind, body FROM messages WHERE id = ?').get(m1.id);
+  assert.deepEqual({ ...row }, { kind: 'deleted', body: '' }, 'texto apagado do banco');
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM messages WHERE body LIKE '%texto secreto%'").get().n, 0);
+  const seen = (await gp.get(`/api/chat/conversations/${conv.id}/messages`)).data.items;
+  assert.ok(seen.every((m) => m.kind === 'deleted' && m.body === ''), 'o outro lado vê "Mensagem apagada"');
+  const listen = await fetch(`${base}/api/chat/audio/${file}`, { headers: { Cookie: pt.cookie } });
+  assert.equal(listen.status, 404, 'o áudio apagado não toca mais');
+  await new Promise((ok) => setTimeout(ok, 50));
+  const { AUDIO_DIR } = require('../server/upload');
+  assert.equal(fs.existsSync(path.join(AUDIO_DIR, file)), false, 'arquivo do áudio removido');
 });

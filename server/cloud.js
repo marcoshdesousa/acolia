@@ -141,7 +141,7 @@ const pendingUploads = new Set();
 function uploadFile(folder, localFile) {
   if (!enabled) return;
   const type = { '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.pdf': 'application/pdf',
-    '.webm': 'audio/webm', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.mp3': 'audio/mpeg' }[path.extname(localFile)] || 'application/octet-stream';
+    '.wav': 'audio/wav', '.webm': 'audio/webm', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.mp3': 'audio/mpeg' }[path.extname(localFile)] || 'application/octet-stream';
   const p = fs.promises.readFile(localFile)
     .then((data) => put(`${folder}/${path.basename(localFile)}`, data, type))
     .catch((e) => console.error('[nuvem] falha ao enviar arquivo:', e.message))

@@ -74,14 +74,14 @@ function removeDocument(name) {
 const AUDIO_DIR = path.join(DATA_DIR, 'audio');
 fs.mkdirSync(AUDIO_DIR, { recursive: true });
 const AUDIO_EXT = {
-  'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/aac': '.aac', 'audio/mpeg': '.mp3',
+  'audio/wav': '.wav', 'audio/x-wav': '.wav', 'audio/wave': '.wav', 'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/aac': '.aac', 'audio/mpeg': '.mp3',
 };
 const audioUpload = multer({
   storage: multer.diskStorage({
     destination: AUDIO_DIR,
     filename: (_req, file, cb) => cb(null, crypto.randomBytes(16).toString('hex') + AUDIO_EXT[file.mimetype.split(';')[0]]),
   }),
-  limits: { fileSize: 12 * 1024 * 1024, files: 1, fields: 5 },
+  limits: { fileSize: 16 * 1024 * 1024, files: 1, fields: 5 },
   fileFilter: (_req, file, cb) => {
     if (file.fieldname !== 'audio' || !AUDIO_EXT[file.mimetype.split(';')[0]]) return cb(new HttpError(400, 'Formato de áudio não suportado.'));
     cb(null, true);

@@ -1,5 +1,5 @@
 /* Acolia — chat estilo WhatsApp (usado pelo paciente e pelo profissional).
-   Mensagens não podem ser apagadas; conversas podem ser arquivadas/desarquivadas. */
+   Quem enviou pode apagar a mensagem para todos ("Mensagem apagada"); conversas podem ser arquivadas. */
 (function () {
   'use strict';
   const { $, $$, esc, api, ICONS, avatar, fmtTime, fmtDay, fmtShort, toast, modal, copyText } = window.Acolia;
@@ -22,7 +22,7 @@
           <div class="chat-empty" data-empty>
             <div>${ICONS.chat.replace('<svg', '<svg style="width:64px;height:64px;opacity:.4;margin:0 auto 8px"')}
             <p>${role === 'patient' ? 'Escolha um profissional para conversar.' : 'Selecione uma conversa para responder.'}</p>
-            <p class="small">As mensagens ficam salvas e não podem ser apagadas.</p></div>
+            <p class="small">Você pode apagar as mensagens que enviou a qualquer momento.</p></div>
           </div>
           <div class="hidden" data-thread style="display:contents"></div>
         </section>
@@ -47,6 +47,7 @@
       if (m.kind === 'pix') return `${prefix}Chave Pix enviada`;
       if (m.kind === 'call') return `${prefix}Código de atendimento`;
       if (m.kind === 'audio') return `${prefix}🎤 Áudio (${fmtSecs(audioParts(m.body).secs)})`;
+      if (m.kind === 'deleted') return `${prefix}🚫 Mensagem apagada`;
       return prefix + m.body;
     }
 
@@ -105,7 +106,8 @@
     }
 
     function closeThread() {
-      stopRecording(false);
+      const f = $('[data-composer]', threadWrap);
+      if (f) stopRecording(f, 'cancel');
       state.current = null;
       chatEl.classList.remove('open');
       threadWrap.classList.add('hidden');
@@ -138,8 +140,10 @@
         </div>
         <form class="composer" data-composer>
           <textarea rows="1" placeholder="${c.peer.active ? 'Digite uma mensagem' : 'Esta conta não está mais ativa'}" aria-label="Mensagem" ${c.peer.active ? '' : 'disabled'} maxlength="4000"></textarea>
-          <div class="rec-bar" aria-live="polite"><span class="rec-dot"></span> Gravando <b data-rec-time>0:00</b></div>
-          <button class="icon-btn rec-cancel" type="button" data-rec-cancel aria-label="Cancelar áudio" title="Cancelar">${ICONS.trash}</button>
+          <button class="icon-btn rec-cancel" type="button" data-rec-cancel aria-label="Apagar áudio" title="Apagar áudio">${ICONS.trash}</button>
+          <div class="rec-bar" aria-live="polite"><span class="rec-dot"></span><b data-rec-time>0:00</b><div class="rec-live" data-rec-live></div>
+            <button class="icon-btn rec-stop" type="button" data-rec-stop aria-label="Parar e ouvir antes de enviar" title="Parar e ouvir">${ICONS.stop}</button></div>
+          <div class="rec-preview" data-rec-preview></div>
           <button class="btn send mic" type="button" data-mic aria-label="Gravar áudio" title="Gravar áudio" ${c.peer.active ? '' : 'disabled'}>${ICONS.mic}</button>
           <button class="btn send" type="submit" data-send aria-label="Enviar" ${c.peer.active ? '' : 'disabled'}>${ICONS.send}</button>
         </form>`;
@@ -155,7 +159,8 @@
       const syncButtons = () => form.classList.toggle('has-text', ta.value.trim().length > 0);
       syncButtons();
       $('[data-mic]', form).addEventListener('click', () => startRecording(form));
-      $('[data-rec-cancel]', form).addEventListener('click', () => stopRecording(false));
+      $('[data-rec-cancel]', form).addEventListener('click', () => stopRecording(form, 'cancel'));
+      $('[data-rec-stop]', form).addEventListener('click', () => stopRecording(form, 'preview'));
       ta.addEventListener('input', syncButtons);
       ta.addEventListener('input', () => {
         ta.style.height = 'auto';
@@ -170,7 +175,8 @@
       });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (form.classList.contains('recording')) { stopRecording(true); return; }
+        if (form.classList.contains('recording')) { stopRecording(form, 'send'); return; }
+        if (form.classList.contains('previewing')) { sendRecording(form); return; }
         const body = ta.value.trim();
         if (!body) return;
         ta.value = '';
@@ -183,76 +189,127 @@
       });
       const box = $('[data-messages]', threadWrap);
       box.addEventListener('scroll', () => { if (box.scrollTop < 60) loadOlder(); });
+      // ⋮ na mensagem → "Apagar mensagem"
+      box.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-msg-menu]');
+        const old = $('.msg-pop', box);
+        if (old) old.remove();
+        if (!b) return;
+        e.stopPropagation();
+        const pop = document.createElement('div');
+        pop.className = 'msg-pop';
+        pop.innerHTML = `<button type="button">${ICONS.trash} Apagar mensagem</button>`;
+        b.closest('.msg').appendChild(pop);
+        pop.querySelector('button').addEventListener('click', (ev) => { ev.stopPropagation(); pop.remove(); deleteMessage(Number(b.dataset.msgMenu)); });
+      });
     }
 
     // ---------- Áudio (mensagem de voz) ----------
     function audioParts(body) {
-      const [file, secs] = String(body).split('|');
-      return { file, secs: Number(secs) || 0 };
+      const [file, secs, peaks] = String(body).split('|');
+      return { file, secs: Number(secs) || 0, peaks: peaks || '' };
     }
     function fmtSecs(t) { return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`; }
 
+    // Gravar (estilo WhatsApp): microfone → gravando com as barrinhas da voz ao vivo →
+    // ■ para e ouve antes de enviar → ➤ envia (ou 🗑 descarta)
     const MAX_REC_SECS = 300; // 5 minutos
-    const rec = { recorder: null, stream: null, chunks: [], started: 0, timer: null, send: false };
+    const rec = { recorder: null, result: null, previewUrl: null };
 
-    function pickMime() {
-      const opts = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm'];
-      return opts.find((t) => window.MediaRecorder?.isTypeSupported?.(t)) || '';
+    function setMode(form, mode) {
+      form.classList.toggle('recording', mode === 'recording');
+      form.classList.toggle('previewing', mode === 'preview');
     }
 
     async function startRecording(form) {
-      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-        toast('Seu navegador não permite gravar áudio. Atualize o navegador ou use o Chrome/Safari.', 'error');
+      const V = window.AcoliaVoice;
+      if (!V?.Recorder.supported()) {
+        toast('Seu navegador não permite gravar áudio. Atualize o navegador.', 'error');
         return;
       }
+      V.stopAll();
+      const live = $('[data-rec-live]', form);
+      const clock = $('[data-rec-time]', form);
+      live.innerHTML = '';
+      clock.textContent = '0:00';
+      rec.result = null;
+      rec.recorder = new V.Recorder({
+        maxSecs: MAX_REC_SECS,
+        onMax: () => stopRecording(form, 'preview'),
+        onLevel: (level, secs) => {
+          clock.textContent = V.fmt(secs);
+          const bar = document.createElement('i');
+          bar.style.height = `${12 + Math.round(level * 88)}%`; // parado = pontinho; falando alto = barra grande
+          live.appendChild(bar);
+          while (live.childElementCount > 60) live.firstElementChild.remove();
+        },
+      });
       try {
-        rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+        await rec.recorder.start();
       } catch {
+        rec.recorder = null;
         toast('Libere o microfone no navegador para gravar áudio.', 'error');
         return;
       }
-      const mime = pickMime();
-      rec.recorder = new MediaRecorder(rec.stream, mime ? { mimeType: mime } : undefined);
-      rec.chunks = [];
-      rec.send = false;
-      rec.recorder.ondataavailable = (e) => { if (e.data.size) rec.chunks.push(e.data); };
-      rec.recorder.onstop = () => finishRecording(form);
-      rec.recorder.start(250);
-      rec.started = Date.now();
-      form.classList.add('recording');
-      const clock = $('[data-rec-time]', form);
-      clock.textContent = '0:00';
-      rec.timer = setInterval(() => {
-        const t = (Date.now() - rec.started) / 1000;
-        clock.textContent = fmtSecs(t);
-        if (t >= MAX_REC_SECS) stopRecording(true);
-      }, 250);
+      setMode(form, 'recording');
     }
 
-    function stopRecording(send) {
-      if (!rec.recorder || rec.recorder.state === 'inactive') return;
-      rec.send = send;
-      clearInterval(rec.timer);
-      rec.recorder.stop();
+    // mode: 'preview' (para e deixa ouvir), 'send' (para e envia), 'cancel' (descarta)
+    function stopRecording(form, mode) {
+      if (rec.recorder) {
+        const r = rec.recorder;
+        rec.recorder = null;
+        if (mode === 'cancel') r.cancel();
+        else rec.result = r.stop();
+      }
+      if (mode === 'cancel' || !rec.result) { discardRecording(form); return; }
+      if (rec.result.secs < 1) { toast('Áudio muito curto.'); discardRecording(form); return; }
+      if (mode === 'send') { sendRecording(form); return; }
+      // Prévia: ouvir antes de enviar
+      if (rec.previewUrl) URL.revokeObjectURL(rec.previewUrl);
+      rec.previewUrl = URL.createObjectURL(rec.result.blob);
+      $('[data-rec-preview]', form).innerHTML = window.AcoliaVoice.playerHtml({ src: rec.previewUrl, secs: rec.result.secs, peaks: rec.result.peaks });
+      setMode(form, 'preview');
     }
 
-    async function finishRecording(form) {
-      rec.stream?.getTracks().forEach((t) => t.stop());
-      form.classList.remove('recording');
-      const secs = (Date.now() - rec.started) / 1000;
-      const type = rec.recorder.mimeType || rec.chunks[0]?.type || 'audio/webm';
-      rec.recorder = null;
-      if (!rec.send) return;
-      if (secs < 1) { toast('Áudio muito curto.'); return; }
-      const blob = new Blob(rec.chunks, { type });
-      const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm';
-      const fd = new FormData();
-      fd.append('duration', String(Math.round(secs)));
-      fd.append('audio', blob, `audio.${ext}`);
+    function discardRecording(form) {
+      window.AcoliaVoice?.stopAll();
+      rec.result = null;
+      if (rec.previewUrl) { URL.revokeObjectURL(rec.previewUrl); rec.previewUrl = null; }
+      if (form) { $('[data-rec-preview]', form).innerHTML = ''; setMode(form, 'idle'); }
+    }
+
+    async function sendRecording(form) {
+      const r = rec.result;
       const c = state.current;
+      discardRecording(form);
+      if (!r || !c) return;
+      const fd = new FormData();
+      fd.append('duration', String(Math.round(r.secs)));
+      fd.append('peaks', r.peaks);
+      fd.append('audio', r.blob, 'audio.wav');
       try {
         addMessage(await api(`/api/chat/conversations/${c.id}/audio`, { method: 'POST', form: fd }));
       } catch (ex) { toast(ex.message, 'error'); }
+    }
+
+    // ---------- Apagar mensagem (só as suas, para todos) ----------
+    async function deleteMessage(id) {
+      const ok = await Acolia.confirmDialog('Apagar esta mensagem para todos? No lugar dela vai aparecer "Mensagem apagada".', { okLabel: 'Apagar', danger: true, title: 'Apagar mensagem' });
+      if (!ok) return;
+      try {
+        await api(`/api/chat/messages/${id}/delete`, { method: 'POST' });
+        markDeleted(id);
+      } catch (ex) { toast(ex.message, 'error'); }
+    }
+
+    function markDeleted(id) {
+      const m = state.messages.find((x) => x.id === id);
+      if (!m) return;
+      m.kind = 'deleted';
+      m.body = '';
+      const el = $(`[data-mid="${id}"]`, threadWrap);
+      if (el) el.outerHTML = msgHtml(m);
     }
 
     function msgHtml(m) {
@@ -272,13 +329,15 @@
             : `<a class="btn sm" href="${esc(link)}" target="_blank" rel="noopener">${ICONS.video} Entrar no atendimento</a>`}</div>`;
       } else if (m.kind === 'audio') {
         const a = audioParts(m.body);
-        inner = `<div class="msg-audio">${ICONS.mic.replace('<svg', '<svg style="width:18px;height:18px;flex:none"')}
-          <audio controls preload="metadata" src="/api/chat/audio/${encodeURIComponent(a.file)}"></audio>
-          <span class="small muted">${fmtSecs(a.secs)}</span></div>`;
+        inner = window.AcoliaVoice.playerHtml({ src: `/api/chat/audio/${encodeURIComponent(a.file)}`, secs: a.secs, peaks: a.peaks });
+      } else if (m.kind === 'deleted') {
+        inner = `<span class="msg-deleted">${ICONS.ban} ${mine ? 'Você apagou esta mensagem' : 'Mensagem apagada'}</span>`;
       } else {
         inner = esc(m.body);
       }
-      return `<div class="msg ${mine ? 'me' : ''}" data-mid="${m.id}">${inner}<span class="when">${fmtTime(m.created_at)}${ticks}</span></div>`;
+      const menu = mine && m.kind !== 'deleted'
+        ? `<button type="button" class="msg-menu" data-msg-menu="${m.id}" aria-label="Opções da mensagem" title="Opções">⋮</button>` : '';
+      return `<div class="msg ${mine ? 'me' : ''} ${m.kind === 'audio' ? 'is-audio' : ''}" data-mid="${m.id}">${menu}${inner}<span class="when">${fmtTime(m.created_at)}${ticks}</span></div>`;
     }
 
     function renderMessages(scrollBottom) {
@@ -375,6 +434,10 @@
 
     // ---------- Tempo real ----------
     if (socket) {
+      socket.on('message:deleted', ({ id, conversation_id: cid }) => {
+        if (state.current && cid === state.current.id) markDeleted(id);
+        loadList();
+      });
       socket.on('message:new', (m) => {
         if (state.current && m.conversation_id === state.current.id) {
           addMessage(m);
