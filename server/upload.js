@@ -127,8 +127,8 @@ function handleMedia(req, res) {
   });
 }
 
-// Reels: vídeo de até 5 minutos + a capa (um quadro do vídeo, gerado no aparelho)
-const REEL_MAX_MB = 200;
+// Reels: vídeo de até 2 minutos e 70 MB + a capa (um quadro do vídeo, gerado no aparelho)
+const REEL_MAX_MB = 70;
 const VIDEO_EXT = { 'video/mp4': '.mp4', 'video/quicktime': '.mov', 'video/webm': '.webm' };
 const reelUpload = multer({
   storage: multer.diskStorage({

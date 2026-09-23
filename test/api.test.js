@@ -1123,7 +1123,7 @@ test('Acolia Brasil: o admin publica, todos seguem (sem deixar de seguir) e o pe
   assert.ok(!(await pt.get('/api/social/feed')).data.items.some((p) => p.id === op.id));
 });
 
-test('Reels: profissional publica vídeo de até 5 min; aparece no feed, na aba Reels e no perfil separado das fotos', async () => {
+test('Reels: profissional publica vídeo de até 2 min; aparece no feed, na aba Reels e no perfil separado das fotos', async () => {
   const c = await admin.post('/api/admin/professionals', { name: 'Rafa Reels', profession: 'Psicólogo(a)', registry: 'R-reels', email: 'rafareels@example.com', phone: '11944440000', state: 'SP', city: 'Campinas' });
   const pro = client();
   await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
@@ -1139,8 +1139,8 @@ test('Reels: profissional publica vídeo de até 5 min; aparece no feed, na aba 
   const pt = client();
   await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
   assert.equal((await sendReel(pt, 10)).status, 403, 'paciente não publica');
-  assert.equal((await sendReel(pro, 301 + 5)).status, 400, 'no máximo 5 minutos');
-  const r = await sendReel(pro, 295);
+  assert.equal((await sendReel(pro, 126)).status, 400, 'no máximo 2 minutos');
+  const r = await sendReel(pro, 118);
   assert.equal(r.status, 201, JSON.stringify(r.data));
   assert.equal(r.data.kind, 'reel');
   assert.ok(r.data.video.startsWith('/uploads/') && r.data.video.endsWith('.mp4'));
@@ -1376,4 +1376,13 @@ test('limite de publicações: ao passar, a mais antiga sai; o admin muda o limi
   assert.equal((await pro.post('/api/admin/limits', { photo: 99, reel: 99 })).status, 401);
   // Volta ao padrão combinado (15 fotos e 10 vídeos)
   assert.equal((await admin.post('/api/admin/limits', { photo: 15, reel: 10 })).status, 200);
+});
+
+test('reel: mais de 70 MB é recusado (inteiro ou em pedaços)', async () => {
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: '123456789', password: '123456789' });
+  const r = await pro.post('/api/social/uploads', { mime: 'video/mp4', size: 70 * 1024 * 1024 + 1 });
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /70 MB/);
+  assert.equal((await pro.post('/api/social/uploads', { mime: 'video/mp4', size: 69 * 1024 * 1024 })).status, 201, 'até 70 MB tudo bem');
 });

@@ -9,7 +9,7 @@ const A = require('../auth');
 const rt = require('../realtime');
 const { VISIBLE_SQL, freeGalleryCount, PROFILE_POSTS } = require('../serialize');
 const { handlePhoto, handlePhotos, handleMedia, handleReel, removePhoto } = require('../upload');
-const REEL_MAX_SECS = 5 * 60; // Reels: vídeos de até 5 minutos
+const REEL_MAX_SECS = 2 * 60; // Reels: vídeos de até 2 minutos (e 70 MB)
 const O = require('../official');
 
 const router = express.Router();
@@ -253,7 +253,7 @@ function createPost(proId, urls, caption, aspect) {
   return db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
 }
 
-// ---------- Reels (vídeos de até 5 minutos) ----------
+// ---------- Reels (vídeos de até 2 minutos e 70 MB) ----------
 // O vídeo vai junto com a capa (um quadro tirado no aparelho) e a duração
 function createReel(proId, media, caption, duration) {
   const info = db.prepare("INSERT INTO posts (professional_id, image, caption, kind, video, duration) VALUES (?, ?, ?, 'reel', ?, ?)")
@@ -269,7 +269,7 @@ router.post('/reels', async (req, res) => {
   if (secs > REEL_MAX_SECS + 1) {
     removePhoto(media.video);
     removePhoto(media.poster);
-    throw new U.HttpError(400, 'O vídeo pode ter no máximo 5 minutos.');
+    throw new U.HttpError(400, 'O vídeo pode ter no máximo 2 minutos.');
   }
   res.status(201).json(postOut(createReel(req.auth.user.id, media, req.body.caption, secs || null), who(req)));
 });
@@ -322,7 +322,7 @@ router.post('/uploads/:id/finish', async (req, res) => {
   if (secs > REEL_MAX_SECS + 1) {
     removePhoto(poster);
     discardUpload(u.id);
-    throw new U.HttpError(400, 'O vídeo pode ter no máximo 5 minutos.');
+    throw new U.HttpError(400, 'O vídeo pode ter no máximo 2 minutos.');
   }
   const video = UP.finishPart(u.id, u.mime);
   db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(u.id);

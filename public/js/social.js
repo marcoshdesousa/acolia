@@ -560,7 +560,7 @@
       title: 'Criar',
       html: `<div class="create-menu">
         <button type="button" data-v="post">${ic('image', 30)}<b>Publicar fotos</b><small>No feed e no seu perfil (até ${MAX_PHOTOS} fotos)</small></button>
-        <button type="button" data-v="reel">${ic('reel', 30)}<b>Publicar reel</b><small>Vídeo de até 5 minutos, no feed, nos Reels e no seu perfil</small></button>
+        <button type="button" data-v="reel">${ic('reel', 30)}<b>Publicar reel</b><small>Vídeo de até 2 minutos (70 MB), no feed, nos Reels e no seu perfil</small></button>
         <button type="button" data-v="story">${ic('video', 30)}<b>Publicar story</b><small>Foto ou vídeo de até ${MAX_STORY_SECS} s, some em 24 h</small></button></div>`,
       actions: [],
       onOpen: (dlg) => {
@@ -964,9 +964,9 @@
     return { add, resume };
   })();
 
-  // ---------- Novo reel (profissional): vídeo de até 5 minutos ----------
-  const REEL_MAX_SECS = 5 * 60;
-  const REEL_MAX_MB = 200;
+  // ---------- Novo reel (profissional): vídeo de até 2 minutos e 70 MB ----------
+  const REEL_MAX_SECS = 2 * 60;
+  const REEL_MAX_MB = 70;
   // Lê a duração e tira a capa (um quadro do começo do vídeo). Se o aparelho não conseguir
   // abrir o vídeo aqui (formato), usa uma capa com as cores da Acolia.
   function readVideo(file) {
@@ -1017,7 +1017,7 @@
       title: 'Novo reel',
       html: `<p class="limit-note hidden" data-limit-note></p>
         <label class="pick-media" data-pick><input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" hidden data-file>
-          <span data-empty-pick>${ic('reel', 40)}<b>Escolher vídeo</b><small class="muted">Até 5 minutos (máximo ${REEL_MAX_MB} MB) · ideal: em pé, 1080 × 1920 (9:16)</small></span></label>
+          <span data-empty-pick>${ic('reel', 40)}<b>Escolher vídeo</b><small class="muted">Até 2 minutos e ${REEL_MAX_MB} MB · ideal: em pé, 1080 × 1920 (9:16)</small></span></label>
         <div class="reel-preview hidden" data-prev><video playsinline muted controls data-pv></video><small class="muted" data-dur></small></div>
         <div class="field" style="margin-top:12px"><label for="rcap">Descrição (opcional)</label><textarea id="rcap" rows="3" maxlength="2200" placeholder="Escreva algo sobre este vídeo…" data-cap></textarea></div>
         <p class="muted small" style="margin:10px 0 0">Depois de tocar em Publicar, o vídeo envia em segundo plano — você pode continuar usando o app.</p>`,
@@ -1040,8 +1040,8 @@
           $('[data-empty-pick]', dlg).innerHTML = `<span class="spinner"></span><small class="muted">Preparando o vídeo…</small>`;
           const m = await readVideo(f);
           if (m.duration && m.duration > REEL_MAX_SECS + 1) {
-            toast('O vídeo pode ter no máximo 5 minutos.', 'error');
-            $('[data-empty-pick]', dlg).innerHTML = `${ic('reel', 40)}<b>Escolher outro vídeo</b><small class="muted">Até 5 minutos</small>`;
+            toast(`O vídeo pode ter no máximo 2 minutos. Este tem ${fmtSecs(m.duration)}.`, 'error');
+            $('[data-empty-pick]', dlg).innerHTML = `${ic('reel', 40)}<b>Escolher outro vídeo</b><small class="muted">Até 2 minutos e ${REEL_MAX_MB} MB</small>`;
             return;
           }
           file = f; meta = m;
