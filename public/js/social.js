@@ -474,7 +474,7 @@
     root.innerHTML = `
       <div class="home">
         <div class="home-top">
-          <h1>Início</h1>
+          <h1><button type="button" class="home-title" data-home-top title="Voltar ao topo e atualizar">Início</button></h1>
           <div class="row" style="gap:4px">
             ${isPro ? `<button type="button" class="icon-btn create-btn" data-create aria-label="Criar: publicar fotos ou story" title="Publicar fotos ou story">${ic('plus', 26)}</button>` : ''}
             <button type="button" class="icon-btn bell" data-bell aria-label="Notificações" title="Notificações">${ic('bell', 26)}<span class="nav-badge" data-bell-count></span></button>
@@ -563,6 +563,7 @@
       if (sb) return openStories(groups, Number(sb.dataset.storyGroup), loadStories);
       if (e.target.closest('[data-create]')) return createMenu(() => newPost(() => loadFeed(true)), () => newStory(loadStories));
       if (e.target.closest('[data-bell]')) return openNotifications(refreshBell);
+      if (e.target.closest('[data-home-top]')) return toTop();
     });
 
     if ('IntersectionObserver' in window) {
@@ -571,9 +572,13 @@
     opts.socket?.on('social:notification', refreshBell);
     window.addEventListener('acolia:stories', loadStories);
 
+    const topBar = $('.home-top', root);
+    window.addEventListener('scroll', () => { topBar.classList.toggle('stuck', window.scrollY > 40); }, { passive: true });
     const reload = () => { loadStories(); loadFeed(true); refreshBell(); };
+    // Tocar na casinha (ou no título "Início") já estando no Início: sobe e atualiza
+    const toTop = () => { window.scrollTo({ top: 0, behavior: 'smooth' }); reload(); };
     reload();
-    return { reload, refreshBell };
+    return { reload, refreshBell, toTop };
   }
 
   // ---------- Perfil: grade de publicações e botão Seguir ----------

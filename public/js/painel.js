@@ -241,6 +241,10 @@
     }
     document.body.style.overflow = v === 'conversas' ? 'hidden' : '';
   }
+  // Casinha tocada estando no Início: volta ao topo e atualiza o feed
+  $$('[data-nav="inicio"]').forEach((a) => a.addEventListener('click', (e) => {
+    if (home && (location.hash || '#inicio').startsWith('#inicio')) { e.preventDefault(); home.toTop(); }
+  }));
   window.addEventListener('hashchange', route);
   renderMe();
   route();
