@@ -79,6 +79,7 @@
       if (m.kind === 'call') return `${prefix}Código de atendimento`;
       if (m.kind === 'audio') return `${prefix}🎤 Áudio (${fmtSecs(audioParts(m.body).secs)})`;
       if (m.kind === 'deleted') return `${prefix}🚫 Mensagem apagada`;
+      if (m.kind === 'doc') return `${prefix}📄 ${String(m.body).split('|')[1] || 'Documento'}`;
       return prefix + m.body;
     }
 
@@ -155,7 +156,8 @@
       threadWrap.classList.remove('hidden');
       const proActions = role === 'professional' ? `
         <button class="icon-btn" title="Enviar chave Pix" aria-label="Enviar chave Pix" data-pix>${ICONS.pix}</button>
-        <button class="icon-btn" title="Criar atendimento (chamada)" aria-label="Criar atendimento" data-call>${ICONS.video}</button>` : '';
+        <button class="icon-btn" title="Criar atendimento (chamada)" aria-label="Criar atendimento" data-call>${ICONS.video}</button>
+        <button class="icon-btn" title="Documentos: atestado, receita, encaminhamento" aria-label="Documentos" data-docs>${ICONS.doc}</button>` : '';
       threadWrap.innerHTML = `
         <div class="thread-head">
           <button class="icon-btn back-btn" aria-label="Voltar" data-close>${ICONS.back}</button>
@@ -200,6 +202,10 @@
       $('[data-unblock-here]', threadWrap)?.addEventListener('click', toggleBlock);
       $('[data-pix]', threadWrap)?.addEventListener('click', sendPix);
       $('[data-call]', threadWrap)?.addEventListener('click', createCall);
+      $('[data-docs]', threadWrap)?.addEventListener('click', () => {
+        if (!canWrite(state.current)) { toast('Não é possível enviar nesta conversa.', 'error'); return; }
+        window.AcoliaDocs.openForm(state.current.id, (msg) => addMessage(msg));
+      });
       const form = $('[data-composer]', threadWrap);
       const ta = $('textarea', form);
       // Igual ao WhatsApp: campo vazio mostra o microfone; com texto, o botão de enviar
@@ -431,6 +437,12 @@
       } else if (m.kind === 'audio') {
         const a = audioParts(m.body);
         inner = window.AcoliaVoice.playerHtml({ src: `/api/chat/audio/${encodeURIComponent(a.file)}`, secs: a.secs, peaks: a.peaks, hint: true });
+      } else if (m.kind === 'doc') {
+        // Documento (atestado, receita, encaminhamento): abre a folha para ver e salvar
+        const [code, title] = String(m.body).split('|');
+        inner = `<div class="msg-card doc-card"><strong>${ICONS.doc.replace('<svg', '<svg style="width:20px;height:20px;vertical-align:-4px"')} ${esc(title || 'Documento')}</strong>
+          <span class="small muted">Código de verificação: <b>${esc(code)}</b></span>
+          <button type="button" class="btn ${mine ? 'secondary' : ''} sm" data-open-doc="${esc(code)}">${ICONS.doc} ${mine ? 'Ver documento' : 'Ver e salvar documento'}</button></div>`;
       } else if (m.kind === 'deleted') {
         inner = `<span class="msg-deleted">${ICONS.ban} ${mine ? 'Você apagou esta mensagem' : 'Mensagem apagada'}</span>`;
       } else {
@@ -457,6 +469,7 @@
       const prevTop = box.scrollTop;
       box.innerHTML = html;
       $$('[data-copy]', box).forEach((b) => b.addEventListener('click', () => copyText(b.dataset.copy)));
+      $$('[data-open-doc]', box).forEach((b) => b.addEventListener('click', () => window.AcoliaDocs.openDoc(b.dataset.openDoc)));
       if (scrollBottom) box.scrollTop = box.scrollHeight;
       else box.scrollTop = box.scrollHeight - prevHeight + prevTop;
     }

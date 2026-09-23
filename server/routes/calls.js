@@ -87,7 +87,7 @@ router.post('/', (req, res) => {
       throw new U.HttpError(409, `Você já tem ${MAX_ACTIVE_CALLS} atendimentos em aberto. Finalize um deles antes de criar outro.`);
     }
     const code = newPatientCode(pro.code);
-    const info = db.prepare('INSERT INTO calls (professional_id, patient_label, patient_code) VALUES (?, ?, ?)').run(pro.id, label, code);
+    const info = db.prepare('INSERT INTO calls (professional_id, patient_label, patient_code, conversation_id) VALUES (?, ?, ?, ?)').run(pro.id, label, code, conv ? conv.id : null);
     return db.prepare('SELECT * FROM calls WHERE id = ?').get(Number(info.lastInsertRowid));
   });
   if (conv) postMessage(req, conv, 'call', call.patient_code);

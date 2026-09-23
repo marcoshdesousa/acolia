@@ -220,6 +220,7 @@ addColumn('messages', 'hidden_for_patient', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('messages', 'hidden_for_professional', 'INTEGER NOT NULL DEFAULT 0');
 // Conversa já teve mensagem do paciente (o profissional passa a ver a conversa) — fica gravado
 // mesmo se as mensagens forem apagadas depois
+addColumn('calls', 'conversation_id', 'INTEGER'); // atendimento criado pela conversa (horário do último atendimento nos documentos)
 addColumn('conversations', 'patient_wrote', 'INTEGER NOT NULL DEFAULT 0');
 db.exec(`UPDATE conversations SET patient_wrote = 1 WHERE patient_wrote = 0
   AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = conversations.id AND m.sender_role = 'patient')`);

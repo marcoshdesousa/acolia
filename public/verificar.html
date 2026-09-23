@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Verificar documento — Acolia</title>
+  <meta name="description" content="Confira se um atestado, receita ou encaminhamento foi emitido pela plataforma Acolia.">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#3f5550">
+  <link rel="icon" href="/img/favicon.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="topbar"><div class="container">
+    <a class="brand" href="/"><span data-logo><img class="brand-mark" src="/img/logo-simbolo.png" alt="" width="34" height="34"></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
+  </div></header>
+  <main class="container narrow" style="padding-top:24px;padding-bottom:48px">
+    <h1 style="font-size:1.5rem">Verificar documento</h1>
+    <form class="card row" data-form style="gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div class="field grow" style="margin:0;min-width:200px"><label for="code">Código do documento</label><input id="code" name="code" placeholder="Ex.: AC-7KX2M9QD" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase"></div>
+      <button class="btn" type="submit">Verificar</button>
+    </form>
+    <div data-result style="margin-top:16px"></div>
+  </main>
+  <script src="/js/common.js"></script>
+  <script src="/js/docs.js"></script>
+  <script>
+  (function () {
+    const { $, api, esc } = Acolia;
+    const form = $('[data-form]');
+    const out = $('[data-result]');
+    const brDate = (s) => { const d = new Date(`${String(s).replace(' ', 'T')}Z`); return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); };
+    async function check(code) {
+      code = String(code || '').trim().toUpperCase();
+      if (!code) return;
+      out.innerHTML = '<div class="spinner"></div>';
+      try {
+        const doc = await api(`/api/docs/${encodeURIComponent(code)}`);
+        const p = doc.data.professional;
+        const canvas = await AcoliaDocs.render(doc);
+        out.innerHTML = `<div class="notice ${doc.revoked ? 'danger' : 'ok'}" style="margin-bottom:12px">
+            ${doc.revoked ? `<b>Documento CANCELADO</b> pelo profissional em ${esc(brDate(doc.revoked_at))}.` : '<b>✓ Documento válido</b>, emitido pela plataforma Acolia.'}</div>
+          <div class="card" style="padding:16px">
+            <p style="margin:0 0 6px"><b>${esc(doc.title)}</b> · código <b>${esc(doc.code)}</b></p>
+            <p style="margin:0 0 6px">Emitido por <b>${esc(p.name)}</b> — ${esc(p.profession)} · <b>${esc(p.registry)}</b></p>
+            <p style="margin:0 0 6px">Paciente: <b>${esc(doc.data.patient_name)}</b>${doc.data.cpf ? ` · CPF ${esc(doc.data.cpf)}` : ''}</p>
+            <p class="muted small" style="margin:0">Emitido em ${esc(brDate(doc.created_at))}. ${doc.masked ? 'Por privacidade, parte do CPF e a data de nascimento não aparecem aqui.' : ''}</p>
+          </div>
+          <img class="doc-preview" style="margin-top:14px" src="${canvas.toDataURL('image/png')}" alt="${esc(doc.title)}">
+          <p class="small muted">Confira se as informações batem com o documento apresentado. A responsabilidade pelo conteúdo é do profissional indicado (${esc(p.registry)}).</p>`;
+      } catch (e) {
+        out.innerHTML = `<div class="notice danger"><b>Documento não encontrado.</b> Confira o código. ${esc(e.message)}</div>`;
+      }
+    }
+    form.addEventListener('submit', (e) => { e.preventDefault(); history.replaceState(null, '', `/v/${form.code.value.trim().toUpperCase()}`); check(form.code.value); });
+    const fromUrl = location.pathname.split('/v/')[1];
+    if (fromUrl) { form.code.value = decodeURIComponent(fromUrl); check(fromUrl); }
+  })();
+  </script>
+</body>
+</html>

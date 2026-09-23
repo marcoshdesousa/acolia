@@ -74,6 +74,7 @@ function createApp() {
   app.use('/api/push', require('./routes/push').router);
   app.use('/api/calls', require('./routes/calls').router);
   app.use('/api/admin', require('./routes/admin').router);
+  app.use('/api/docs', require('./routes/docs').router); // atestado, receita e encaminhamento
   app.use('/api', (_req, _res, next) => next(new U.HttpError(404, 'Rota não encontrada.')));
 
   // Fotos: se não estiverem no disco (servidor reiniciou), baixa da nuvem
@@ -111,6 +112,8 @@ function createApp() {
     }
     res.type('html').send(html);
   });
+  // Verificação pública de documento (QR Code do atestado/receita/encaminhamento)
+  app.get('/v/:code', (_req, res) => res.sendFile(path.join(pub, 'verificar.html')));
   // Link próprio do profissional: site.com/<slug> abre o perfil dele
   const profileHtml = require('node:fs').readFileSync(path.join(pub, 'profissional.html'), 'utf8');
   app.get(/^\/([a-zA-Z0-9-]{3,40})\/?$/, (req, res, next) => {

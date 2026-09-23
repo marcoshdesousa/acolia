@@ -910,3 +910,10 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .block-banner { flex-wrap: nowrap; }
 .block-banner > svg { flex: none; }
 .block-banner .btn { flex: none; }
+
+/* Documentos (atestado, receita, encaminhamento) */
+.doc-card { min-width: 220px; }
+.doc-preview { width: 100%; border-radius: 10px; border: 1px solid var(--line); box-shadow: var(--shadow); background: #fff; display: block; }
+dialog.doc-dialog { max-width: min(560px, calc(100vw - 24px)); }
+.doc-item { display: grid; gap: 8px; padding: 12px; }
+label.check { display: flex; gap: 8px; align-items: center; font-size: .9rem; }

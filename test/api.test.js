@@ -1438,3 +1438,71 @@ test('chat: apagar para mim, limpar conversa, bloquear (só mensagens) e conta a
   assert.equal(db.prepare('SELECT COUNT(*) n FROM messages WHERE conversation_id = ?').get(conv.id).n, 0);
   assert.equal(db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(conv.id), undefined);
 });
+
+test('documentos: quem pode emitir o quê, envio no chat, verificação pública e cancelamento', async () => {
+  const mk = async (name, profession, registry, email) => {
+    const c = await admin.post('/api/admin/professionals', { name, profession, registry, email, phone: '11911112222', state: 'SP', city: 'Campinas' });
+    const cl = client();
+    await cl.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+    return { id: c.data.id, cl };
+  };
+  const psiq = await mk('Dra. Paula Psiq', 'Psiquiatra', 'CRM-SP 123456', 'paula.psiq@example.com');
+  const psico = await mk('Rui Psico', 'Psicólogo(a)', 'CRP 06/111111', 'rui.psico@example.com');
+  const analista = await mk('Ana Lista', 'Psicanalista', 'Registro 999', 'ana.lista@example.com');
+  const pt = client();
+  const CPF = '453.178.287-91';
+  await pt.post('/api/auth/patient/login', { cpf: CPF, password: '123456' });
+  const conv = async (pro) => {
+    const c = (await pt.post('/api/chat/conversations', { professional_id: pro.id })).data;
+    await pt.post(`/api/chat/conversations/${c.id}/messages`, { body: 'Olá' });
+    return c.id;
+  };
+  const cPsiq = await conv(psiq);
+  const cPsico = await conv(psico);
+  const cAna = await conv(analista);
+  const kinds = async (pro, cid) => (await pro.cl.get(`/api/docs/options/${cid}`)).data.kinds.map((k) => k.kind);
+  assert.deepEqual(await kinds(psiq, cPsiq), ['atestado', 'receita', 'encaminhamento'], 'psiquiatra: tudo');
+  assert.deepEqual(await kinds(psico, cPsico), ['atestado', 'encaminhamento'], 'psicólogo: sem receita');
+  assert.deepEqual(await kinds(analista, cAna), ['encaminhamento'], 'psicanalista: só encaminhamento');
+  const opt = (await psiq.cl.get(`/api/docs/options/${cPsiq}`)).data;
+  assert.equal(opt.patient.cpf, CPF, 'CPF do paciente já vem preenchido');
+
+  const base0 = { patient_name: 'Rita Souza Lima', cpf: CPF, birth_date: '1990-05-10', attended_at: '2026-09-20T14:30' };
+  assert.equal((await psico.cl.post('/api/docs', { ...base0, conversation_id: cPsico, kind: 'receita', items: [{ name: 'X', instructions: 'y' }] })).status, 403, 'psicólogo não receita');
+  assert.equal((await analista.cl.post('/api/docs', { ...base0, conversation_id: cAna, kind: 'atestado' })).status, 403, 'psicanalista não dá atestado');
+  assert.equal((await psiq.cl.post('/api/docs', { ...base0, conversation_id: cPsiq, kind: 'atestado', cid: 'F41.1' })).status, 400, 'CID só com autorização');
+
+  // Receita do psiquiatra: vai no chat e o paciente abre completa
+  let r = await psiq.cl.post('/api/docs', { ...base0, conversation_id: cPsiq, kind: 'receita', items: [{ name: 'Sertralina', dose: '50 mg', qty: '30 comprimidos', instructions: '1 comprimido pela manhã' }] });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const code = r.data.code;
+  assert.match(code, /^AC-[A-Z2-9]{8}$/);
+  const msgs = (await pt.get(`/api/chat/conversations/${cPsiq}/messages`)).data.items;
+  assert.ok(msgs.some((m) => m.kind === 'doc' && m.body.startsWith(code)), 'o documento chega na conversa');
+  const full = (await pt.get(`/api/docs/${code}`)).data;
+  assert.equal(full.masked, false);
+  assert.equal(full.data.cpf, CPF);
+  assert.equal(full.data.professional.registry, 'CRM-SP 123456');
+  assert.equal(full.data.items[0].name, 'Sertralina');
+  assert.ok(full.qr.includes('<svg'), 'QR Code');
+  // Verificação pública (qualquer pessoa com o código): CPF mascarado, sem nascimento
+  const pub = (await anon.get(`/api/docs/${code.toLowerCase()}`)).data;
+  assert.equal(pub.masked, true);
+  assert.equal(pub.data.cpf, '***.178.287-**');
+  assert.equal(pub.data.birth_date, '');
+  assert.equal(pub.revoked, false);
+  const page = await fetch(`${base}/v/${code}`);
+  assert.equal(page.status, 200);
+  // Atestado do psicólogo e encaminhamento do psicanalista
+  r = await psico.cl.post('/api/docs', { ...base0, conversation_id: cPsico, kind: 'atestado', cid: 'F41.1', cid_authorized: true });
+  assert.equal(r.status, 201);
+  assert.equal((await pt.get(`/api/docs/${r.data.code}`)).data.title, 'Atestado psicológico');
+  r = await analista.cl.post('/api/docs', { ...base0, conversation_id: cAna, kind: 'encaminhamento', specialty: 'Psiquiatra', modality: 'online' });
+  assert.equal(r.status, 201);
+  // Apagar para todos a mensagem do documento: fica cancelado na verificação
+  const docMsg = msgs.find((m) => m.kind === 'doc');
+  await psiq.cl.post(`/api/chat/messages/${docMsg.id}/delete`, { for: 'everyone' });
+  assert.equal((await anon.get(`/api/docs/${code}`)).data.revoked, true);
+  // Outro profissional não emite na conversa dos outros
+  assert.equal((await psico.cl.post('/api/docs', { ...base0, conversation_id: cPsiq, kind: 'atestado' })).status, 404);
+});

@@ -89,6 +89,13 @@ Testes: `npm test`
 - **LGPD**: a plataforma guarda CPF e dados de saúde sensíveis. Tenha termos de uso e política de privacidade redigidos por um profissional.
 
 
+## Documentos do profissional (no chat)
+Botão 📄 no chat do profissional → escolhe o documento; nome e CPF do paciente e o horário do último atendimento já vêm preenchidos (dá para corrigir), e a data de nascimento é digitada. O documento chega na conversa e o paciente **vê, salva a imagem ou compartilha**.
+- **Quem pode emitir**: **Receita** (medicamentos) → só **Psiquiatra (CRM)**. **Atestado** → Psiquiatra ("Atestado médico", CFM Res. 1.658/2002) e **Psicólogo(a) / Neuropsicólogo(a)** ("Atestado psicológico", CFP Res. 06/2019) — sempre **1 dia** (o do atendimento); CID só com autorização do paciente. **Encaminhamento** (presencial ou online) → **todos**. **Laudo**: não é feito pela plataforma.
+- A folha sai com o nome completo e o registro (CRM/CRP) do profissional, "assinado eletronicamente" com data e hora, **código de verificação + QR Code** e, no rodapé, o símbolo e o nome da Acolia com o aviso de que o conteúdo é responsabilidade do profissional.
+- **Verificação pública**: `site.com/v/CÓDIGO` (ou o QR Code) mostra se o documento é válido, quem emitiu e para quem (CPF mascarado). Se o profissional apagar a mensagem do documento para todos, ele fica **cancelado**.
+- Medicamentos controlados (tarja preta, receita azul/amarela — Portaria 344/98) não devem ser prescritos por aqui (o formulário avisa).
+
 ## Leve e rápido (menos internet)
 - Páginas, CSS e JS vão **compactados** (Brotli/gzip, ~75% menores) e com ETag: o que não mudou volta como "304" (quase 0 bytes). JSON grande da API também vai compactado.
 - Logo e ícones otimizados (ex.: símbolo 86 KB → 11 KB) e a logo vem direto na página (aparece na hora).

@@ -139,7 +139,7 @@ function postMessage(req, c, kind, body) {
   const to = role === 'patient' ? ['professional', c.professional_id, `/painel#conversas/${c.id}`] : ['patient', c.patient_id, `/app#chat/${c.id}`];
   const from = role === 'patient' ? (sender.display_name || sender.name) : sender.name;
   const text = kind === 'pix' ? 'Enviou a chave Pix para pagamento' : kind === 'call' ? 'Enviou um código de atendimento'
-    : kind === 'audio' ? '🎤 Enviou um áudio' : body;
+    : kind === 'audio' ? '🎤 Enviou um áudio' : kind === 'doc' ? `📄 Enviou um documento: ${String(body).split('|')[1] || ''}` : body;
   require('../push').notify(to[0], to[1], {
     title: from, body: text.length > 140 ? `${text.slice(0, 137)}…` : text, url: to[2], tag: `conversa-${c.id}`,
   });
@@ -206,6 +206,8 @@ router.post('/messages/:id/delete', (req, res) => {
     if (m.sender_role !== role) throw new U.HttpError(403, 'Você só pode apagar para todos as mensagens que você enviou.');
     if (m.kind !== 'deleted') {
       removeAudioFile(m);
+      // Documento apagado para todos: fica cancelado (a verificação pelo QR mostra "cancelado")
+      if (m.kind === 'doc') db.prepare("UPDATE documents SET revoked_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE code = ?").run(String(m.body).split('|')[0]);
       db.prepare("UPDATE messages SET kind = 'deleted', body = '' WHERE id = ?").run(m.id);
     }
     const other = role === 'patient' ? 'professional' : 'patient';
@@ -287,6 +289,7 @@ function eraseMessagesOf(role, userId) {
     for (const m of db.prepare("SELECT id, kind, body FROM messages WHERE conversation_id = ? AND kind = 'audio'").all(c.id)) removeAudioFile(m);
     n += db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(c.id).changes;
     db.prepare('DELETE FROM chat_blocks WHERE conversation_id = ?').run(c.id);
+    try { db.prepare('DELETE FROM documents WHERE conversation_id = ?').run(c.id); } catch { /* tabela ainda não existe */ }
     db.prepare('DELETE FROM conversations WHERE id = ?').run(c.id);
     rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });
     rt.emit(`professional:${c.professional_id}`, 'conversation:peer', { conversation_id: c.id });
