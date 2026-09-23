@@ -309,10 +309,10 @@ td .row { flex-wrap: nowrap; }
 .staff-link:hover { opacity: 1; text-decoration: underline; }
 
 /* Logo na página inicial */
-.hero-logo { justify-self: center; width: 100%; max-width: 400px; background: #faf9f5; border-radius: 28px; padding: 28px; box-shadow: var(--shadow); }
-.hero-logo img { width: 100%; height: auto; }
+.hero-logo { justify-self: center; width: 100%; max-width: 400px; background: #faf9f5; border-radius: 28px; overflow: hidden; box-shadow: var(--shadow); }
+.hero-logo img { display: block; width: 100%; height: auto; }
 .eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .22em; font-size: .78rem; color: var(--muted); margin-bottom: 12px; }
-@media (max-width: 800px) { .hero-logo { max-width: 240px; padding: 18px; order: -1; } }
+@media (max-width: 800px) { .hero-logo { max-width: 240px; order: -1; } }
 
 /* Redes sociais no rodapé */
 .social { display: flex; gap: 10px; width: 100%; margin-bottom: 12px; }
