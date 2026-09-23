@@ -47,6 +47,17 @@
       <div class="car-dots" data-dots>${imgs.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>`;
   }
 
+  // Garantia: foto sem formato gravado ganha o formato mais próximo assim que carrega
+  // (4:5, 1:1 ou 1,91:1) e aparece recortada pelo centro, nunca gigante
+  document.addEventListener('load', (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    const box = img.closest('.post-img');
+    if (!box || box.dataset.aspect || box.classList.contains('reel-media') || !img.naturalWidth) return;
+    const r = img.naturalWidth / img.naturalHeight;
+    box.dataset.aspect = r >= 1.4 ? '1.91:1' : r >= 0.9 ? '1:1' : '4:5';
+  }, true);
+
   // Atualiza bolinhas, contador e setas conforme a pessoa arrasta
   function syncCarousel(car) {
     const track = car.querySelector('[data-track]');

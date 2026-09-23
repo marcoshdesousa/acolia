@@ -145,6 +145,8 @@ async function start(port = Number(process.env.PORT) || 3000) {
   const { cleanupStories } = require('./routes/social');
   cleanupStories();
   setInterval(cleanupStories, 60 * 60 * 1000).unref();
+  // Fotos antigas: grava o formato do feed (4:5, 1:1 ou 1,91:1) para aparecerem recortadas certinho
+  require('./routes/social').fixOldAspects().catch((e) => console.error('[formatos]', e.message));
   const app = createApp();
   const server = http.createServer(app);
   setupSocket(server);

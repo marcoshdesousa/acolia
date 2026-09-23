@@ -1210,3 +1210,23 @@ test('reel em pedaços: continua de onde parou (internet caiu / app no fundo) e 
   await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
   assert.equal((await pt.post('/api/social/uploads', { mime: 'video/mp4', size: 10 })).status, 403, 'paciente não envia');
 });
+
+test('fotos antigas: o sistema mede a foto e grava o formato do feed mais próximo (4:5, 1:1 ou 1,91:1)', async () => {
+  const { db } = require('../server/db');
+  const path = require('node:path');
+  // PNG 1200×628 (paisagem) e PNG 800×1000 (retrato), como se fossem publicações antigas sem formato
+  const png = (w, h) => {
+    const b = Buffer.alloc(33);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
+    b.writeUInt32BE(13, 8); b.write('IHDR', 12, 'latin1'); b.writeUInt32BE(w, 16); b.writeUInt32BE(h, 20);
+    return b;
+  };
+  fs.writeFileSync(path.join(tmp, 'uploads', 'velha-paisagem.png'), png(1200, 628));
+  fs.writeFileSync(path.join(tmp, 'uploads', 'velha-retrato.png'), png(800, 1000));
+  const pro = db.prepare("SELECT id FROM professionals WHERE status = 'aprovado' LIMIT 1").get().id;
+  const a = Number(db.prepare('INSERT INTO posts (professional_id, image) VALUES (?, ?)').run(pro, '/uploads/velha-paisagem.png').lastInsertRowid);
+  const b = Number(db.prepare('INSERT INTO posts (professional_id, image) VALUES (?, ?)').run(pro, '/uploads/velha-retrato.png').lastInsertRowid);
+  await require('../server/routes/social').fixOldAspects();
+  assert.equal(db.prepare('SELECT aspect FROM posts WHERE id = ?').get(a).aspect, '1.91:1');
+  assert.equal(db.prepare('SELECT aspect FROM posts WHERE id = ?').get(b).aspect, '4:5');
+});

@@ -188,7 +188,29 @@ router.post('/posts', async (req, res) => {
 });
 
 const ASPECTS = ['4:5', '1:1', '1.91:1']; // Retrato 1080×1350 · Quadrado 1080×1080 · Paisagem 1080×566
+const IMG = require('../imageSize');
+const uploadFile = (url) => require('node:path').join(require('../upload').UPLOAD_DIR, require('node:path').basename(url));
+function aspectOfUpload(url) {
+  const s = url ? IMG.fileSize(uploadFile(url)) : null;
+  return s ? IMG.bestAspect(s.w, s.h) : null;
+}
+
+// Publicações antigas (de antes dos formatos): mede a 1ª foto e grava o formato mais próximo.
+// O feed então mostra a foto recortada pelo centro nesse formato. As fotos em si não mudam.
+async function fixOldAspects() {
+  const cloud = require('../cloud');
+  const rows = db.prepare("SELECT id, image FROM posts WHERE kind = 'photo' AND aspect IS NULL").all();
+  let fixed = 0;
+  for (const r of rows) {
+    await cloud.ensureLocalFile('uploads', uploadFile(r.image)).catch(() => false);
+    const a = aspectOfUpload(r.image);
+    if (a) { db.prepare('UPDATE posts SET aspect = ? WHERE id = ? AND aspect IS NULL').run(a, r.id); fixed++; }
+  }
+  if (rows.length) console.log(`[formatos] ${fixed} de ${rows.length} publicações antigas ajustadas ao formato do feed`);
+  return fixed;
+}
 function createPost(proId, urls, caption, aspect) {
+  if (!ASPECTS.includes(aspect)) aspect = aspectOfUpload(urls[0]); // sem formato: mede a foto e escolhe o mais próximo
   const info = db.prepare('INSERT INTO posts (professional_id, image, caption, aspect) VALUES (?, ?, ?, ?)')
     .run(proId, urls[0], U.cleanText(caption, 2200), ASPECTS.includes(aspect) ? aspect : null);
   const id = Number(info.lastInsertRowid);
@@ -560,4 +582,4 @@ router.post('/notifications/read', (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };
+module.exports = { fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };
