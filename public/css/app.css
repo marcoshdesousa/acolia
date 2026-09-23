@@ -638,3 +638,26 @@ dialog.post-dialog .dlg-actions:empty, dialog.sheet .dlg-actions:empty { display
 .feed-logo .fl-feed { font-family: 'Jost', system-ui, sans-serif; font-weight: 400; font-size: .62rem; text-transform: uppercase; letter-spacing: .62em; margin-right: -.62em; text-align: center; color: var(--primary); }
 .feed-logo:active { transform: scale(.97); }
 
+
+/* Topo do feed ao rolar: fundo some (vidro que desfoca o que passa por trás) e os botões viram bolhas de vidro */
+.home-top { isolation: isolate; transition: background-color .25s; }
+.home-top::before { content: ""; position: absolute; inset: 0 0 -18px; z-index: -1; pointer-events: none; opacity: 0; transition: opacity .25s;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 50%, transparent) 0%, color-mix(in srgb, var(--bg) 18%, transparent) 60%, transparent 100%);
+  -webkit-backdrop-filter: blur(6px) saturate(1.4); backdrop-filter: blur(6px) saturate(1.4);
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent); mask-image: linear-gradient(to bottom, #000 55%, transparent); }
+.home-top.stuck { background: transparent; border-bottom-color: transparent; box-shadow: none; }
+.home-top.stuck::before { opacity: 1; }
+.home-top .ht-side .icon-btn { width: 44px; height: 44px; border: 1px solid transparent; transition: background-color .25s, border-color .25s, box-shadow .25s; }
+.home-top.stuck .ht-side .icon-btn {
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.8); backdrop-filter: blur(16px) saturate(1.8);
+  border-color: color-mix(in srgb, var(--text) 14%, transparent);
+  box-shadow: 0 4px 14px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.35); }
+.home-top .fl-name, .home-top .fl-feed { transition: filter .25s, text-shadow .25s; }
+.home-top.stuck .fl-name { filter: drop-shadow(0 0 4px var(--bg)) drop-shadow(0 0 1px var(--bg)); }
+.home-top.stuck .fl-feed { text-shadow: 0 0 6px var(--bg), 0 0 2px var(--bg); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .home-top.stuck .fl-name { filter: invert(1) brightness(1.15) drop-shadow(0 0 6px #000) drop-shadow(0 0 2px #000); }
+  :root:not([data-theme="light"]) .home-top.stuck .ht-side .icon-btn { box-shadow: 0 4px 14px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.08); } }
+:root[data-theme="dark"] .home-top.stuck .fl-name { filter: invert(1) brightness(1.15) drop-shadow(0 0 6px #000) drop-shadow(0 0 2px #000); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .home-top.stuck .fl-feed { color: var(--text); text-shadow: 0 0 5px #000, 0 0 2px #000; } }
+:root[data-theme="dark"] .home-top.stuck .fl-feed { color: var(--text); text-shadow: 0 0 5px #000, 0 0 2px #000; }
