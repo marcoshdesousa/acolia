@@ -1,6 +1,6 @@
 /* Service worker — permite instalar o app e abre mais rápido.
    Dados (API, chat, chamadas) nunca são guardados em cache. */
-const VERSION = 'acolia-v13';
+const VERSION = 'acolia-v14';
 const SHELL = ['/css/app.css', '/js/common.js', '/js/chat.js', '/js/voice.js', '/js/catalog.js', '/js/profile-view.js', '/img/logo-simbolo.png', '/img/logo-nome.png', '/img/favicon.png', '/img/app-icon-192.png', '/offline.html'];
 
 self.addEventListener('install', (e) => {

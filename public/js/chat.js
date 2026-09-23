@@ -244,14 +244,17 @@
           while (live.childElementCount > 60) live.firstElementChild.remove();
         },
       });
+      setMode(form, 'recording'); // a barra aparece na hora do toque
+      const r = rec.recorder;
       try {
-        await rec.recorder.start();
+        await r.start();
       } catch {
-        rec.recorder = null;
+        if (rec.recorder === r) rec.recorder = null;
+        setMode(form, 'idle');
         toast('Libere o microfone no navegador para gravar áudio.', 'error');
         return;
       }
-      setMode(form, 'recording');
+      if (rec.recorder !== r) r.cancel(); // cancelou enquanto o microfone ligava
     }
 
     // mode: 'preview' (para e deixa ouvir), 'send' (para e envia), 'cancel' (descarta)

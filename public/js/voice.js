@@ -8,6 +8,14 @@
   const BARS = 48;
 
   // ---------- Gravação ----------
+  // Um único "motor de áudio" reaproveitado: a 2ª gravação em diante começa na hora
+  let sharedCtx = null;
+  function audioCtx() {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!sharedCtx || sharedCtx.state === 'closed') sharedCtx = new Ctx();
+    return sharedCtx;
+  }
+
   class Recorder {
     constructor({ onLevel = () => {}, maxSecs = 300, onMax = () => {} } = {}) {
       this.onLevel = onLevel;
@@ -23,10 +31,11 @@
     }
 
     async start() {
+      // Liga o motor ainda dentro do toque (o iPhone exige) e pede o microfone ao mesmo tempo
+      this.ctx = audioCtx();
+      const resumed = this.ctx.resume().catch(() => {});
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      this.ctx = new Ctx();
-      await this.ctx.resume();
+      await resumed;
       this.rate = this.ctx.sampleRate;
       this.src = this.ctx.createMediaStreamSource(this.stream);
       this.proc = this.ctx.createScriptProcessor(4096, 1, 1);
@@ -50,8 +59,8 @@
     // Para a gravação e devolve { blob, secs, peaks }
     stop() {
       try { this.proc?.disconnect(); this.src?.disconnect(); } catch { /* ignora */ }
+      if (this.proc) this.proc.onaudioprocess = null;
       this.stream?.getTracks().forEach((t) => t.stop());
-      this.ctx?.close().catch(() => {});
       const secs = this.seconds();
       const pcm = downsample(this.chunks, this.samples, this.rate || 48000, RATE);
       return { blob: encodeWav(pcm, RATE), secs, peaks: peaksOf(this.levels) };
@@ -59,8 +68,8 @@
 
     cancel() {
       try { this.proc?.disconnect(); this.src?.disconnect(); } catch { /* ignora */ }
+      if (this.proc) this.proc.onaudioprocess = null;
       this.stream?.getTracks().forEach((t) => t.stop());
-      this.ctx?.close().catch(() => {});
       this.chunks = [];
     }
   }
@@ -138,27 +147,21 @@
     </div>`;
   }
 
-  // Busca o áudio com o login da pessoa e toca a partir da memória (funciona em todos os navegadores).
+  // O áudio toca direto do servidor (começa na hora, sem esperar baixar tudo) e o play()
+  // é chamado no próprio toque — no iPhone isso evita ter que tocar duas vezes.
   // O mesmo áudio continua tocando mesmo se a conversa for redesenhada (chega mensagem nova etc.).
-  const cache = new Map(); // src → { audio, el }
-  async function audioFor(el) {
+  const cache = new Map(); // src → { audio, el, paint }
+  function audioFor(el) {
     const src = el.dataset.vsrc;
     let entry = cache.get(src);
     if (!entry) {
-      let url = src;
-      if (!src.startsWith('blob:')) {
-        const res = await fetch(src, { credentials: 'same-origin' });
-        if (!res.ok) throw new Error(res.status === 404 ? 'Este áudio foi apagado.' : 'Não foi possível carregar o áudio.');
-        url = URL.createObjectURL(await res.blob());
-      }
       const a = new Audio();
       a.preload = 'auto';
-      a.src = url;
+      a.src = src;
       entry = { audio: a, el };
       const total = () => (Number.isFinite(a.duration) && a.duration > 0 ? a.duration : Number(entry.el.dataset.vsecs) || 1);
       entry.paint = () => {
-        const cur = entry.el;
-        if (!cur.isConnected) {
+        if (!entry.el.isConnected) {
           const again = document.querySelector(`.vplayer[data-vsrc="${CSS.escape(src)}"]`);
           if (again) entry.el = again;
         }
@@ -167,13 +170,22 @@
         bars.forEach((bar, i) => bar.classList.toggle('on', i < on));
         entry.el.querySelector('.vtime').textContent = fmt(!a.paused || a.currentTime > 0 ? a.currentTime : total());
         entry.el.classList.toggle('playing', !a.paused);
+        entry.el.classList.toggle('loading', !a.paused && a.readyState < 3);
         entry.el.querySelector('.vplay').innerHTML = a.paused ? PLAY : PAUSE;
       };
-      a.addEventListener('timeupdate', entry.paint);
-      a.addEventListener('play', entry.paint);
-      a.addEventListener('pause', entry.paint);
+      ['timeupdate', 'play', 'pause', 'playing', 'waiting', 'canplay'].forEach((ev) => a.addEventListener(ev, entry.paint));
       a.addEventListener('ended', () => { a.currentTime = 0; entry.paint(); });
-      a.addEventListener('error', () => (window.Acolia?.toast || alert)('Não foi possível tocar este áudio.', 'error'));
+      a.addEventListener('error', async () => {
+        cache.delete(src);
+        entry.el.classList.remove('playing', 'loading');
+        entry.el.querySelector('.vplay').innerHTML = PLAY;
+        let msg = 'Não foi possível tocar este áudio.';
+        if (!src.startsWith('blob:')) {
+          const r = await fetch(src, { method: 'HEAD', credentials: 'same-origin' }).catch(() => null);
+          if (r && r.status === 404) msg = 'Este áudio foi apagado.';
+        }
+        (window.Acolia?.toast || alert)(msg, 'error');
+      });
       cache.set(src, entry);
     }
     entry.el = el;
@@ -181,14 +193,15 @@
     return entry.audio;
   }
 
-  async function toggle(el) {
-    try {
-      const a = await audioFor(el);
-      if (current && current !== a) current.pause();
-      if (a.paused) { current = a; await a.play(); } else a.pause();
-    } catch (e) {
-      (window.Acolia?.toast || alert)(e.message || 'Não foi possível tocar o áudio.', 'error');
-    }
+  function toggle(el) {
+    const a = audioFor(el);
+    if (current && current !== a) current.pause();
+    if (a.paused) {
+      current = a;
+      const p = a.play();
+      el._paint();
+      if (p) p.catch(() => {});
+    } else a.pause();
   }
 
   async function seek(el, ev) {
@@ -196,7 +209,7 @@
     const r = wave.getBoundingClientRect();
     const f = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
     try {
-      const a = await audioFor(el);
+      const a = audioFor(el);
       const total = Number.isFinite(a.duration) && a.duration > 0 ? a.duration : Number(el.dataset.vsecs) || 0;
       a.currentTime = f * total;
       el._paint();
