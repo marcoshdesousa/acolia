@@ -248,6 +248,49 @@
   }
 
   // "há 5 min", "há 2 h", "ontem", "12 de set."
+  // Barra flutuante: encolhe quando a pessoa rola para baixo e volta ao subir
+  (function shrinkNavOnScroll() {
+    let last = 0;
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const nav = document.querySelector('.bottom-nav.icons');
+        const y = window.scrollY;
+        if (nav) {
+          if (y < 60) nav.classList.remove('compact');
+          else if (y > last + 6) nav.classList.add('compact');
+          else if (y < last - 6) nav.classList.remove('compact');
+        }
+        last = y;
+        ticking = false;
+      });
+    }, { passive: true });
+  }());
+
+  // Computador: o chat ocupa a tela até pouco antes da barra flutuante (não fica por baixo dela)
+  function fitChat() {
+    if (!window.matchMedia('(min-width: 801px)').matches) {
+      document.querySelectorAll('.chat').forEach((c) => { c.style.height = ''; });
+      return;
+    }
+    const chat = [...document.querySelectorAll('.chat')].find((c) => c.offsetParent !== null);
+    if (!chat) return;
+    const nav = document.querySelector('.bottom-nav.icons');
+    const reserve = nav && getComputedStyle(nav).display !== 'none' ? (window.innerHeight - nav.getBoundingClientRect().top) + 16 : 24;
+    const top = chat.getBoundingClientRect().top + window.scrollY;
+    chat.style.height = `${Math.max(360, window.innerHeight - top - reserve)}px`;
+  }
+  window.addEventListener('resize', fitChat);
+  window.addEventListener('hashchange', () => setTimeout(fitChat, 60));
+  window.addEventListener('load', () => setTimeout(fitChat, 300));
+  // Quando algo aparece acima do chat (ex.: aviso de notificações), reajusta
+  if ('ResizeObserver' in window) {
+    let raf = 0;
+    new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fitChat); }).observe(document.documentElement);
+  }
+
   function timeAgo(sqlDate) {
     const d = parseDate(sqlDate);
     const s = Math.max(0, (Date.now() - d.getTime()) / 1000);
@@ -468,7 +511,7 @@
 
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
-    confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo,
+    confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
     handleForm, logout, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
   };
 })();
