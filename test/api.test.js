@@ -812,7 +812,10 @@ test('apagar mensagem: só quem enviou, para todos; o conteúdo sai do banco', a
   const { db } = require('../server/db');
   const row = db.prepare('SELECT kind, body FROM messages WHERE id = ?').get(m1.id);
   assert.deepEqual({ kind: row.kind, body: row.body }, { kind: 'deleted', body: '' }, 'texto apagado do banco');
-  assert.equal((await pt.get(`/api/chat/conversations/${conv.id}/messages`)).data.items.length, 0, 'para quem apagou, some');
+  const mine = (await pt.get(`/api/chat/conversations/${conv.id}/messages`)).data.items;
+  assert.ok(mine.length === 2 && mine.every((m) => m.kind === 'deleted' && m.body === ''), 'quem apagou também vê "Mensagem apagada"');
+  assert.equal((await pt.post(`/api/chat/messages/${m1.id}/delete`)).status, 200, 'apagar de novo (toque duplo) não dá erro');
+  assert.equal((await pt.post('/api/chat/messages/999999/delete')).status, 200, 'mensagem que já saiu do banco não dá erro');
   assert.equal(db.prepare("SELECT COUNT(*) n FROM messages WHERE body LIKE '%texto secreto%'").get().n, 0);
   const seen = (await gp.get(`/api/chat/conversations/${conv.id}/messages`)).data.items;
   assert.ok(seen.every((m) => m.kind === 'deleted' && m.body === ''), 'o outro lado vê "Mensagem apagada"');

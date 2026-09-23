@@ -49,8 +49,11 @@ function staticCompressed(pubDir) {
     res.setHeader('Content-Type', e.type);
     res.setHeader('ETag', e.etag);
     res.setHeader('Vary', 'Accept-Encoding');
-    // Páginas sempre conferem se mudou; CSS/JS/ícones podem ficar 1 dia (o app confere por baixo)
-    res.setHeader('Cache-Control', e.type.startsWith('text/html') || req.path === '/sw.js' ? 'no-cache' : 'public, max-age=86400');
+    // Páginas, CSS e JS sempre conferem se mudou (com o ETag, se não mudou volta só um "304", quase
+    // nada de internet): assim, depois de uma atualização, ninguém fica com código velho misturado com
+    // a página nova. Ícones e imagens podem ficar 1 dia.
+    const always = /^(text\/html|text\/css|text\/javascript)/.test(e.type) || req.path === '/sw.js' || req.path.endsWith('.webmanifest');
+    res.setHeader('Cache-Control', always ? 'no-cache' : 'public, max-age=86400');
     if (req.headers['if-none-match'] === e.etag) return res.status(304).end();
     const accept = String(req.headers['accept-encoding'] || '');
     let body = e.raw;

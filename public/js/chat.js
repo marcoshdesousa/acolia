@@ -357,16 +357,16 @@
     }
 
     // ---------- Apagar mensagem ----------
-    // Uma a uma: "Apagar para todos" (só as suas) — o outro vê "Mensagem apagada" e para você some.
+    // Uma a uma: "Apagar para todos" (só as suas) — os dois lados passam a ver "Mensagem apagada".
     // Para apagar só para você (as suas e as do outro), use "Limpar conversa" no ⋮ da conversa.
     async function deleteMessage(id, mode) {
       const ok = await Acolia.confirmDialog(mode === 'everyone'
-        ? 'Apagar esta mensagem para todos? Para a outra pessoa vai aparecer "Mensagem apagada".'
+        ? 'Apagar esta mensagem para todos? Para você e para a outra pessoa vai aparecer "Mensagem apagada".'
         : 'Apagar esta mensagem só para você? A outra pessoa continua vendo.', { okLabel: 'Apagar', danger: true, title: mode === 'everyone' ? 'Apagar para todos' : 'Apagar para mim' });
       if (!ok) return;
       try {
         await api(`/api/chat/messages/${id}/delete`, { method: 'POST', body: { for: mode } });
-        removeMessage(id);
+        if (mode === 'everyone') markDeleted(id); else removeMessage(id);
         loadList();
       } catch (ex) { toast(ex.message, 'error'); }
     }
@@ -444,7 +444,7 @@
           <span class="small muted">Código de verificação: <b>${esc(code)}</b></span>
           <button type="button" class="btn ${mine ? 'secondary' : ''} sm" data-open-doc="${esc(code)}">${ICONS.doc} ${mine ? 'Ver documento' : 'Ver e salvar documento'}</button></div>`;
       } else if (m.kind === 'deleted') {
-        inner = `<span class="msg-deleted">${ICONS.ban} ${mine ? 'Você apagou esta mensagem' : 'Mensagem apagada'}</span>`;
+        inner = `<span class="msg-deleted">${ICONS.ban} Mensagem apagada</span>`;
       } else {
         inner = esc(m.body);
       }

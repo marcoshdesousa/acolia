@@ -16,9 +16,9 @@ const MSG_COLS = 'id, conversation_id, sender_role, kind, body, read_at, created
 const PATIENT_WROTE = 'c.patient_wrote = 1';
 
 // ---------- Apagar e bloquear ----------
-// "Apagar para mim": some só para quem apagou. "Apagar para todos" (quem enviou): o conteúdo
-// sai do banco e o outro lado vê "Mensagem apagada"; para quem apagou, some. Quando os dois
-// lados apagaram a mesma mensagem, ela sai do banco de vez (junto com o arquivo do áudio).
+// Apagar mensagem (uma a uma, só as suas): é para todos — o conteúdo sai do banco e os DOIS lados
+// veem "Mensagem apagada". "Limpar conversa": some só para quem limpou (o outro continua vendo).
+// Quando os dois lados limparam a mesma mensagem, ela sai do banco de vez (junto com o áudio).
 const hideCol = (role) => (role === 'patient' ? 'hidden_for_patient' : 'hidden_for_professional');
 function removeAudioFile(m) {
   if (m.kind !== 'audio') return;
@@ -200,7 +200,8 @@ router.post('/messages/:id/delete', (req, res) => {
   const s = side(req);
   const m = db.prepare(`SELECT m.*, c.patient_id, c.professional_id FROM messages m JOIN conversations c ON c.id = m.conversation_id
     WHERE m.id = ? AND c.${s.col} = ?`).get(Number(req.params.id), req.auth.user.id);
-  if (!m) throw new U.HttpError(404, 'Mensagem não encontrada.');
+  // Já não existe (apagada em outro aparelho, toque duplo, ou os dois lados já tinham apagado): tudo certo
+  if (!m) return res.json({ ok: true, gone: true });
   const mode = req.body.for === 'me' ? 'me' : req.body.for === 'everyone' ? 'everyone' : (m.sender_role === role ? 'everyone' : 'me');
   if (mode === 'everyone') {
     if (m.sender_role !== role) throw new U.HttpError(403, 'Você só pode apagar para todos as mensagens que você enviou.');
@@ -210,12 +211,15 @@ router.post('/messages/:id/delete', (req, res) => {
       if (m.kind === 'doc') db.prepare("UPDATE documents SET revoked_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE code = ?").run(String(m.body).split('|')[0]);
       db.prepare("UPDATE messages SET kind = 'deleted', body = '' WHERE id = ?").run(m.id);
     }
-    const other = role === 'patient' ? 'professional' : 'patient';
-    rt.emit(`${other}:${other === 'patient' ? m.patient_id : m.professional_id}`, 'message:deleted', { id: m.id, conversation_id: m.conversation_id });
+    // Os dois lados (e os outros aparelhos de quem apagou) passam a ver "Mensagem apagada"
+    const ev = { id: m.id, conversation_id: m.conversation_id };
+    rt.emit(`patient:${m.patient_id}`, 'message:deleted', ev);
+    rt.emit(`professional:${m.professional_id}`, 'message:deleted', ev);
+  } else {
+    db.prepare(`UPDATE messages SET ${hideCol(role)} = 1 WHERE id = ?`).run(m.id);
+    rt.emit(`${role}:${req.auth.user.id}`, 'message:removed', { id: m.id, conversation_id: m.conversation_id });
+    purgeHidden(m.conversation_id);
   }
-  db.prepare(`UPDATE messages SET ${hideCol(role)} = 1 WHERE id = ?`).run(m.id);
-  rt.emit(`${role}:${req.auth.user.id}`, 'message:removed', { id: m.id, conversation_id: m.conversation_id });
-  purgeHidden(m.conversation_id);
   require('../cloud').scheduleBackup();
   res.json({ ok: true, for: mode });
 });
