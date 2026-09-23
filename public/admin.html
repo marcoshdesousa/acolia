@@ -42,6 +42,15 @@
         <h1 style="font-size:1.5rem">Visão geral</h1>
         <div data-storage style="margin-bottom:16px"></div>
         <div class="stats" data-stats></div>
+        <h2 style="margin-top:28px">Limite de publicações por profissional</h2>
+        <form class="card limits-card" data-limits-form style="padding:16px">
+          <p class="small muted" style="margin-top:0">Cada profissional guarda no máximo esta quantidade. Quando ele publica além do limite, a publicação <b>mais antiga é apagada</b> sozinha para a nova entrar (libera espaço). A Acolia Brasil não tem limite.</p>
+          <div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-end">
+            <div class="field" style="margin:0"><label for="lim-photo">Publicações de fotos</label><input id="lim-photo" name="photo" type="number" min="1" max="500" required style="width:130px"></div>
+            <div class="field" style="margin:0"><label for="lim-reel">Vídeos (reels)</label><input id="lim-reel" name="reel" type="number" min="1" max="500" required style="width:130px"></div>
+            <button class="btn" type="submit">Salvar limite</button>
+          </div>
+        </form>
         <h2 style="margin-top:28px">Aguardando aprovação</h2>
         <div data-pending-list></div>
         <h2 style="margin-top:28px">Contas de teste</h2>

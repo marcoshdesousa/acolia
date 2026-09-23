@@ -209,12 +209,47 @@ async function fixOldAspects() {
   if (rows.length) console.log(`[formatos] ${fixed} de ${rows.length} publicações antigas ajustadas ao formato do feed`);
   return fixed;
 }
+// ---------- Limite de publicações por profissional ----------
+// Cada profissional guarda no máximo N publicações de fotos e N vídeos (o admin define; começa
+// com 15 fotos e 10 vídeos). Ao publicar além do limite, a mais antiga é apagada (com os
+// arquivos) para a nova entrar. A Acolia Brasil (perfil oficial) não tem limite.
+const LIMIT_DEFAULTS = { photo: 15, reel: 10 };
+function getLimits() {
+  db.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+  const read = (k, d) => {
+    const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(k);
+    const n = r ? Number(r.value) : d;
+    return Number.isInteger(n) && n > 0 ? n : d;
+  };
+  return { photo: read('limit_photo_posts', LIMIT_DEFAULTS.photo), reel: read('limit_reel_posts', LIMIT_DEFAULTS.reel) };
+}
+function setLimits({ photo, reel }) {
+  const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+  up.run('limit_photo_posts', String(photo));
+  up.run('limit_reel_posts', String(reel));
+}
+// Publicações que passam do limite (as mais antigas) — de um profissional ou de todos
+function overLimit(kind, max, proId = null) {
+  return db.prepare(`SELECT po.* FROM posts po WHERE po.kind = ? AND po.professional_id <> ? ${proId ? 'AND po.professional_id = ?' : ''}
+    AND (SELECT COUNT(*) FROM posts n WHERE n.professional_id = po.professional_id AND n.kind = po.kind AND n.id > po.id) >= ?`)
+    .all(...[kind, O.officialId(), ...(proId ? [proId] : []), max]);
+}
+function enforceLimits(proId = null) {
+  const lim = getLimits();
+  let removed = 0;
+  for (const kind of ['photo', 'reel']) {
+    for (const p of overLimit(kind, lim[kind], proId)) { deletePostFully(p); removed++; }
+  }
+  return removed;
+}
+
 function createPost(proId, urls, caption, aspect) {
   if (!ASPECTS.includes(aspect)) aspect = aspectOfUpload(urls[0]); // sem formato: mede a foto e escolhe o mais próximo
   const info = db.prepare('INSERT INTO posts (professional_id, image, caption, aspect) VALUES (?, ?, ?, ?)')
     .run(proId, urls[0], U.cleanText(caption, 2200), ASPECTS.includes(aspect) ? aspect : null);
   const id = Number(info.lastInsertRowid);
   urls.forEach((u, i) => db.prepare('INSERT INTO post_images (post_id, position, image) VALUES (?, ?, ?)').run(id, i, u));
+  if (!O.isOfficial(proId)) enforceLimits(proId); // passou do limite: a mais antiga sai
   return db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
 }
 
@@ -223,6 +258,7 @@ function createPost(proId, urls, caption, aspect) {
 function createReel(proId, media, caption, duration) {
   const info = db.prepare("INSERT INTO posts (professional_id, image, caption, kind, video, duration) VALUES (?, ?, ?, 'reel', ?, ?)")
     .run(proId, media.poster, U.cleanText(caption, 2200), media.video, duration);
+  if (!O.isOfficial(proId)) enforceLimits(proId); // passou do limite: o vídeo mais antigo sai
   return db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(info.lastInsertRowid));
 }
 
@@ -306,6 +342,13 @@ function discardUpload(id) {
 function cleanupUploads() {
   for (const u of db.prepare("SELECT id FROM upload_sessions WHERE created_at < datetime('now', '-3 days')").all()) discardUpload(u.id);
 }
+
+// Quanto o profissional já usou do limite (aparece na hora de publicar)
+router.get('/limits', (req, res) => {
+  const lim = getLimits();
+  const used = (kind) => (isPro(req) ? db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = ?').get(req.auth.user.id, kind).n : 0);
+  res.json({ photo: { max: lim.photo, used: used('photo') }, reel: { max: lim.reel, used: used('reel') } });
+});
 
 // Aba Reels: vídeos de todos os profissionais (e da Acolia Brasil) em ordem aleatória,
 // primeiro os que a pessoa ainda não viu. ?sug=1,2,3 = já mostrados (não repete).
@@ -606,4 +649,4 @@ function purgeUserSocial(role, id) {
   db.prepare('DELETE FROM notifications WHERE (recipient_role = ? AND recipient_id = ?) OR (actor_role = ? AND actor_id = ?)').run(role, id, role, id);
 }
 
-module.exports = { purgeUserSocial, fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };
+module.exports = { getLimits, setLimits, overLimit, enforceLimits, purgeUserSocial, fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };

@@ -395,13 +395,27 @@
     return new File([blob], 'foto.jpg', { type: 'image/jpeg' });
   }
 
+  // Aviso do limite: "Você tem 15 de 15 publicações de fotos — ao publicar, a mais antiga sai"
+  async function limitNote(el, kind) {
+    try {
+      const l = (await api('/api/social/limits'))[kind];
+      const word = kind === 'reel' ? ['vídeo', 'vídeos'] : ['publicação de fotos', 'publicações de fotos'];
+      el.innerHTML = l.used >= l.max
+        ? `${ic('image', 14)} Você já tem <b>${l.used} de ${l.max}</b> ${word[1]}. Ao publicar, ${kind === 'reel' ? 'o vídeo mais antigo é apagado' : 'a publicação mais antiga é apagada'} para ${kind === 'reel' ? 'este entrar' : 'esta entrar'}.`
+        : `Você pode ter até <b>${l.max}</b> ${word[1]} (tem ${l.used}). Depois disso, ${kind === 'reel' ? 'o mais antigo sai' : 'a mais antiga sai'} para ${kind === 'reel' ? 'o novo entrar' : 'a nova entrar'}.`;
+      el.classList.toggle('full', l.used >= l.max);
+      el.classList.remove('hidden');
+    } catch { /* sem aviso */ }
+  }
+
   async function newPost(onDone, { base = '/api/social/posts', title = 'Nova publicação' } = {}) {
     let items = []; // { file, img, crop }
     let format = null;
     let cur = 0;
     await modal({
       title,
-      html: `<label class="pick-media" data-pick><input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden data-file>
+      html: `<p class="limit-note hidden" data-limit-note></p>
+        <label class="pick-media" data-pick><input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden data-file>
           <span data-empty-pick>${ic('image', 40)}<b>Escolher fotos</b><small class="muted">Até ${MAX_PHOTOS} fotos numa publicação</small></span></label>
         <p class="fmt-help muted small" data-fmt-help>Formatos: <b>Retrato 4:5</b> (1080 × 1350, recomendado) · <b>Quadrado 1:1</b> (1080 × 1080) · <b>Paisagem 1,91:1</b> (1080 × 566). Foto diferente é recortada sozinha — você pode ajustar.</p>
         <div class="crop-area hidden" data-crop-area>
@@ -429,6 +443,7 @@
         },
       }],
       onOpen: (dlg) => {
+        if (base === '/api/social/posts') limitNote($('[data-limit-note]', dlg), 'photo');
         const strip = $('[data-strip]', dlg);
         const frame = $('[data-frame]', dlg);
         const cimg = $('[data-crop-img]', dlg);
@@ -1000,7 +1015,8 @@
     let meta = null;
     await modal({
       title: 'Novo reel',
-      html: `<label class="pick-media" data-pick><input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" hidden data-file>
+      html: `<p class="limit-note hidden" data-limit-note></p>
+        <label class="pick-media" data-pick><input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" hidden data-file>
           <span data-empty-pick>${ic('reel', 40)}<b>Escolher vídeo</b><small class="muted">Até 5 minutos (máximo ${REEL_MAX_MB} MB) · ideal: em pé, 1080 × 1920 (9:16)</small></span></label>
         <div class="reel-preview hidden" data-prev><video playsinline muted controls data-pv></video><small class="muted" data-dur></small></div>
         <div class="field" style="margin-top:12px"><label for="rcap">Descrição (opcional)</label><textarea id="rcap" rows="3" maxlength="2200" placeholder="Escreva algo sobre este vídeo…" data-cap></textarea></div>
@@ -1015,6 +1031,7 @@
         },
       }],
       onOpen: (dlg) => {
+        limitNote($('[data-limit-note]', dlg), 'reel');
         $('[data-file]', dlg).addEventListener('change', async (e) => {
           const f = e.target.files[0];
           e.target.value = '';

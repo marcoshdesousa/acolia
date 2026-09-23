@@ -106,6 +106,31 @@
       : '<p class="muted">Nenhum cadastro pendente. 🎉</p>';
   }
 
+  // ---------- Limite de publicações por profissional ----------
+  const limForm = $('[data-limits-form]');
+  async function loadLimits() {
+    const l = await api('/api/admin/limits');
+    limForm.photo.value = l.photo;
+    limForm.reel.value = l.reel;
+  }
+  limForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const photo = Number(limForm.photo.value);
+    const reel = Number(limForm.reel.value);
+    try {
+      const prev = await api(`/api/admin/limits?photo=${photo}&reel=${reel}`);
+      const w = prev.would_remove || { photo: 0, reel: 0 };
+      if (w.photo || w.reel) {
+        const parts = [w.photo ? `${w.photo} ${w.photo === 1 ? 'publicação de fotos' : 'publicações de fotos'}` : '', w.reel ? `${w.reel} ${w.reel === 1 ? 'vídeo' : 'vídeos'}` : ''].filter(Boolean).join(' e ');
+        if (!await confirmDialog(`Com esse limite, vai ser apagado agora: ${parts}. São as publicações mais antigas de quem passou do limite (com os arquivos). Não dá para desfazer. Continuar?`, { okLabel: 'Salvar e apagar', danger: true, title: 'Diminuir o limite' })) return;
+      }
+      const r = await api('/api/admin/limits', { method: 'POST', body: { photo, reel } });
+      toast(r.removed ? `Limite salvo — ${r.removed} ${r.removed === 1 ? 'publicação antiga apagada' : 'publicações antigas apagadas'}` : 'Limite salvo');
+      loadStats().catch(() => {});
+    } catch (ex) { toast(ex.message, 'error'); }
+  });
+  loadLimits().catch(() => {});
+
   // ---------- Profissionais ----------
   function proRow(p) {
     return `<tr>

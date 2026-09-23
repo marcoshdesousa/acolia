@@ -883,3 +883,7 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .topbar .container:has(.disk-pill) .brand { min-width: 0; flex: 0 1 auto; }
 .disk-pill { flex: none; }
 @media (max-width: 560px) { .topbar .container:has(.disk-pill) .brand .badge { display: none; } }
+/* Aviso do limite de publicações */
+.limit-note { margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; background: var(--primary-soft); color: var(--primary); font-size: .82rem; line-height: 1.4; }
+.limit-note.full { background: var(--warn-soft); color: var(--warn); }
+.limit-note svg { vertical-align: -2px; }

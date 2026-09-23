@@ -1328,3 +1328,52 @@ test('espaço do disco: só o administrador vê (paciente, profissional e visita
     assert.ok(!JSON.stringify(me.data).includes('usage'), 'nada de espaço no /me');
   }
 });
+
+test('limite de publicações: ao passar, a mais antiga sai; o admin muda o limite e o excesso é apagado', async () => {
+  const { db } = require('../server/db');
+  const path = require('node:path');
+  // Começa com 15 fotos e 10 vídeos
+  assert.deepEqual((await admin.get('/api/admin/limits')).data, { photo: 15, reel: 10 });
+  const c = await admin.post('/api/admin/professionals', { name: 'Lia Limite', profession: 'Psicólogo(a)', registry: 'R-limite', email: 'lia.limite@example.com', phone: '11955554444', state: 'SP', city: 'Campinas' });
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+  const photo = async (i) => {
+    const fd = new FormData();
+    fd.append('caption', `Foto ${i}`);
+    fd.append('photos', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, i])], { type: 'image/png' }), 'f.png');
+    return (await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } })).json();
+  };
+  const reel = async (i) => {
+    const fd = new FormData();
+    fd.append('caption', `Vídeo ${i}`);
+    fd.append('poster', new Blob([Buffer.from([0xff, 0xd8, 0xff, i])], { type: 'image/jpeg' }), 'c.jpg');
+    fd.append('video', new Blob([Buffer.from(`video-${i}`)], { type: 'video/mp4' }), 'v.mp4');
+    return (await fetch(`${base}/api/social/reels`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } })).json();
+  };
+  // Admin baixa para 3 fotos e 2 vídeos (para o teste ser rápido)
+  assert.equal((await admin.post('/api/admin/limits', { photo: 3, reel: 2 })).status, 200);
+  const photos = [];
+  for (let i = 1; i <= 4; i++) photos.push(await photo(i));
+  const count = (kind) => db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = ?').get(c.data.id, kind).n;
+  assert.equal(count('photo'), 3, 'no máximo 3');
+  assert.equal(db.prepare('SELECT 1 FROM posts WHERE id = ?').get(photos[0].id), undefined, 'a 1ª (mais antiga) saiu');
+  await new Promise((ok) => setTimeout(ok, 50));
+  assert.equal(fs.existsSync(path.join(tmp, 'uploads', path.basename(photos[0].image))), false, 'arquivo apagado (libera espaço)');
+  const reels = [];
+  for (let i = 1; i <= 3; i++) reels.push(await reel(i));
+  assert.equal(count('reel'), 2);
+  assert.equal(db.prepare('SELECT 1 FROM posts WHERE id = ?').get(reels[0].id), undefined, 'o vídeo mais antigo saiu');
+  assert.deepEqual((await pro.get('/api/social/limits')).data, { photo: { max: 3, used: 3 }, reel: { max: 2, used: 2 } });
+  // Diminuir o limite: mostra quantas vão sair e apaga as mais antigas na hora
+  const prev = (await admin.get('/api/admin/limits?photo=1&reel=1')).data;
+  assert.ok(prev.would_remove.photo >= 2 && prev.would_remove.reel >= 1);
+  const r = (await admin.post('/api/admin/limits', { photo: 1, reel: 1 })).data;
+  assert.ok(r.removed >= 3);
+  assert.equal(count('photo'), 1);
+  assert.equal(count('reel'), 1);
+  assert.equal(db.prepare('SELECT caption FROM posts WHERE professional_id = ? AND kind = ?').get(c.data.id, 'photo').caption, 'Foto 4', 'fica a mais nova');
+  // Paciente e profissional não mudam o limite
+  assert.equal((await pro.post('/api/admin/limits', { photo: 99, reel: 99 })).status, 401);
+  // Volta ao padrão combinado (15 fotos e 10 vídeos)
+  assert.equal((await admin.post('/api/admin/limits', { photo: 15, reel: 10 })).status, 200);
+});

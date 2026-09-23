@@ -315,6 +315,32 @@ router.get('/export/professionals.csv', (req, res) => {
     ['WhatsApp', 'phone'], ['UF', 'state'], ['Município', 'city'], ['Status', 'status'], ['Mensalidade até', 'subscription_until'], ['Cadastro', 'created_at']]));
 });
 
+// ---------- Limite de publicações por profissional ----------
+// GET: limites atuais. ?photo=&reel= mostra quantas publicações seriam apagadas com esses números.
+router.get('/limits', (req, res) => {
+  const S = require('./social');
+  const lim = S.getLimits();
+  const out = { photo: lim.photo, reel: lim.reel };
+  const p = Number(req.query.photo);
+  const r = Number(req.query.reel);
+  if (Number.isInteger(p) && Number.isInteger(r) && p > 0 && r > 0) {
+    out.would_remove = { photo: S.overLimit('photo', p).length, reel: S.overLimit('reel', r).length };
+  }
+  res.json(out);
+});
+
+// POST: salva e já aplica — quem passar do novo limite perde as publicações mais antigas
+router.post('/limits', (req, res) => {
+  const photo = Number(req.body.photo);
+  const reel = Number(req.body.reel);
+  const ok = (n) => Number.isInteger(n) && n >= 1 && n <= 500;
+  if (!ok(photo) || !ok(reel)) throw new U.HttpError(400, 'Use números de 1 a 500.');
+  const S = require('./social');
+  S.setLimits({ photo, reel });
+  const removed = S.enforceLimits();
+  res.json({ photo, reel, removed });
+});
+
 // ---------- Perfil oficial Acolia Brasil (publicações feitas pela administração) ----------
 // A administração só publica e cuida das próprias publicações; não vê o feed nem segue ninguém.
 {
