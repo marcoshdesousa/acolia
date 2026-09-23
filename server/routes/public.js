@@ -89,8 +89,13 @@ router.get('/professionals/:id', (req, res) => {
   const p = /^\d+$/.test(req.params.id)
     ? db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id))
     : db.prepare('SELECT * FROM professionals WHERE slug = ?').get(String(req.params.id).toLowerCase());
-  if (!p || !isVisible(p)) throw new U.HttpError(404, 'Profissional não encontrado.');
   const role = req.auth?.role;
+  // Perfil oficial da Acolia Brasil: só nome, Instagram, seguidores e as publicações
+  if (p && p.status === 'oficial') {
+    const logged = role === 'patient' || role === 'professional';
+    return res.json({ ...require('../official').publicOfficial({ loggedIn: logged }), viewer_role: logged ? role : undefined });
+  }
+  if (!p || !isVisible(p)) throw new U.HttpError(404, 'Profissional não encontrado.');
   const isPatient = role === 'patient';
   const logged = isPatient || role === 'professional'; // profissionais também veem o perfil completo
   const favorite = isPatient && !!db.prepare('SELECT 1 FROM favorites WHERE patient_id = ? AND professional_id = ?').get(req.auth.user.id, p.id);

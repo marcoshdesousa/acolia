@@ -13,7 +13,35 @@
     return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
   }
 
+  // Perfil oficial Acolia Brasil: nome, Instagram, seguidores (pacientes e profissionais) e
+  // todas as publicações. Sem consulta, valores, mensagem ou localização.
+  function renderOfficial(p, { next = '' } = {}) {
+    const n = (x) => Number(x || 0).toLocaleString('pt-BR');
+    const signup = `/cadastro-paciente${next ? `?next=${encodeURIComponent(next)}` : ''}`;
+    return `
+      <div class="card stack official-profile">
+        <div class="row" style="align-items:center;gap:20px;flex-wrap:wrap">
+          <span class="official-avatar"><img src="${esc(p.photo)}" alt=""></span>
+          <div class="grow" style="min-width:220px">
+            <h1 style="font-size:1.6rem;margin-bottom:6px">${esc(p.name)} ${window.AcoliaSocial?.officialBadge || ''}</h1>
+            <div class="pro-counts official-counts">
+              <span><b>${n(p.posts_count)}</b> ${p.posts_count === 1 ? 'publicação' : 'publicações'}</span>
+              <span><b>${n(p.followers_patients)}</b> ${p.followers_patients === 1 ? 'seguidor paciente' : 'seguidores pacientes'}</span>
+              <span><b>${n(p.followers_professionals)}</b> ${p.followers_professionals === 1 ? 'seguidor profissional' : 'seguidores profissionais'}</span>
+            </div>
+            ${p.instagram ? `<a class="insta-btn" href="https://www.instagram.com/${encodeURIComponent(p.instagram)}/" target="_blank" rel="noopener">${ic('instagram', 18)} @${esc(p.instagram)}</a>` : ''}
+          </div>
+          <div class="row"><button type="button" class="btn ${p.following ? 'following' : ''}" data-follow>${p.following ? 'Seguindo' : 'Seguir'}</button></div>
+        </div>
+        <div><h3>Publicações</h3><div class="gallery-grid posts-grid" data-official-grid></div>
+          <div class="spinner" data-official-loading></div><div data-official-end style="height:1px"></div></div>
+      </div>
+      ${p.locked ? `<div class="notice info" style="margin-top:16px">${ic('lock')} Crie sua conta grátis para ver todas as publicações, curtir e comentar.
+        <div class="row" style="margin-top:10px"><a class="btn sm" href="${signup}">Criar conta grátis</a><a class="btn secondary sm" href="/entrar?next=${encodeURIComponent(next || '/acolia')}">Já tenho conta</a></div></div>` : ''}`;
+  }
+
   function render(p, { actions = '', next = '' } = {}) {
+    if (p.official) return renderOfficial(p, { next });
     const specialties = (p.specialties || '').split(',').map((s) => s.trim()).filter(Boolean);
     const signup = `/cadastro-paciente${next ? `?next=${encodeURIComponent(next)}` : ''}`;
     // Selo "Crie conta para ver" (leva para o cadastro grátis e depois volta para este perfil)

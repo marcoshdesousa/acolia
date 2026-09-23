@@ -52,7 +52,7 @@
 
     try {
       const p = await api('/api/professionals/' + encodeURIComponent(key));
-      document.title = p.name + ' — ' + p.profession + ' | Acolia';
+      document.title = p.official ? p.name + ' | Acolia' : p.name + ' — ' + p.profession + ' | Acolia';
       const heart = ICONS.heart.replace('<svg', '<svg style="width:18px;height:18px"');
       const chat = ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"');
       $('[data-profile]').innerHTML = AcoliaProfile.render(p, {
@@ -63,7 +63,7 @@
       });
       AcoliaSocial.setContext({ role: me.role, me: me.user, onOpenProfile: (id) => { location.href = '/profissional.html?id=' + id; }, onMessage: (id) => { location.href = '/app#conversar/' + id; } });
       AcoliaSocial.bindProfile($('[data-profile]'), p, { onNeedAccount: needAccount });
-      if (pro) return;
+      if (pro || p.official) return;
       let fav = !!p.favorite;
       $('[data-fav]').addEventListener('click', async () => {
         if (!patient) return needAccount();

@@ -9,6 +9,7 @@ const A = require('../auth');
 const rt = require('../realtime');
 const { VISIBLE_SQL, freeGalleryCount, PROFILE_POSTS } = require('../serialize');
 const { handlePhoto, handlePhotos, handleMedia, removePhoto } = require('../upload');
+const O = require('../official');
 
 const router = express.Router();
 const STORY_HOURS = 24;
@@ -20,6 +21,9 @@ const isPro = (req) => req.auth?.role === 'professional';
 
 // Nome público: profissional com nome completo; paciente só com o 1º e o 2º nome + cidade
 function actor(role, id) {
+  if (role === 'professional' && O.isOfficial(id)) {
+    return { role, id: O.officialId(), name: O.NAME, subtitle: 'Perfil oficial', photo: O.PHOTO, slug: O.SLUG, official: true };
+  }
   if (role === 'professional') {
     const p = db.prepare('SELECT id, name, photo, profession, slug FROM professionals WHERE id = ?').get(id);
     if (!p) return { role, id, name: 'Profissional', subtitle: '', photo: null };
@@ -33,6 +37,7 @@ function actor(role, id) {
 
 function notify(toRole, toId, type, from, extra = {}) {
   if (toRole === from.role && toId === from.id) return; // não avisa a própria pessoa
+  if (toRole === 'professional' && O.isOfficial(toId)) return; // o perfil oficial não tem sininho
   const info = db.prepare(`INSERT INTO notifications (recipient_role, recipient_id, type, actor_role, actor_id, post_id, story_id, comment_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(toRole, toId, type, from.role, from.id, extra.post_id || null, extra.story_id || null, extra.comment_id || null);
   rt.emit(`${toRole}:${toId}`, 'social:notification', { id: Number(info.lastInsertRowid), type });
@@ -41,6 +46,16 @@ function notify(toRole, toId, type, from, extra = {}) {
 // ---------- Publicações ----------
 function visiblePro(id) {
   return db.prepare(`SELECT * FROM professionals p WHERE id = ? AND ${VISIBLE_SQL}`).get(id);
+}
+// Quem pode ter publicações vistas: profissional visível ou o perfil oficial da Acolia
+const socialPro = (id) => (O.isOfficial(id) ? O.officialRow() : visiblePro(id));
+
+// A pessoa segue este profissional? 'self' (é ela), 'official' (Acolia Brasil: todos seguem) ou true/false
+function followState(proId, me) {
+  if (!me) return undefined;
+  if (me.role === 'professional' && me.id === proId) return 'self';
+  if (O.isOfficial(proId)) return 'official';
+  return !!db.prepare('SELECT 1 FROM follows WHERE follower_role = ? AND follower_id = ? AND professional_id = ?').get(me.role, me.id, proId);
 }
 
 // Fotos da publicação na ordem (carrossel); publicações antigas têm só a capa
@@ -59,6 +74,7 @@ function postOut(p, me) {
     likes, comments, liked,
     mine: !!me && me.role === 'professional' && me.id === p.professional_id,
     author: actor('professional', p.professional_id),
+    follow: followState(p.professional_id, me),
   };
 }
 
@@ -66,7 +82,7 @@ function loadPost(req, id) {
   const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(id));
   if (!p) throw new U.HttpError(404, 'Publicação não encontrada.');
   const mine = isPro(req) && req.auth.user.id === p.professional_id;
-  if (!mine && !visiblePro(p.professional_id)) throw new U.HttpError(404, 'Publicação não encontrada.');
+  if (!mine && !socialPro(p.professional_id)) throw new U.HttpError(404, 'Publicação não encontrada.');
   return p;
 }
 
@@ -74,7 +90,7 @@ function loadPost(req, id) {
 router.get('/professionals/:id/posts', (req, res) => {
   const proId = Number(req.params.id);
   const mine = isPro(req) && req.auth.user.id === proId;
-  if (!mine && !visiblePro(proId)) throw new U.HttpError(404, 'Profissional não encontrado.');
+  if (!mine && !socialPro(proId)) throw new U.HttpError(404, 'Profissional não encontrado.');
   const total = db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(proId).n;
   if (!req.auth || !['patient', 'professional'].includes(req.auth.role)) {
     const first = db.prepare(`SELECT image FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(proId);
@@ -99,21 +115,53 @@ router.get('/posts/:id', (req, res) => {
 
 router.use(A.requireRole('patient', 'professional'));
 
-// Feed: publicações de quem a pessoa segue (e as próprias, no caso do profissional).
-// Primeiro as que ela ainda não viu (mais novas no topo), depois as já vistas.
+// Feed: publicações de quem a pessoa segue, as próprias (profissional) e as da Acolia Brasil
+// (todos seguem). Primeiro as que ela ainda não viu (mais novas no topo), depois as já vistas.
+// No meio, de vez em quando, aparecem publicações de outros profissionais que ela não segue
+// (sugestões, com o botão Seguir). Quando acabam as de quem ela segue, o feed continua só com
+// sugestões — assim quem não segue ninguém também vê publicações.
+// ?sug=1,2,3 = sugestões que o aparelho já mostrou (para não repetir).
 router.get('/feed', (req, res) => {
   const me = who(req);
   const offset = Math.max(0, Number(req.query.offset) || 0);
+  const official = O.officialId();
   const rows = db.prepare(`
     SELECT po.*, (SELECT 1 FROM post_views v WHERE v.post_id = po.id AND v.role = ? AND v.user_id = ?) AS seen
     FROM posts po JOIN professionals p ON p.id = po.professional_id
     WHERE (${VISIBLE_SQL} AND po.professional_id IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?))
        OR (? = 'professional' AND po.professional_id = ?)
+       OR po.professional_id = ?
     ORDER BY seen IS NOT NULL, po.id DESC
-    LIMIT ? OFFSET ?`).all(me.role, me.id, me.role, me.id, me.role, me.id, PAGE + 1, offset);
-  const more = rows.length > PAGE;
+    LIMIT ? OFFSET ?`).all(me.role, me.id, me.role, me.id, me.role, me.id, official, PAGE + 1, offset);
+  const mainMore = rows.length > PAGE;
+  const main = rows.slice(0, PAGE);
+
+  // Sugestões: poucas no meio (0 a 2 a cada página); se acabou o resto, a página inteira
+  const shown = String(req.query.sug || '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(-500);
+  const want = mainMore ? Math.floor(Math.random() * 3) : PAGE - main.length;
+  let sug = [];
+  if (want > 0 || !mainMore) {
+    sug = db.prepare(`
+      SELECT po.*, (SELECT 1 FROM post_views v WHERE v.post_id = po.id AND v.role = ? AND v.user_id = ?) AS seen
+      FROM posts po JOIN professionals p ON p.id = po.professional_id
+      WHERE ${VISIBLE_SQL} AND po.professional_id <> ?
+        AND NOT (? = 'professional' AND po.professional_id = ?)
+        AND po.professional_id NOT IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?)
+        AND po.id NOT IN (SELECT value FROM json_each(?))
+      ORDER BY seen IS NOT NULL, RANDOM()
+      LIMIT ?`).all(me.role, me.id, official, me.role, me.id, me.role, me.id, JSON.stringify(shown), want + 1);
+  }
+  const sugMore = sug.length > want;
+  sug = sug.slice(0, Math.max(0, want));
+
+  // Espalha as sugestões em posições aleatórias (nunca como a primeira do feed)
+  const items = main.map((p) => ({ ...postOut(p, me), seen: !!p.seen }));
+  for (const p of sug) {
+    const at = items.length < 2 ? items.length : 1 + Math.floor(Math.random() * items.length);
+    items.splice(at, 0, { ...postOut(p, me), seen: !!p.seen, suggested: true });
+  }
   const following = db.prepare('SELECT COUNT(*) n FROM follows WHERE follower_role = ? AND follower_id = ?').get(me.role, me.id).n;
-  res.json({ items: rows.slice(0, PAGE).map((p) => ({ ...postOut(p, me), seen: !!p.seen })), has_more: more, following });
+  res.json({ items, main_count: main.length, has_more: mainMore || sugMore, following });
 });
 
 // O aparelho avisa quais publicações apareceram na tela
@@ -130,12 +178,16 @@ router.post('/seen', (req, res) => {
 router.post('/posts', async (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
   const urls = await handlePhotos(req, res);
-  const caption = U.cleanText(req.body.caption, 2200);
-  const info = db.prepare('INSERT INTO posts (professional_id, image, caption) VALUES (?, ?, ?)').run(req.auth.user.id, urls[0], caption);
+  const p = createPost(req.auth.user.id, urls, req.body.caption);
+  res.status(201).json(postOut(p, who(req)));
+});
+
+function createPost(proId, urls, caption) {
+  const info = db.prepare('INSERT INTO posts (professional_id, image, caption) VALUES (?, ?, ?)').run(proId, urls[0], U.cleanText(caption, 2200));
   const id = Number(info.lastInsertRowid);
   urls.forEach((u, i) => db.prepare('INSERT INTO post_images (post_id, position, image) VALUES (?, ?, ?)').run(id, i, u));
-  res.status(201).json(postOut(db.prepare('SELECT * FROM posts WHERE id = ?').get(id), who(req)));
-});
+  return db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
+}
 
 // Miniatura (até ~600 px) usada na prévia do link compartilhado
 router.post('/posts/:id/thumb', async (req, res) => {
@@ -150,6 +202,11 @@ router.post('/posts/:id/thumb', async (req, res) => {
 router.delete('/posts/:id', (req, res) => {
   const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(req.params.id));
   if (!p || !isPro(req) || p.professional_id !== req.auth.user.id) throw new U.HttpError(404, 'Publicação não encontrada.');
+  deletePostFully(p);
+  res.json({ ok: true });
+});
+
+function deletePostFully(p) {
   db.prepare('DELETE FROM notifications WHERE post_id = ?').run(p.id);
   const imgs = postImages(p);
   for (const st of db.prepare("SELECT id FROM stories WHERE kind = 'post' AND post_id = ?").all(p.id)) {
@@ -159,8 +216,7 @@ router.delete('/posts/:id', (req, res) => {
   db.prepare('DELETE FROM posts WHERE id = ?').run(p.id);
   new Set([p.image, ...imgs]).forEach(removePhoto);
   if (p.thumb) removePhoto(p.thumb);
-  res.json({ ok: true });
-});
+}
 
 router.post('/posts/:id/like', (req, res) => {
   const p = loadPost(req, req.params.id);
@@ -215,9 +271,11 @@ router.delete('/comments/:id', (req, res) => {
 });
 
 // ---------- Seguir ----------
+// Seguidores de um profissional: quem segue + 1 (a Acolia Brasil segue todos os profissionais)
 function followInfo(proId, me) {
+  if (O.isOfficial(proId)) return { followers: O.publicOfficial().followers_count, following: !!me, official: true };
   return {
-    followers: db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(proId).n,
+    followers: db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(proId).n + 1,
     following: me ? !!db.prepare('SELECT 1 FROM follows WHERE follower_role = ? AND follower_id = ? AND professional_id = ?').get(me.role, me.id, proId) : false,
   };
 }
@@ -226,6 +284,7 @@ router.post('/follow/:id', (req, res) => {
   const me = who(req);
   const proId = Number(req.params.id);
   if (me.role === 'professional' && me.id === proId) throw new U.HttpError(400, 'Você não pode seguir a si mesmo.');
+  if (O.isOfficial(proId)) return res.json(followInfo(proId, me)); // já segue (todo mundo segue)
   if (!visiblePro(proId)) throw new U.HttpError(404, 'Profissional não encontrado.');
   const r = db.prepare('INSERT OR IGNORE INTO follows (follower_role, follower_id, professional_id) VALUES (?, ?, ?)').run(me.role, me.id, proId);
   if (r.changes) notify('professional', proId, 'follow', me);
@@ -235,6 +294,7 @@ router.post('/follow/:id', (req, res) => {
 router.delete('/follow/:id', (req, res) => {
   const me = who(req);
   const proId = Number(req.params.id);
+  if (O.isOfficial(proId)) throw new U.HttpError(400, 'Todos seguem a Acolia Brasil — não dá para deixar de seguir.');
   db.prepare('DELETE FROM follows WHERE follower_role = ? AND follower_id = ? AND professional_id = ?').run(me.role, me.id, proId);
   res.json(followInfo(proId, me));
 });
@@ -372,4 +432,4 @@ router.post('/notifications/read', (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router, followInfo, cleanupStories, actor, visiblePro, imageCount };
+module.exports = { router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };

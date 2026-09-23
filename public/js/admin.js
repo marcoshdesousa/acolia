@@ -291,6 +291,80 @@
     reloadAll();
   });
 
+  // ---------- Perfil oficial Acolia Brasil ----------
+  // A administração publica fotos (1 a 10 por publicação), vê as curtidas e comentários,
+  // apaga comentários e publicações. Não vê o feed nem segue ninguém.
+  let offPosts = [];
+  let offOffset = 0;
+  const offGrid = $('[data-official-posts]');
+  function offTile(p) {
+    return `<button type="button" class="gallery-item" data-off-post="${p.id}" aria-label="Abrir publicação"><img src="${esc(p.image)}" alt="" loading="lazy">
+      <span class="off-stats">♥ ${p.likes} · 💬 ${p.comments}</span></button>`;
+  }
+  async function loadOfficial(reset = true) {
+    if (reset) { offPosts = []; offOffset = 0; offGrid.innerHTML = ''; }
+    const d = await api(`/api/admin/official?offset=${offOffset}`);
+    const pr = d.profile;
+    const n = (x) => Number(x || 0).toLocaleString('pt-BR');
+    $('[data-official-head]').innerHTML = `<div class="row" style="gap:16px;flex-wrap:wrap">
+        <span class="official-avatar" style="width:84px;height:84px"><img src="${esc(pr.photo)}" alt=""></span>
+        <div class="grow"><h2 style="margin:0 0 6px">${esc(pr.name)} ${AcoliaSocial.officialBadge}</h2>
+          <div class="pro-counts official-counts"><span><b>${n(pr.posts_count)}</b> ${pr.posts_count === 1 ? 'publicação' : 'publicações'}</span>
+            <span><b>${n(pr.followers_patients)}</b> ${pr.followers_patients === 1 ? 'seguidor paciente' : 'seguidores pacientes'}</span>
+            <span><b>${n(pr.followers_professionals)}</b> ${pr.followers_professionals === 1 ? 'seguidor profissional' : 'seguidores profissionais'}</span></div>
+          <small class="muted">Contam só contas ativas: paciente bloqueado ou que excluiu a conta e profissional com a licença vencida saem da contagem.</small></div></div>`;
+    const ig = $('[data-official-ig]').instagram;
+    if (document.activeElement !== ig) ig.value = pr.instagram ? '@' + pr.instagram : '';
+    offPosts.push(...d.items);
+    offOffset += d.items.length;
+    offGrid.insertAdjacentHTML('beforeend', d.items.map(offTile).join(''));
+    if (!offPosts.length) offGrid.innerHTML = '<p class="muted" style="grid-column:1/-1">Nenhuma publicação ainda. Toque em "Nova publicação" para começar.</p>';
+    $('[data-official-more]').classList.toggle('hidden', !d.has_more);
+  }
+  $('[data-official-more]').addEventListener('click', () => loadOfficial(false).catch((e) => toast(e.message, 'error')));
+  $('[data-official-new]').addEventListener('click', () => AcoliaSocial.openNewPost(() => loadOfficial(), { base: '/api/admin/official/posts', title: 'Nova publicação da Acolia Brasil' }));
+  handleForm($('[data-official-ig]'), async (d) => {
+    await api('/api/admin/official/instagram', { method: 'POST', body: d });
+    toast('Instagram salvo!');
+    await loadOfficial();
+  });
+  offGrid.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-off-post]');
+    if (!b) return;
+    const p = offPosts.find((x) => x.id === Number(b.dataset.offPost));
+    let comments = [];
+    try { comments = (await api(`/api/admin/official/posts/${p.id}/comments`)).items; } catch (ex) { toast(ex.message, 'error'); return; }
+    const cHtml = (c) => `<li class="comment" data-c="${c.id}">${avatar(c.author.name, c.author.photo, 'sm')}
+        <div class="grow"><div class="c-head"><b>${esc(c.author.name)}</b> ${c.author.subtitle ? `<small class="muted">${esc(c.author.subtitle)}</small>` : ''}</div>
+          <div class="c-body">${esc(c.body)}</div><small class="muted">${esc(Acolia.timeAgo(c.created_at))}</small></div>
+        <button type="button" class="icon-btn" data-del-c="${c.id}" aria-label="Apagar comentário" title="Apagar">${ICONS.trash}</button></li>`;
+    const v = await modal({
+      title: 'Publicação',
+      html: `<div class="off-imgs">${p.images.map((src) => `<img src="${esc(src)}" alt="">`).join('')}</div>
+        ${p.caption ? `<p style="white-space:pre-wrap">${esc(p.caption)}</p>` : ''}
+        <p class="muted small">${p.likes} ${p.likes === 1 ? 'curtida' : 'curtidas'} · ${comments.length} ${comments.length === 1 ? 'comentário' : 'comentários'}</p>
+        <h3 style="margin-top:12px">Comentários</h3>
+        <ul class="comments" data-clist>${comments.length ? comments.map(cHtml).join('') : '<li class="muted small">Nenhum comentário.</li>'}</ul>`,
+      actions: [{ label: 'Apagar publicação', value: 'del', class: 'danger' }, { label: 'Fechar' }],
+      onOpen: (dlg) => {
+        $('[data-clist]', dlg).addEventListener('click', async (ev) => {
+          const del = ev.target.closest('[data-del-c]');
+          if (!del || !await confirmDialog('Apagar este comentário?', { okLabel: 'Apagar', danger: true, title: 'Apagar comentário' })) return;
+          try {
+            await api(`/api/admin/official/comments/${del.dataset.delC}`, { method: 'DELETE' });
+            del.closest('li').remove();
+            p.comments = Math.max(0, p.comments - 1);
+            toast('Comentário apagado');
+          } catch (ex) { toast(ex.message, 'error'); }
+        });
+      },
+    });
+    if (v === 'del' && await confirmDialog('Apagar esta publicação? Ela some do perfil da Acolia Brasil e do feed de todos.', { okLabel: 'Apagar', danger: true, title: 'Apagar publicação' })) {
+      try { await api(`/api/admin/official/posts/${p.id}`, { method: 'DELETE' }); toast('Publicação apagada'); } catch (ex) { toast(ex.message, 'error'); }
+    }
+    loadOfficial().catch(() => {});
+  });
+
   // ---------- Conta ----------
   handleForm($('[data-pw-form]'), async (d, f) => {
     await api('/api/admin/password', { method: 'POST', body: d });
@@ -311,7 +385,7 @@
   async function route() {
     $$('dialog').forEach((d) => { d.close(); d.remove(); });
     const [view, arg] = (location.hash.slice(1) || 'inicio').split('/');
-    const v = ['inicio', 'profissionais', 'pacientes', 'novo', 'conta'].includes(view) ? view : 'inicio';
+    const v = ['inicio', 'profissionais', 'pacientes', 'novo', 'acolia', 'conta'].includes(view) ? view : 'inicio';
     $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
     $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === v));
     try {
@@ -322,6 +396,7 @@
         await loadList('professionals');
       }
       if (v === 'pacientes') await loadList('patients');
+      if (v === 'acolia') await loadOfficial();
     } catch (e) { toast(e.message, 'error'); }
   }
   window.addEventListener('hashchange', route);

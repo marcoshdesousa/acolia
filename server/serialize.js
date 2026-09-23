@@ -63,8 +63,9 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
   const gallery = recent.map((r) => r.image);
   const social = {
     posts_count: postsCount,
-    followers_count: db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(p.id).n,
-    following_count: db.prepare("SELECT COUNT(*) n FROM follows WHERE follower_role = 'professional' AND follower_id = ?").get(p.id).n,
+    // +1 nos dois: a Acolia Brasil segue todo profissional e todo profissional segue a Acolia Brasil
+    followers_count: db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(p.id).n + 1,
+    following_count: db.prepare("SELECT COUNT(*) n FROM follows WHERE follower_role = 'professional' AND follower_id = ?").get(p.id).n + 1,
   };
   const common = {
     state: p.state,

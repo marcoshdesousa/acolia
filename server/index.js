@@ -80,7 +80,7 @@ function createApp() {
     const safe = (t, n) => U.cleanText(t, n).replace(/[<>&"]/g, '');
     const post = db.prepare('SELECT po.*, p.name, p.profession FROM posts po JOIN professionals p ON p.id = po.professional_id WHERE po.id = ?').get(Number(req.params.id));
     let html = postHtml;
-    if (post && require('./routes/social').visiblePro(post.professional_id)) {
+    if (post && require('./routes/social').socialPro(post.professional_id)) {
       const origin = `${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}`;
       const title = safe(`${post.name} na Acolia`, 120);
       const desc = safe(post.caption || `Veja a publicação de ${post.name} (${post.profession}) na Acolia.`, 200);
@@ -102,10 +102,12 @@ function createApp() {
   app.get(/^\/([a-zA-Z0-9-]{3,40})\/?$/, (req, res, next) => {
     const { db } = require('./db');
     const slug = req.params[0].toLowerCase();
-    const p = db.prepare("SELECT name, profession, registry, city, state FROM professionals WHERE slug = ? AND status <> 'excluido'").get(slug);
+    const p = db.prepare("SELECT name, profession, registry, city, state, status FROM professionals WHERE slug = ? AND status <> 'excluido'").get(slug);
     if (!p) return next();
-    const title = U.cleanText(`${p.name} — ${p.profession} | Acolia`, 160).replace(/[<>&"]/g, '');
-    const desc = U.cleanText(`${p.profession} (${p.registry}). Veja o perfil, valores e agende sua consulta online pela Acolia.`, 300).replace(/[<>&"]/g, '');
+    const official = p.status === 'oficial';
+    const title = U.cleanText(official ? `${p.name} — perfil oficial | Acolia` : `${p.name} — ${p.profession} | Acolia`, 160).replace(/[<>&"]/g, '');
+    const desc = U.cleanText(official ? 'Perfil oficial da Acolia: saúde mental ao seu alcance. Veja as publicações.'
+      : `${p.profession} (${p.registry}). Veja o perfil, valores e agende sua consulta online pela Acolia.`, 300).replace(/[<>&"]/g, '');
     const html = profileHtml
       .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>
   <meta name="description" content="${desc}">
@@ -135,6 +137,7 @@ async function start(port = Number(process.env.PORT) || 3000) {
   console.log(`[dados] ${st.label}${st.permanent ? '' : ' — ATENÇÃO: não é permanente, adicione um disco no Render'}`);
   const { setupSocket } = require('./socket');
   ensureAdmin();
+  require('./official').officialId(); // cria o perfil oficial Acolia Brasil (uma vez só)
   if (process.env.TEST_ACCOUNTS !== '0') require('./testAccounts').seedOnce();
   // Stories somem depois de 24 h
   const { cleanupStories } = require('./routes/social');

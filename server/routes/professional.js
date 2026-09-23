@@ -162,4 +162,4 @@ router.post('/password', (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router, wipeProfessional };
+module.exports = { router, wipeProfessional, cleanInstagram };

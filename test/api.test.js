@@ -828,26 +828,36 @@ test('v1.2 — seguir, feed (não vistas primeiro), curtir, comentar, stories e 
   const pt = client();
   await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
 
-  // Sem seguir, o feed fica vazio; paciente não publica
-  assert.equal((await pt.get('/api/social/feed')).data.items.length, 0);
+  // Sem seguir, o feed mostra publicações de outros profissionais como sugestão (com Seguir); paciente não publica
+  let sugFeed = (await pt.get('/api/social/feed')).data.items;
+  assert.ok([p1.id, p2.id].every((id) => sugFeed.some((p) => p.id === id)));
+  assert.ok(sugFeed.every((p) => p.suggested && p.follow === false), 'sugestão com o botão Seguir');
+  // Sugestão já mostrada não repete
+  const again = (await pt.get(`/api/social/feed?sug=${sugFeed.map((p) => p.id).join(',')}`)).data.items;
+  assert.ok(!again.some((p) => sugFeed.some((q) => q.id === p.id)));
+  // Sem seguir, curte e comenta do mesmo jeito
+  assert.equal((await pt.post(`/api/social/posts/${p2.id}/like`)).data.liked, true);
+  await pt.del(`/api/social/posts/${p2.id}/like`);
   let r = await pt.post('/api/social/posts');
   assert.equal(r.status, 403);
 
   // Seguir (paciente e profissional); contadores no perfil, sem lista de quem segue
   r = await pt.post(`/api/social/follow/${A.id}`);
-  assert.deepEqual(r.data, { followers: 1, following: true });
+  assert.deepEqual(r.data, { followers: 2, following: true }, 'quem segue + a Acolia Brasil');
   await B.cl.post(`/api/social/follow/${A.id}`);
   assert.equal((await A.cl.post(`/api/social/follow/${A.id}`)).status, 400, 'não segue a si mesmo');
   const prof = (await pt.get(`/api/professionals/${A.id}`)).data;
-  assert.equal(prof.followers_count, 2);
+  assert.equal(prof.followers_count, 3);
   assert.equal(prof.following, true);
-  assert.equal((await pt.get(`/api/professionals/${B.id}`)).data.following_count, 1, 'Bruno segue 1');
+  assert.equal((await pt.get(`/api/professionals/${B.id}`)).data.following_count, 2, 'Bruno segue Ana e a Acolia Brasil');
 
   // Feed: não vistas primeiro
-  let feed = (await pt.get('/api/social/feed')).data.items;
+  const followed = async () => (await pt.get('/api/social/feed')).data.items.filter((p) => !p.suggested && !p.author.official);
+  let feed = await followed();
   assert.deepEqual(feed.map((p) => p.id), [p2.id, p1.id]);
+  assert.ok(feed.every((p) => p.follow === true));
   await pt.post('/api/social/seen', { ids: [p2.id] });
-  feed = (await pt.get('/api/social/feed')).data.items;
+  feed = await followed();
   assert.deepEqual(feed.map((p) => p.id), [p1.id, p2.id], 'a já vista desce');
 
   // Curtir (sem mostrar quem) e comentar
@@ -919,8 +929,8 @@ test('v1.2 — seguir, feed (não vistas primeiro), curtir, comentar, stories e 
 
   // Deixar de seguir
   r = await pt.del(`/api/social/follow/${A.id}`);
-  assert.deepEqual(r.data, { followers: 1, following: false });
-  assert.equal((await pt.get('/api/social/feed')).data.items.length, 0);
+  assert.deepEqual(r.data, { followers: 2, following: false });
+  assert.ok((await pt.get('/api/social/feed')).data.items.every((p) => p.suggested), 'volta a ver só como sugestão');
 });
 
 test('carrossel: uma publicação com até 10 fotos e uma descrição só', async () => {
@@ -984,4 +994,94 @@ test('publicação no story: só o dono coloca; quem segue vê e abre a publica�
   await D.cl.post(`/api/social/posts/${post.id}/story`);
   await D.cl.del(`/api/social/posts/${post.id}`);
   assert.equal((await pt.get('/api/social/stories')).data.groups.filter((x) => x.professional.id === D.id).length, 0);
+});
+
+test('Acolia Brasil: o admin publica, todos seguem (sem deixar de seguir) e o perfil mostra seguidores pacientes e profissionais', async () => {
+  const { db } = require('../server/db');
+  const O = require('../server/official');
+  const offId = O.officialId();
+  const mkPro = async (name, email) => {
+    const c = await admin.post('/api/admin/professionals', { name, profession: 'Psicólogo(a)', registry: `R-${email}`, email, phone: '11933330000', state: 'SP', city: 'Campinas' });
+    const cl = client();
+    await cl.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+    return { id: c.data.id, cl };
+  };
+  const P = await mkPro('Paula Oficial', 'paulaof@example.com');
+  const pt = client();
+  await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+
+  // Não aparece na vitrine nem na lista de profissionais do admin; ninguém entra nele
+  assert.ok(!(await pt.get('/api/professionals?state=todos')).data.items.some((p) => p.id === offId));
+  assert.ok(!(await admin.get('/api/admin/professionals')).data.items.some((p) => p.id === offId));
+  assert.equal((await admin.get(`/api/admin/professionals/${offId}`)).status, 404);
+  const row = O.officialRow();
+  assert.equal((await client().post('/api/auth/professional/login', { login: row.code, password: 'x' })).status, 401);
+  assert.equal((await pt.post('/api/chat/conversations', { professional_id: offId })).status, 404, 'sem mensagem');
+
+  // Admin publica (com carrossel) e define o Instagram; profissional/paciente não publicam por essa rota
+  const fd = new FormData();
+  fd.append('caption', 'Bem-vindos à Acolia!');
+  fd.append('photos', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 1])], { type: 'image/png' }), 'a.png');
+  fd.append('photos', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 2])], { type: 'image/png' }), 'b.png');
+  let res = await fetch(`${base}/api/admin/official/posts`, { method: 'POST', body: fd, headers: { Cookie: admin.cookie } });
+  const op = await res.json();
+  assert.equal(res.status, 201, JSON.stringify(op));
+  assert.equal(op.images.length, 2);
+  res = await fetch(`${base}/api/admin/official/posts`, { method: 'POST', body: new FormData(), headers: { Cookie: pt.cookie } });
+  assert.equal(res.status, 401);
+  assert.equal((await admin.post('/api/admin/official/instagram', { instagram: 'https://instagram.com/acoliabrasil' })).data.instagram, 'acoliabrasil');
+
+  // Aparece no feed de todo mundo (paciente e profissional), sem botão Seguir
+  for (const who of [pt, P.cl]) {
+    const it = (await who.get('/api/social/feed')).data.items.find((p) => p.id === op.id);
+    assert.ok(it, 'publicação oficial no feed');
+    assert.equal(it.follow, 'official');
+    assert.equal(it.author.name, 'Acolia Brasil');
+    assert.equal(it.author.official, true);
+  }
+  // Curte e comenta; o admin vê e apaga o comentário
+  await pt.post(`/api/social/posts/${op.id}/like`);
+  const cm = (await pt.post(`/api/social/posts/${op.id}/comments`, { body: 'Que legal!' })).data;
+  const adm = (await admin.get('/api/admin/official')).data;
+  assert.equal(adm.items[0].likes, 1);
+  assert.equal(adm.items[0].comments, 1);
+  assert.equal((await admin.get(`/api/admin/official/posts/${op.id}/comments`)).data.items[0].body, 'Que legal!');
+  assert.equal((await admin.del(`/api/admin/official/comments/${cm.id}`)).status, 200);
+
+  // Não dá para deixar de seguir
+  assert.equal((await pt.del(`/api/social/follow/${offId}`)).status, 400);
+  assert.equal((await pt.post(`/api/social/follow/${offId}`)).data.following, true);
+
+  // Perfil: seguidores pacientes (ativos) e profissionais (licença em dia); sai quem perde a licença
+  const count = () => ({
+    patients: db.prepare("SELECT COUNT(*) n FROM patients WHERE status = 'ativo' AND is_test = 0").get().n,
+    pros: db.prepare("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND subscription_until >= date('now') AND is_test = 0").get().n,
+  });
+  let prof = (await pt.get('/api/professionals/acolia')).data;
+  assert.equal(prof.official, true);
+  assert.equal(prof.name, 'Acolia Brasil');
+  assert.equal(prof.instagram, 'acoliabrasil');
+  assert.equal(prof.followers_patients, count().patients);
+  assert.equal(prof.followers_professionals, count().pros);
+  assert.equal(prof.following, true);
+  assert.equal(prof.price_cents, undefined, 'sem valores/consulta');
+  const before = prof.followers_professionals;
+  db.prepare("UPDATE professionals SET subscription_until = date('now', '-1 day') WHERE id = ?").run(P.id);
+  prof = (await pt.get(`/api/professionals/${offId}`)).data;
+  assert.equal(prof.followers_professionals, before - 1, 'licença vencida some da contagem');
+  db.prepare("UPDATE professionals SET subscription_until = date('now', '+30 day') WHERE id = ?").run(P.id);
+
+  // Todas as publicações no perfil (logado); visitante com o bloqueio de sempre
+  assert.equal((await pt.get(`/api/social/professionals/${offId}/posts`)).data.items.length, 1);
+  const vis = (await anon.get(`/api/social/professionals/${offId}/posts`)).data;
+  assert.equal(vis.locked, true);
+  assert.equal(vis.items.length, 0, 'com 1 publicação, visitante não vê nenhuma aberta');
+  assert.equal((await anon.get('/api/professionals/acolia')).data.locked, true);
+  const page = await fetch(`${base}/acolia`);
+  assert.equal(page.status, 200);
+  assert.ok((await page.text()).includes('Acolia Brasil — perfil oficial'));
+
+  // Admin apaga a publicação
+  assert.equal((await admin.del(`/api/admin/official/posts/${op.id}`)).status, 200);
+  assert.ok(!(await pt.get('/api/social/feed')).data.items.some((p) => p.id === op.id));
 });

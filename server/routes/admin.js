@@ -13,6 +13,11 @@ const { DOC_DIR } = require('../upload');
 
 const router = express.Router();
 router.use(A.requireRole('admin'));
+// O perfil oficial (Acolia Brasil) não aparece nem é mexido pelas telas de profissionais
+router.use('/professionals/:id', (req, _res, next) => {
+  if (require('../official').isOfficial(req.params.id)) return next(new U.HttpError(404, 'Profissional não encontrado.'));
+  next();
+});
 
 const PRO_STATUSES = ['pendente', 'aprovado', 'recusado', 'restrito', 'bloqueado'];
 
@@ -54,7 +59,7 @@ router.get('/stats', (_req, res) => {
   res.json({
     patients: g('SELECT COUNT(*) n FROM patients'),
     patients_blocked: g("SELECT COUNT(*) n FROM patients WHERE status = 'bloqueado'"),
-    professionals: g('SELECT COUNT(*) n FROM professionals'),
+    professionals: g("SELECT COUNT(*) n FROM professionals WHERE status <> 'oficial'"),
     pending: g("SELECT COUNT(*) n FROM professionals WHERE status = 'pendente'"),
     approved: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado'"),
     visible: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND subscription_until >= date('now')"),
@@ -80,7 +85,7 @@ router.get('/locations', (_req, res) => {
 
 // ---------- Profissionais ----------
 router.get('/professionals', (req, res) => {
-  let rows = db.prepare('SELECT * FROM professionals ORDER BY created_at DESC').all();
+  let rows = db.prepare("SELECT * FROM professionals WHERE status <> 'oficial' ORDER BY created_at DESC").all();
   if ([...PRO_STATUSES, 'excluido'].includes(req.query.status)) rows = rows.filter((r) => r.status === req.query.status);
   if (req.query.status === 'vencido') rows = rows.filter((r) => r.status === 'aprovado' && !isVisible(r));
   rows = filterRows(rows, req.query);
@@ -88,7 +93,7 @@ router.get('/professionals', (req, res) => {
 });
 
 router.get('/professionals/:id', (req, res) => {
-  const p = db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id));
+  const p = db.prepare("SELECT * FROM professionals WHERE id = ? AND status <> 'oficial'").get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
   res.json(adminPro(p));
 });
@@ -241,12 +246,75 @@ router.get('/export/patients.csv', (req, res) => {
 });
 
 router.get('/export/professionals.csv', (req, res) => {
-  const rows = filterRows(db.prepare('SELECT * FROM professionals ORDER BY name').all(), req.query).map(adminPro);
+  const rows = filterRows(db.prepare("SELECT * FROM professionals WHERE status <> 'oficial' ORDER BY name").all(), req.query).map(adminPro);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="profissionais.csv"');
   res.send(csv(rows, [['Nome', 'name'], ['Profissão', 'profession'], ['Registro', 'registry'], ['Código', 'code'], ['E-mail', 'email'],
     ['WhatsApp', 'phone'], ['UF', 'state'], ['Município', 'city'], ['Status', 'status'], ['Mensalidade até', 'subscription_until'], ['Cadastro', 'created_at']]));
 });
+
+// ---------- Perfil oficial Acolia Brasil (publicações feitas pela administração) ----------
+// A administração só publica e cuida das próprias publicações; não vê o feed nem segue ninguém.
+{
+  const O = require('../official');
+  const S = require('./social');
+  const { handlePhoto, handlePhotos, removePhoto } = require('../upload');
+  const ownPost = (id) => {
+    const p = db.prepare('SELECT * FROM posts WHERE id = ? AND professional_id = ?').get(Number(id), O.officialId());
+    if (!p) throw new U.HttpError(404, 'Publicação não encontrada.');
+    return p;
+  };
+  const postRow = (p) => ({
+    id: p.id, image: p.image, images: S.postImages(p), caption: p.caption, created_at: p.created_at,
+    likes: db.prepare('SELECT COUNT(*) n FROM post_likes WHERE post_id = ?').get(p.id).n,
+    comments: db.prepare('SELECT COUNT(*) n FROM post_comments WHERE post_id = ?').get(p.id).n,
+  });
+
+  router.get('/official', (req, res) => {
+    const offset = Math.max(0, Number(req.query.offset) || 0);
+    const rows = db.prepare('SELECT * FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT 25 OFFSET ?').all(O.officialId(), offset);
+    res.json({ profile: O.publicOfficial({ loggedIn: true }), items: rows.slice(0, 24).map(postRow), has_more: rows.length > 24 });
+  });
+
+  router.post('/official/instagram', (req, res) => {
+    const ig = require('./professional').cleanInstagram(req.body.instagram);
+    db.prepare('UPDATE professionals SET instagram = ? WHERE id = ?').run(ig, O.officialId());
+    res.json(O.publicOfficial({ loggedIn: true }));
+  });
+
+  router.post('/official/posts', async (req, res) => {
+    const urls = await handlePhotos(req, res);
+    res.status(201).json(postRow(S.createPost(O.officialId(), urls, req.body.caption)));
+  });
+
+  router.post('/official/posts/:id/thumb', async (req, res) => {
+    const p = ownPost(req.params.id);
+    const url = await handlePhoto(req, res);
+    if (p.thumb) removePhoto(p.thumb);
+    db.prepare('UPDATE posts SET thumb = ? WHERE id = ?').run(url, p.id);
+    res.json({ ok: true });
+  });
+
+  router.delete('/official/posts/:id', (req, res) => {
+    S.deletePostFully(ownPost(req.params.id));
+    res.json({ ok: true });
+  });
+
+  // Comentários nas publicações oficiais: a administração lê e apaga (moderação)
+  router.get('/official/posts/:id/comments', (req, res) => {
+    const p = ownPost(req.params.id);
+    const rows = db.prepare('SELECT * FROM post_comments WHERE post_id = ? ORDER BY id').all(p.id);
+    res.json({ items: rows.map((c) => ({ id: c.id, body: c.body, created_at: c.created_at, author: S.actor(c.role, c.user_id) })) });
+  });
+
+  router.delete('/official/comments/:id', (req, res) => {
+    const c = db.prepare('SELECT c.id FROM post_comments c JOIN posts p ON p.id = c.post_id WHERE c.id = ? AND p.professional_id = ?').get(Number(req.params.id), O.officialId());
+    if (!c) throw new U.HttpError(404, 'Comentário não encontrado.');
+    db.prepare('DELETE FROM notifications WHERE comment_id = ?').run(c.id);
+    db.prepare('DELETE FROM post_comments WHERE id = ?').run(c.id);
+    res.json({ ok: true });
+  });
+}
 
 router.post('/password', (req, res) => {
   const a = db.prepare('SELECT * FROM admins WHERE id = ?').get(req.auth.user.id);

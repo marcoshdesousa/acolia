@@ -148,7 +148,7 @@ router.post('/professional/login', (req, res) => {
   const login = U.cleanText(req.body.login, 160);
   const key = `pro:${req.ip}:${login.toLowerCase()}`;
   A.checkLoginRate(key);
-  const p = db.prepare('SELECT * FROM professionals WHERE code = ? OR email = ?').get(login.toUpperCase(), login.toLowerCase());
+  const p = db.prepare("SELECT * FROM professionals WHERE (code = ? OR email = ?) AND status <> 'oficial'").get(login.toUpperCase(), login.toLowerCase());
   if (!p || !U.verifyPassword(req.body.password || '', p.password_hash)) {
     A.registerLoginFailure(key);
     throw new HttpError(401, 'Código/e-mail ou senha incorretos.');

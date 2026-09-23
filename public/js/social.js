@@ -14,8 +14,11 @@
   // ---------- Peças ----------
   const likeBtn = (liked, attr) => `<button type="button" class="like-btn ${liked ? 'on' : ''}" ${attr} aria-pressed="${liked}" aria-label="${liked ? 'Descurtir' : 'Curtir'}"><span class="mind" aria-hidden="true"></span></button>`;
 
+  // Selo do perfil oficial (Acolia Brasil)
+  const officialBadge = '<span class="official-badge" title="Perfil oficial da Acolia" aria-label="Perfil oficial"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.5l2.6 1.9 3.2-.1 1 3 2.6 1.9-1 3.1 1 3.1-2.6 1.9-1 3-3.2-.1L12 22.5l-2.6-1.9-3.2.1-1-3-2.6-1.9 1-3.1-1-3.1 2.6-1.9 1-3 3.2.1z"/><path d="M8 12.2l2.7 2.7L16.2 9.4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+
   function authorLink(a, extra = '') {
-    const inner = `${avatar(a.name, a.photo, 'sm')}<span class="who"><b>${esc(a.name)}</b>${a.subtitle ? `<small>${esc(a.subtitle)}</small>` : ''}${extra}</span>`;
+    const inner = `${avatar(a.name, a.photo, 'sm')}<span class="who"><b>${esc(a.name)}${a.official ? officialBadge : ''}</b>${a.subtitle ? `<small>${esc(a.subtitle)}</small>` : ''}${extra}</span>`;
     return a.role === 'professional'
       ? `<a class="post-author" href="#" data-open-pro="${a.id}">${inner}</a>`
       : `<span class="post-author">${inner}</span>`;
@@ -63,6 +66,7 @@
   function postCard(p) {
     return `<article class="post-card" data-post="${p.id}">
       <header>${authorLink(p.author, `<small class="muted">· ${esc(timeAgo(p.created_at))}</small>`)}
+        ${p.follow === false ? `<button type="button" class="follow-chip" data-follow-pro="${p.author.id}">Seguir</button>` : ''}
         ${p.mine ? `<button type="button" class="icon-btn" data-post-menu="${p.id}" aria-label="Opções">⋮</button>` : ''}</header>
       ${mediaHtml(p)}
       <div class="post-actions">
@@ -187,6 +191,20 @@
     } catch (e) { toast(e.message, 'error'); return false; }
   }
 
+  // Botão "Seguir" em cima da publicação de quem a pessoa ainda não segue
+  async function followFromPost(btn) {
+    const id = Number(btn.dataset.followPro);
+    const on = btn.classList.contains('following');
+    const all = $$(`[data-follow-pro="${id}"]`);
+    all.forEach((b) => { b.disabled = true; });
+    try {
+      const r = await api(`/api/social/follow/${id}`, { method: on ? 'DELETE' : 'POST' });
+      all.forEach((b) => { b.classList.toggle('following', r.following); b.textContent = r.following ? 'Seguindo' : 'Seguir'; });
+      if (r.following) toast('Agora você segue este profissional');
+    } catch (e) { toast(e.message, 'error'); }
+    all.forEach((b) => { b.disabled = false; });
+  }
+
   // Um único "ouvinte" de cliques para feed, publicação aberta e perfil
   function bindActions(root) {
     if (root._socialBound) return;
@@ -200,6 +218,8 @@
       if (com) return openComments(Number(com.dataset.comments));
       const sh = e.target.closest('[data-share]');
       if (sh) return share(Number(sh.dataset.share));
+      const fol = e.target.closest('[data-follow-pro]');
+      if (fol) return ctx.anon ? ctx.onNeedAccount?.() : followFromPost(fol);
       const pro = e.target.closest('[data-open-pro]');
       if (pro) { e.preventDefault(); return openProfile(Number(pro.dataset.openPro)); }
       const menu = e.target.closest('[data-post-menu]');
@@ -237,10 +257,10 @@
   // ---------- Nova publicação (profissional) ----------
   // Uma publicação com 1 a 10 fotos (carrossel) e uma descrição para todas
   const MAX_PHOTOS = 10;
-  async function newPost(onDone) {
+  async function newPost(onDone, { base = '/api/social/posts', title = 'Nova publicação' } = {}) {
     let files = [];
     await modal({
-      title: 'Nova publicação',
+      title,
       html: `<label class="pick-media" data-pick><input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden data-file>
           <span data-empty-pick>${ic('image', 40)}<b>Escolher fotos</b><small class="muted">Até ${MAX_PHOTOS} fotos numa publicação</small></span></label>
         <div class="pick-strip hidden" data-strip></div>
@@ -256,11 +276,11 @@
           fd.append('caption', $('[data-cap]', dlg).value);
           for (const f of files) fd.append('photos', await shrinkImage(f, 1600));
           try {
-            const p = await api('/api/social/posts', { method: 'POST', form: fd });
+            const p = await api(base, { method: 'POST', form: fd });
             // Miniatura leve (da 1ª foto) para a prévia do link no WhatsApp
             const tf = new FormData();
             tf.append('photo', await shrinkImage(files[0], 600));
-            api(`/api/social/posts/${p.id}/thumb`, { method: 'POST', form: tf }).catch(() => {});
+            api(`${base}/${p.id}/thumb`, { method: 'POST', form: tf }).catch(() => {});
             toast('Publicado!');
             onDone?.(p);
             return true;
@@ -489,6 +509,7 @@
     let more = true;
     let loading = false;
     let groups = [];
+    let sugIds = []; // sugestões já mostradas (o servidor não repete)
 
     async function loadStories() {
       try {
@@ -530,9 +551,9 @@
     async function loadFeed(reset) {
       if (loading || (!more && !reset)) return;
       loading = true;
-      if (reset) { offset = 0; more = true; feed.innerHTML = '<div class="spinner"></div>'; }
+      if (reset) { offset = 0; more = true; sugIds = []; feed.innerHTML = '<div class="spinner"></div>'; }
       try {
-        const data = await api(`/api/social/feed?offset=${offset}`);
+        const data = await api(`/api/social/feed?offset=${offset}&sug=${sugIds.slice(-400).join(',')}`);
         if (reset) feed.innerHTML = '';
         if (!data.items.length && offset === 0) {
           feed.innerHTML = `<div class="empty">${ic('home', 48)}<p>${data.following
@@ -541,9 +562,11 @@
             <button type="button" class="btn secondary sm" data-go-pros>Ver profissionais</button></div>`;
           $('[data-go-pros]', feed).onclick = () => opts.onFindPros?.();
         }
+        data.items = data.items.filter((p) => !$(`[data-post="${p.id}"]`, feed)); // sem repetir no feed
         feed.insertAdjacentHTML('beforeend', data.items.map(postCard).join(''));
         data.items.forEach((p) => { if (!p.seen && io) io.observe($(`[data-post="${p.id}"]`, feed)); });
-        offset += data.items.length;
+        offset += data.main_count ?? data.items.length;
+        sugIds.push(...data.items.filter((p) => p.suggested).map((p) => p.id));
         more = data.has_more;
       } catch (e) { if (reset) feed.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
       loading = false;
@@ -584,6 +607,7 @@
   // Primeiras 6 fotos; "Ver todas as fotos" carrega o resto (só com conta). Visitante não abre.
   function bindProfile(container, p, { onNeedAccount } = {}) {
     bindActions(container);
+    if (p.official) return bindOfficial(container, p, { onNeedAccount });
     const moreBtn = $('[data-all-posts]', container);
     if (moreBtn) {
       moreBtn.addEventListener('click', () => {
@@ -609,6 +633,51 @@
         } catch (ex) { toast(ex.message, 'error'); }
       });
     }
+  }
+
+  // ---------- Perfil oficial Acolia Brasil ----------
+  // Todas as publicações direto no perfil, com rolagem sem fim. Visitante sem conta vê só
+  // as primeiras (mesma regra dos profissionais) e o resto pede conta. Não dá para deixar de seguir.
+  function bindOfficial(container, p, { onNeedAccount } = {}) {
+    const grid = $('[data-official-grid]', container);
+    const end = $('[data-official-end]', container);
+    const spin = $('[data-official-loading]', container);
+    container.addEventListener('click', (e) => {
+      const open = e.target.closest('[data-post-open]');
+      if (open) return openPost(Number(open.dataset.postOpen));
+      if (e.target.closest('[data-follow]')) {
+        if (p.locked || !p.viewer_role) return onNeedAccount?.();
+        toast('Todos seguem a Acolia Brasil 💚');
+      }
+    });
+    let offset = 0;
+    let more = true;
+    let busy = false;
+    async function load() {
+      if (busy || !more) return;
+      busy = true;
+      try {
+        const data = await api(`/api/social/professionals/${p.id}/posts?offset=${offset}&limit=24`);
+        if (data.locked) {
+          const next = location.pathname + location.search;
+          const lockedTiles = Math.min(data.hidden || 0, 4 - data.items.length);
+          grid.innerHTML = data.items.map((x, i) => `<button type="button" class="gallery-item" data-gallery-need-account="${esc(next)}" aria-label="Crie conta para ampliar"><img src="${esc(x.image)}" alt="Publicação ${i + 1} da Acolia Brasil" loading="lazy"></button>`).join('')
+            + Array.from({ length: lockedTiles }, () => `<a class="gallery-item gallery-locked" href="/cadastro-paciente?next=${encodeURIComponent(next)}">${ic('lock', 20)}<span>Crie conta para ver</span></a>`).join('');
+          more = false;
+        } else {
+          grid.insertAdjacentHTML('beforeend', data.items.map(gridTile).join(''));
+          offset += data.items.length;
+          more = data.has_more;
+        }
+        if (!grid.children.length) grid.innerHTML = '<p class="muted" style="grid-column:1/-1">Nenhuma publicação ainda.</p>';
+      } catch (e) { toast(e.message, 'error'); more = false; }
+      spin?.classList.toggle('hidden', !more);
+      busy = false;
+    }
+    if ('IntersectionObserver' in window && end) {
+      new IntersectionObserver((en) => { if (en[0].isIntersecting) load(); }, { rootMargin: '400px' }).observe(end);
+    }
+    load();
   }
 
   // ---------- Página "Todas as publicações" de um profissional ----------
@@ -654,5 +723,5 @@
     load();
   }
 
-  window.AcoliaSocial = { mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
+  window.AcoliaSocial = { officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
 })();

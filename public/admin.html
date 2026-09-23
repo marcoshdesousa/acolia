@@ -33,7 +33,8 @@
       <a href="#profissionais" data-nav="profissionais"><span data-i="therapist"></span>Profissionais<span class="nav-badge" data-pending></span></a>
       <a href="#pacientes" data-nav="pacientes"><span data-i="users"></span>Pacientes</a>
       <a href="#novo" data-nav="novo"><span data-i="userPlus"></span>Cadastrar profissional</a>
-      <a href="#conta" data-nav="conta"><span data-i="gear"></span>Conta</a>
+      <a href="#acolia" data-nav="acolia"><span data-i="gear"></span>Acolia Brasil</a>
+      <a href="#conta" data-nav="conta"><span data-i="user"></span>Conta</a>
     </aside>
     <main class="panel-main">
       <section data-view="inicio" class="hidden">
@@ -101,6 +102,23 @@
         </form>
       </section>
 
+      <section data-view="acolia" class="hidden" style="max-width:900px">
+        <div class="row between" style="flex-wrap:wrap;gap:10px">
+          <h1 style="font-size:1.5rem;margin:0">Perfil oficial Acolia Brasil</h1>
+          <div class="row" style="gap:8px"><a class="btn secondary sm" href="/acolia" target="_blank" rel="noopener">Ver perfil público</a>
+            <button type="button" class="btn sm" data-official-new><span data-i="plus"></span> Nova publicação</button></div>
+        </div>
+        <p class="muted small" style="margin-top:6px">Todos que têm conta (pacientes e profissionais) seguem este perfil automaticamente e não conseguem deixar de seguir. As publicações daqui aparecem no feed de todo mundo.</p>
+        <div class="card" data-official-head style="margin-top:12px"><div class="spinner"></div></div>
+        <form class="card row" data-official-ig style="margin-top:12px;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <div class="field grow" style="margin:0;min-width:200px"><label for="o-ig">Instagram da Acolia (o @, aparece no perfil)</label><input id="o-ig" name="instagram" placeholder="@acoliabrasil" maxlength="80"></div>
+          <button class="btn secondary" type="submit">Salvar</button>
+        </form>
+        <h2 style="margin-top:24px">Nossas publicações</h2>
+        <div class="gallery-grid posts-grid" data-official-posts></div>
+        <div style="margin-top:12px"><button type="button" class="btn secondary sm hidden" data-official-more>Carregar mais</button></div>
+      </section>
+
       <section data-view="conta" class="hidden" style="max-width:520px">
         <h1 style="font-size:1.5rem">Conta do administrador</h1>
         <form class="card" data-pw-form>
@@ -118,10 +136,12 @@
     <a href="#profissionais" data-nav="profissionais"><span data-i="therapist"></span>Profissionais<span class="nav-badge" data-pending></span></a>
     <a href="#pacientes" data-nav="pacientes"><span data-i="users"></span>Pacientes</a>
     <a href="#novo" data-nav="novo"><span data-i="userPlus"></span>Cadastrar</a>
-    <a href="#conta" data-nav="conta"><span data-i="gear"></span>Conta</a>
+    <a href="#acolia" data-nav="acolia"><span data-i="gear"></span>Acolia</a>
+    <a href="#conta" data-nav="conta"><span data-i="user"></span>Conta</a>
   </nav>
 
   <script src="/js/common.js"></script>
+  <script src="/js/social.js"></script>
   <script src="/js/admin.js"></script>
 </body>
 </html>

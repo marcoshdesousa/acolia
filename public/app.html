@@ -166,6 +166,7 @@
           });
           AcoliaSocial.bindProfile($('[data-profile]'), p);
           const fb = $('[data-fav]');
+          if (!fb) return; // perfil oficial: sem favoritar nem mensagem
           let fav = p.favorite;
           fb.addEventListener('click', async () => {
             await api('/api/patient/favorites/' + p.id, { method: fav ? 'DELETE' : 'POST' });
