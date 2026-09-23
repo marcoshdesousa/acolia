@@ -21,8 +21,8 @@ function setupSocket(httpServer) {
       const c = db.prepare(`SELECT * FROM conversations WHERE id = ? AND ${col} = ?`).get(Number(conversation_id), auth.user.id);
       if (!c) return;
       // Antes da primeira mensagem do paciente, o profissional não sabe da conversa
-      const wrote = db.prepare("SELECT 1 FROM messages WHERE conversation_id = ? AND sender_role = 'patient'").get(c.id);
-      if (!wrote) return;
+      if (!c.patient_wrote) return;
+      if (db.prepare('SELECT 1 FROM chat_blocks WHERE conversation_id = ?').get(c.id)) return; // bloqueado: nada de "digitando"
       const target = auth.role === 'patient' ? `professional:${c.professional_id}` : `patient:${c.patient_id}`;
       io.to(target).emit('chat:typing', { conversation_id: c.id });
     });

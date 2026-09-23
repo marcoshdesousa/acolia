@@ -887,3 +887,26 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .limit-note { margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; background: var(--primary-soft); color: var(--primary); font-size: .82rem; line-height: 1.4; }
 .limit-note.full { background: var(--warn-soft); color: var(--warn); }
 .limit-note svg { vertical-align: -2px; }
+
+/* Chat: menu ⋮ da conversa, faixa de bloqueio e lista de bloqueados */
+.thread-menu-wrap { position: relative; }
+.thread-pop { position: absolute; top: 42px; right: 0; left: auto; z-index: 20; display: grid; min-width: 220px; }
+.msg-pop button, .thread-pop button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; white-space: nowrap; }
+.msg-pop button svg, .thread-pop button svg { width: 16px; height: 16px; flex: none; }
+.thread-pop button.danger { color: var(--danger); }
+.msg-pop { display: grid; gap: 2px; }
+.block-banner { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; font-size: .85rem; font-weight: 700; color: var(--muted);
+  background: var(--surface-2); border-bottom: 1px solid var(--line); }
+.block-banner svg { width: 16px; height: 16px; }
+.block-banner .btn { margin-left: auto; }
+.blocked-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.blocked-list li { display: flex; align-items: center; gap: 10px; }
+.blocked-list li .grow { display: flex; flex-direction: column; min-width: 0; }
+.thread-pop button { color: var(--text); }
+.thread-pop button.danger { color: var(--danger); }
+.thread-pop.hidden { display: none; }
+/* Menu da mensagem recebida abre para a direita (não sai da tela) */
+.msg:not(.me) .msg-pop { right: auto; left: 8px; }
+.block-banner { flex-wrap: nowrap; }
+.block-banner > svg { flex: none; }
+.block-banner .btn { flex: none; }

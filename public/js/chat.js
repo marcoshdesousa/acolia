@@ -1,5 +1,5 @@
 /* Acolia — chat estilo WhatsApp (usado pelo paciente e pelo profissional).
-   Quem enviou pode apagar a mensagem para todos ("Mensagem apagada"); conversas podem ser arquivadas. */
+   Apagar para mim / para todos, limpar conversa, bloquear (só mensagens) e arquivar. */
 (function () {
   'use strict';
   const { $, $$, esc, api, ICONS, avatar, fmtTime, fmtDay, fmtShort, toast, modal, copyText } = window.Acolia;
@@ -16,25 +16,56 @@
             <button class="btn ghost sm hidden" data-back-list>${ICONS.back} Voltar</button>
           </div>
           <div class="archived-link hidden" data-archived-link role="button" tabindex="0">${ICONS.archive}<span class="grow">Arquivadas</span><span class="unread hidden" data-archived-unread></span><span class="muted small" data-archived-count></span></div>
+          <div class="archived-link hidden" data-blocked-link role="button" tabindex="0">${ICONS.ban}<span class="grow">Bloqueados</span><span class="muted small" data-blocked-count></span></div>
           <ul data-list></ul>
         </aside>
         <section class="chat-thread" aria-live="polite">
           <div class="chat-empty" data-empty>
             <div>${ICONS.chat.replace('<svg', '<svg style="width:64px;height:64px;opacity:.4;margin:0 auto 8px"')}
             <p>${role === 'patient' ? 'Escolha um profissional para conversar.' : 'Selecione uma conversa para responder.'}</p>
-            <p class="small">Você pode apagar as mensagens que enviou a qualquer momento.</p></div>
+            <p class="small">Você pode apagar mensagens (para você ou para todos), limpar a conversa e bloquear pelo ⋮.</p></div>
           </div>
           <div class="hidden" data-thread style="display:contents"></div>
         </section>
       </div>`;
 
     const chatEl = $('.chat', root);
+    // Tocar fora fecha o menu ⋮ da conversa
+    document.addEventListener('click', (e) => { if (!e.target.closest('.thread-menu-wrap')) $$('[data-thread-pop]', root).forEach((p) => p.classList.add('hidden')); });
     const listEl = $('[data-list]', root);
     const threadWrap = $('[data-thread]', root);
 
     $('[data-archived-link]', root).addEventListener('click', () => { state.archived = true; renderListHead(); loadList(); });
     $('[data-archived-link]', root).addEventListener('keydown', (e) => { if (e.key === 'Enter') e.currentTarget.click(); });
     $('[data-back-list]', root).addEventListener('click', () => { state.archived = false; renderListHead(); loadList(); });
+    $('[data-blocked-link]', root).addEventListener('click', openBlocked);
+    $('[data-blocked-link]', root).addEventListener('keydown', (e) => { if (e.key === 'Enter') openBlocked(); });
+
+    // Bloqueados: quem eu bloqueei (dá para desbloquear e voltar a conversar)
+    async function openBlocked() {
+      let items = [];
+      try { items = (await api('/api/chat/blocks')).items; } catch (e) { toast(e.message, 'error'); return; }
+      await modal({
+        title: 'Bloqueados',
+        html: items.length ? `<p class="small muted" style="margin-top:0">Quem está aqui não consegue mandar mensagem para você (e você também não manda). O bloqueio é só das mensagens.</p>
+          <ul class="blocked-list">${items.map((b) => `<li>${avatar(b.peer.name, b.peer.photo, 'sm')}<span class="grow"><b>${esc(b.peer.name)}</b><small class="muted">${esc(b.peer.subtitle || '')}</small></span>
+            <button type="button" class="btn secondary sm" data-unblock="${b.conversation_id}">Desbloquear</button></li>`).join('')}</ul>`
+          : '<p class="muted">Você não bloqueou ninguém.</p>',
+        actions: [{ label: 'Fechar' }],
+        onOpen: (dlg) => {
+          dlg.addEventListener('click', async (e) => {
+            const u = e.target.closest('[data-unblock]');
+            if (!u) return;
+            try {
+              await api(`/api/chat/conversations/${u.dataset.unblock}/block`, { method: 'DELETE' });
+              u.closest('li').remove();
+              toast('Desbloqueado');
+              loadList();
+            } catch (ex) { toast(ex.message, 'error'); }
+          });
+        },
+      });
+    }
 
     function renderListHead() {
       $('[data-title]', root).textContent = state.archived ? 'Arquivadas' : 'Conversas';
@@ -58,6 +89,8 @@
         const link = $('[data-archived-link]', root);
         link.classList.toggle('hidden', state.archived || data.archived_count === 0);
         $('[data-archived-count]', root).textContent = data.archived_count || '';
+        $('[data-blocked-link]', root).classList.toggle('hidden', state.archived || !data.blocked_count);
+        $('[data-blocked-count]', root).textContent = data.blocked_count || '';
         const au = $('[data-archived-unread]', root);
         au.textContent = data.archived_unread;
         au.classList.toggle('hidden', !data.archived_unread);
@@ -133,24 +166,38 @@
           </div>
           ${proActions}
           <img class="brand-mark" src="/img/logo-simbolo.png" alt="Acolia" title="Acolia">
-          <button class="icon-btn" data-archive title="${c.archived ? 'Desarquivar' : 'Arquivar'}" aria-label="${c.archived ? 'Desarquivar conversa' : 'Arquivar conversa'}">${c.archived ? ICONS.unarchive : ICONS.archive}</button>
+          <div class="thread-menu-wrap">
+            <button class="icon-btn" data-thread-menu aria-label="Opções da conversa" title="Opções"><span style="font-size:1.3rem;line-height:1">⋮</span></button>
+            <div class="msg-pop thread-pop hidden" data-thread-pop>
+              <button type="button" data-archive>${c.archived ? ICONS.unarchive : ICONS.archive} ${c.archived ? 'Desarquivar conversa' : 'Arquivar conversa'}</button>
+              <button type="button" data-clear>${ICONS.trash} Limpar conversa</button>
+              <button type="button" data-block class="danger">${ICONS.ban} ${c.blocked_by_me ? 'Desbloquear' : 'Bloquear'} ${role === 'professional' ? 'paciente' : 'profissional'}</button>
+            </div>
+          </div>
         </div>
+        ${c.blocked_by_me ? `<div class="block-banner">${ICONS.ban}<span class="grow">Você bloqueou este ${role === 'professional' ? 'paciente' : 'profissional'}. Ninguém consegue mandar mensagem nesta conversa.</span><button type="button" class="btn secondary sm" data-unblock-here>Desbloquear</button></div>`
+          : c.blocked_me ? `<div class="block-banner">${ICONS.ban}<span class="grow">Não é possível enviar mensagens nesta conversa.</span></div>` : ''}
         <div class="messages-wrap">
           <div class="messages" data-messages></div>
         </div>
         <form class="composer" data-composer>
-          <textarea rows="1" placeholder="${c.peer.active ? 'Digite uma mensagem' : 'Esta conta não está mais ativa'}" aria-label="Mensagem" ${c.peer.active ? '' : 'disabled'} maxlength="4000"></textarea>
+          <textarea rows="1" placeholder="${!c.peer.active ? 'Esta conta não está mais ativa' : c.blocked_by_me || c.blocked_me ? 'Mensagens bloqueadas' : 'Digite uma mensagem'}" aria-label="Mensagem" ${canWrite(c) ? '' : 'disabled'} maxlength="4000"></textarea>
           <button class="icon-btn rec-cancel" type="button" data-rec-cancel aria-label="Apagar áudio" title="Apagar áudio">${ICONS.trash}</button>
           <div class="rec-bar" aria-live="polite"><span class="rec-dot"></span><b data-rec-time>0:00</b><div class="rec-live" data-rec-live></div>
             <button class="icon-btn rec-stop" type="button" data-rec-stop aria-label="Parar e ouvir antes de enviar" title="Parar e ouvir">${ICONS.stop}</button></div>
           <div class="rec-preview" data-rec-preview></div>
-          <button class="btn send mic" type="button" data-mic aria-label="Gravar áudio" title="Gravar áudio" ${c.peer.active ? '' : 'disabled'}>${ICONS.mic}</button>
-          <button class="btn send" type="submit" data-send aria-label="Enviar" ${c.peer.active ? '' : 'disabled'}>${ICONS.send}</button>
+          <button class="btn send mic" type="button" data-mic aria-label="Gravar áudio" title="Gravar áudio" ${canWrite(c) ? '' : 'disabled'}>${ICONS.mic}</button>
+          <button class="btn send" type="submit" data-send aria-label="Enviar" ${canWrite(c) ? '' : 'disabled'}>${ICONS.send}</button>
         </form>`;
       renderMessages(true);
 
       $('[data-close]', threadWrap).addEventListener('click', closeThread);
-      $('[data-archive]', threadWrap).addEventListener('click', toggleArchive);
+      const pop = $('[data-thread-pop]', threadWrap);
+      $('[data-thread-menu]', threadWrap).addEventListener('click', (e) => { e.stopPropagation(); pop.classList.toggle('hidden'); });
+      $('[data-archive]', threadWrap).addEventListener('click', () => { pop.classList.add('hidden'); toggleArchive(); });
+      $('[data-clear]', threadWrap).addEventListener('click', () => { pop.classList.add('hidden'); clearConversation(); });
+      $('[data-block]', threadWrap).addEventListener('click', () => { pop.classList.add('hidden'); toggleBlock(); });
+      $('[data-unblock-here]', threadWrap)?.addEventListener('click', toggleBlock);
       $('[data-pix]', threadWrap)?.addEventListener('click', sendPix);
       $('[data-call]', threadWrap)?.addEventListener('click', createCall);
       const form = $('[data-composer]', threadWrap);
@@ -198,9 +245,17 @@
         e.stopPropagation();
         const pop = document.createElement('div');
         pop.className = 'msg-pop';
-        pop.innerHTML = `<button type="button">${ICONS.trash} Apagar mensagem</button>`;
+        const m = state.messages.find((x) => x.id === Number(b.dataset.msgMenu));
+        const everyone = m && m.sender_role === role && m.kind !== 'deleted';
+        pop.innerHTML = `<button type="button" data-del="me">${ICONS.trash} Apagar para mim</button>${everyone ? `<button type="button" data-del="everyone">${ICONS.trash} Apagar para todos</button>` : ''}`;
         b.closest('.msg').appendChild(pop);
-        pop.querySelector('button').addEventListener('click', (ev) => { ev.stopPropagation(); pop.remove(); deleteMessage(Number(b.dataset.msgMenu)); });
+        pop.addEventListener('click', (ev) => {
+          const d = ev.target.closest('[data-del]');
+          if (!d) return;
+          ev.stopPropagation();
+          pop.remove();
+          deleteMessage(Number(b.dataset.msgMenu), d.dataset.del);
+        });
       });
     }
 
@@ -296,14 +351,25 @@
       } catch (ex) { toast(ex.message, 'error'); }
     }
 
-    // ---------- Apagar mensagem (só as suas, para todos) ----------
-    async function deleteMessage(id) {
-      const ok = await Acolia.confirmDialog('Apagar esta mensagem para todos? No lugar dela vai aparecer "Mensagem apagada".', { okLabel: 'Apagar', danger: true, title: 'Apagar mensagem' });
+    // ---------- Apagar mensagem ----------
+    // "Apagar para mim": some só para você. "Apagar para todos" (suas mensagens): o outro vê
+    // "Mensagem apagada" e para você some. Quando os dois apagam, sai do banco de vez.
+    async function deleteMessage(id, mode) {
+      const ok = await Acolia.confirmDialog(mode === 'everyone'
+        ? 'Apagar esta mensagem para todos? Para a outra pessoa vai aparecer "Mensagem apagada".'
+        : 'Apagar esta mensagem só para você? A outra pessoa continua vendo.', { okLabel: 'Apagar', danger: true, title: mode === 'everyone' ? 'Apagar para todos' : 'Apagar para mim' });
       if (!ok) return;
       try {
-        await api(`/api/chat/messages/${id}/delete`, { method: 'POST' });
-        markDeleted(id);
+        await api(`/api/chat/messages/${id}/delete`, { method: 'POST', body: { for: mode } });
+        removeMessage(id);
+        loadList();
       } catch (ex) { toast(ex.message, 'error'); }
+    }
+
+    function removeMessage(id) {
+      const before = state.messages.length;
+      state.messages = state.messages.filter((x) => x.id !== id);
+      if (state.messages.length !== before) renderMessages(false);
     }
 
     function markDeleted(id) {
@@ -313,6 +379,39 @@
       m.body = '';
       const el = $(`[data-mid="${id}"]`, threadWrap);
       if (el) el.outerHTML = msgHtml(m);
+    }
+
+    const canWrite = (c) => c.peer.active && !c.blocked_by_me && !c.blocked_me;
+
+    // Limpar conversa: apaga todas as mensagens só para você
+    async function clearConversation() {
+      if (!await Acolia.confirmDialog('Limpar esta conversa? Todas as mensagens somem para você. A outra pessoa continua vendo as dela.', { okLabel: 'Limpar', danger: true, title: 'Limpar conversa' })) return;
+      try {
+        await api(`/api/chat/conversations/${state.current.id}/clear`, { method: 'POST' });
+        state.messages = [];
+        state.hasMore = false;
+        renderMessages(true);
+        loadList();
+        toast('Conversa limpa');
+      } catch (ex) { toast(ex.message, 'error'); }
+    }
+
+    // Bloquear (só as mensagens) / desbloquear
+    async function toggleBlock() {
+      const c = state.current;
+      const who = role === 'professional' ? 'paciente' : 'profissional';
+      if (!c.blocked_by_me) {
+        const ok = await Acolia.confirmDialog(`Bloquear este ${who}? Ele não vai conseguir mandar mensagem para você e as mensagens desta conversa serão apagadas para você. ${role === 'patient' ? 'Você continua vendo o perfil, as fotos e os vídeos dele. ' : ''}Dá para desbloquear em "Bloqueados".`, { okLabel: 'Bloquear', danger: true, title: `Bloquear ${who}` });
+        if (!ok) return;
+      }
+      try {
+        const upd = await api(`/api/chat/conversations/${c.id}/block`, { method: c.blocked_by_me ? 'DELETE' : 'POST' });
+        toast(upd.blocked_by_me ? `${who[0].toUpperCase()}${who.slice(1)} bloqueado` : 'Desbloqueado');
+        if (upd.blocked_by_me) { closeThread(); return; }
+        state.current = upd;
+        renderThread();
+        loadList();
+      } catch (ex) { toast(ex.message, 'error'); }
     }
 
     function msgHtml(m) {
@@ -338,8 +437,7 @@
       } else {
         inner = esc(m.body);
       }
-      const menu = mine && m.kind !== 'deleted'
-        ? `<button type="button" class="msg-menu" data-msg-menu="${m.id}" aria-label="Opções da mensagem" title="Opções">⋮</button>` : '';
+      const menu = `<button type="button" class="msg-menu" data-msg-menu="${m.id}" aria-label="Opções da mensagem" title="Opções">⋮</button>`;
       return `<div class="msg ${mine ? 'me' : ''} ${m.kind === 'audio' ? 'is-audio' : ''}" data-mid="${m.id}">${menu}${inner}<span class="when">${fmtTime(m.created_at)}${ticks}</span></div>`;
     }
 
@@ -439,6 +537,18 @@
     if (socket) {
       socket.on('message:deleted', ({ id, conversation_id: cid }) => {
         if (state.current && cid === state.current.id) markDeleted(id);
+        loadList();
+      });
+      // Eu apaguei (em outro aparelho): some daqui também
+      socket.on('message:removed', ({ id, conversation_id: cid }) => {
+        if (state.current && cid === state.current.id) removeMessage(id);
+        loadList();
+      });
+      // Bloqueio/desbloqueio: atualiza a conversa aberta (campo de mensagem liberado ou não)
+      socket.on('chat:block', async ({ conversation_id: cid }) => {
+        if (state.current?.id === cid) {
+          try { state.current = await api(`/api/chat/conversations/${cid}`); renderThread(); } catch { closeThread(); }
+        }
         loadList();
       });
       socket.on('message:new', (m) => {

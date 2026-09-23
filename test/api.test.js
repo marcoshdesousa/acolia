@@ -256,11 +256,10 @@ test('chat: paciente inicia, profissional responde, Pix, arquivar', async () => 
   assert.equal(r.data.items.length, 3);
 });
 
-test('mensagens não podem ser editadas nem removidas do banco (só o conteúdo pode ser apagado)', async () => {
+test('mensagens não podem ser editadas (só apagadas)', async () => {
   const r = await pat.del(`/api/chat/conversations/${convId}/messages`);
   assert.equal(r.status, 404);
   const { db } = require('../server/db');
-  assert.throws(() => db.prepare('DELETE FROM messages').run(), /não podem ser apagadas/);
   assert.throws(() => db.prepare("UPDATE messages SET body = 'x'").run(), /não podem ser alteradas/);
   assert.throws(() => db.prepare("UPDATE messages SET kind = 'deleted', body = 'ainda aqui'").run(), /não podem ser alteradas/);
 });
@@ -796,8 +795,8 @@ test('apagar mensagem: só quem enviou, para todos; o conteúdo sai do banco', a
   const file = m2.body.split('|')[0];
   assert.ok(file.endsWith('.wav'));
 
-  let r = await gp.post(`/api/chat/messages/${m1.id}/delete`);
-  assert.equal(r.status, 403, 'o profissional não apaga mensagem do paciente');
+  let r = await gp.post(`/api/chat/messages/${m1.id}/delete`, { for: 'everyone' });
+  assert.equal(r.status, 403, 'o profissional não apaga para todos a mensagem do paciente');
   r = await pt.post(`/api/chat/messages/${m1.id}/delete`);
   assert.equal(r.status, 200);
   r = await pt.post(`/api/chat/messages/${m2.id}/delete`);
@@ -805,7 +804,8 @@ test('apagar mensagem: só quem enviou, para todos; o conteúdo sai do banco', a
 
   const { db } = require('../server/db');
   const row = db.prepare('SELECT kind, body FROM messages WHERE id = ?').get(m1.id);
-  assert.deepEqual({ ...row }, { kind: 'deleted', body: '' }, 'texto apagado do banco');
+  assert.deepEqual({ kind: row.kind, body: row.body }, { kind: 'deleted', body: '' }, 'texto apagado do banco');
+  assert.equal((await pt.get(`/api/chat/conversations/${conv.id}/messages`)).data.items.length, 0, 'para quem apagou, some');
   assert.equal(db.prepare("SELECT COUNT(*) n FROM messages WHERE body LIKE '%texto secreto%'").get().n, 0);
   const seen = (await gp.get(`/api/chat/conversations/${conv.id}/messages`)).data.items;
   assert.ok(seen.every((m) => m.kind === 'deleted' && m.body === ''), 'o outro lado vê "Mensagem apagada"');
@@ -1385,4 +1385,56 @@ test('reel: mais de 70 MB é recusado (inteiro ou em pedaços)', async () => {
   assert.equal(r.status, 400);
   assert.match(r.data.error, /70 MB/);
   assert.equal((await pro.post('/api/social/uploads', { mime: 'video/mp4', size: 69 * 1024 * 1024 })).status, 201, 'até 70 MB tudo bem');
+});
+
+test('chat: apagar para mim, limpar conversa, bloquear (só mensagens) e conta apagada some com tudo', async () => {
+  const { db } = require('../server/db');
+  const created = await admin.post('/api/admin/professionals', { name: 'Téo Chat', profession: 'Psicólogo(a)', registry: 'R-chatblk', email: 'teo.chat@example.com', phone: '11922223333', state: 'SP', city: 'Campinas' });
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
+  const pt = client();
+  await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+  const conv = (await pt.post('/api/chat/conversations', { professional_id: created.data.id })).data;
+  const send = (who, body) => who.post(`/api/chat/conversations/${conv.id}/messages`, { body });
+  const a = (await send(pt, 'Oi, tudo bem?')).data;
+  const b = (await send(pro, 'Olá! Tudo sim.')).data;
+  const msgs = async (who) => (await who.get(`/api/chat/conversations/${conv.id}/messages`)).data.items.map((m) => m.body);
+
+  // Apagar para mim: some só para mim; quando os dois apagam, sai do banco
+  assert.equal((await pro.post(`/api/chat/messages/${a.id}/delete`, { for: 'me' })).status, 200);
+  assert.ok(!(await msgs(pro)).includes('Oi, tudo bem?'));
+  assert.ok((await msgs(pt)).includes('Oi, tudo bem?'), 'o paciente ainda vê');
+  await pt.post(`/api/chat/messages/${a.id}/delete`, { for: 'me' });
+  assert.equal(db.prepare('SELECT 1 FROM messages WHERE id = ?').get(a.id), undefined, 'os dois apagaram: saiu do banco');
+
+  // Limpar conversa: some tudo para mim, o outro continua vendo
+  await pt.post(`/api/chat/conversations/${conv.id}/clear`);
+  assert.equal((await msgs(pt)).length, 0);
+  assert.ok((await msgs(pro)).includes('Olá! Tudo sim.'));
+
+  // Profissional bloqueia o paciente: ninguém manda mensagem; a conversa vai para "Bloqueados"
+  let r = await pro.post(`/api/chat/conversations/${conv.id}/block`);
+  assert.equal(r.data.blocked_by_me, true);
+  assert.equal(db.prepare('SELECT 1 FROM messages WHERE id = ?').get(b.id), undefined, 'bloqueou: a conversa foi limpa (e o paciente já tinha limpado)');
+  assert.equal((await send(pt, 'Oi?')).status, 403, 'bloqueado não manda mensagem');
+  assert.equal((await send(pro, 'teste')).status, 403, 'quem bloqueou também não, até desbloquear');
+  assert.equal((await pt.get(`/api/chat/conversations/${conv.id}`)).data.blocked_me, true);
+  assert.equal((await pro.get('/api/chat/conversations')).data.blocked_count, 1);
+  assert.equal((await pro.get('/api/chat/blocks')).data.items[0].conversation_id, conv.id);
+  // Bloqueio é só das mensagens: o paciente continua vendo o profissional
+  assert.equal((await pt.get(`/api/professionals/${created.data.id}`)).status, 200);
+  // Desbloquear
+  r = await pro.del(`/api/chat/conversations/${conv.id}/block`);
+  assert.equal(r.data.blocked_by_me, false);
+  assert.equal((await send(pt, 'Voltei')).status, 201);
+  // Paciente também bloqueia o profissional
+  await pt.post(`/api/chat/conversations/${conv.id}/block`);
+  assert.equal((await send(pro, 'Oi')).status, 403);
+  await pt.del(`/api/chat/conversations/${conv.id}/block`);
+
+  // Conta apagada: a conversa inteira some (mensagens dos dois lados)
+  await send(pro, 'Mensagem do profissional');
+  await admin.post(`/api/admin/professionals/${created.data.id}/delete`);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM messages WHERE conversation_id = ?').get(conv.id).n, 0);
+  assert.equal(db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(conv.id), undefined);
 });

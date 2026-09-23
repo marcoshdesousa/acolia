@@ -33,8 +33,12 @@ A chamada é ponto a ponto (WebRTC): o áudio e o vídeo não passam pelo servid
 O site pode ser instalado como app (Android, iPhone e computador) pelo próprio site, sem loja. As páginas de entrada e o rodapé têm um tutorial de instalação por aparelho. Depois de instalar e tocar em **Ativar notificações**, paciente e profissional recebem cada mensagem nova como notificação, mesmo com o app fechado (Web Push). As chaves de notificação são criadas sozinhas e ficam guardadas no banco. No iPhone, as notificações só funcionam com o app instalado (iOS 16.4 ou mais novo).
 
 ## Mensagens
-
-Não podem ser editadas. Quem enviou pode **apagar a própria mensagem para todos**, a qualquer momento: o conteúdo (e o arquivo do áudio) sai do banco e no lugar fica "Mensagem apagada" (o banco tem gatilhos que impedem qualquer outra alteração). Cada lado pode arquivar a conversa; ela continua disponível em "Arquivadas".
+- **Apagar para mim** (qualquer mensagem): some só para você; o outro continua vendo.
+- **Apagar para todos** (só as suas): o conteúdo sai do banco (áudio também), o outro vê "Mensagem apagada" e para você some.
+- Quando **os dois** apagaram a mesma mensagem, ela **sai do banco de vez**.
+- **Limpar conversa** (⋮ da conversa): apaga todas as mensagens só para você.
+- **Bloquear** (⋮ da conversa → "Bloquear paciente/profissional"): só as mensagens — ninguém manda mensagem nessa conversa e ela é limpa para quem bloqueou. O paciente continua vendo o perfil, fotos e vídeos do profissional (para não ver, é só deixar de seguir). Desbloquear em **Conversas → Bloqueados**.
+- **Conta apagada**: as conversas dela somem por completo (mensagens dos dois lados, áudios e a conversa).
 
 ## Colocar no ar com um clique
 

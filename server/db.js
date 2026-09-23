@@ -108,9 +108,9 @@ CREATE TABLE IF NOT EXISTS calls (
 );
 CREATE INDEX IF NOT EXISTS idx_calls_active ON calls(status, patient_code);
 
--- Impede que as mensagens sejam apagadas ou alteradas, mesmo por engano no código.
-CREATE TRIGGER IF NOT EXISTS messages_no_delete BEFORE DELETE ON messages
-BEGIN SELECT RAISE(ABORT, 'mensagens não podem ser apagadas'); END;
+-- Mensagens podem ser apagadas de verdade (apagar para mim / para todos, limpar conversa,
+-- bloquear, conta apagada). Só não podem ser EDITADAS:
+DROP TRIGGER IF EXISTS messages_no_delete;
 -- Mensagem não pode ser editada; a única mudança permitida é apagar o conteúdo (kind = 'deleted', body vazio)
 DROP TRIGGER IF EXISTS messages_no_body_update;
 CREATE TRIGGER IF NOT EXISTS messages_only_erase BEFORE UPDATE OF body, sender_role, conversation_id, kind ON messages
@@ -213,7 +213,23 @@ addColumn('stories', 'post_id', 'INTEGER'); // story que mostra uma publicação
 addColumn('posts', 'kind', "TEXT NOT NULL DEFAULT 'photo'");
 addColumn('posts', 'video', 'TEXT');
 addColumn('posts', 'duration', 'REAL');
-addColumn('posts', 'aspect', 'TEXT'); // formato das fotos: 4:5 | 1:1 | 1.91:1 (publicações antigas: vazio)
+addColumn('posts', 'aspect', 'TEXT');
+// Chat: "apagar para mim" — cada lado esconde a mensagem só para si; quando os dois apagaram,
+// a mensagem sai do banco de vez
+addColumn('messages', 'hidden_for_patient', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('messages', 'hidden_for_professional', 'INTEGER NOT NULL DEFAULT 0');
+// Conversa já teve mensagem do paciente (o profissional passa a ver a conversa) — fica gravado
+// mesmo se as mensagens forem apagadas depois
+addColumn('conversations', 'patient_wrote', 'INTEGER NOT NULL DEFAULT 0');
+db.exec(`UPDATE conversations SET patient_wrote = 1 WHERE patient_wrote = 0
+  AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = conversations.id AND m.sender_role = 'patient')`);
+// Chat: bloquear alguém (só as mensagens: quem foi bloqueado não consegue mais mandar mensagem)
+db.exec(`CREATE TABLE IF NOT EXISTS chat_blocks (
+  conversation_id INTEGER NOT NULL,
+  blocker_role TEXT NOT NULL,              -- patient | professional
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (conversation_id, blocker_role)
+)`); // formato das fotos: 4:5 | 1:1 | 1.91:1 (publicações antigas: vazio)
 // Envio de vídeo em pedaços (continua de onde parou se a internet cair ou o app for para o fundo)
 db.exec(`CREATE TABLE IF NOT EXISTS upload_sessions (
   id TEXT PRIMARY KEY,

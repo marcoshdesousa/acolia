@@ -81,6 +81,7 @@ router.post('/', (req, res) => {
   const pro = req.auth.user;
   let conv = null;
   if (req.body.conversation_id) conv = loadConversation(req, req.body.conversation_id);
+  if (conv) require('./chat').assertCanSend(req.auth.role, conv); // conversa bloqueada: não manda o código
   const call = tx(() => {
     if (activeCalls(pro.id).length >= MAX_ACTIVE_CALLS) {
       throw new U.HttpError(409, `Você já tem ${MAX_ACTIVE_CALLS} atendimentos em aberto. Finalize um deles antes de criar outro.`);
