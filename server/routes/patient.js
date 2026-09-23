@@ -33,6 +33,13 @@ router.post('/photo', async (req, res) => {
 router.post('/delete', (req, res) => {
   const me = req.auth.user;
   if (!U.verifyPassword(req.body.password || '', me.password_hash)) throw new U.HttpError(400, 'Senha incorreta.');
+  wipePatient(me);
+  A.destroySession(req, res);
+  res.json({ ok: true });
+});
+
+// Apaga os dados pessoais (usado pela própria pessoa e, nas contas de teste, pelo admin)
+function wipePatient(me) {
   removePhoto(me.photo);
   db.prepare("DELETE FROM favorites WHERE patient_id = ?").run(me.id);
   db.prepare(`UPDATE patients SET status = 'excluido', name = 'Conta excluída', display_name = '', cpf = ?, cpf_name_verified = 0,
@@ -40,9 +47,7 @@ router.post('/delete', (req, res) => {
   broadcastIdentity(me);
   A.destroyUserSessions('patient', me.id);
   require('../push').removeUser('patient', me.id);
-  A.destroySession(req, res);
-  res.json({ ok: true });
-});
+}
 
 router.post('/password', (req, res) => {
   if (!U.verifyPassword(req.body.current || '', req.auth.user.password_hash)) throw new U.HttpError(400, 'Senha atual incorreta.');
@@ -72,4 +77,4 @@ function broadcastIdentity(me) {
   }
 }
 
-module.exports = { router };
+module.exports = { router, wipePatient };

@@ -124,6 +124,8 @@ addColumn('professionals', 'document_file', 'TEXT');              // foto/PDF da
 addColumn('professionals', 'legal_name', 'TEXT');                 // nome completo da carteirinha (não muda)
 addColumn('professionals', 'registry_verified', 'INTEGER NOT NULL DEFAULT 0'); // conferido no conselho por API
 addColumn('professionals', 'slug', 'TEXT');                        // link próprio: site.com/<slug>
+addColumn('professionals', 'is_test', 'INTEGER NOT NULL DEFAULT 0');  // conta de teste (o admin pode apagar)
+addColumn('patients', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_professionals_slug ON professionals(slug)');
 fs.mkdirSync(path.join(DATA_DIR, 'documents'), { recursive: true });
 

@@ -24,14 +24,14 @@ function adminPro(p) {
     clinic_name: p.clinic_name, clinic_address: p.clinic_address, subscription_until: p.subscription_until,
     visible: isVisible(p), admin_note: p.admin_note, created_at: p.created_at,
     has_document: !!p.document_file, document_is_pdf: /\.pdf$/.test(p.document_file || ''),
-    registry_verified: !!p.registry_verified, legal_name: p.legal_name || p.name, slug: p.slug,
+    registry_verified: !!p.registry_verified, legal_name: p.legal_name || p.name, slug: p.slug, is_test: !!p.is_test,
   };
 }
 
 function adminPatient(p) {
   return {
     id: p.id, name: p.name, display_name: p.display_name, cpf: U.formatCpf(p.cpf), cpf_name_verified: !!p.cpf_name_verified,
-    state: p.state, city: p.city, photo: p.photo, status: p.status, created_at: p.created_at,
+    state: p.state, city: p.city, photo: p.photo, status: p.status, created_at: p.created_at, is_test: !!p.is_test,
   };
 }
 
@@ -171,6 +171,34 @@ router.post('/professionals/:id/reset-password', (req, res) => {
   db.prepare('UPDATE professionals SET password_hash = ? WHERE id = ?').run(U.hashPassword(password), p.id);
   A.destroyUserSessions('professional', p.id);
   res.json({ password });
+});
+
+// ---------- Contas de teste ----------
+// Só contas marcadas como teste podem ser apagadas pelo admin; contas reais nunca.
+router.post('/test-accounts', (_req, res) => {
+  const T = require('../testAccounts');
+  const created = T.ensureTestAccounts();
+  res.json({ created, professional: { login: T.PRO.code, password: T.PRO.password }, patient: { cpf: U.formatCpf(T.PATIENT.cpf), password: T.PATIENT.password } });
+});
+
+router.post('/professionals/:id/delete-test', (req, res) => {
+  const p = db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id));
+  if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
+  if (!p.is_test) throw new U.HttpError(403, 'Só contas de teste podem ser apagadas pelo admin.');
+  if (p.status === 'excluido') throw new U.HttpError(400, 'Esta conta já foi apagada.');
+  require('./professional').wipeProfessional(p);
+  // Libera o código para poder criar a conta de teste de novo
+  db.prepare('UPDATE professionals SET code = ?, slug = NULL WHERE id = ?').run(`excluido-${p.id}`, p.id);
+  res.json({ ok: true });
+});
+
+router.post('/patients/:id/delete-test', (req, res) => {
+  const p = db.prepare('SELECT * FROM patients WHERE id = ?').get(Number(req.params.id));
+  if (!p) throw new U.HttpError(404, 'Paciente não encontrado.');
+  if (!p.is_test) throw new U.HttpError(403, 'Só contas de teste podem ser apagadas pelo admin.');
+  if (p.status === 'excluido') throw new U.HttpError(400, 'Esta conta já foi apagada.');
+  require('./patient').wipePatient(p);
+  res.json({ ok: true });
 });
 
 // ---------- Pacientes ----------

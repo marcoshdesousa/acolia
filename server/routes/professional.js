@@ -71,6 +71,13 @@ router.post('/photo', async (req, res) => {
 router.post('/delete', (req, res) => {
   const me = req.auth.user;
   if (!U.verifyPassword(req.body.password || '', me.password_hash)) throw new U.HttpError(400, 'Senha incorreta.');
+  wipeProfessional(me);
+  A.destroySession(req, res);
+  res.json({ ok: true });
+});
+
+// Apaga os dados pessoais (usado pelo próprio profissional e, nas contas de teste, pelo admin)
+function wipeProfessional(me) {
   const active = db.prepare("SELECT * FROM calls WHERE professional_id = ? AND status = 'ativo'").get(me.id);
   if (active) require('./calls').endCall(active);
   removePhoto(me.photo);
@@ -84,9 +91,7 @@ router.post('/delete', (req, res) => {
   }
   A.destroyUserSessions('professional', me.id);
   require('../push').removeUser('professional', me.id);
-  A.destroySession(req, res);
-  res.json({ ok: true });
-});
+}
 
 router.post('/slug', (req, res) => {
   const slug = require('../slug').validateSlug(req.body.slug);
@@ -103,4 +108,4 @@ router.post('/password', (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router };
+module.exports = { router, wipeProfessional };

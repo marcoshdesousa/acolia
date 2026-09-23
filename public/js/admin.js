@@ -79,10 +79,10 @@
   // ---------- Profissionais ----------
   function proRow(p) {
     return `<tr>
-      <td><div class="row" style="flex-wrap:nowrap">${avatar(p.name, p.photo, 'sm')}<div><b>${esc(p.name)}</b><div class="small muted">${esc(p.profession)} · ${esc(p.email)}</div></div></div></td>
+      <td><div class="row" style="flex-wrap:nowrap">${avatar(p.name, p.photo, 'sm')}<div><b>${esc(p.name)}</b>${p.is_test ? ' <span class="badge warn">Teste</span>' : ''}<div class="small muted">${esc(p.profession)} · ${esc(p.email)}</div></div></div></td>
       <td>${esc(p.registry)}</td>
       <td>${esc(p.city)} - ${esc(p.state)}</td>
-      <td>${STATUS_BADGE[p.status] || esc(p.status)}</td>
+      <td>${p.is_test && p.status === 'excluido' ? '<span class="badge">Apagada</span>' : (STATUS_BADGE[p.status] || esc(p.status))}</td>
       <td>${subBadge(p)}</td>
       <td><button class="btn secondary sm" data-pro="${p.id}">Gerenciar</button></td></tr>`;
   }
@@ -95,14 +95,15 @@
     if (kind === 'professionals') body.innerHTML = items.length ? items.map(proRow).join('') : '<tr><td colspan="6" class="center muted">Nenhum profissional encontrado.</td></tr>';
     else {
       body.innerHTML = items.length ? items.map((p) => `<tr>
-        <td><div class="row" style="flex-wrap:nowrap">${avatar(p.name, p.photo, 'sm')}<div><b>${esc(p.name)}</b>${p.display_name ? `<div class="small muted">Exibe: ${esc(p.display_name)}</div>` : ''}</div></div></td>
+        <td><div class="row" style="flex-wrap:nowrap">${avatar(p.name, p.photo, 'sm')}<div><b>${esc(p.name)}</b>${p.is_test ? ' <span class="badge warn">Teste</span>' : ''}${p.display_name ? `<div class="small muted">Exibe: ${esc(p.display_name)}</div>` : ''}</div></div></td>
         <td style="white-space:nowrap">${esc(p.cpf)} ${p.cpf_name_verified ? '<span class="badge ok" title="Nome conferido com a Receita">conferido</span>' : ''}</td>
         <td>${esc(p.city)} - ${esc(p.state)}</td>
         <td>${fmtDT(p.created_at)}</td>
-        <td>${STATUS_BADGE[p.status]}</td>
+        <td>${p.is_test && p.status === 'excluido' ? '<span class="badge">Apagada</span>' : STATUS_BADGE[p.status]}</td>
         <td>${p.status === 'excluido' ? '' : `<div class="row">
           <button class="btn secondary sm" data-pat-status="${p.id}" data-to="${p.status === 'ativo' ? 'bloqueado' : 'ativo'}">${p.status === 'ativo' ? 'Bloquear' : 'Desbloquear'}</button>
-          <button class="btn ghost sm" data-pat-reset="${p.id}" data-name="${esc(p.name)}">Gerar nova senha</button></div>`}</td></tr>`).join('')
+          <button class="btn ghost sm" data-pat-reset="${p.id}" data-name="${esc(p.name)}">Gerar nova senha</button>
+          ${p.is_test ? `<button class="btn danger sm" data-pat-del="${p.id}">Apagar conta</button>` : ''}</div>`}</td></tr>`).join('')
         : '<tr><td colspan="6" class="center muted">Nenhum paciente encontrado.</td></tr>';
     }
     $(`[data-count="${kind}"]`).textContent = `${items.length} resultado${items.length === 1 ? '' : 's'}`;
@@ -131,6 +132,28 @@
       await api(`/api/admin/patients/${ps.dataset.patStatus}/status`, { method: 'POST', body: { status: to } });
       toast('Atualizado');
       loadList('patients');
+    }
+    const pd = e.target.closest('[data-pat-del]');
+    if (pd) {
+      if (!await confirmDialog('Apagar esta conta de teste? Ela não poderá mais entrar.', { okLabel: 'Apagar', danger: true })) return;
+      await api(`/api/admin/patients/${pd.dataset.patDel}/delete-test`, { method: 'POST' });
+      toast('Conta de teste apagada');
+      reloadAll();
+    }
+    const tb = e.target.closest('[data-test-accounts]');
+    if (tb) {
+      const r = await api('/api/admin/test-accounts', { method: 'POST' });
+      const made = r.created.professional || r.created.patient;
+      const txt = `Profissional — login: ${r.professional.login} · senha: ${r.professional.password}\nPaciente — CPF: ${r.patient.cpf} · senha: ${r.patient.password}`;
+      modal({
+        title: made ? 'Contas de teste criadas' : 'As contas de teste já existem',
+        html: `<p class="small muted" style="margin:0">Profissional (entra com o código)</p>
+          <div class="code-box" style="font-size:1.1rem">${esc(r.professional.login)} / ${esc(r.professional.password)}</div>
+          <p class="small muted" style="margin:12px 0 0">Paciente (entra com o CPF)</p>
+          <div class="code-box" style="font-size:1.1rem">${esc(r.patient.cpf)} / ${esc(r.patient.password)}</div>`,
+        actions: [{ label: 'Copiar tudo', class: 'secondary', handler: () => { copyText(txt); return false; } }, { label: 'Fechar' }],
+      });
+      reloadAll();
     }
     const pr = e.target.closest('[data-pat-reset]');
     if (pr) {
@@ -162,7 +185,7 @@
       html: `
         <div class="row" style="margin-bottom:12px">${avatar(p.name, p.photo, 'lg')}<div>
           <div><b>${esc(p.profession)}</b> · ${esc(p.registry)}</div>
-          <div class="small">${STATUS_BADGE[p.status]} ${p.visible ? '<span class="badge primary">Na vitrine</span>' : '<span class="badge">Fora da vitrine</span>'}</div>
+          <div class="small">${STATUS_BADGE[p.status]}${p.is_test ? ' <span class="badge warn">Teste</span>' : ''} ${p.visible ? '<span class="badge primary">Na vitrine</span>' : '<span class="badge">Fora da vitrine</span>'}</div>
         </div></div>
         <table style="font-size:.9rem"><tbody>
           <tr><th>Código único</th><td><code style="font-size:1.05rem;font-weight:800">${esc(p.code)}</code> <button type="button" class="btn ghost sm" data-copy-code>Copiar</button></td></tr>
@@ -197,7 +220,9 @@
         <h3 style="margin-top:16px">Observações internas</h3>
         <textarea data-note rows="2" maxlength="1000">${esc(p.admin_note)}</textarea>
         <div class="row" style="margin-top:6px"><button type="button" class="btn secondary sm" data-save-note>Salvar observação</button>
-          <button type="button" class="btn ghost sm" data-reset-pw>Gerar nova senha</button></div>`,
+          <button type="button" class="btn ghost sm" data-reset-pw>Gerar nova senha</button></div>
+        ${p.is_test && p.status !== 'excluido' ? `<h3 style="margin-top:16px">Conta de teste</h3>
+          <button type="button" class="btn danger sm" data-del-test>Apagar conta de teste</button>` : ''}`,
       actions: [{ label: 'Fechar' }],
       onOpen: (dlg) => {
         const refresh = async () => { dlg.close(); dlg.remove(); await reloadAll(); openPro(id); };
@@ -230,6 +255,13 @@
         $('[data-save-note]', dlg).addEventListener('click', async () => {
           await api(`/api/admin/professionals/${id}/note`, { method: 'POST', body: { note: $('[data-note]', dlg).value } });
           toast('Observação salva');
+        });
+        const del = $('[data-del-test]', dlg);
+        if (del) del.addEventListener('click', async () => {
+          if (!await confirmDialog('Apagar esta conta de teste? Ela sai da vitrine e não poderá mais entrar.', { okLabel: 'Apagar', danger: true })) return;
+          await api(`/api/admin/professionals/${id}/delete-test`, { method: 'POST' });
+          toast('Conta de teste apagada');
+          dlg.close(); dlg.remove(); reloadAll();
         });
         $('[data-reset-pw]', dlg).addEventListener('click', async () => {
           if (!await confirmDialog('Gerar nova senha para este profissional? A atual deixará de funcionar.')) return;

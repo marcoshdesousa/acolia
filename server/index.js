@@ -109,6 +109,7 @@ async function start(port = Number(process.env.PORT) || 3000) {
   console.log(`[dados] ${st.label}${st.permanent ? '' : ' — ATENÇÃO: não é permanente, adicione um disco no Render'}`);
   const { setupSocket } = require('./socket');
   ensureAdmin();
+  if (process.env.TEST_ACCOUNTS !== '0') require('./testAccounts').seedOnce();
   const app = createApp();
   const server = http.createServer(app);
   setupSocket(server);

@@ -10,6 +10,7 @@ process.env.DATA_DIR = tmp;
 process.env.ADMIN_USER = 'admin';
 process.env.ADMIN_PASSWORD = 'senha-admin-123';
 delete process.env.CPF_API_URL;
+process.env.TEST_ACCOUNTS = '0';
 
 const { start } = require('../server');
 const { isValidCpf } = require('../server/util');
@@ -542,4 +543,47 @@ test('aviso de armazenamento: pasta comum no Render não conta como permanente',
   assert.equal(run({ DATA_DIR: dir, RENDER: 'true', SUPABASE_URL: '' }).permanent, false, 'no Render sem disco: temporário');
   assert.equal(run({ DATA_DIR: dir, RENDER: '', SUPABASE_URL: '' }).permanent, true, 'no computador: permanente');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('contas de teste: o admin cria, entram com os dados combinados e só elas podem ser apagadas pelo admin', async () => {
+  let r = await client().post('/api/admin/test-accounts');
+  assert.equal(r.status, 401, 'só o admin');
+  r = await admin.post('/api/admin/test-accounts');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.data.created, { professional: true, patient: true });
+
+  const tp = client();
+  r = await tp.post('/api/auth/professional/login', { login: '123456789', password: '123456789' });
+  assert.equal(r.status, 200, 'profissional de teste entra');
+  const tpat = client();
+  r = await tpat.post('/api/auth/patient/login', { cpf: '000.000.000-00', password: '1234' });
+  assert.equal(r.status, 200, 'paciente de teste entra');
+  r = await anon.get('/api/professionals?state=todos');
+  assert.ok(r.data.items.some((x) => x.name === 'Profissional Teste'), 'aparece na vitrine');
+
+  r = await admin.post('/api/admin/test-accounts');
+  assert.deepEqual(r.data.created, { professional: false, patient: false }, 'não duplica');
+
+  const pros = (await admin.get('/api/admin/professionals?q=Profissional Teste')).data.items;
+  const tpro = pros.find((x) => x.is_test);
+  const pats = (await admin.get('/api/admin/patients')).data.items;
+  const tpatient = pats.find((x) => x.is_test);
+  const real = pats.find((x) => !x.is_test && x.status === 'ativo');
+  r = await admin.post(`/api/admin/patients/${real.id}/delete-test`);
+  assert.equal(r.status, 403, 'conta real não é apagada pelo admin');
+  r = await admin.post(`/api/admin/professionals/${proId}/delete-test`);
+  assert.equal(r.status, 403);
+
+  r = await admin.post(`/api/admin/professionals/${tpro.id}/delete-test`);
+  assert.equal(r.status, 200);
+  r = await admin.post(`/api/admin/patients/${tpatient.id}/delete-test`);
+  assert.equal(r.status, 200);
+  assert.equal((await tp.get('/api/auth/me')).data.role, null, 'sessão encerrada');
+  r = await client().post('/api/auth/professional/login', { login: '123456789', password: '123456789' });
+  assert.equal(r.status, 401);
+  r = await client().post('/api/auth/patient/login', { cpf: '000.000.000-00', password: '1234' });
+  assert.equal(r.status, 401);
+
+  r = await admin.post('/api/admin/test-accounts');
+  assert.deepEqual(r.data.created, { professional: true, patient: true }, 'pode criar de novo');
 });
