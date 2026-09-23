@@ -5,7 +5,7 @@
 
   function priceLine(p) {
     const where = `<div class="meta"><span class="badge ${p.near ? 'ok' : ''}">${ICONS.pin.replace('<svg', '<svg style="width:14px;height:14px"')} ${esc(p.city)} - ${esc(p.state)}</span>
-      ${p.has_clinic ? '<span class="badge">Atende presencial</span>' : '<span class="badge">Somente online</span>'}</div>`;
+      <span class="badge">Atende online</span>${p.has_clinic ? '<span class="badge">Atende presencial</span>' : ''}</div>`;
     if (p.locked) {
       return `<div class="locked">${ICONS.lock.replace('<svg', '<svg style="width:18px;height:18px"')} Valores: crie sua conta grátis para ver</div>${where}`;
     }

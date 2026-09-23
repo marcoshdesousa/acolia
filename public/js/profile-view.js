@@ -38,10 +38,12 @@
     }
 
     // ---------- Localização (visível para todos; endereço da clínica só com conta) ----------
-    let clinic;
-    if (!p.has_clinic) clinic = '<div class="muted">Atende somente online.</div>';
-    else if (p.locked) clinic = `<div class="row between"><span><b>${ic('clinic')} Atende também presencial</b></span>${lockLink('Crie conta para ver o endereço e o mapa')}</div>`;
-    else {
+    // Todos atendem online; alguns também presencial — as duas opções aparecem
+    const modes = `<div class="row" style="gap:6px"><span class="badge ok">${ic('video', 15)} Atende online</span>
+        ${p.has_clinic ? `<span class="badge ok">${ic('clinic', 15)} Atende presencial</span>` : ''}</div>`;
+    let clinic = '';
+    if (p.has_clinic && p.locked) clinic = `<div>${lockLink('Crie conta para ver o endereço e o mapa')}</div>`;
+    else if (p.has_clinic) {
       clinic = `<div><b>${ic('clinic')} ${esc(p.clinic_name || 'Consultório presencial')}</b><div class="muted">${esc(p.clinic_address)}</div></div>
         ${p.map_embed ? `<div class="mini-map"><iframe src="${esc(p.map_embed)}" title="Mapa: ${esc(p.clinic_name || 'consultório')}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe></div>` : ''}
         ${p.maps_url ? `<a class="btn secondary sm" style="width:max-content" target="_blank" rel="noopener" href="${esc(p.maps_url)}">${ic('pin', 16)} Abrir no Google Maps</a>` : ''}`;
@@ -49,6 +51,7 @@
     const location = `<div class="card flat stack">
         <h3>${ic('pin')} Localização</h3>
         <div>${esc(p.city)} - ${esc(p.state)}</div>
+        ${modes}
         ${clinic}
       </div>`;
 
