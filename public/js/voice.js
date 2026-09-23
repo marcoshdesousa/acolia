@@ -146,7 +146,7 @@
       <span class="vtime">${fmt(secs)}</span>
     </div>`;
     // Aviso miudinho embaixo do áudio enviado
-    return hint ? `${player}<div class="vhint">Pode levar de 0 a 15 segundos para reproduzir.</div>` : player;
+    return hint ? `${player}<div class="vhint">Pode levar de 0 a 5 segundos para reproduzir.</div>` : player;
   }
 
   // O áudio toca direto do servidor (começa na hora, sem esperar baixar tudo) e o play()
