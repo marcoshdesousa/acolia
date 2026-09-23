@@ -199,7 +199,7 @@
 
   // ---------- Início estilo Instagram e outros profissionais (versão 1.2) ----------
   const openPro = (id) => { location.hash = id === me.id ? 'perfil' : `verpro/${id}`; };
-  AcoliaSocial.setContext({ role: 'professional', me, onOpenProfile: openPro, onAllPosts: (id) => { location.hash = `posts/${id}`; } });
+  AcoliaSocial.setContext({ role: 'professional', me, onOpenProfile: openPro, onAllPosts: (id, kind) => { location.hash = `posts/${id}/${kind || 'photo'}`; } });
   let home = null;
   let catalogMounted = false;
 

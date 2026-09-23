@@ -127,6 +127,43 @@ function handleMedia(req, res) {
   });
 }
 
+// Reels: vídeo de até 5 minutos + a capa (um quadro do vídeo, gerado no aparelho)
+const REEL_MAX_MB = 200;
+const VIDEO_EXT = { 'video/mp4': '.mp4', 'video/quicktime': '.mov', 'video/webm': '.webm' };
+const reelUpload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (_req, file, cb) => cb(null, crypto.randomBytes(16).toString('hex') + (file.fieldname === 'video' ? VIDEO_EXT : EXT)[file.mimetype.split(';')[0]]),
+  }),
+  limits: { fileSize: REEL_MAX_MB * 1024 * 1024, files: 2, fields: 5 },
+  fileFilter: (_req, file, cb) => {
+    const type = file.mimetype.split(';')[0];
+    if (file.fieldname === 'video' && VIDEO_EXT[type]) return cb(null, true);
+    if (file.fieldname === 'poster' && EXT[type]) return cb(null, true);
+    cb(new HttpError(400, 'Envie um vídeo MP4, MOV ou WEBM.'));
+  },
+}).fields([{ name: 'video', maxCount: 1 }, { name: 'poster', maxCount: 1 }]);
+
+function handleReel(req, res) {
+  return new Promise((resolve, reject) => {
+    reelUpload(req, res, (err) => {
+      const files = [...(req.files?.video || []), ...(req.files?.poster || [])];
+      const drop = () => files.forEach((f) => fs.promises.unlink(f.path).catch(() => {}));
+      if (err) {
+        drop();
+        if (err.code === 'LIMIT_FILE_SIZE') return reject(new HttpError(400, `Vídeo muito grande (máximo ${REEL_MAX_MB} MB).`));
+        return reject(err.status ? err : new HttpError(400, 'Não foi possível enviar o vídeo.'));
+      }
+      const video = req.files?.video?.[0];
+      const poster = req.files?.poster?.[0];
+      if (!video || !poster) { drop(); return reject(new HttpError(400, 'Escolha um vídeo.')); }
+      if (poster.size > 3 * 1024 * 1024) { drop(); return reject(new HttpError(400, 'Capa do vídeo muito grande.')); }
+      files.forEach((f) => cloud.uploadFile('uploads', f.path));
+      resolve({ video: `/uploads/${video.filename}`, poster: `/uploads/${poster.filename}` });
+    });
+  });
+}
+
 // Áudios do chat: pasta PRIVADA (só quem participa da conversa ouve)
 const AUDIO_DIR = path.join(DATA_DIR, 'audio');
 fs.mkdirSync(AUDIO_DIR, { recursive: true });
@@ -166,4 +203,4 @@ function removePhoto(url) {
   cloud.removeFile('uploads', url);
 }
 
-module.exports = { handlePhotos, handleMedia, handleAudio, AUDIO_DIR, handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };
+module.exports = { handleReel, REEL_MAX_MB, handlePhotos, handleMedia, handleAudio, AUDIO_DIR, handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };

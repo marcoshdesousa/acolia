@@ -1,7 +1,7 @@
 /* Perfil completo de um profissional */
 (function () {
   'use strict';
-  const { esc, ICONS, avatar, money } = window.Acolia;
+  const { $$, esc, ICONS, avatar, money } = window.Acolia;
   const ic = (name, s = 18) => ICONS[name].replace('<svg', `<svg style="width:${s}px;height:${s}px;vertical-align:-4px"`);
 
   // 50 → "50 min", 60 → "1h", 90 → "1h30"
@@ -33,7 +33,9 @@
           </div>
           <div class="row"><button type="button" class="btn ${p.following ? 'following' : ''}" data-follow>${p.following ? 'Seguindo' : 'Seguir'}</button></div>
         </div>
-        <div><h3>Publicações</h3><div class="gallery-grid posts-grid" data-official-grid></div>
+        <div><h3>Publicações</h3>
+          <div class="pv-tabs" role="tablist"><button type="button" role="tab" class="active" data-of-tab="photo">${ic('grid', 20)} Fotos</button><button type="button" role="tab" data-of-tab="reel">${ic('reel', 20)} Vídeos</button></div>
+          <div class="gallery-grid posts-grid" data-official-grid></div>
           <div class="spinner" data-official-loading></div><div data-official-end style="height:1px"></div></div>
       </div>
       ${p.locked ? `<div class="notice info" style="margin-top:16px">${ic('lock')} Crie sua conta grátis para ver todas as publicações, curtir e comentar.
@@ -88,23 +90,41 @@
     if (p.locked && p.has_bio) about = `<div><h3>Sobre</h3>${lockLink()}</div>`;
     else if (p.bio) about = `<div><h3>Sobre</h3><p style="white-space:pre-wrap">${esc(p.bio)}</p></div>`;
 
-    // ---------- Publicações (só as 4 mais recentes; "Ver todas as fotos" abre a página de publicações) ----------
-    // Visitante: no máximo 2 abertas (sem ampliar) e o resto com "Crie conta para ver"
+    // ---------- Publicações: fotos e vídeos (Reels) em abas, 4 de cada ----------
+    // "Ver todas as fotos" / "Ver todos os vídeos" abre a página com as duas abas.
+    // Visitante: no máximo 2 abertas por aba (sem ampliar) e o resto com "Crie conta para ver"
     const total = p.posts_count ?? ((p.gallery || []).length + (p.gallery_hidden || 0));
+    const photosTotal = p.photos_count ?? total;
+    const reelsTotal = p.reels_count || 0;
+    const play = `<span class="multi-ic" aria-hidden="true">${ICONS.play}</span>`;
+    const lockedTiles = (n) => Array.from({ length: n }, () => `<a class="gallery-item gallery-locked" href="${signup}">${ic('lock', 20)}<span>Crie conta para ver</span></a>`).join('');
+    const freeTile = (src, i, isReel) => `<button type="button" class="gallery-item" data-gallery-need-account="${esc(next || '')}" aria-label="Crie conta para ver"><img src="${esc(src)}" alt="${isReel ? 'Vídeo' : 'Foto'} ${i + 1} de ${esc(p.name)}" loading="lazy">${isReel ? play : ''}</button>`;
+    const tile = (x) => (window.AcoliaSocial ? window.AcoliaSocial.gridTile(x)
+      : `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação"><img src="${esc(x.image)}" alt="" loading="lazy"></button>`);
     let gallery = '';
     if (total) {
-      let tiles;
+      let photoTiles;
+      let reelTiles;
       if (p.locked) {
         const photos = p.gallery || [];
-        const lockedTiles = Math.min(p.gallery_hidden || 0, 4 - photos.length);
-        tiles = photos.map((src, i) => `<button type="button" class="gallery-item" data-gallery-need-account="${esc(next || '')}" aria-label="Crie conta para ampliar"><img src="${esc(src)}" alt="Foto ${i + 1} de ${esc(p.name)}" loading="lazy"></button>`).join('')
-          + Array.from({ length: lockedTiles }, () => `<a class="gallery-item gallery-locked" href="${signup}">${ic('lock', 20)}<span>Crie conta para ver</span></a>`).join('');
+        const reels = p.reels || [];
+        photoTiles = photos.map((src, i) => freeTile(src, i, false)).join('') + lockedTiles(Math.min(p.gallery_hidden || 0, 4 - photos.length));
+        reelTiles = reels.map((src, i) => freeTile(src, i, true)).join('') + lockedTiles(Math.min(p.reels_hidden || 0, 4 - reels.length));
       } else {
-        tiles = (p.gallery_posts || []).map((x) => window.AcoliaSocial ? window.AcoliaSocial.gridTile(x)
-          : `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação"><img src="${esc(x.image)}" alt="" loading="lazy"></button>`).join('');
+        photoTiles = (p.gallery_posts || []).map(tile).join('');
+        reelTiles = (p.reels_posts || []).map(tile).join('');
       }
-      const more = total > 4 ? `<button type="button" class="btn secondary sm" data-all-posts style="margin-top:10px">${ic('image', 16)} Ver todas as fotos (${total})</button>` : '';
-      gallery = `<div><h3>Publicações</h3><div class="gallery-grid" data-post-grid>${tiles}</div>${more}</div>`;
+      const empty = (t) => `<p class="muted small" style="grid-column:1/-1;margin:0">${t}</p>`;
+      gallery = `<div><h3>Publicações</h3>
+        <div class="pv-tabs" role="tablist">
+          <button type="button" role="tab" class="active" data-pv-tab="photo" aria-label="Fotos" title="Fotos">${ic('grid', 22)}<span>${photosTotal}</span></button>
+          <button type="button" role="tab" data-pv-tab="reel" aria-label="Vídeos" title="Vídeos">${ic('reel', 22)}<span>${reelsTotal}</span></button>
+        </div>
+        <div data-pv-pane="photo"><div class="gallery-grid" data-post-grid>${photoTiles || empty('Nenhuma foto ainda.')}</div>
+          ${photosTotal > 4 ? `<button type="button" class="btn secondary sm" data-all-posts="photo" style="margin-top:10px">${ic('image', 16)} Ver todas as fotos (${photosTotal})</button>` : ''}</div>
+        <div data-pv-pane="reel" hidden><div class="gallery-grid" data-reel-grid>${reelTiles || empty('Nenhum vídeo ainda.')}</div>
+          ${reelsTotal > 4 ? `<button type="button" class="btn secondary sm" data-all-posts="reel" style="margin-top:10px">${ic('reel', 16)} Ver todos os vídeos (${reelsTotal})</button>` : ''}</div>
+      </div>`;
     }
 
     // Seguidores / seguindo (só os números) e botão Seguir
@@ -135,6 +155,15 @@
         <div class="row" style="margin-top:10px"><a class="btn sm" href="${signup}">Criar conta grátis</a><a class="btn secondary sm" href="/entrar?next=${encodeURIComponent(next || '/app#perfil/' + p.id)}">Já tenho conta</a></div></div>` : ''}
       <div class="grid-2" style="margin-top:16px;align-items:start">${values}${location}</div>`;
   }
+
+  // Abas Fotos | Vídeos do perfil
+  document.addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-pv-tab]');
+    if (!tab) return;
+    const box = tab.closest('.pv-tabs').parentElement;
+    $$('[data-pv-tab]', box).forEach((b) => b.classList.toggle('active', b === tab));
+    $$('[data-pv-pane]', box).forEach((pane) => { pane.hidden = pane.dataset.pvPane !== tab.dataset.pvTab; });
+  });
 
   // Toque numa foto da galeria abre em tamanho grande (só com conta)
   document.addEventListener('click', (e) => {

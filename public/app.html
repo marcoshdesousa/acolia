@@ -122,7 +122,7 @@
     let home = null;
     const openPro = (id) => { location.hash = 'perfil/' + id; };
     AcoliaSocial.setContext({ role: 'patient', me, onOpenProfile: openPro, onMessage: (id) => { location.hash = 'conversar/' + id; },
-      onAllPosts: (id) => { location.hash = 'posts/' + id; } });
+      onAllPosts: (id, kind) => { location.hash = 'posts/' + id + '/' + (kind || 'photo'); } });
 
     let catalogMounted = false;
     let backTo = '#buscar';

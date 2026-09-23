@@ -1093,3 +1093,67 @@ test('Acolia Brasil: o admin publica, todos seguem (sem deixar de seguir) e o pe
   assert.equal((await admin.del(`/api/admin/official/posts/${op.id}`)).status, 200);
   assert.ok(!(await pt.get('/api/social/feed')).data.items.some((p) => p.id === op.id));
 });
+
+test('Reels: profissional publica vídeo de até 5 min; aparece no feed, na aba Reels e no perfil separado das fotos', async () => {
+  const c = await admin.post('/api/admin/professionals', { name: 'Rafa Reels', profession: 'Psicólogo(a)', registry: 'R-reels', email: 'rafareels@example.com', phone: '11944440000', state: 'SP', city: 'Campinas' });
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+  const sendReel = async (who, duration, caption = 'Meu vídeo') => {
+    const fd = new FormData();
+    fd.append('caption', caption);
+    fd.append('duration', String(duration));
+    fd.append('poster', new Blob([Buffer.from([0xff, 0xd8, 0xff, 1])], { type: 'image/jpeg' }), 'capa.jpg');
+    fd.append('video', new Blob([Buffer.from('fake-mp4-video')], { type: 'video/mp4' }), 'v.mp4');
+    const res = await fetch(`${base}/api/social/reels`, { method: 'POST', body: fd, headers: { Cookie: who.cookie } });
+    return { status: res.status, data: await res.json() };
+  };
+  const pt = client();
+  await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+  assert.equal((await sendReel(pt, 10)).status, 403, 'paciente não publica');
+  assert.equal((await sendReel(pro, 301 + 5)).status, 400, 'no máximo 5 minutos');
+  const r = await sendReel(pro, 295);
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.kind, 'reel');
+  assert.ok(r.data.video.startsWith('/uploads/') && r.data.video.endsWith('.mp4'));
+  assert.ok(r.data.image.endsWith('.jpg'), 'capa do vídeo');
+
+  // Uma foto também, para ver a separação no perfil
+  const fd = new FormData();
+  fd.append('photos', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'f.png');
+  await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } });
+
+  // Aba Reels: só vídeos, de todo mundo (mesmo sem seguir), sem repetir o que já mostrou
+  const reels = (await pt.get('/api/social/reels')).data;
+  assert.ok(reels.items.some((p) => p.id === r.data.id));
+  assert.ok(reels.items.every((p) => p.kind === 'reel'));
+  assert.ok(!(await pt.get(`/api/social/reels?sug=${r.data.id}`)).data.items.some((p) => p.id === r.data.id));
+  // No feed (como sugestão) com o vídeo
+  const inFeed = (await pt.get('/api/social/feed')).data.items.find((p) => p.id === r.data.id);
+  assert.ok(inFeed && inFeed.video, 'reel aparece no feed');
+  // Curtir e comentar funcionam igual
+  assert.equal((await pt.post(`/api/social/posts/${r.data.id}/like`)).data.likes, 1);
+  assert.equal((await pt.post(`/api/social/posts/${r.data.id}/comments`, { body: 'Ótimo vídeo' })).status, 201);
+
+  // Perfil: fotos e vídeos separados (4 de cada)
+  const prof = (await pt.get(`/api/professionals/${c.data.id}`)).data;
+  assert.equal(prof.posts_count, 2);
+  assert.equal(prof.photos_count, 1);
+  assert.equal(prof.reels_count, 1);
+  assert.equal(prof.gallery_posts.length, 1);
+  assert.equal(prof.reels_posts[0].id, r.data.id);
+  const onlyReels = (await pt.get(`/api/social/professionals/${c.data.id}/posts?kind=reel`)).data.items;
+  assert.deepEqual(onlyReels.map((x) => x.kind), ['reel']);
+  const onlyPhotos = (await pt.get(`/api/social/professionals/${c.data.id}/posts?kind=photo`)).data.items;
+  assert.deepEqual(onlyPhotos.map((x) => x.kind), ['photo']);
+
+  // O dono coloca o vídeo no story (abre o vídeo)
+  const st = await pro.post(`/api/social/posts/${r.data.id}/story`);
+  assert.equal(st.status, 201);
+  assert.equal(st.data.post.kind, 'reel');
+
+  // Apagar remove o vídeo
+  assert.equal((await pro.del(`/api/social/posts/${r.data.id}`)).status, 200);
+  const file = require('node:path').join(tmp, 'uploads', require('node:path').basename(r.data.video));
+  await new Promise((ok) => setTimeout(ok, 50));
+  assert.equal(fs.existsSync(file), false, 'arquivo do vídeo apagado');
+});

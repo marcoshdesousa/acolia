@@ -8,7 +8,8 @@ const U = require('../util');
 const A = require('../auth');
 const rt = require('../realtime');
 const { VISIBLE_SQL, freeGalleryCount, PROFILE_POSTS } = require('../serialize');
-const { handlePhoto, handlePhotos, handleMedia, removePhoto } = require('../upload');
+const { handlePhoto, handlePhotos, handleMedia, handleReel, removePhoto } = require('../upload');
+const REEL_MAX_SECS = 5 * 60; // Reels: vídeos de até 5 minutos
 const O = require('../official');
 
 const router = express.Router();
@@ -70,7 +71,8 @@ function postOut(p, me) {
   const comments = db.prepare('SELECT COUNT(*) n FROM post_comments WHERE post_id = ?').get(p.id).n;
   const liked = me ? !!db.prepare('SELECT 1 FROM post_likes WHERE post_id = ? AND role = ? AND user_id = ?').get(p.id, me.role, me.id) : false;
   return {
-    id: p.id, image: p.image, images: postImages(p), caption: p.caption, created_at: p.created_at,
+    id: p.id, kind: p.kind || 'photo', image: p.image, images: postImages(p), caption: p.caption, created_at: p.created_at,
+    video: p.kind === 'reel' ? p.video : undefined, duration: p.kind === 'reel' ? p.duration : undefined,
     likes, comments, liked,
     mine: !!me && me.role === 'professional' && me.id === p.professional_id,
     author: actor('professional', p.professional_id),
@@ -91,16 +93,19 @@ router.get('/professionals/:id/posts', (req, res) => {
   const proId = Number(req.params.id);
   const mine = isPro(req) && req.auth.user.id === proId;
   if (!mine && !socialPro(proId)) throw new U.HttpError(404, 'Profissional não encontrado.');
-  const total = db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(proId).n;
+  // ?kind=photo (fotos) | reel (vídeos); sem kind = tudo
+  const kind = ['photo', 'reel'].includes(req.query.kind) ? req.query.kind : null;
+  const kindSql = kind ? `AND kind = '${kind}'` : '';
+  const total = db.prepare(`SELECT COUNT(*) n FROM posts WHERE professional_id = ? ${kindSql}`).get(proId).n;
   if (!req.auth || !['patient', 'professional'].includes(req.auth.role)) {
-    const first = db.prepare(`SELECT image FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(proId);
+    const first = db.prepare(`SELECT image, kind FROM posts WHERE professional_id = ? ${kindSql} ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(proId);
     const free = freeGalleryCount(first.length);
-    return res.json({ locked: true, total, items: first.slice(0, free).map((r) => ({ image: r.image })), hidden: total - free });
+    return res.json({ locked: true, total, items: first.slice(0, free).map((r) => ({ image: r.image, kind: r.kind })), hidden: total - free });
   }
   const offset = Math.max(0, Number(req.query.offset) || 0);
   const limit = Math.min(60, Number(req.query.limit) || PAGE);
-  const rows = db.prepare('SELECT id, image FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT ? OFFSET ?').all(proId, limit, offset);
-  res.json({ locked: false, total, items: rows.map((r) => ({ ...r, count: imageCount(r.id) })), has_more: offset + rows.length < total });
+  const rows = db.prepare(`SELECT id, image, kind FROM posts WHERE professional_id = ? ${kindSql} ORDER BY id DESC LIMIT ? OFFSET ?`).all(proId, limit, offset);
+  res.json({ locked: false, total, items: rows.map((r) => ({ ...r, count: r.kind === 'reel' ? 1 : imageCount(r.id) })), has_more: offset + rows.length < total });
 });
 
 // Publicação aberta pelo link compartilhado: qualquer pessoa vê a foto e a descrição.
@@ -189,6 +194,42 @@ function createPost(proId, urls, caption) {
   return db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
 }
 
+// ---------- Reels (vídeos de até 5 minutos) ----------
+// O vídeo vai junto com a capa (um quadro tirado no aparelho) e a duração
+function createReel(proId, media, caption, duration) {
+  const info = db.prepare("INSERT INTO posts (professional_id, image, caption, kind, video, duration) VALUES (?, ?, ?, 'reel', ?, ?)")
+    .run(proId, media.poster, U.cleanText(caption, 2200), media.video, duration);
+  return db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(info.lastInsertRowid));
+}
+
+router.post('/reels', async (req, res) => {
+  if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
+  const media = await handleReel(req, res);
+  const secs = Number(req.body.duration) || 0;
+  if (secs > REEL_MAX_SECS + 1) {
+    removePhoto(media.video);
+    removePhoto(media.poster);
+    throw new U.HttpError(400, 'O vídeo pode ter no máximo 5 minutos.');
+  }
+  res.status(201).json(postOut(createReel(req.auth.user.id, media, req.body.caption, secs || null), who(req)));
+});
+
+// Aba Reels: vídeos de todos os profissionais (e da Acolia Brasil) em ordem aleatória,
+// primeiro os que a pessoa ainda não viu. ?sug=1,2,3 = já mostrados (não repete).
+router.get('/reels', (req, res) => {
+  const me = who(req);
+  const shown = String(req.query.sug || '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(-500);
+  const size = 6;
+  const rows = db.prepare(`
+    SELECT po.*, (SELECT 1 FROM post_views v WHERE v.post_id = po.id AND v.role = ? AND v.user_id = ?) AS seen
+    FROM posts po JOIN professionals p ON p.id = po.professional_id
+    WHERE po.kind = 'reel' AND ((${VISIBLE_SQL}) OR po.professional_id = ? OR (? = 'professional' AND po.professional_id = ?))
+      AND po.id NOT IN (SELECT value FROM json_each(?))
+    ORDER BY seen IS NOT NULL, RANDOM()
+    LIMIT ?`).all(me.role, me.id, O.officialId(), me.role, me.id, JSON.stringify(shown), size + 1);
+  res.json({ items: rows.slice(0, size).map((p) => ({ ...postOut(p, me), seen: !!p.seen })), has_more: rows.length > size });
+});
+
 // Miniatura (até ~600 px) usada na prévia do link compartilhado
 router.post('/posts/:id/thumb', async (req, res) => {
   const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(req.params.id));
@@ -216,6 +257,7 @@ function deletePostFully(p) {
   db.prepare('DELETE FROM posts WHERE id = ?').run(p.id);
   new Set([p.image, ...imgs]).forEach(removePhoto);
   if (p.thumb) removePhoto(p.thumb);
+  if (p.video) removePhoto(p.video);
 }
 
 router.post('/posts/:id/like', (req, res) => {
@@ -307,7 +349,7 @@ function storyOut(s, me) {
   let post = null;
   if (s.kind === 'post' && s.post_id) {
     const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(s.post_id);
-    if (p) post = { id: p.id, image: p.image, caption: p.caption, count: imageCount(p.id) };
+    if (p) post = { id: p.id, image: p.image, caption: p.caption, count: p.kind === 'reel' ? 1 : imageCount(p.id), kind: p.kind };
   }
   return {
     id: s.id, media: s.media, kind: s.kind, created_at: s.created_at, post,

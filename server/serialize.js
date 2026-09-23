@@ -58,11 +58,17 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
   };
   // No perfil aparecem só as 4 publicações mais recentes; "Ver todas" abre a página de publicações
   const { db } = require('./db');
-  const recent = db.prepare(`SELECT id, image FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id);
+  // Fotos e vídeos (Reels) ficam separados no perfil: 4 de cada, cada um na sua aba
+  const recent = db.prepare(`SELECT id, image FROM posts WHERE professional_id = ? AND kind = 'photo' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id);
+  const recentReels = db.prepare(`SELECT id, image FROM posts WHERE professional_id = ? AND kind = 'reel' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id);
   const postsCount = db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(p.id).n;
+  const photosCount = db.prepare("SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = 'photo'").get(p.id).n;
+  const reelsCount = postsCount - photosCount;
   const gallery = recent.map((r) => r.image);
   const social = {
     posts_count: postsCount,
+    photos_count: photosCount,
+    reels_count: reelsCount,
     // +1 nos dois: a Acolia Brasil segue todo profissional e todo profissional segue a Acolia Brasil
     followers_count: db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(p.id).n + 1,
     following_count: db.prepare("SELECT COUNT(*) n FROM follows WHERE follower_role = 'professional' AND follower_id = ?").get(p.id).n + 1,
@@ -87,7 +93,9 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
       package_sessions: packages.map((k) => k.sessions),
       has_session_minutes: !!p.session_minutes,
       gallery: gallery.slice(0, free),
-      gallery_hidden: postsCount - free,
+      gallery_hidden: photosCount - free,
+      reels: recentReels.slice(0, freeGalleryCount(recentReels.length)).map((r) => r.image),
+      reels_hidden: reelsCount - freeGalleryCount(recentReels.length),
     };
   }
   return {
@@ -104,6 +112,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     ...clinicMap(p),
     gallery,
     gallery_posts: recent.map((r) => ({ ...r, count: Math.max(1, db.prepare('SELECT COUNT(*) n FROM post_images WHERE post_id = ?').get(r.id).n) })),
+    reels_posts: recentReels.map((r) => ({ ...r, kind: 'reel', count: 1 })),
     gallery_hidden: 0,
   };
 }

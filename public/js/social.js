@@ -26,6 +26,14 @@
 
   // Uma foto, ou carrossel (arrastar para o lado) com as bolinhas e o contador "1/5"
   function mediaHtml(p) {
+    // Reel no feed: toca sozinho sem som quando aparece na tela; tocar no vídeo liga/desliga o som
+    if (p.kind === 'reel') {
+      return `<div class="post-img reel-media" data-dbl-like="${p.id}">
+        <video src="${esc(p.video)}" poster="${esc(p.image)}" playsinline muted loop preload="none" data-autoplay data-feed-video></video>
+        <button type="button" class="reel-tag" data-reel-open="${p.id}" aria-label="Abrir nos Reels">${ic('reel', 16)} Reels</button>
+        <button type="button" class="reel-sound" data-sound aria-label="Ligar ou desligar o som">${ic(feedSound ? 'volume' : 'volumeOff', 18)}</button>
+      </div>`;
+    }
     const imgs = p.images?.length ? p.images : [p.image];
     const alt = `Publicação de ${esc(p.author.name)}`;
     if (imgs.length === 1) return `<div class="post-img" data-dbl-like="${p.id}"><img src="${esc(imgs[0])}" alt="${alt}" loading="lazy"></div>`;
@@ -61,7 +69,35 @@
 
   // Ícone de "várias fotos" na grade do perfil
   const multiIcon = '<span class="multi-ic" aria-label="Várias fotos"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 3h11a3 3 0 0 1 3 3v11a1 1 0 0 1-1 1h-1V6a1 1 0 0 0-1-1H6V4a1 1 0 0 1 1-1z"/><rect x="3" y="7" width="13" height="14" rx="2.5"/></svg></span>';
-  const gridTile = (x) => `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação${x.count > 1 ? ` (${x.count} fotos)` : ''}"><img src="${esc(x.image)}" alt="" loading="lazy">${x.count > 1 ? multiIcon : ''}</button>`;
+  const reelIcon = `<span class="multi-ic" aria-label="Vídeo">${ICONS.play}</span>`;
+  const gridTile = (x) => `<button type="button" class="gallery-item ${x.kind === 'reel' ? 'is-reel' : ''}" data-post-open="${x.id}" aria-label="${x.kind === 'reel' ? 'Abrir vídeo' : `Abrir publicação${x.count > 1 ? ` (${x.count} fotos)` : ''}`}"><img src="${esc(x.image)}" alt="" loading="lazy">${x.kind === 'reel' ? reelIcon : x.count > 1 ? multiIcon : ''}</button>`;
+
+  // ---------- Vídeos: tocam sozinhos quando aparecem na tela ----------
+  let feedSound = false; // no feed começam sem som (tocar no vídeo liga)
+  let reelSound = true;  // na aba Reels começam com som
+  const videoIO = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      const v = en.target;
+      if (en.isIntersecting && en.intersectionRatio >= 0.6) {
+        v.muted = !feedSound;
+        v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+      } else v.pause();
+    });
+  }, { threshold: [0, 0.6] }) : null;
+  function watchVideos(root) {
+    $$('video[data-autoplay]:not([data-watched])', root).forEach((v) => { v.dataset.watched = '1'; videoIO?.observe(v); });
+  }
+  function syncSoundIcons() {
+    $$('[data-feed-video]').forEach((v) => { v.muted = !feedSound; });
+    $$('[data-sound]').forEach((b) => { b.innerHTML = ic(feedSound ? 'volume' : 'volumeOff', 18); });
+  }
+
+  // Só paciente (ou visitante, que é levado a criar conta) manda mensagem; profissional não manda para profissional
+  const canMsg = (p) => !p.mine && !p.author.official && ctx.role !== 'professional';
+  function sendMessage(proId) {
+    if (ctx.onMessage) ctx.onMessage(proId);
+    else location.href = `/app#conversar/${proId}`;
+  }
 
   // Seguir / Seguindo no canto da publicação (não aparece na própria publicação — lá fica o ⋮)
   function followChip(p) {
@@ -81,6 +117,7 @@
         <button type="button" class="icon-btn" data-comments="${p.id}" aria-label="Comentários">${ic('comment')}<span class="cnt" data-ccount="${p.id}">${p.comments || ''}</span></button>
         <button type="button" class="icon-btn" data-share="${p.id}" aria-label="Compartilhar">${ic('plane')}</button>
         ${p.mine ? `<button type="button" class="icon-btn to-story" data-to-story="${p.id}" aria-label="Colocar no meu story" title="Colocar no meu story">${ic('storyAdd')}</button>` : ''}
+        ${canMsg(p) ? `<button type="button" class="msg-pill" data-msg-pro="${p.author.id}" title="Enviar mensagem para marcar a consulta">${ic('send', 16)} Mensagem</button>` : ''}
       </div>
       ${p.likes ? `<div class="post-likes" data-lcount="${p.id}">${p.likes} ${p.likes === 1 ? 'curtida' : 'curtidas'}</div>` : `<div class="post-likes" data-lcount="${p.id}"></div>`}
       ${p.caption ? `<p class="post-caption"><b>${esc(p.author.name)}</b> ${esc(p.caption)}</p>` : ''}
@@ -90,6 +127,7 @@
   function updateLikes(root, p) {
     $$(`[data-like="${p.id}"]`, root).forEach((b) => { b.classList.toggle('on', p.liked); b.setAttribute('aria-pressed', String(p.liked)); });
     $$(`[data-lcount="${p.id}"]`, root).forEach((el) => { el.textContent = p.likes ? `${p.likes} ${p.likes === 1 ? 'curtida' : 'curtidas'}` : ''; });
+    $$(`[data-lnum="${p.id}"]`, root).forEach((el) => { el.textContent = p.likes || ''; });
   }
 
   // ---------- Ações (curtir, comentar, compartilhar, apagar) ----------
@@ -216,6 +254,8 @@
   function bindActions(root) {
     if (root._socialBound) return;
     root._socialBound = true;
+    watchVideos(root);
+    if ('MutationObserver' in window) new MutationObserver(() => watchVideos(root)).observe(root, { childList: true, subtree: true });
     root.addEventListener('click', (e) => {
       const like = e.target.closest('[data-like]');
       const com = e.target.closest('[data-comments]');
@@ -225,6 +265,17 @@
       if (com) return openComments(Number(com.dataset.comments));
       const sh = e.target.closest('[data-share]');
       if (sh) return share(Number(sh.dataset.share));
+      const msg = e.target.closest('[data-msg-pro]');
+      if (msg) return ctx.anon ? ctx.onNeedAccount?.() : sendMessage(Number(msg.dataset.msgPro));
+      const ro = e.target.closest('[data-reel-open]');
+      if (ro) return openPost(Number(ro.dataset.reelOpen));
+      if (e.target.closest('[data-sound]') || e.target.closest('[data-feed-video]')) {
+        feedSound = !feedSound;
+        syncSoundIcons();
+        const v = e.target.closest('.reel-media')?.querySelector('video');
+        if (v && v.paused) v.play().catch(() => {});
+        return;
+      }
       const fol = e.target.closest('[data-follow-pro]');
       if (fol) return ctx.anon ? ctx.onNeedAccount?.() : followFromPost(fol);
       if (e.target.closest('[data-follow-official]')) return toast('Todos seguem a Acolia Brasil 💚');
@@ -240,7 +291,7 @@
       const img = e.target.closest('[data-dbl-like]');
       if (!img) return;
       if (ctx.anon) return ctx.onNeedAccount?.();
-      const btn = $(`[data-like="${img.dataset.dblLike}"]`, img.closest('.post-card'));
+      const btn = $(`[data-like="${img.dataset.dblLike}"]`, img.closest('.post-card, .rv-slide'));
       if (btn && !btn.classList.contains('on')) toggleLike(Number(img.dataset.dblLike), btn);
     });
   }
@@ -249,6 +300,7 @@
   async function openPost(id) {
     let p;
     try { p = await api(`/api/social/posts/${id}`); } catch (e) { toast(e.message, 'error'); return; }
+    if (p.kind === 'reel' && !p.locked) return openReels({ start: p });
     await modal({
       html: postCard(p),
       actions: [],
@@ -323,11 +375,12 @@
   }
 
   // Cruz do Início: escolher entre publicar fotos ou story
-  function createMenu(onPost, onStory) {
+  function createMenu(onPost, onStory, onReel) {
     modal({
       title: 'Criar',
       html: `<div class="create-menu">
         <button type="button" data-v="post">${ic('image', 30)}<b>Publicar fotos</b><small>No feed e no seu perfil (até ${MAX_PHOTOS} fotos)</small></button>
+        <button type="button" data-v="reel">${ic('reel', 30)}<b>Publicar reel</b><small>Vídeo de até 5 minutos, no feed, nos Reels e no seu perfil</small></button>
         <button type="button" data-v="story">${ic('video', 30)}<b>Publicar story</b><small>Foto ou vídeo de até ${MAX_STORY_SECS} s, some em 24 h</small></button></div>`,
       actions: [],
       onOpen: (dlg) => {
@@ -335,7 +388,7 @@
         $$('[data-v]', dlg).forEach((b) => b.addEventListener('click', () => {
           dlg.close();
           dlg.remove();
-          if (b.dataset.v === 'post') onPost(); else onStory();
+          if (b.dataset.v === 'post') onPost(); else if (b.dataset.v === 'reel') onReel?.(); else onStory();
         }));
       },
     });
@@ -495,6 +548,255 @@
     });
   }
 
+  // ---------- Novo reel (profissional): vídeo de até 5 minutos ----------
+  const REEL_MAX_SECS = 5 * 60;
+  const REEL_MAX_MB = 200;
+  // Lê a duração e tira a capa (um quadro do começo do vídeo). Se o aparelho não conseguir
+  // abrir o vídeo aqui (formato), usa uma capa com as cores da Acolia.
+  function readVideo(file) {
+    return new Promise((resolve) => {
+      const v = document.createElement('video');
+      v.muted = true; v.playsInline = true; v.preload = 'metadata';
+      const url = URL.createObjectURL(file);
+      let done = false;
+      const finish = (duration, canvas) => {
+        if (done) return;
+        done = true;
+        const c = canvas || fallbackPoster();
+        c.toBlob((blob) => { URL.revokeObjectURL(url); resolve({ duration, poster: blob }); }, 'image/jpeg', 0.82);
+      };
+      setTimeout(() => finish(Number.isFinite(v.duration) ? v.duration : null, null), 15000);
+      v.addEventListener('loadedmetadata', () => {
+        const d = Number.isFinite(v.duration) ? v.duration : null;
+        if (!v.videoWidth) return finish(d, null);
+        v.addEventListener('seeked', () => {
+          const scale = Math.min(1, 720 / v.videoWidth);
+          const c = document.createElement('canvas');
+          c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
+          try { c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); finish(d, c); } catch { finish(d, null); }
+        }, { once: true });
+        v.currentTime = Math.min(1, (d || 2) * 0.1);
+      }, { once: true });
+      v.addEventListener('error', () => finish(null, null), { once: true });
+      v.src = url;
+    });
+  }
+  function fallbackPoster() {
+    const c = document.createElement('canvas');
+    c.width = 720; c.height = 1280;
+    const g = c.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 720, 1280);
+    grad.addColorStop(0, '#3f5550'); grad.addColorStop(1, '#8a7362');
+    g.fillStyle = grad; g.fillRect(0, 0, 720, 1280);
+    g.fillStyle = 'rgba(255,255,255,.9)';
+    g.beginPath(); g.moveTo(300, 540); g.lineTo(300, 740); g.lineTo(460, 640); g.closePath(); g.fill();
+    return c;
+  }
+  // Envio com barra de progresso (vídeo pode ser grande)
+  function uploadWithProgress(url, fd, onProgress) {
+    return new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open('POST', url);
+      x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+      x.onload = () => {
+        let d = {};
+        try { d = JSON.parse(x.responseText); } catch { /* ignora */ }
+        if (x.status < 400) resolve(d); else reject(new Error(d.error || 'Não foi possível enviar o vídeo.'));
+      };
+      x.onerror = () => reject(new Error('A conexão caiu durante o envio. Tente de novo.'));
+      x.send(fd);
+    });
+  }
+  const fmtSecs = (t) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+
+  async function newReel(onDone) {
+    let file = null;
+    let meta = null;
+    await modal({
+      title: 'Novo reel',
+      html: `<label class="pick-media" data-pick><input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" hidden data-file>
+          <span data-empty-pick>${ic('reel', 40)}<b>Escolher vídeo</b><small class="muted">Até 5 minutos (máximo ${REEL_MAX_MB} MB)</small></span></label>
+        <div class="reel-preview hidden" data-prev><video playsinline muted controls data-pv></video><small class="muted" data-dur></small></div>
+        <div class="field" style="margin-top:12px"><label for="rcap">Descrição (opcional)</label><textarea id="rcap" rows="3" maxlength="2200" placeholder="Escreva algo sobre este vídeo…" data-cap></textarea></div>
+        <div class="upload-bar hidden" data-bar><i data-fill></i><span data-pct>0%</span></div>`,
+      actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
+        label: 'Publicar',
+        handler: async (dlg) => {
+          if (!file || !meta) { toast('Escolha um vídeo.', 'error'); return false; }
+          const btn = $$('.dlg-actions .btn', dlg).at(-1);
+          btn.disabled = true;
+          btn.textContent = 'Enviando…';
+          $('[data-bar]', dlg).classList.remove('hidden');
+          const fd = new FormData();
+          fd.append('caption', $('[data-cap]', dlg).value);
+          if (meta.duration) fd.append('duration', String(Math.round(meta.duration * 10) / 10));
+          fd.append('poster', meta.poster, 'capa.jpg');
+          fd.append('video', file, file.name || 'video.mp4');
+          try {
+            const p = await uploadWithProgress('/api/social/reels', fd, (f) => {
+              $('[data-fill]', dlg).style.width = `${Math.round(f * 100)}%`;
+              $('[data-pct]', dlg).textContent = f >= 1 ? 'Finalizando…' : `${Math.round(f * 100)}%`;
+            });
+            toast('Reel publicado!');
+            onDone?.(p);
+            return true;
+          } catch (e) {
+            toast(e.message, 'error');
+            btn.disabled = false; btn.textContent = 'Publicar';
+            $('[data-bar]', dlg).classList.add('hidden');
+            return false;
+          }
+        },
+      }],
+      onOpen: (dlg) => {
+        $('[data-file]', dlg).addEventListener('change', async (e) => {
+          const f = e.target.files[0];
+          e.target.value = '';
+          if (!f) return;
+          if (f.size > REEL_MAX_MB * 1024 * 1024) { toast(`Vídeo muito grande (máximo ${REEL_MAX_MB} MB).`, 'error'); return; }
+          $('[data-empty-pick]', dlg).innerHTML = `<span class="spinner"></span><small class="muted">Preparando o vídeo…</small>`;
+          const m = await readVideo(f);
+          if (m.duration && m.duration > REEL_MAX_SECS + 1) {
+            toast('O vídeo pode ter no máximo 5 minutos.', 'error');
+            $('[data-empty-pick]', dlg).innerHTML = `${ic('reel', 40)}<b>Escolher outro vídeo</b><small class="muted">Até 5 minutos</small>`;
+            return;
+          }
+          file = f; meta = m;
+          $('[data-empty-pick]', dlg).innerHTML = `${ic('reel', 28)}<b>Trocar vídeo</b>`;
+          $('[data-pick]', dlg).classList.add('compact');
+          $('[data-prev]', dlg).classList.remove('hidden');
+          $('[data-pv]', dlg).src = URL.createObjectURL(f);
+          $('[data-dur]', dlg).textContent = m.duration ? `Duração: ${fmtSecs(m.duration)}` : '';
+        });
+      },
+    });
+  }
+
+  // ---------- Reels: vídeos em tela cheia, um por vez (arrasta para cima) ----------
+  // Ordem aleatória, de todos os profissionais. Curtir, comentar, compartilhar, Seguir e
+  // Mensagem (paciente). O dono do vídeo tem ⭐+ (colocar no story) e ⋮ (apagar).
+  function reelSlide(p) {
+    return `<section class="rv-slide" data-slide="${p.id}" data-post="${p.id}">
+      <div class="rv-media" data-dbl-like="${p.id}" data-rv-tap>
+        <video src="${esc(p.video)}" poster="${esc(p.image)}" playsinline loop preload="metadata" data-rv-video></video>
+        <span class="rv-paused" aria-hidden="true">${ic('play', 72)}</span>
+      </div>
+      <button type="button" class="rv-sound" data-rv-sound aria-label="Ligar ou desligar o som">${ic(reelSound ? 'volume' : 'volumeOff', 20)}</button>
+      <div class="rv-side">
+        <div class="rv-act">${likeBtn(p.liked, `data-like="${p.id}"`)}<span data-lnum="${p.id}">${p.likes || ''}</span></div>
+        <button type="button" class="rv-act" data-comments="${p.id}" aria-label="Comentários">${ic('comment', 30)}<span data-ccount="${p.id}">${p.comments || ''}</span></button>
+        <button type="button" class="rv-act" data-share="${p.id}" aria-label="Compartilhar">${ic('plane', 30)}</button>
+        ${canMsg(p) ? `<button type="button" class="rv-act msg" data-msg-pro="${p.author.id}" aria-label="Enviar mensagem para marcar a consulta">${ic('send', 26)}<span>Mensagem</span></button>` : ''}
+        ${p.mine ? `<button type="button" class="rv-act" data-to-story="${p.id}" aria-label="Colocar no meu story">${ic('storyAdd', 30)}</button>
+          <button type="button" class="rv-act" data-post-menu="${p.id}" aria-label="Opções"><span style="font-size:1.6rem;line-height:1">⋮</span></button>` : ''}
+      </div>
+      <div class="rv-info">
+        <div class="rv-author">${authorLink(p.author)}${followChip(p)}</div>
+        ${p.caption ? `<p class="rv-cap" data-rv-cap>${esc(p.caption)}</p>` : ''}
+      </div>
+    </section>`;
+  }
+
+  function openReels({ start = null } = {}) {
+    return new Promise((resolve) => {
+      $$('video[data-feed-video]').forEach((v) => v.pause());
+      const el = document.createElement('div');
+      el.className = 'reels-view';
+      el.setAttribute('role', 'dialog');
+      el.setAttribute('aria-label', 'Reels');
+      el.innerHTML = `<div class="rv-top"><button type="button" class="rv-close" data-rv-close aria-label="Voltar">${ic('back', 26)}</button><b>Reels</b><span></span></div>
+        <div class="rv-list" data-rv-list></div>`;
+      document.body.appendChild(el);
+      document.documentElement.classList.add('rv-open');
+      bindActions(el);
+      const list = $('[data-rv-list]', el);
+      const shown = [];
+      let more = true;
+      let busy = false;
+      let closed = false;
+      const seenIds = new Set();
+
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach((en) => {
+          const slide = en.target;
+          const v = $('video', slide);
+          if (en.isIntersecting && en.intersectionRatio >= 0.7) {
+            v.muted = !reelSound;
+            v.play().then(() => slide.classList.remove('paused')).catch(() => {
+              v.muted = true; reelSound = false; syncReelSound();
+              v.play().catch(() => slide.classList.add('paused'));
+            });
+            const id = Number(slide.dataset.slide);
+            if (!seenIds.has(id)) { seenIds.add(id); api('/api/social/seen', { method: 'POST', body: { ids: [id] } }).catch(() => {}); }
+            if (!slide.nextElementSibling || !slide.nextElementSibling.nextElementSibling) load();
+          } else { v.pause(); }
+        });
+      }, { root: list, threshold: [0, 0.7] });
+
+      function syncReelSound() {
+        $$('[data-rv-video]', el).forEach((v) => { v.muted = !reelSound; });
+        $$('[data-rv-sound]', el).forEach((b) => { b.innerHTML = ic(reelSound ? 'volume' : 'volumeOff', 20); });
+      }
+      function add(items) {
+        items = items.filter((p) => !shown.includes(p.id));
+        shown.push(...items.map((p) => p.id));
+        list.insertAdjacentHTML('beforeend', items.map(reelSlide).join(''));
+        items.forEach((p) => {
+          const slide = $(`[data-slide="${p.id}"]`, list);
+          const v = $('video', slide);
+          // vídeo deitado aparece inteiro; em pé ocupa a tela toda
+          v.addEventListener('loadedmetadata', () => slide.classList.toggle('landscape', v.videoWidth > v.videoHeight), { once: true });
+          io.observe(slide);
+        });
+      }
+      async function load() {
+        if (busy || !more || closed) return;
+        busy = true;
+        try {
+          const d = await api(`/api/social/reels?sug=${shown.slice(-400).join(',')}`);
+          add(d.items);
+          more = d.has_more;
+          if (!shown.length) list.innerHTML = `<div class="rv-empty">${ic('reel', 56)}<p>Ainda não há vídeos. Quando os profissionais publicarem, eles aparecem aqui.</p></div>`;
+        } catch (e) { toast(e.message, 'error'); more = false; }
+        busy = false;
+      }
+
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('[data-rv-close]')) { history.state?.acoliaReels ? history.back() : close(); return; }
+        if (e.target.closest('[data-rv-sound]')) { reelSound = !reelSound; syncReelSound(); return; }
+        const cap = e.target.closest('[data-rv-cap]');
+        if (cap) { cap.classList.toggle('open'); return; }
+        const tap = e.target.closest('[data-rv-tap]');
+        if (tap) {
+          const slide = tap.closest('.rv-slide');
+          const v = $('video', slide);
+          if (v.paused) { v.muted = !reelSound; v.play().catch(() => {}); slide.classList.remove('paused'); } else { v.pause(); slide.classList.add('paused'); }
+        }
+      });
+      const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('dialog[open]')) close(); };
+      const onPop = () => close();
+      const onHash = () => close();
+      function close() {
+        if (closed) return;
+        closed = true;
+        io.disconnect();
+        $$('video', el).forEach((v) => { v.pause(); v.removeAttribute('src'); v.load(); });
+        el.remove();
+        document.documentElement.classList.remove('rv-open');
+        document.removeEventListener('keydown', onKey);
+        window.removeEventListener('popstate', onPop);
+        window.removeEventListener('hashchange', onHash);
+        resolve();
+      }
+      history.pushState({ acoliaReels: 1 }, '');
+      document.addEventListener('keydown', onKey);
+      window.addEventListener('popstate', onPop);
+      window.addEventListener('hashchange', onHash);
+      if (start) add([start]);
+      load();
+    });
+  }
+
   // ---------- Início ----------
   function mountHome(root, opts) {
     ctx = { ...ctx, ...opts };
@@ -506,6 +808,10 @@
           <h1 class="ht-title"><button type="button" class="feed-logo" data-home-top title="Voltar ao topo e atualizar">
             <span class="fl-words"><img class="fl-name brand-word" src="/img/logo-nome.png" alt="Acolia"><span class="fl-feed">Feed</span></span></button></h1>
           <div class="ht-side right"><button type="button" class="icon-btn bell" data-bell aria-label="Notificações" title="Notificações">${ic('bell', 27)}<span class="nav-badge" data-bell-count></span></button></div>
+        </div>
+        <div class="home-tabs" role="tablist" aria-label="Feed ou Reels">
+          <button type="button" class="active" role="tab" aria-selected="true" data-home-tab="feed">${ic('grid', 18)} Feed</button>
+          <button type="button" role="tab" aria-selected="false" data-home-tab="reels">${ic('reel', 18)} Reels</button>
         </div>
         <div class="stories-bar" data-stories></div>
         <div class="feed" data-feed></div>
@@ -591,7 +897,8 @@
     root.addEventListener('click', (e) => {
       const sb = e.target.closest('[data-story-group]');
       if (sb) return openStories(groups, Number(sb.dataset.storyGroup), loadStories);
-      if (e.target.closest('[data-create]')) return createMenu(() => newPost(() => loadFeed(true)), () => newStory(loadStories));
+      if (e.target.closest('[data-create]')) return createMenu(() => newPost(() => loadFeed(true)), () => newStory(loadStories), () => newReel(() => loadFeed(true)));
+      if (e.target.closest('[data-home-tab="reels"]')) return openReels();
       if (e.target.closest('[data-bell]')) return openNotifications(refreshBell);
       if (e.target.closest('[data-home-top]')) return toTop();
     });
@@ -616,14 +923,14 @@
   function bindProfile(container, p, { onNeedAccount } = {}) {
     bindActions(container);
     if (p.official) return bindOfficial(container, p, { onNeedAccount });
-    const moreBtn = $('[data-all-posts]', container);
-    if (moreBtn) {
+    $$('[data-all-posts]', container).forEach((moreBtn) => {
       moreBtn.addEventListener('click', () => {
         if (p.locked || !p.viewer_role) return onNeedAccount?.();
-        if (ctx.onAllPosts) ctx.onAllPosts(p.id);
-        else location.href = `${ctx.role === 'professional' ? '/painel' : '/app'}#posts/${p.id}`;
+        const kind = moreBtn.dataset.allPosts === 'reel' ? 'reel' : 'photo';
+        if (ctx.onAllPosts) ctx.onAllPosts(p.id, kind);
+        else location.href = `${ctx.role === 'professional' ? '/painel' : '/app'}#posts/${p.id}/${kind}`;
       });
-    }
+    });
     container.addEventListener('click', (e) => {
       const open = e.target.closest('[data-post-open]');
       if (open) return openPost(Number(open.dataset.postOpen));
@@ -661,11 +968,22 @@
     let offset = 0;
     let more = true;
     let busy = false;
+    let kind = 'photo';
+    container.addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-of-tab]');
+      if (!tab || tab.dataset.ofTab === kind) return;
+      kind = tab.dataset.ofTab;
+      $$('[data-of-tab]', container).forEach((b) => b.classList.toggle('active', b === tab));
+      grid.innerHTML = ''; offset = 0; more = true; busy = false;
+      load();
+    });
     async function load() {
       if (busy || !more) return;
       busy = true;
       try {
-        const data = await api(`/api/social/professionals/${p.id}/posts?offset=${offset}&limit=24`);
+        const want = kind;
+        const data = await api(`/api/social/professionals/${p.id}/posts?offset=${offset}&limit=24&kind=${want}`);
+        if (want !== kind) { busy = false; return; }
         if (data.locked) {
           const next = location.pathname + location.search;
           const lockedTiles = Math.min(data.hidden || 0, 4 - data.items.length);
@@ -677,7 +995,7 @@
           offset += data.items.length;
           more = data.has_more;
         }
-        if (!grid.children.length) grid.innerHTML = '<p class="muted" style="grid-column:1/-1">Nenhuma publicação ainda.</p>';
+        if (!grid.children.length) grid.innerHTML = `<p class="muted" style="grid-column:1/-1">${kind === 'reel' ? 'Nenhum vídeo ainda.' : 'Nenhuma foto ainda.'}</p>`;
       } catch (e) { toast(e.message, 'error'); more = false; }
       spin?.classList.toggle('hidden', !more);
       busy = false;
@@ -690,10 +1008,15 @@
 
   // ---------- Página "Todas as publicações" de um profissional ----------
   // Grade com rolagem infinita; tocar abre a publicação. Botão para voltar ao perfil.
-  function mountPostsPage(root, proId, { onBack } = {}) {
+  function mountPostsPage(root, proId, { onBack, kind } = {}) {
+    kind = kind || (location.hash.split('/')[2] === 'reel' ? 'reel' : 'photo');
     root.innerHTML = `<div class="posts-page">
         <div class="posts-top"><button type="button" class="btn ghost sm" data-back-profile>← Voltar para o perfil</button></div>
         <div class="posts-head" data-head></div>
+        <div class="pv-tabs" role="tablist">
+          <button type="button" role="tab" data-pp-tab="photo" class="${kind === 'photo' ? 'active' : ''}">${ic('grid', 20)} Fotos</button>
+          <button type="button" role="tab" data-pp-tab="reel" class="${kind === 'reel' ? 'active' : ''}">${ic('reel', 20)} Vídeos</button>
+        </div>
         <div class="gallery-grid posts-grid" data-grid></div>
         <div class="spinner" data-loading></div>
         <div data-end style="height:1px"></div>
@@ -712,16 +1035,29 @@
       if (busy || !more) return;
       busy = true;
       try {
-        const data = await api(`/api/social/professionals/${proId}/posts?offset=${offset}&limit=24`);
+        const want = kind;
+        const data = await api(`/api/social/professionals/${proId}/posts?offset=${offset}&limit=24&kind=${want}`);
+        if (want !== kind) { busy = false; return; } // trocou de aba no meio
         grid.insertAdjacentHTML('beforeend', data.items.map(gridTile).join(''));
         offset += data.items.length;
         more = data.has_more;
-        if (!offset) grid.innerHTML = '<p class="muted" style="grid-column:1/-1">Nenhuma publicação ainda.</p>';
+        if (!offset) grid.innerHTML = `<p class="muted" style="grid-column:1/-1">${kind === 'reel' ? 'Nenhum vídeo ainda.' : 'Nenhuma foto ainda.'}</p>`;
       } catch (e) { toast(e.message, 'error'); more = false; }
       $('[data-loading]', root).classList.toggle('hidden', !more);
       busy = false;
     }
     root.addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-pp-tab]');
+      if (tab && tab.dataset.ppTab !== kind) {
+        kind = tab.dataset.ppTab;
+        $$('[data-pp-tab]', root).forEach((b) => b.classList.toggle('active', b === tab));
+        const parts = location.hash.split('/');
+        if (parts[0] === '#posts') history.replaceState(history.state, '', `#posts/${proId}/${kind}`);
+        grid.innerHTML = ''; offset = 0; more = true; busy = false;
+        $('[data-loading]', root).classList.remove('hidden');
+        load();
+        return;
+      }
       const open = e.target.closest('[data-post-open]');
       if (open) openPost(Number(open.dataset.postOpen));
     });
@@ -731,5 +1067,5 @@
     load();
   }
 
-  window.AcoliaSocial = { officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
+  window.AcoliaSocial = { openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
 })();
