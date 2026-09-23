@@ -71,7 +71,7 @@ function postOut(p, me) {
   const comments = db.prepare('SELECT COUNT(*) n FROM post_comments WHERE post_id = ?').get(p.id).n;
   const liked = me ? !!db.prepare('SELECT 1 FROM post_likes WHERE post_id = ? AND role = ? AND user_id = ?').get(p.id, me.role, me.id) : false;
   return {
-    id: p.id, kind: p.kind || 'photo', image: p.image, images: postImages(p), caption: p.caption, created_at: p.created_at,
+    id: p.id, kind: p.kind || 'photo', aspect: p.aspect || null, image: p.image, images: postImages(p), caption: p.caption, created_at: p.created_at,
     video: p.kind === 'reel' ? p.video : undefined, duration: p.kind === 'reel' ? p.duration : undefined,
     likes, comments, liked,
     mine: !!me && me.role === 'professional' && me.id === p.professional_id,
@@ -183,12 +183,14 @@ router.post('/seen', (req, res) => {
 router.post('/posts', async (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
   const urls = await handlePhotos(req, res);
-  const p = createPost(req.auth.user.id, urls, req.body.caption);
+  const p = createPost(req.auth.user.id, urls, req.body.caption, req.body.aspect);
   res.status(201).json(postOut(p, who(req)));
 });
 
-function createPost(proId, urls, caption) {
-  const info = db.prepare('INSERT INTO posts (professional_id, image, caption) VALUES (?, ?, ?)').run(proId, urls[0], U.cleanText(caption, 2200));
+const ASPECTS = ['4:5', '1:1', '1.91:1']; // Retrato 1080×1350 · Quadrado 1080×1080 · Paisagem 1080×566
+function createPost(proId, urls, caption, aspect) {
+  const info = db.prepare('INSERT INTO posts (professional_id, image, caption, aspect) VALUES (?, ?, ?, ?)')
+    .run(proId, urls[0], U.cleanText(caption, 2200), ASPECTS.includes(aspect) ? aspect : null);
   const id = Number(info.lastInsertRowid);
   urls.forEach((u, i) => db.prepare('INSERT INTO post_images (post_id, position, image) VALUES (?, ?, ?)').run(id, i, u));
   return db.prepare('SELECT * FROM posts WHERE id = ?').get(id);

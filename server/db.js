@@ -213,6 +213,7 @@ addColumn('stories', 'post_id', 'INTEGER'); // story que mostra uma publicação
 addColumn('posts', 'kind', "TEXT NOT NULL DEFAULT 'photo'");
 addColumn('posts', 'video', 'TEXT');
 addColumn('posts', 'duration', 'REAL');
+addColumn('posts', 'aspect', 'TEXT'); // formato das fotos: 4:5 | 1:1 | 1.91:1 (publicações antigas: vazio)
 // Envio de vídeo em pedaços (continua de onde parou se a internet cair ou o app for para o fundo)
 db.exec(`CREATE TABLE IF NOT EXISTS upload_sessions (
   id TEXT PRIMARY KEY,

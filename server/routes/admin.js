@@ -284,7 +284,7 @@ router.get('/export/professionals.csv', (req, res) => {
 
   router.post('/official/posts', async (req, res) => {
     const urls = await handlePhotos(req, res);
-    res.status(201).json(postRow(S.createPost(O.officialId(), urls, req.body.caption)));
+    res.status(201).json(postRow(S.createPost(O.officialId(), urls, req.body.caption, req.body.aspect)));
   });
 
   router.post('/official/posts/:id/thumb', async (req, res) => {

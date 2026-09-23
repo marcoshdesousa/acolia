@@ -948,6 +948,7 @@ test('carrossel: uma publicação com até 10 fotos e uma descrição só', asyn
   const send = async (n) => {
     const fd = new FormData();
     fd.append('caption', 'Várias fotos');
+    fd.append('aspect', '4:5');
     for (let i = 0; i < n; i++) fd.append('photos', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, i])], { type: 'image/png' }), `f${i}.png`);
     const res = await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: cl.cookie } });
     return { status: res.status, data: await res.json() };
@@ -957,6 +958,7 @@ test('carrossel: uma publicação com até 10 fotos e uma descrição só', asyn
   assert.equal(r.data.images.length, 3);
   assert.equal(r.data.image, r.data.images[0], 'a 1ª foto é a capa');
   assert.equal(r.data.caption, 'Várias fotos');
+  assert.equal(r.data.aspect, '4:5', 'formato escolhido (retrato 1080 × 1350)');
   assert.equal((await send(11)).status, 400, 'no máximo 10');
   const grid = (await cl.get(`/api/social/professionals/${c.data.id}/posts`)).data.items;
   assert.equal(grid.length, 1, 'no perfil conta como 1 publicação');

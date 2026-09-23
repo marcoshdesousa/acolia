@@ -801,3 +801,32 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .rv-empty .btn.secondary { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.3); }
 /* "FEED / REELS" embaixo do ACOLIA: mesmo estilo espaçado, um pouco menos aberto para caber */
 .feed-logo .fl-feed { letter-spacing: .34em; margin-right: -.34em; white-space: nowrap; }
+
+/* Formatos das fotos do feed: 4:5 (1080×1350) · 1:1 (1080×1080) · 1,91:1 (1080×566) */
+.post-img[data-aspect] img { max-height: none; object-fit: cover; }
+.post-img[data-aspect="4:5"] img { aspect-ratio: 4 / 5; }
+.post-img[data-aspect="1:1"] img { aspect-ratio: 1 / 1; }
+.post-img[data-aspect="1.91:1"] img { aspect-ratio: 1080 / 566; }
+/* Escolha do formato e recorte na hora de publicar */
+.fmt-help { margin: 8px 0 0; line-height: 1.4; }
+.crop-area { margin-top: 12px; display: grid; gap: 10px; }
+.fmt-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fmt-pick button { display: grid; justify-items: center; gap: 3px; padding: 10px 6px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+  color: var(--text); font: inherit; cursor: pointer; }
+.fmt-pick button b { font-size: .84rem; }
+.fmt-pick button small { color: var(--muted); font-size: .72rem; font-weight: 700; }
+.fmt-pick button.active { border-color: var(--primary); background: var(--primary-soft); box-shadow: inset 0 0 0 1px var(--primary); }
+.fmt-box { width: 26px; border: 2px solid currentColor; border-radius: 4px; opacity: .8; }
+.crop-frame { position: relative; width: min(100%, calc(52vh * var(--ar, 1))); overflow: hidden; border-radius: 12px; background: #000; touch-action: none; cursor: grab; margin: 0 auto; }
+.crop-frame:active { cursor: grabbing; }
+.crop-frame img { position: absolute; max-width: none; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+.crop-frame::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to right, transparent 33.1%, rgba(255,255,255,.25) 33.3%, transparent 33.5%, transparent 66.5%, rgba(255,255,255,.25) 66.7%, transparent 66.9%),
+              linear-gradient(to bottom, transparent 33.1%, rgba(255,255,255,.25) 33.3%, transparent 33.5%, transparent 66.5%, rgba(255,255,255,.25) 66.7%, transparent 66.9%); }
+.crop-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.crop-tools svg { vertical-align: -3px; }
+.crop-zoom { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: .85rem; }
+.crop-zoom input { width: 140px; accent-color: var(--primary); }
+.pick-thumb.current { outline: 3px solid var(--primary); outline-offset: 1px; }
+.pick-thumb canvas { width: 100%; height: 100%; display: block; }
+.pick-strip .pick-thumb { aspect-ratio: auto; align-self: start; cursor: pointer; }

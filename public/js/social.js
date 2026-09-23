@@ -36,8 +36,9 @@
     }
     const imgs = p.images?.length ? p.images : [p.image];
     const alt = `Publicação de ${esc(p.author.name)}`;
-    if (imgs.length === 1) return `<div class="post-img" data-dbl-like="${p.id}"><img src="${esc(imgs[0])}" alt="${alt}" loading="lazy"></div>`;
-    return `<div class="post-img carousel" data-dbl-like="${p.id}" data-carousel>
+    const asp = p.aspect ? ` data-aspect="${esc(p.aspect)}"` : '';
+    if (imgs.length === 1) return `<div class="post-img"${asp} data-dbl-like="${p.id}"><img src="${esc(imgs[0])}" alt="${alt}" loading="lazy"></div>`;
+    return `<div class="post-img carousel"${asp} data-dbl-like="${p.id}" data-carousel>
         <div class="car-track" data-track>${imgs.map((src, i) => `<img src="${esc(src)}" alt="${alt} — foto ${i + 1} de ${imgs.length}" loading="lazy">`).join('')}</div>
         <span class="car-count" data-count>1/${imgs.length}</span>
         <button type="button" class="car-arrow prev" data-car="-1" aria-label="Foto anterior" hidden>‹</button>
@@ -317,48 +318,215 @@
   // ---------- Nova publicação (profissional) ----------
   // Uma publicação com 1 a 10 fotos (carrossel) e uma descrição para todas
   const MAX_PHOTOS = 10;
+  // ---------- Formatos das fotos do feed ----------
+  // Todas as fotos de uma publicação saem no mesmo formato, com 1080 px de largura:
+  //   Retrato 4:5 → 1080 × 1350 (recomendado, ocupa mais a tela) · Quadrado 1:1 → 1080 × 1080 ·
+  //   Paisagem 1,91:1 → 1080 × 566. Foto maior/diferente é recortada sozinha (pelo centro) e a
+  //   pessoa pode arrastar e dar zoom para escolher o recorte. Foto pequena demais não é esticada:
+  //   fica no meio com faixas pretas.
+  const FORMATS = {
+    '4:5': { w: 1080, h: 1350, label: 'Retrato', hint: '1080 × 1350' },
+    '1:1': { w: 1080, h: 1080, label: 'Quadrado', hint: '1080 × 1080' },
+    '1.91:1': { w: 1080, h: 566, label: 'Paisagem', hint: '1080 × 566' },
+  };
+  const bestFormat = (w, h) => { const r = w / h; return r >= 1.4 ? '1.91:1' : r >= 0.9 ? '1:1' : '4:5'; };
+  function loadImg(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+  // Escala "cobrir" (sem faixas) e "caber" (foto inteira, com faixas) para o formato
+  const scales = (img, f) => {
+    const cover = Math.max(f.w / img.naturalWidth, f.h / img.naturalHeight);
+    const fit = Math.min(f.w / img.naturalWidth, f.h / img.naturalHeight);
+    // Menor tamanho permitido: a foto inteira; se ela for muito pequena, no máximo 2× o original
+    return { cover, fit, min: cover > 2 ? Math.min(fit, 2) : fit };
+  };
+  function defaultCrop(img, f) {
+    const { cover, min } = scales(img, f);
+    // Foto muito pequena: não estica (fica borrada) — 2× no máximo e o resto em preto
+    const zoom = cover > 2 ? min / cover : 1;
+    return { zoom, cx: 0.5, cy: 0.5 };
+  }
+  function clampCrop(img, f, c) {
+    const { cover, min } = scales(img, f);
+    c.zoom = Math.min(3, Math.max(min / cover, c.zoom));
+    const s = cover * c.zoom;
+    const w = img.naturalWidth * s;
+    const h = img.naturalHeight * s;
+    const hw = f.w / (2 * w);
+    const hh = f.h / (2 * h);
+    c.cx = w <= f.w ? 0.5 : Math.min(1 - hw, Math.max(hw, c.cx));
+    c.cy = h <= f.h ? 0.5 : Math.min(1 - hh, Math.max(hh, c.cy));
+    return c;
+  }
+  // Posição/tamanho da foto dentro de um quadro de largura W (em px)
+  function placement(img, f, c, W) {
+    const k = W / f.w;
+    const s = scales(img, f).cover * c.zoom * k;
+    const w = img.naturalWidth * s;
+    const h = img.naturalHeight * s;
+    return { x: W / 2 - c.cx * w, y: (f.h * k) / 2 - c.cy * h, w, h };
+  }
+  async function renderCropped(img, f, c) {
+    const cv = document.createElement('canvas');
+    cv.width = f.w; cv.height = f.h;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, f.w, f.h);
+    g.imageSmoothingQuality = 'high';
+    const p = placement(img, f, c, f.w);
+    g.drawImage(img, p.x, p.y, p.w, p.h);
+    const blob = await new Promise((r) => cv.toBlob(r, 'image/jpeg', 0.88));
+    return new File([blob], 'foto.jpg', { type: 'image/jpeg' });
+  }
+
   async function newPost(onDone, { base = '/api/social/posts', title = 'Nova publicação' } = {}) {
-    let files = [];
+    let items = []; // { file, img, crop }
+    let format = null;
+    let cur = 0;
     await modal({
       title,
       html: `<label class="pick-media" data-pick><input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden data-file>
           <span data-empty-pick>${ic('image', 40)}<b>Escolher fotos</b><small class="muted">Até ${MAX_PHOTOS} fotos numa publicação</small></span></label>
+        <p class="fmt-help muted small" data-fmt-help>Formatos: <b>Retrato 4:5</b> (1080 × 1350, recomendado) · <b>Quadrado 1:1</b> (1080 × 1080) · <b>Paisagem 1,91:1</b> (1080 × 566). Foto diferente é recortada sozinha — você pode ajustar.</p>
+        <div class="crop-area hidden" data-crop-area>
+          <div class="fmt-pick" role="radiogroup" aria-label="Formato das fotos">${Object.entries(FORMATS).map(([k, f]) => `
+            <button type="button" role="radio" data-fmt="${k}"><span class="fmt-box" style="aspect-ratio:${f.w}/${f.h}"></span><b>${f.label}</b><small>${k.replace('.', ',')}</small></button>`).join('')}</div>
+          <div class="crop-frame" data-frame><img alt="" data-crop-img draggable="false"></div>
+          <div class="crop-tools"><span class="muted small">${ic('image', 16)} Arraste para ajustar</span>
+            <label class="crop-zoom">Zoom <input type="range" min="0" max="100" value="0" data-zoom aria-label="Zoom da foto"></label></div>
+          <small class="muted" data-fmt-size></small>
+        </div>
         <div class="pick-strip hidden" data-strip></div>
         <div class="field" style="margin-top:12px"><label for="cap">Descrição (opcional)</label><textarea id="cap" rows="3" maxlength="2200" placeholder="Escreva algo sobre esta publicação…" data-cap></textarea></div>`,
       actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
         label: 'Publicar',
         handler: async (dlg) => {
-          if (!files.length) { toast('Escolha pelo menos uma foto.', 'error'); return false; }
-          Uploads.add({ type: 'photos', label: 'Publicação', files: [...files], caption: $('[data-cap]', dlg).value, base: base === '/api/social/posts' ? null : base, onDone });
+          if (!items.length) { toast('Escolha pelo menos uma foto.', 'error'); return false; }
+          const btn = $$('.dlg-actions .btn', dlg).at(-1);
+          btn.disabled = true;
+          btn.textContent = 'Preparando…';
+          const f = FORMATS[format];
+          const files = [];
+          for (const it of items) files.push(await renderCropped(it.img, f, it.crop));
+          Uploads.add({ type: 'photos', label: 'Publicação', files, aspect: format, caption: $('[data-cap]', dlg).value, base: base === '/api/social/posts' ? null : base, onDone });
           return true;
         },
       }],
       onOpen: (dlg) => {
         const strip = $('[data-strip]', dlg);
-        const render = () => {
-          strip.classList.toggle('hidden', !files.length);
-          $('[data-empty-pick]', dlg).innerHTML = files.length
-            ? `${ic('plus', 28)}<b>Adicionar mais fotos</b><small class="muted">${files.length} de ${MAX_PHOTOS}</small>`
+        const frame = $('[data-frame]', dlg);
+        const cimg = $('[data-crop-img]', dlg);
+        const zoom = $('[data-zoom]', dlg);
+        // Zoom: 0 = foto inteira (com faixas se precisar) … 100 = 3× o recorte
+        const zoomRange = (it) => { const { cover, min } = scales(it.img, FORMATS[format]); return { min: Math.min(1, min / cover), max: 3 }; };
+        const toSlider = (it) => { const r = zoomRange(it); return Math.round(((it.crop.zoom - r.min) / (r.max - r.min)) * 100); };
+        const fromSlider = (it, v) => { const r = zoomRange(it); return r.min + (v / 100) * (r.max - r.min); };
+        function drawCrop() {
+          const it = items[cur];
+          if (!it) return;
+          const f = FORMATS[format];
+          frame.style.aspectRatio = `${f.w} / ${f.h}`;
+          frame.style.setProperty('--ar', String(f.w / f.h));
+          const W = frame.clientWidth || 300;
+          const p = placement(it.img, f, it.crop, W);
+          cimg.src = it.img.src;
+          Object.assign(cimg.style, { left: `${p.x}px`, top: `${p.y}px`, width: `${p.w}px`, height: `${p.h}px` });
+          zoom.value = String(toSlider(it));
+          $$('[data-fmt]', dlg).forEach((b) => { b.classList.toggle('active', b.dataset.fmt === format); b.setAttribute('aria-checked', String(b.dataset.fmt === format)); });
+          $('[data-fmt-size]', dlg).textContent = `${FORMATS[format].label} ${format.replace('.', ',')} — sai em ${FORMATS[format].hint} px${items.length > 1 ? ` · todas as ${items.length} fotos no mesmo formato` : ''}`;
+        }
+        function thumbs() {
+          const f = FORMATS[format];
+          strip.innerHTML = items.map((it, i) => `<div class="pick-thumb ${i === cur ? 'current' : ''}" data-sel="${i}" style="aspect-ratio:${f.w}/${f.h}">
+            <canvas data-th="${i}"></canvas><span class="n">${i + 1}</span>
+            <button type="button" data-rm="${i}" aria-label="Tirar foto ${i + 1}">${ic('close', 14)}</button></div>`).join('');
+          items.forEach((it, i) => {
+            const cv = $(`[data-th="${i}"]`, strip);
+            const W = 160;
+            cv.width = W; cv.height = Math.round((W * f.h) / f.w);
+            const g = cv.getContext('2d');
+            g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
+            const pl = placement(it.img, f, it.crop, W);
+            g.drawImage(it.img, pl.x, pl.y, pl.w, pl.h);
+          });
+        }
+        function render() {
+          const n = items.length;
+          strip.classList.toggle('hidden', !n);
+          $('[data-crop-area]', dlg).classList.toggle('hidden', !n);
+          $('[data-fmt-help]', dlg).classList.toggle('hidden', n > 0); // com fotos, o tamanho aparece embaixo do recorte
+          $('[data-empty-pick]', dlg).innerHTML = n
+            ? `${ic('plus', 28)}<b>Adicionar mais fotos</b><small class="muted">${n} de ${MAX_PHOTOS}</small>`
             : `${ic('image', 40)}<b>Escolher fotos</b><small class="muted">Até ${MAX_PHOTOS} fotos numa publicação</small>`;
-          $('[data-pick]', dlg).classList.toggle('compact', files.length > 0);
-          $('[data-pick]', dlg).classList.toggle('hidden', files.length >= MAX_PHOTOS);
-          strip.innerHTML = files.map((f, i) => `<div class="pick-thumb"><img src="${URL.createObjectURL(f)}" alt="Foto ${i + 1}">
-            <span class="n">${i + 1}</span><button type="button" data-rm="${i}" aria-label="Tirar foto ${i + 1}">${ic('close', 14)}</button></div>`).join('');
-        };
-        $('[data-file]', dlg).addEventListener('change', (e) => {
+          $('[data-pick]', dlg).classList.toggle('compact', n > 0);
+          $('[data-pick]', dlg).classList.toggle('hidden', n >= MAX_PHOTOS);
+          if (!n) return;
+          cur = Math.min(cur, n - 1);
+          drawCrop();
+          thumbs();
+        }
+        function setFormat(k) {
+          format = k;
+          items.forEach((it) => { it.crop = clampCrop(it.img, FORMATS[k], defaultCrop(it.img, FORMATS[k])); });
+          render();
+        }
+        $('[data-file]', dlg).addEventListener('change', async (e) => {
           const picked = [...e.target.files];
-          if (files.length + picked.length > MAX_PHOTOS) toast(`No máximo ${MAX_PHOTOS} fotos por publicação.`, 'error');
-          files = [...files, ...picked].slice(0, MAX_PHOTOS);
           e.target.value = '';
+          if (items.length + picked.length > MAX_PHOTOS) toast(`No máximo ${MAX_PHOTOS} fotos por publicação.`, 'error');
+          for (const file of picked.slice(0, MAX_PHOTOS - items.length)) {
+            try {
+              const img = await loadImg(file);
+              if (!format) format = bestFormat(img.naturalWidth, img.naturalHeight); // a 1ª foto escolhe o formato
+              items.push({ file, img, crop: clampCrop(img, FORMATS[format], defaultCrop(img, FORMATS[format])) });
+            } catch { toast('Não foi possível abrir uma das fotos.', 'error'); }
+          }
           render();
         });
+        $$('[data-fmt]', dlg).forEach((b) => b.addEventListener('click', () => setFormat(b.dataset.fmt)));
         strip.addEventListener('click', (e) => {
           const rm = e.target.closest('[data-rm]');
-          if (rm) { files.splice(Number(rm.dataset.rm), 1); render(); }
+          if (rm) { items.splice(Number(rm.dataset.rm), 1); if (!items.length) format = null; render(); return; }
+          const sel = e.target.closest('[data-sel]');
+          if (sel) { cur = Number(sel.dataset.sel); render(); }
         });
+        zoom.addEventListener('input', () => {
+          const it = items[cur];
+          if (!it) return;
+          it.crop.zoom = fromSlider(it, Number(zoom.value));
+          clampCrop(it.img, FORMATS[format], it.crop);
+          drawCrop();
+        });
+        zoom.addEventListener('change', thumbs);
+        // Arrastar a foto dentro do quadro
+        let drag = null;
+        frame.addEventListener('pointerdown', (e) => {
+          const it = items[cur];
+          if (!it) return;
+          frame.setPointerCapture(e.pointerId);
+          drag = { x: e.clientX, y: e.clientY, cx: it.crop.cx, cy: it.crop.cy };
+        });
+        frame.addEventListener('pointermove', (e) => {
+          if (!drag) return;
+          const it = items[cur];
+          const p = placement(it.img, FORMATS[format], it.crop, frame.clientWidth);
+          it.crop.cx = drag.cx - (e.clientX - drag.x) / p.w;
+          it.crop.cy = drag.cy - (e.clientY - drag.y) / p.h;
+          clampCrop(it.img, FORMATS[format], it.crop);
+          drawCrop();
+        });
+        const endDrag = () => { if (drag) { drag = null; thumbs(); } };
+        frame.addEventListener('pointerup', endDrag);
+        frame.addEventListener('pointercancel', endDrag);
       },
     });
   }
+
 
   // Cruz do Início: escolher entre publicar fotos ou story
   function createMenu(onPost, onStory, onReel) {
@@ -562,7 +730,7 @@
       } catch { return null; }
     }
     const saved = (j) => ({ lid: j.lid, type: j.type, base: j.base, label: j.label, caption: j.caption, duration: j.duration,
-      files: j.files, file: j.file, poster: j.poster, serverId: j.serverId, meId: j.meId, created: j.created });
+      files: j.files, file: j.file, poster: j.poster, serverId: j.serverId, meId: j.meId, created: j.created, aspect: j.aspect });
 
     function dock() {
       let b = document.querySelector('.up-dock');
@@ -695,6 +863,7 @@
       const base = j.base || '/api/social/posts';
       const fd = new FormData();
       fd.append('caption', j.caption || '');
+      if (j.aspect) fd.append('aspect', j.aspect);
       for (const f of j.files) fd.append('photos', await shrinkImage(f, 1600));
       const p = await xhrSend(j, base, 'POST', fd, null, (f) => { j.progress = f * 0.98; render(j); });
       // Miniatura leve (da 1ª foto) para a prévia do link no WhatsApp
@@ -821,7 +990,7 @@
     await modal({
       title: 'Novo reel',
       html: `<label class="pick-media" data-pick><input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" hidden data-file>
-          <span data-empty-pick>${ic('reel', 40)}<b>Escolher vídeo</b><small class="muted">Até 5 minutos (máximo ${REEL_MAX_MB} MB)</small></span></label>
+          <span data-empty-pick>${ic('reel', 40)}<b>Escolher vídeo</b><small class="muted">Até 5 minutos (máximo ${REEL_MAX_MB} MB) · ideal: em pé, 1080 × 1920 (9:16)</small></span></label>
         <div class="reel-preview hidden" data-prev><video playsinline muted controls data-pv></video><small class="muted" data-dur></small></div>
         <div class="field" style="margin-top:12px"><label for="rcap">Descrição (opcional)</label><textarea id="rcap" rows="3" maxlength="2200" placeholder="Escreva algo sobre este vídeo…" data-cap></textarea></div>
         <p class="muted small" style="margin:10px 0 0">Depois de tocar em Publicar, o vídeo envia em segundo plano — você pode continuar usando o app.</p>`,
