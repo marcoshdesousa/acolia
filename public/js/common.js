@@ -121,11 +121,15 @@
   function modal({ title = '', html = '', actions = [{ label: 'OK', value: true }], onOpen } = {}) {
     return new Promise((resolve) => {
       const dlg = document.createElement('dialog');
-      dlg.innerHTML = `<div class="dlg-body">${title ? `<h2>${esc(title)}</h2>` : ''}${html}</div>
+      dlg.innerHTML = `<button type="button" class="dlg-close" data-dlg-close aria-label="Fechar" title="Fechar">✕</button>
+        <div class="dlg-body">${title ? `<h2>${esc(title)}</h2>` : ''}${html}</div>
         <div class="dlg-actions">${actions.map((a, i) => `<button type="button" class="btn ${a.class || ''}" data-i="${i}">${esc(a.label)}</button>`).join('')}</div>`;
       document.body.appendChild(dlg);
       const close = (v) => { dlg.close(); dlg.remove(); resolve(v); };
       dlg.addEventListener('cancel', (e) => { e.preventDefault(); close(undefined); });
+      // X no canto: fecha e volta para onde a pessoa estava
+      $('[data-dlg-close]', dlg).addEventListener('click', () => close(undefined));
+      dlg.addEventListener('click', (e) => { if (e.target === dlg) close(undefined); }); // toque fora da janela
       $$('.dlg-actions button', dlg).forEach((b) => b.addEventListener('click', async () => {
         const a = actions[b.dataset.i];
         if (a.handler) {

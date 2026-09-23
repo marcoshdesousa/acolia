@@ -623,7 +623,7 @@ test('profissional só vê a conversa depois que o paciente manda mensagem', asy
   assert.equal(r.status, 201);
 });
 
-test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitante vê as 2 primeiras)', async () => {
+test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitante vê no máximo 2, sem ampliar)', async () => {
   const created = await admin.post('/api/admin/professionals', {
     name: 'Lia Campos', profession: 'Psicólogo(a)', registry: 'X-10', email: 'lia@example.com', phone: '11966665555', state: 'SP', city: 'Campinas',
   });
@@ -658,16 +658,21 @@ test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitan
   assert.ok(r.data.gallery[2]);
 
   const anonView = (await anon.get(`/api/professionals/${created.data.id}`)).data;
-  assert.equal(anonView.session_minutes, 50, 'duração aparece para todos');
+  assert.equal(anonView.session_minutes, undefined, 'duração só com conta');
+  assert.equal(anonView.has_session_minutes, true);
   assert.equal(anonView.instagram, 'lia.psi', 'Instagram aparece para todos');
-  assert.equal(anonView.gallery.length, 1, 'visitante vê até 2 fotos');
+  assert.equal(anonView.gallery.length, 0, 'com 1 foto, ela fica bloqueada');
+  assert.equal(anonView.gallery_hidden, 1);
   for (const s of [1, 2, 4]) await upload(s);
   const anon2 = (await anon.get(`/api/professionals/${created.data.id}`)).data;
-  assert.equal(anon2.gallery.length, 2, 'visitante vê só as 2 primeiras');
+  assert.equal(anon2.gallery.length, 2, 'com 4 fotos, 2 abertas');
   assert.equal(anon2.gallery_hidden, 2, 'e sabe quantas faltam');
   const pt = client();
   await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+  const { freeGalleryCount } = require('../server/serialize');
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map(freeGalleryCount), [0, 1, 1, 2, 2, 2], 'regra das fotos abertas para visitante');
   const patView = (await pt.get(`/api/professionals/${created.data.id}`)).data;
+  assert.equal(patView.session_minutes, 50);
   assert.equal(patView.gallery.length, 4, 'paciente vê todas as fotos colocadas');
   assert.equal(patView.gallery_hidden, 0);
   assert.equal(patView.instagram, 'lia.psi');

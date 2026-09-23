@@ -25,10 +25,15 @@ function parseGallery(json) {
   return Array.from({ length: GALLERY_SLOTS }, (_, i) => (typeof arr[i] === 'string' && arr[i].startsWith('/uploads/') ? arr[i] : null));
 }
 
-// Visitante sem conta tem um acesso básico: vê localização, Instagram, duração da sessão,
-// se há pacotes e as 2 primeiras fotos da galeria. Valores, o "Sobre", o endereço da
-// clínica e o resto da galeria ficam para quem cria a conta grátis.
-const FREE_GALLERY = 2;
+// Visitante sem conta tem um acesso básico: vê nome, registro, especialidades, localização,
+// Instagram, se há pacotes e até 2 fotos da galeria (sem ampliar). Valores, duração da sessão, o
+// "Sobre", o endereço da clínica e o resto da galeria ficam para quem cria a conta grátis.
+// Fotos abertas para o visitante: 1 foto → 0, 2 ou 3 fotos → 1, 4 ou mais → 2
+function freeGalleryCount(n) {
+  if (n <= 1) return 0;
+  if (n <= 3) return 1;
+  return 2;
+}
 
 function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
   const base = {
@@ -40,7 +45,6 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     bio: p.bio,
     specialties: p.specialties,
     photo: p.photo,
-    session_minutes: p.session_minutes || null,
   };
   const gallery = parseGallery(p.gallery).filter(Boolean);
   const common = {
@@ -52,6 +56,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
   if (!loggedIn) {
     const packages = parsePackages(p.packages);
     const { bio, ...rest } = base;
+    const free = freeGalleryCount(gallery.length);
     return {
       ...rest,
       ...common,
@@ -59,8 +64,9 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
       has_bio: !!bio,
       has_price: p.price_cents != null,
       package_sessions: packages.map((k) => k.sessions),
-      gallery: gallery.slice(0, FREE_GALLERY),
-      gallery_hidden: Math.max(0, gallery.length - FREE_GALLERY),
+      has_session_minutes: !!p.session_minutes,
+      gallery: gallery.slice(0, free),
+      gallery_hidden: gallery.length - free,
     };
   }
   return {
@@ -68,6 +74,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     locked: false,
     favorite: !!favorite,
     ...common,
+    session_minutes: p.session_minutes || null,
     price_cents: p.price_cents,
     packages: parsePackages(p.packages),
     clinic_name: p.has_clinic ? p.clinic_name : '',
@@ -120,4 +127,4 @@ function ownPatient(p) {
   };
 }
 
-module.exports = { VISIBLE_SQL, isVisible, parsePackages, parseGallery, GALLERY_SLOTS, publicProfessional, ownProfessional, ownPatient };
+module.exports = { freeGalleryCount, VISIBLE_SQL, isVisible, parsePackages, parseGallery, GALLERY_SLOTS, publicProfessional, ownProfessional, ownPatient };

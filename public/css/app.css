@@ -221,7 +221,7 @@ footer.site { border-top: 1px solid var(--line); padding: 24px 0 90px; color: va
 }
 
 /* Modal e toast */
-dialog { border: 0; border-radius: var(--radius); padding: 0; max-width: min(520px, calc(100vw - 32px)); width: 100%; background: var(--surface); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+dialog { position: fixed; border: 0; border-radius: var(--radius); padding: 0; max-width: min(520px, calc(100vw - 32px)); width: 100%; background: var(--surface); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
 dialog::backdrop { background: rgba(10, 20, 20, .5); }
 dialog .dlg-body { padding: 20px; max-height: 80dvh; overflow-y: auto; }
 dialog .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 20px; flex-wrap: wrap; }
@@ -393,3 +393,7 @@ footer.site .social { width: auto; margin: 0; }
 .lock-link { display: inline-flex; align-items: center; gap: 5px; font-size: .85rem; font-weight: 700; color: var(--primary); text-decoration: none; background: var(--primary-soft); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
 .lock-link:hover { text-decoration: underline; }
 .gallery-locked { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-decoration: none; color: var(--primary); font-size: .8rem; font-weight: 700; text-align: center; padding: 8px; background: repeating-linear-gradient(45deg, var(--primary-soft), var(--primary-soft) 10px, var(--line) 10px, var(--line) 20px); cursor: pointer; }
+dialog .dlg-close { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; z-index: 1; }
+dialog .dlg-close:hover { background: var(--primary-soft); color: var(--text); }
+dialog .dlg-body h2 { padding-right: 28px; }
+[data-gallery-need-account] { cursor: pointer; }

@@ -62,7 +62,7 @@
     let gallery = '';
     if (photos.length || hidden) {
       gallery = `<div><h3>Galeria</h3><div class="gallery-grid">${photos.map((src, i) => `
-          <button type="button" class="gallery-item" data-gallery-open="${esc(src)}" aria-label="Abrir foto ${i + 1}"><img src="${esc(src)}" alt="Foto ${i + 1} de ${esc(p.name)}" loading="lazy"></button>`).join('')}
+          <button type="button" class="gallery-item" ${p.locked ? `data-gallery-need-account="${esc(next || '')}"` : `data-gallery-open="${esc(src)}"`} aria-label="${p.locked ? 'Crie conta para ampliar' : `Abrir foto ${i + 1}`}"><img src="${esc(src)}" alt="Foto ${i + 1} de ${esc(p.name)}" loading="lazy"></button>`).join('')}
         ${Array.from({ length: hidden }, () => `<a class="gallery-item gallery-locked" href="${signup}">${ic('lock', 20)}<span>Crie conta para ver</span></a>`).join('')}
         </div></div>`;
     }
@@ -75,7 +75,8 @@
             <h1 style="font-size:1.6rem;margin-bottom:4px">${esc(p.name)}</h1>
             <div class="muted" style="font-weight:700">${esc(p.profession)}</div>
             <div class="row" style="margin-top:6px;gap:6px"><span class="badge ok">${ic('badge', 15)} ${esc(p.registry)}</span>
-              ${p.session_minutes ? `<span class="badge">${ic('clock', 15)} Sessão de ${duration(p.session_minutes)}</span>` : ''}</div>
+              ${p.session_minutes ? `<span class="badge">${ic('clock', 15)} Sessão de ${duration(p.session_minutes)}</span>` : ''}
+              ${p.locked && p.has_session_minutes ? `<a class="lock-link" href="${signup}">${ic('clock', 15)} Duração: crie conta para ver</a>` : ''}</div>
             ${p.instagram ? `<a class="insta-btn" href="https://www.instagram.com/${encodeURIComponent(p.instagram)}/" target="_blank" rel="noopener">${ic('instagram', 18)} @${esc(p.instagram)}</a>` : ''}
             ${specialties.length ? `<div class="meta row" style="gap:6px;margin-top:10px">${specialties.map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
           </div>
@@ -84,13 +85,27 @@
         ${about}
         ${gallery}
       </div>
-      ${p.locked ? `<div class="notice info" style="margin-top:16px">${ic('lock')} Crie sua conta grátis para ver valores, o endereço, o "Sobre", toda a galeria e para mandar mensagem.
+      ${p.locked ? `<div class="notice info" style="margin-top:16px">${ic('lock')} Crie sua conta grátis para ver valores, a duração da sessão, o endereço, o "Sobre", toda a galeria (e ampliar as fotos) e para mandar mensagem.
         <div class="row" style="margin-top:10px"><a class="btn sm" href="${signup}">Criar conta grátis</a><a class="btn secondary sm" href="/entrar?next=${encodeURIComponent(next || '/app#perfil/' + p.id)}">Já tenho conta</a></div></div>` : ''}
       <div class="grid-2" style="margin-top:16px;align-items:start">${values}${location}</div>`;
   }
 
-  // Toque numa foto da galeria abre em tamanho grande
+  // Toque numa foto da galeria abre em tamanho grande (só com conta)
   document.addEventListener('click', (e) => {
+    const locked = e.target.closest('[data-gallery-need-account]');
+    if (locked) {
+      const next = locked.dataset.galleryNeedAccount;
+      const q = next ? `?next=${encodeURIComponent(next)}` : '';
+      window.Acolia.modal({
+        title: 'Crie sua conta grátis',
+        html: '<p>Para ampliar as fotos e ver a galeria completa, crie sua conta. É rápido e depois você volta direto para este perfil.</p>',
+        actions: [{ label: 'Já tenho conta', value: 'entrar', class: 'secondary' }, { label: 'Criar conta', value: 'criar' }],
+      }).then((v) => {
+        if (v === 'criar') location.href = `/cadastro-paciente${q}`;
+        if (v === 'entrar') location.href = `/entrar${q}`;
+      });
+      return;
+    }
     const b = e.target.closest('[data-gallery-open]');
     if (!b) return;
     window.Acolia.modal({ title: 'Galeria', html: `<img src="${esc(b.dataset.galleryOpen)}" alt="" style="width:100%;border-radius:12px">`, actions: [{ label: 'Fechar' }] });
