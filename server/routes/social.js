@@ -152,6 +152,10 @@ router.delete('/posts/:id', (req, res) => {
   if (!p || !isPro(req) || p.professional_id !== req.auth.user.id) throw new U.HttpError(404, 'Publicação não encontrada.');
   db.prepare('DELETE FROM notifications WHERE post_id = ?').run(p.id);
   const imgs = postImages(p);
+  for (const st of db.prepare("SELECT id FROM stories WHERE kind = 'post' AND post_id = ?").all(p.id)) {
+    db.prepare('DELETE FROM notifications WHERE story_id = ?').run(st.id);
+    db.prepare('DELETE FROM stories WHERE id = ?').run(st.id);
+  }
   db.prepare('DELETE FROM posts WHERE id = ?').run(p.id);
   new Set([p.image, ...imgs]).forEach(removePhoto);
   if (p.thumb) removePhoto(p.thumb);
@@ -238,9 +242,15 @@ router.delete('/follow/:id', (req, res) => {
 // ---------- Stories ----------
 const STORY_ALIVE = `created_at >= strftime('%Y-%m-%d %H:%M:%f', 'now', '-${STORY_HOURS} hours')`;
 
+// Story de publicação (kind = 'post'): mostra a capa e leva para a publicação
 function storyOut(s, me) {
+  let post = null;
+  if (s.kind === 'post' && s.post_id) {
+    const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(s.post_id);
+    if (p) post = { id: p.id, image: p.image, caption: p.caption, count: imageCount(p.id) };
+  }
   return {
-    id: s.id, media: s.media, kind: s.kind, created_at: s.created_at,
+    id: s.id, media: s.media, kind: s.kind, created_at: s.created_at, post,
     liked: !!db.prepare('SELECT 1 FROM story_likes WHERE story_id = ? AND role = ? AND user_id = ?').get(s.id, me.role, me.id),
     likes: me.role === 'professional' && me.id === s.professional_id
       ? db.prepare('SELECT COUNT(*) n FROM story_likes WHERE story_id = ?').get(s.id).n : undefined,
@@ -278,8 +288,17 @@ router.delete('/stories/:id', (req, res) => {
   if (!s || !isPro(req) || s.professional_id !== req.auth.user.id) throw new U.HttpError(404, 'Story não encontrado.');
   db.prepare('DELETE FROM notifications WHERE story_id = ?').run(s.id);
   db.prepare('DELETE FROM stories WHERE id = ?').run(s.id);
-  removePhoto(s.media);
+  if (s.kind !== 'post') removePhoto(s.media);
   res.json({ ok: true });
+});
+
+// Colocar a própria publicação no story (só o dono da publicação)
+router.post('/posts/:id/story', (req, res) => {
+  const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(req.params.id));
+  if (!p) throw new U.HttpError(404, 'Publicação não encontrada.');
+  if (!isPro(req) || p.professional_id !== req.auth.user.id) throw new U.HttpError(403, 'Só quem publicou pode colocar esta publicação no story.');
+  const info = db.prepare("INSERT INTO stories (professional_id, media, kind, post_id) VALUES (?, ?, 'post', ?)").run(p.professional_id, p.image, p.id);
+  res.status(201).json(storyOut(db.prepare('SELECT * FROM stories WHERE id = ?').get(Number(info.lastInsertRowid)), who(req)));
 });
 
 function loadStory(id) {
@@ -309,7 +328,7 @@ function cleanupStories() {
   for (const s of old) {
     db.prepare('DELETE FROM notifications WHERE story_id = ?').run(s.id);
     db.prepare('DELETE FROM stories WHERE id = ?').run(s.id);
-    removePhoto(s.media);
+    if (s.kind !== 'post') removePhoto(s.media);
   }
   return old.length;
 }

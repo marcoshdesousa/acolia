@@ -97,6 +97,7 @@ Testes: `npm test`
 - Navegação só com símbolos: 🏠 Início, 👤 Profissionais, 💬 Mensagens, ⚙️ Configurações (o profissional tem também 🎥 Atendimento e o próprio perfil). A barra fica fixa enquanto a pessoa rola a tela.
 - **Início**: stories no topo e o feed de quem a pessoa segue. As publicações que ela ainda não viu aparecem primeiro; as já vistas descem.
 - **Publicações**: só profissionais publicam, pela **cruz (+)** do Início (escolhe "Publicar fotos" ou "Publicar story"). Cada publicação tem **de 1 a 10 fotos** (carrossel, arrasta para o lado) e uma descrição para todas. No perfil aparecem as **6 publicações** mais recentes (com o ícone de "várias fotos" quando for carrossel) e o botão "Ver todas as fotos"; a descrição, as curtidas e os comentários aparecem ao abrir. As publicações ficam no perfil até o profissional apagar (⋮).
+- **Publicação no story**: o dono da publicação tem o botão ⭐+ (estrela com cruzinha) — só ele vê. Tocando, a publicação vai para o story dele; quem vê o story toca na publicação e ela abre (com todas as fotos). Outro profissional não consegue colocar a publicação de alguém no story dele.
 - **Stories**: só profissionais postam (foto ou vídeo de até 20 s, quantos quiserem). Somem depois de 24 h. Quem segue vê e curte; o paciente também tem "Enviar mensagem".
 - **Seguir**: pacientes e profissionais seguem profissionais. O perfil mostra só os números (seguidores / seguindo), nunca a lista.
 - **Curtir** com o símbolo da Acolia (fica vermelho). Não mostra quem curtiu.

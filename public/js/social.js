@@ -69,6 +69,7 @@
         ${likeBtn(p.liked, `data-like="${p.id}"`)}
         <button type="button" class="icon-btn" data-comments="${p.id}" aria-label="Comentários">${ic('comment')}<span class="cnt" data-ccount="${p.id}">${p.comments || ''}</span></button>
         <button type="button" class="icon-btn" data-share="${p.id}" aria-label="Compartilhar">${ic('plane')}</button>
+        ${p.mine ? `<button type="button" class="icon-btn to-story" data-to-story="${p.id}" aria-label="Colocar no meu story" title="Colocar no meu story">${ic('storyAdd')}</button>` : ''}
       </div>
       ${p.likes ? `<div class="post-likes" data-lcount="${p.id}">${p.likes} ${p.likes === 1 ? 'curtida' : 'curtidas'}</div>` : `<div class="post-likes" data-lcount="${p.id}"></div>`}
       ${p.caption ? `<p class="post-caption"><b>${esc(p.author.name)}</b> ${esc(p.caption)}</p>` : ''}
@@ -165,6 +166,17 @@
     else location.href = `/profissional.html?id=${id}`;
   }
 
+  // Só o dono: coloca a publicação no próprio story (quem vê o story toca e abre a publicação)
+  async function postToStory(id, btn) {
+    btn.disabled = true;
+    try {
+      await api(`/api/social/posts/${id}/story`, { method: 'POST' });
+      toast('Publicação adicionada ao seu story!');
+      window.dispatchEvent(new Event('acolia:stories'));
+    } catch (e) { toast(e.message, 'error'); }
+    btn.disabled = false;
+  }
+
   async function deletePost(id, root) {
     if (!await confirmDialog('Apagar esta publicação? Ela some do seu perfil e do feed.', { okLabel: 'Apagar', danger: true, title: 'Apagar publicação' })) return false;
     try {
@@ -192,6 +204,8 @@
       if (pro) { e.preventDefault(); return openProfile(Number(pro.dataset.openPro)); }
       const menu = e.target.closest('[data-post-menu]');
       if (menu) return deletePost(Number(menu.dataset.postMenu), root);
+      const ts = e.target.closest('[data-to-story]');
+      if (ts) return postToStory(Number(ts.dataset.toStory), ts);
     });
     // Toque duplo na foto curte (como no Instagram)
     root.addEventListener('dblclick', (e) => {
@@ -364,9 +378,17 @@
         <div class="sv-bars">${grp.items.map((_, k) => `<i class="${k < i ? 'done' : ''}"><b></b></i>`).join('')}</div>
         <div class="sv-head">${avatar(pro.name, pro.photo, 'sm')}<b>${esc(pro.name)}</b><small>${esc(timeAgo(s.created_at))}</small>
           <button type="button" class="sv-close" aria-label="Fechar">${ic('close', 26)}</button></div>
-        <div class="sv-media">${s.kind === 'video'
-          ? `<video src="${esc(s.media)}" playsinline autoplay></video>`
-          : `<img src="${esc(s.media)}" alt="Story de ${esc(pro.name)}">`}</div>
+        <div class="sv-media">${s.kind === 'post' && s.post
+          ? `<div class="sv-post" style="--bg:url('${esc(s.post.image)}')">
+              <button type="button" class="sv-post-card" data-sv-open-post="${s.post.id}" aria-label="Abrir publicação">
+                <span class="sv-post-head">${avatar(pro.name, pro.photo, 'sm')}<b>${esc(pro.name)}</b></span>
+                <span class="sv-post-img"><img src="${esc(s.post.image)}" alt="Publicação de ${esc(pro.name)}">${s.post.count > 1 ? `<span class="car-count">1/${s.post.count}</span>` : ''}</span>
+                ${s.post.caption ? `<span class="sv-post-cap">${esc(s.post.caption.slice(0, 120))}${s.post.caption.length > 120 ? '…' : ''}</span>` : ''}
+              </button>
+              <span class="sv-post-hint">Toque na publicação para abrir</span></div>`
+          : s.kind === 'video'
+            ? `<video src="${esc(s.media)}" playsinline autoplay></video>`
+            : `<img src="${esc(s.media)}" alt="Story de ${esc(pro.name)}">`}</div>
         <button type="button" class="sv-nav prev" aria-label="Anterior"></button>
         <button type="button" class="sv-nav next" aria-label="Próximo"></button>
         <div class="sv-foot">
@@ -390,6 +412,7 @@
         v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
       } else run(5);
 
+      $('[data-sv-open-post]', el)?.addEventListener('click', () => { const pid = s.post.id; close(); openPost(pid); });
       $('.sv-close', el).onclick = close;
       $('.sv-nav.next', el).onclick = next;
       $('.sv-nav.prev', el).onclick = prev;
@@ -546,6 +569,7 @@
       new IntersectionObserver((en) => { if (en[0].isIntersecting) loadFeed(false); }, { rootMargin: '600px' }).observe($('[data-sentinel]', root));
     }
     opts.socket?.on('social:notification', refreshBell);
+    window.addEventListener('acolia:stories', loadStories);
 
     const reload = () => { loadStories(); loadFeed(true); refreshBell(); };
     reload();

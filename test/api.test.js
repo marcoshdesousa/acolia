@@ -950,3 +950,38 @@ test('carrossel: uma publicação com até 10 fotos e uma descrição só', asyn
   const { db } = require('../server/db');
   assert.equal(db.prepare('SELECT COUNT(*) n FROM post_images WHERE post_id = ?').get(r.data.id).n, 0, 'fotos do carrossel apagadas junto');
 });
+
+test('publicação no story: só o dono coloca; quem segue vê e abre a publicação', async () => {
+  const mk = async (name, email) => {
+    const c = await admin.post('/api/admin/professionals', { name, profession: 'Psicólogo(a)', registry: `R-${email}`, email, phone: '11911110000', state: 'SP', city: 'Campinas' });
+    const cl = client();
+    await cl.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+    return { id: c.data.id, cl };
+  };
+  const D = await mk('Dora Story', 'dorastory@example.com');
+  const E = await mk('Enzo Story', 'enzostory@example.com');
+  const fd = new FormData();
+  fd.append('caption', 'Para o story');
+  fd.append('photos', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'f.png');
+  const post = await (await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: D.cl.cookie } })).json();
+  assert.equal((await E.cl.post(`/api/social/posts/${post.id}/story`)).status, 403, 'outro profissional não coloca no story dele');
+  const pt = client();
+  await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+  assert.equal((await pt.post(`/api/social/posts/${post.id}/story`)).status, 403, 'paciente também não');
+  const st = await D.cl.post(`/api/social/posts/${post.id}/story`);
+  assert.equal(st.status, 201);
+  assert.equal(st.data.kind, 'post');
+  assert.equal(st.data.post.id, post.id);
+  await pt.post(`/api/social/follow/${D.id}`);
+  const g = (await pt.get('/api/social/stories')).data.groups.find((x) => x.professional.id === D.id);
+  assert.equal(g.items[0].post.caption, 'Para o story', 'quem segue vê a publicação no story');
+  // apagar o story não apaga a foto da publicação
+  const { UPLOAD_DIR } = require('../server/upload');
+  await D.cl.del(`/api/social/stories/${st.data.id}`);
+  await new Promise((ok) => setTimeout(ok, 50));
+  assert.ok(fs.existsSync(path.join(UPLOAD_DIR, path.basename(post.image))), 'foto da publicação continua');
+  // apagar a publicação apaga os stories dela
+  await D.cl.post(`/api/social/posts/${post.id}/story`);
+  await D.cl.del(`/api/social/posts/${post.id}`);
+  assert.equal((await pt.get('/api/social/stories')).data.groups.filter((x) => x.professional.id === D.id).length, 0);
+});
