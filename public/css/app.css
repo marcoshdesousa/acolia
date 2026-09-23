@@ -799,3 +799,5 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .rv-end-ic { width: 72px; height: 72px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); display: grid; place-items: center; color: #fff; }
 .rv-end-ic svg { width: 38px; height: 38px; }
 .rv-empty .btn.secondary { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.3); }
+/* "FEED / REELS" embaixo do ACOLIA: mesmo estilo espaçado, um pouco menos aberto para caber */
+.feed-logo .fl-feed { letter-spacing: .34em; margin-right: -.34em; white-space: nowrap; }
