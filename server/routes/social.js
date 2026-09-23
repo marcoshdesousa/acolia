@@ -289,14 +289,28 @@ router.get('/reels', (req, res) => {
   const me = who(req);
   const shown = String(req.query.sug || '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(-500);
   const size = 6;
+  // ?scope=following: só de quem a pessoa segue (e da Acolia Brasil, que todos seguem)
+  const following = req.query.scope === 'following';
+  const FOLLOWED = 'SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?';
+  const who_ = following
+    ? `((${VISIBLE_SQL} AND po.professional_id IN (${FOLLOWED})) OR po.professional_id = ?)`
+    : `((${VISIBLE_SQL}) OR po.professional_id = ? OR (? = 'professional' AND po.professional_id = ?))`;
+  const whoArgs = following ? [me.role, me.id, O.officialId()] : [O.officialId(), me.role, me.id];
   const rows = db.prepare(`
     SELECT po.*, (SELECT 1 FROM post_views v WHERE v.post_id = po.id AND v.role = ? AND v.user_id = ?) AS seen
     FROM posts po JOIN professionals p ON p.id = po.professional_id
-    WHERE po.kind = 'reel' AND ((${VISIBLE_SQL}) OR po.professional_id = ? OR (? = 'professional' AND po.professional_id = ?))
+    WHERE po.kind = 'reel' AND ${who_}
       AND po.id NOT IN (SELECT value FROM json_each(?))
-    ORDER BY seen IS NOT NULL, RANDOM()
-    LIMIT ?`).all(me.role, me.id, O.officialId(), me.role, me.id, JSON.stringify(shown), size + 1);
-  res.json({ items: rows.slice(0, size).map((p) => ({ ...postOut(p, me), seen: !!p.seen })), has_more: rows.length > size });
+    ORDER BY seen IS NOT NULL, ${following ? 'po.id DESC' : 'RANDOM()'}
+    LIMIT ?`).all(me.role, me.id, ...whoArgs, JSON.stringify(shown), size + 1);
+  const out = { items: rows.slice(0, size).map((p) => ({ ...postOut(p, me), seen: !!p.seen })), has_more: rows.length > size };
+  // Fotinhos de quem a pessoa segue com vídeos (aparecem ao lado de "Seguindo")
+  if (req.query.avatars === '1') {
+    out.following_avatars = db.prepare(`SELECT po.professional_id AS id, MAX(po.id) AS last FROM posts po JOIN professionals p ON p.id = po.professional_id
+      WHERE po.kind = 'reel' AND ${VISIBLE_SQL} AND po.professional_id IN (${FOLLOWED})
+      GROUP BY po.professional_id ORDER BY last DESC LIMIT 3`).all(me.role, me.id).map((r) => actor('professional', r.id));
+  }
+  res.json(out);
 });
 
 // Miniatura (até ~600 px) usada na prévia do link compartilhado

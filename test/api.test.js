@@ -1127,6 +1127,13 @@ test('Reels: profissional publica vídeo de até 5 min; aparece no feed, na aba 
   assert.ok(reels.items.some((p) => p.id === r.data.id));
   assert.ok(reels.items.every((p) => p.kind === 'reel'));
   assert.ok(!(await pt.get(`/api/social/reels?sug=${r.data.id}`)).data.items.some((p) => p.id === r.data.id));
+  // Aba "Seguindo": só de quem a pessoa segue (ainda não segue o Rafa)
+  assert.ok(!(await pt.get('/api/social/reels?scope=following')).data.items.some((p) => p.id === r.data.id));
+  await pt.post(`/api/social/follow/${c.data.id}`);
+  const fol = (await pt.get('/api/social/reels?scope=following&avatars=1')).data;
+  assert.ok(fol.items.some((p) => p.id === r.data.id), 'depois de seguir, aparece em Seguindo');
+  assert.equal(fol.following_avatars[0].id, c.data.id, 'fotinho de quem segue');
+  await pt.del(`/api/social/follow/${c.data.id}`);
   // No feed (como sugestão) com o vídeo
   const inFeed = (await pt.get('/api/social/feed')).data.items.find((p) => p.id === r.data.id);
   assert.ok(inFeed && inFeed.video, 'reel aparece no feed');

@@ -784,3 +784,18 @@ html.rv-open, html.rv-open body { overflow: hidden; }
 .up-chip.waiting .up-track i { background: var(--warn); }
 .up-chip.done { border-color: var(--primary); }
 .up-x { flex: none; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1.3rem; line-height: 1; cursor: pointer; }
+/* Reels: abas "Reels" | "Seguindo" no topo, como no Instagram */
+.rv-tabs { display: flex; justify-content: center; align-items: center; gap: 22px; pointer-events: auto; }
+.rv-tabs button { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; color: rgba(255,255,255,.55); font-family: var(--font); font-weight: 800;
+  font-size: 1.12rem; padding: 6px 0; cursor: pointer; text-shadow: 0 1px 6px rgba(0,0,0,.5); transition: color .2s; }
+.rv-tabs button.active { color: #fff; }
+.rv-avs { display: inline-flex; }
+.rv-avs:empty { display: none; }
+.rv-avs .avatar { width: 24px; height: 24px; font-size: .6rem; border: 2px solid #000; margin-left: -8px; }
+.rv-avs .avatar:first-child { margin-left: 0; }
+.rv-end { display: grid; place-items: center; }
+.rv-end h2 { color: #fff; font-size: 1.3rem; margin: 6px 0 0; }
+.rv-end p { margin: 0 0 8px; }
+.rv-end-ic { width: 72px; height: 72px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); display: grid; place-items: center; color: #fff; }
+.rv-end-ic svg { width: 38px; height: 38px; }
+.rv-empty .btn.secondary { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.3); }

@@ -890,16 +890,24 @@
       el.className = 'reels-view';
       el.setAttribute('role', 'dialog');
       el.setAttribute('aria-label', 'Reels');
-      el.innerHTML = `<div class="rv-top"><button type="button" class="rv-close" data-rv-close aria-label="Voltar">${ic('back', 26)}</button><b>Reels</b><span></span></div>
+      // No topo: "Reels" (de todo mundo, aleatório) e "Seguindo" (só de quem a pessoa segue).
+      // Tocar na aba que já está aberta atualiza e volta para o começo.
+      el.innerHTML = `<div class="rv-top"><button type="button" class="rv-close" data-rv-close aria-label="Voltar">${ic('back', 26)}</button>
+          <div class="rv-tabs" role="tablist">
+            <button type="button" role="tab" class="active" data-rv-scope="all">Reels</button>
+            <button type="button" role="tab" data-rv-scope="following">Seguindo<span class="rv-avs" data-rv-avs></span></button>
+          </div><span></span></div>
         <div class="rv-list" data-rv-list></div>`;
       document.body.appendChild(el);
       document.documentElement.classList.add('rv-open');
       bindActions(el);
       const list = $('[data-rv-list]', el);
-      const shown = [];
+      let shown = [];
       let more = true;
       let busy = false;
       let closed = false;
+      let scope = 'all';
+      let gen = 0; // muda a cada troca de aba (ignora respostas antigas)
       const seenIds = new Set();
 
       const io = new IntersectionObserver((entries) => {
@@ -938,18 +946,54 @@
       async function load() {
         if (busy || !more || closed) return;
         busy = true;
+        const g = gen;
         try {
-          const d = await api(`/api/social/reels?sug=${shown.slice(-400).join(',')}`);
+          const d = await api(`/api/social/reels?scope=${scope}&avatars=1&sug=${shown.slice(-400).join(',')}`);
+          if (g !== gen) { busy = false; return; }
+          const avs = $('[data-rv-avs]', el);
+          if (d.following_avatars) avs.innerHTML = d.following_avatars.map((a) => avatar(a.name, a.photo, 'sm')).join('');
           add(d.items);
           more = d.has_more;
-          if (!shown.length) list.innerHTML = `<div class="rv-empty">${ic('reel', 56)}<p>Ainda não há vídeos. Quando os profissionais publicarem, eles aparecem aqui.</p></div>`;
+          if (!shown.length) {
+            list.innerHTML = `<div class="rv-empty">${ic('reel', 56)}<p>${scope === 'following'
+              ? 'Quem você segue ainda não publicou vídeos. Veja os Reels de todos os profissionais.'
+              : 'Ainda não há vídeos. Quando os profissionais publicarem, eles aparecem aqui.'}</p>
+              ${scope === 'following' ? '<button type="button" class="btn sm" data-rv-scope="all">Ver todos os Reels</button>' : ''}</div>`;
+          } else if (!more) {
+            // Chegou ao fim
+            list.insertAdjacentHTML('beforeend', `<section class="rv-slide rv-end"><div class="rv-empty">
+              <span class="rv-end-ic">${ICONS.check}</span>
+              <h2>${scope === 'following' ? 'Você viu todos os reels de quem você segue' : 'Você assistiu todos os reels'}</h2>
+              <p>${scope === 'following' ? 'Quando alguém que você segue publicar um vídeo novo, ele aparece aqui.' : 'Por enquanto é isso! Volte mais tarde para ver vídeos novos.'}</p>
+              <div class="row" style="justify-content:center">
+                <button type="button" class="btn secondary sm" data-rv-again>Ver de novo</button>
+                ${scope === 'following' ? '<button type="button" class="btn sm" data-rv-scope="all">Ver todos os Reels</button>' : ''}
+              </div></div></section>`);
+          }
         } catch (e) { toast(e.message, 'error'); more = false; }
         busy = false;
+      }
+      // Troca de aba ou toque na aba aberta: recomeça do topo com o que tiver de novo
+      function restart(next) {
+        gen += 1;
+        scope = next;
+        $$('[data-rv-scope]', $('.rv-top', el)).forEach((b) => b.classList.toggle('active', b.dataset.rvScope === scope));
+        $$('video', list).forEach((v) => v.pause());
+        io.disconnect();
+        list.innerHTML = '';
+        list.scrollTop = 0;
+        shown = [];
+        more = true;
+        busy = false;
+        load();
       }
 
       el.addEventListener('click', (e) => {
         if (e.target.closest('[data-rv-close]')) { history.state?.acoliaReels ? history.back() : close(); return; }
         if (e.target.closest('[data-rv-sound]')) { reelSound = !reelSound; syncReelSound(); return; }
+        const sc = e.target.closest('[data-rv-scope]');
+        if (sc) { restart(sc.dataset.rvScope); return; }
+        if (e.target.closest('[data-rv-again]')) { restart(scope); return; }
         const cap = e.target.closest('[data-rv-cap]');
         if (cap) { cap.classList.toggle('open'); return; }
         const tap = e.target.closest('[data-rv-tap]');
