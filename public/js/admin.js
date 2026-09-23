@@ -52,24 +52,11 @@
     f.city.innerHTML = '<option value="">Todos os municípios</option>' + list.map((c) => `<option ${c === cur ? 'selected' : ''}>${esc(c)}</option>`).join('');
   }
 
-  // Apagar conta: confirmação forte (digitar APAGAR)
+  // Apagar conta pelo admin: dois avisos (sem precisar digitar CPF ou código da pessoa)
   async function confirmDelete(name) {
-    let ok = false;
-    await modal({
-      title: 'Apagar conta permanentemente',
-      html: `<p>Apagar a conta de <b>${esc(name || '')}</b>? Some <b>tudo</b>: dados, fotos, publicações, curtidas, comentários e o conteúdo das mensagens. Não dá para desfazer. A pessoa poderá criar uma conta nova depois.</p>
-        <div class="field"><label for="del-word">Para confirmar, digite <b>APAGAR</b></label><input id="del-word" autocomplete="off" data-del-word></div>`,
-      actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
-        label: 'Apagar conta',
-        class: 'danger',
-        handler: (dlg) => {
-          if ($('[data-del-word]', dlg).value.trim().toUpperCase() !== 'APAGAR') { toast('Digite APAGAR para confirmar.', 'error'); return false; }
-          ok = true;
-          return true;
-        },
-      }],
-    });
-    return ok;
+    const ask = (title, html, ok) => modal({ title, html, actions: [{ label: 'Não', value: false, class: 'secondary' }, { label: ok, value: true, class: 'danger' }] });
+    if (!await ask('Apagar esta conta?', `<p>Você quer apagar a conta de <b>${esc(name || '')}</b>?</p>`, 'Sim')) return false;
+    return !!await ask('Tem certeza?', '<p><b>Se apagar, já era.</b> Some tudo: dados, fotos, publicações, curtidas, comentários e o conteúdo das mensagens. Não dá para recuperar. A pessoa poderá criar uma conta nova depois.</p>', 'Sim, apagar');
   }
 
   // ---------- Visão geral ----------
