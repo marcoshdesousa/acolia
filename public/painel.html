@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <title>Painel do profissional — Acolia</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#3f5550">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/img/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>@media (min-width: 801px) { .chat { --chat-offset: 104px; } }</style>
+</head>
+<body>
+  <header class="topbar"><div class="container" style="max-width:none">
+    <a class="brand" href="/painel"><span data-logo></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"> <span class="badge primary">Profissional</span></a>
+    <nav><span data-me-avatar></span></nav>
+  </div></header>
+
+  <div class="panel">
+    <aside class="sidebar" aria-label="Menu">
+      <a href="#conversas" data-nav="conversas"><span data-i="chat"></span>Conversas<span class="nav-badge" data-unread></span></a>
+      <a href="#atendimento" data-nav="atendimento"><span data-i="video"></span>Atendimento</a>
+      <a href="#perfil" data-nav="perfil"><span data-i="user"></span>Meu perfil</a>
+      <a href="#conta" data-nav="conta"><span data-i="gear"></span>Conta</a>
+    </aside>
+
+    <main class="panel-main">
+      <div data-status-notice></div>
+
+      <section data-view="conversas" class="chat-wrap hidden"><div data-chat></div></section>
+
+      <section data-view="atendimento" class="hidden" style="max-width:820px">
+        <h1 style="font-size:1.5rem">Atendimento</h1>
+        <div class="card stack">
+          <div class="row between">
+            <div><div class="muted small" style="font-weight:700">SEU CÓDIGO ÚNICO</div><div class="code-box" style="font-size:1.4rem;padding:8px 16px" data-my-code></div></div>
+            <p class="small muted grow" style="margin:0;min-width:220px">Use este código para <b>entrar</b> na sala de atendimento. Não compartilhe com pacientes — para eles você gera um código próprio abaixo. Você atende <b>uma pessoa por vez</b>.</p>
+          </div>
+        </div>
+        <div data-active-call style="margin-top:16px"></div>
+        <form class="card" data-new-call style="margin-top:16px">
+          <h2>Criar atendimento</h2>
+          <p class="muted small">Gera um código para o paciente (começa com os 2 primeiros caracteres do seu código). Envie para ele pelo chat ou como preferir. Ao finalizar o atendimento, o código deixa de funcionar.</p>
+          <div class="field"><label for="plabel">Nome do paciente (pode ser fictício)</label><input id="plabel" name="patient_label" maxlength="80" required></div>
+          <button class="btn" type="submit">Gerar código do paciente</button>
+        </form>
+        <h2 style="margin-top:24px">Histórico</h2>
+        <div class="table-wrap"><table><thead><tr><th>Paciente</th><th>Código</th><th>Criado</th><th>Situação</th></tr></thead><tbody data-history></tbody></table></div>
+      </section>
+
+      <section data-view="perfil" class="hidden" style="max-width:820px">
+        <h1 style="font-size:1.5rem">Meu perfil</h1>
+        <p class="muted">É assim que os pacientes veem você na vitrine. <a href="#" data-preview>Ver como paciente</a></p>
+        <div class="card stack" style="margin-bottom:16px;border-color:var(--primary)">
+          <h2 style="margin:0">Seu link de divulgação</h2>
+          <p class="small muted" style="margin:0">Coloque na bio do Instagram, no WhatsApp ou onde quiser. Quem abrir vê seu perfil com valores e pode te mandar mensagem. Se a pessoa ainda não tiver conta, cria na hora e volta direto para o seu perfil.</p>
+          <div class="link-box"><span data-my-link></span></div>
+          <div class="row">
+            <button class="btn" type="button" data-copy-link>Copiar link</button>
+            <a class="btn secondary" data-open-link target="_blank" rel="noopener">Abrir</a>
+            <button class="btn ghost" type="button" data-share-link>Compartilhar</button>
+          </div>
+          <form class="row" data-slug-form style="align-items:flex-end">
+            <div class="field grow" style="margin:0"><label for="slug">Personalizar o final do link</label>
+              <div class="slug-input"><span data-origin></span><input id="slug" name="slug" maxlength="40" required autocomplete="off" spellcheck="false"></div>
+              <div class="hint">Só letras, números e hífen. Ex.: dra-ana-lima</div></div>
+            <button class="btn secondary" type="submit">Salvar link</button>
+          </form>
+        </div>
+        <div class="card stack">
+          <div class="row"><span data-photo></span>
+            <div class="stack"><label class="btn secondary sm" style="margin:0;width:max-content">Trocar foto de perfil<input type="file" accept="image/jpeg,image/png,image/webp" data-photo-input hidden></label>
+            <span class="small muted">JPG, PNG ou WEBP, até 3 MB.</span></div></div>
+        </div>
+        <form class="card" data-profile-form style="margin-top:16px" novalidate>
+          <h2>Dados profissionais</h2>
+          <div class="field"><label for="name">Nome exibido (nome completo ou nome e sobrenome)</label><input id="name" name="name" required maxlength="120"></div>
+          <div class="grid-2">
+            <div class="field"><label for="profession">Profissão</label><select id="profession" name="profession" disabled></select></div>
+            <div class="field"><label for="registry">Registro profissional (CRP, CRM…)</label><input id="registry" name="registry" readonly maxlength="40">
+              <div class="hint">Para alterar profissão ou registro, fale com a administração.</div></div>
+          </div>
+          <div class="field"><label for="phone">WhatsApp</label><input id="phone" name="phone" inputmode="tel"></div>
+          <div class="field"><label for="specialties">Especialidades / abordagens</label><input id="specialties" name="specialties" maxlength="300" placeholder="Ex.: Ansiedade, Depressão, TCC, Casais">
+            <div class="hint">Separe por vírgula.</div></div>
+          <div class="field"><label for="bio">Sobre você</label><textarea id="bio" name="bio" maxlength="2000" rows="5" placeholder="Conte sua formação, experiência e como é o seu atendimento."></textarea></div>
+
+          <h2 style="margin-top:24px">Valores</h2>
+          <div class="grid-2">
+            <div class="field"><label for="price">Valor da consulta online (R$)</label><input id="price" name="price" inputmode="decimal" placeholder="Ex.: 150,00"></div>
+            <div class="field"><label for="pix">Chave Pix (para enviar no chat)</label><input id="pix" name="pix_key" maxlength="140" placeholder="CPF, e-mail, telefone ou chave aleatória"></div>
+          </div>
+          <label>Pacotes de sessões</label>
+          <div data-packages class="stack"></div>
+          <button type="button" class="btn secondary sm" data-add-package style="margin-top:8px">+ Adicionar pacote</button>
+
+          <h2 style="margin-top:24px">Localização</h2>
+          <div class="field"><label>Estado e município onde você trabalha</label>
+            <div class="grid-uf"><select name="state" aria-label="Estado"></select><input name="city" placeholder="Município" aria-label="Município"></div></div>
+          <label class="check"><input type="checkbox" name="has_clinic" data-has-clinic> Tenho consultório/clínica presencial</label>
+          <div data-clinic class="hidden" style="margin-top:12px">
+            <div class="field"><label for="cname">Nome da clínica</label><input id="cname" name="clinic_name" maxlength="120"></div>
+            <div class="field"><label for="caddr">Endereço completo</label><input id="caddr" name="clinic_address" maxlength="250" placeholder="Rua, número, bairro"></div>
+          </div>
+          <button class="btn" type="submit" style="margin-top:16px">Salvar perfil</button>
+        </form>
+      </section>
+
+      <section data-view="conta" class="hidden" style="max-width:640px">
+        <h1 style="font-size:1.5rem">Conta</h1>
+        <div class="card stack">
+          <div><div class="muted small" style="font-weight:700">SEU CÓDIGO ÚNICO (LOGIN)</div><div class="code-box" data-my-code2></div></div>
+          <p class="small muted">Guarde este código. Você entra com ele (ou com o e-mail) e a sua senha.</p>
+          <div class="row between"><span>Situação na vitrine</span><span data-visibility></span></div>
+          <div class="row between"><span>Mensalidade paga até</span><b data-sub></b></div>
+          <p class="small muted" style="margin:0">A presença na vitrine depende da mensalidade em dia. Para renovar, fale com a administração.</p>
+        </div>
+        <form class="card stack" data-pw-form style="margin-top:16px">
+          <h2>Trocar senha</h2>
+          <div class="field"><label for="cur">Senha atual</label><input id="cur" name="current" type="password" required autocomplete="current-password"></div>
+          <div class="field"><label for="npw">Nova senha</label><input id="npw" name="password" type="password" minlength="6" required autocomplete="new-password"></div>
+          <button class="btn" type="submit">Alterar senha</button>
+        </form>
+        <div class="card stack" style="margin-top:16px">
+          <div class="row"><button class="btn secondary" data-install-btn>Instalar o app</button><button class="btn secondary" data-enable-push>Ativar notificações</button></div>
+        </div>
+        <button class="btn secondary block" style="margin-top:16px" data-logout>Sair</button>
+        <div class="card stack" style="margin-top:24px;border-color:var(--danger)">
+          <h2 style="color:var(--danger)">Excluir minha conta</h2>
+          <p class="small muted" style="margin:0">Seu perfil sai da vitrine, seus dados e a carteirinha são apagados e você não consegue mais entrar. As conversas continuam com os pacientes, sem o seu nome. Não dá para desfazer.</p>
+          <button class="btn danger" data-delete-account style="width:max-content">Excluir minha conta</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <nav class="bottom-nav mobile-only" aria-label="Navegação">
+    <a href="#conversas" data-nav="conversas"><span data-i="chat"></span>Conversas<span class="nav-badge" data-unread></span></a>
+    <a href="#atendimento" data-nav="atendimento"><span data-i="video"></span>Atendimento</a>
+    <a href="#perfil" data-nav="perfil"><span data-i="user"></span>Perfil</a>
+    <a href="#conta" data-nav="conta"><span data-i="gear"></span>Conta</a>
+  </nav>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/common.js"></script>
+  <script src="/js/profile-view.js"></script>
+  <script src="/js/chat.js"></script>
+  <script src="/js/delete-account.js"></script>
+  <script src="/js/painel.js"></script>
+</body>
+</html>

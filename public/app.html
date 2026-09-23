@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <title>Acolia</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#3f5550">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/img/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar"><div class="container">
+      <a class="brand" href="/app"><span data-logo></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
+      <nav><a class="btn ghost sm" href="/atendimento" target="_blank" rel="noopener">Entrar no atendimento</a><span data-me-avatar></span></nav>
+    </div></header>
+
+    <main class="app-main">
+      <section data-view="buscar" class="container hidden">
+        <h1 style="font-size:1.5rem">Encontre seu profissional</h1>
+        <div data-catalog></div>
+      </section>
+
+      <section data-view="perfil" class="container hidden">
+        <a href="#buscar" class="btn ghost sm" style="margin-bottom:12px">← Voltar</a>
+        <div data-profile></div>
+      </section>
+
+      <section data-view="chat" class="container chat-wrap hidden" style="padding-top:0">
+        <div data-chat></div>
+      </section>
+
+      <section data-view="config" class="narrow hidden" style="max-width:560px">
+        <h1 style="font-size:1.5rem">Configurações</h1>
+        <div class="card stack">
+          <div class="row">
+            <span data-photo></span>
+            <div class="grow"><div style="font-weight:800" data-name></div><div class="muted small" data-cpf></div><div class="muted small" data-loc></div></div>
+          </div>
+          <label class="btn secondary sm" style="width:max-content;margin:0">Trocar foto<input type="file" accept="image/jpeg,image/png,image/webp" data-photo-input hidden></label>
+          <form data-profile-form>
+            <div class="field"><label for="dn">Nome exibido no chat</label><input id="dn" name="display_name" maxlength="60" placeholder="Como quer ser chamado(a)">
+              <div class="hint">Seu nome completo (do CPF) continua registrado na plataforma.</div></div>
+            <button class="btn" type="submit">Salvar</button>
+          </form>
+        </div>
+        <div class="card stack" style="margin-top:16px">
+          <h2>Trocar senha</h2>
+          <form data-pw-form>
+            <div class="field"><label for="cur">Senha atual</label><input id="cur" name="current" type="password" autocomplete="current-password" required></div>
+            <div class="field"><label for="npw">Nova senha</label><input id="npw" name="password" type="password" minlength="6" autocomplete="new-password" required></div>
+            <button class="btn" type="submit">Alterar senha</button>
+          </form>
+        </div>
+        <div class="card stack" style="margin-top:16px">
+          <h2>Aplicativo e avisos</h2>
+          <div class="row"><button class="btn secondary" data-install-btn>Instalar o app</button><button class="btn secondary" data-enable-push>Ativar notificações</button></div>
+        </div>
+        <button class="btn secondary block" style="margin-top:16px" data-logout>Sair da conta</button>
+        <div class="card stack" style="margin-top:24px;border-color:var(--danger)">
+          <h2 style="color:var(--danger)">Excluir minha conta</h2>
+          <p class="small muted" style="margin:0">Seus dados pessoais são apagados e você não consegue mais entrar. As mensagens já enviadas continuam com o profissional, sem o seu nome. Não dá para desfazer.</p>
+          <button class="btn danger" data-delete-account style="width:max-content">Excluir minha conta</button>
+        </div>
+        <p class="small muted center" style="margin-top:16px">Em caso de crise ou risco de vida, ligue 188 (CVV) ou 192 (SAMU).</p>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Navegação">
+      <a href="#buscar" data-nav="buscar"><span data-i="therapist"></span>Profissionais</a>
+      <a href="#chat" data-nav="chat"><span data-i="chat"></span>Conversas<span class="nav-badge" data-unread></span></a>
+      <a href="#config" data-nav="config"><span data-i="gear"></span>Configurações</a>
+    </nav>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/common.js"></script>
+  <script src="/js/catalog.js"></script>
+  <script src="/js/profile-view.js"></script>
+  <script src="/js/chat.js"></script>
+  <script src="/js/delete-account.js"></script>
+  <script>
+  (async function () {
+    const { $, $$, api, ICONS, avatar, esc, toast, handleForm, logout, installApp } = Acolia;
+    const auth = await api('/api/auth/me').catch(() => ({}));
+    if (auth.role !== 'patient') { location.replace('/entrar?next=' + encodeURIComponent('/app' + location.hash)); return; }
+    let me = auth.user;
+    $('[data-logo]').innerHTML = ICONS.logo;
+    $$('[data-i]').forEach((el) => { el.outerHTML = ICONS[el.dataset.i]; });
+
+    function renderMe() {
+      $('[data-me-avatar]').innerHTML = '<a href="#config" aria-label="Configurações">' + avatar(me.display_name || me.name, me.photo, 'sm') + '</a>';
+      $('[data-photo]').innerHTML = avatar(me.name, me.photo, 'lg');
+      $('[data-name]').textContent = me.name;
+      $('[data-cpf]').textContent = 'CPF ' + me.cpf_masked;
+      $('[data-loc]').textContent = me.city + ' - ' + me.state;
+      $('[data-profile-form]').display_name.value = me.display_name;
+    }
+    renderMe();
+
+    const socket = io();
+    const setUnread = (n) => { $('[data-unread]').textContent = n ? String(n) : ''; };
+    const chat = AcoliaChat.mount($('[data-chat]'), {
+      role: 'patient', me, socket, onUnreadChange: setUnread,
+      onNavigate: (id) => { const h = id ? '#chat/' + id : '#chat'; if (location.hash !== h && location.hash.startsWith('#chat')) history.replaceState(null, '', h); },
+    });
+
+    let catalogMounted = false;
+    async function route() {
+      const [view, arg] = (location.hash.slice(1) || 'buscar').split('/');
+      if (view === 'conversar' && arg) {
+        try {
+          const c = await api('/api/chat/conversations', { method: 'POST', body: { professional_id: Number(arg) } });
+          location.replace('#chat/' + c.id);
+        } catch (e) { toast(e.message, 'error'); location.replace('#buscar'); }
+        return;
+      }
+      const v = ['buscar', 'perfil', 'chat', 'config'].includes(view) ? view : 'buscar';
+      $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
+      $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'perfil' ? 'buscar' : v)));
+      if (v === 'buscar' && !catalogMounted) {
+        catalogMounted = true;
+        AcoliaCatalog.mount($('[data-catalog]'), {
+          loggedIn: true, me,
+          profileHref: (p) => '#perfil/' + p.id,
+          onMessage: (id) => { location.hash = 'conversar/' + id; },
+        });
+      }
+      if (v === 'perfil') {
+        $('[data-profile]').innerHTML = '<div class="spinner"></div>';
+        try {
+          const p = await api('/api/professionals/' + Number(arg));
+          $('[data-profile]').innerHTML = AcoliaProfile.render(p, {
+            actions: '<button class="btn secondary" data-fav>' + ICONS.heart.replace('<svg', '<svg style="width:18px;height:18px"') + ' <span>' + (p.favorite ? 'Favorito' : 'Favoritar') + '</span></button>'
+              + '<a class="btn" href="#conversar/' + p.id + '">' + ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"') + ' Enviar mensagem</a>',
+          });
+          const fb = $('[data-fav]');
+          let fav = p.favorite;
+          fb.addEventListener('click', async () => {
+            await api('/api/patient/favorites/' + p.id, { method: fav ? 'DELETE' : 'POST' });
+            fav = !fav;
+            $('span', fb).textContent = fav ? 'Favorito' : 'Favoritar';
+            toast(fav ? 'Adicionado aos favoritos' : 'Removido dos favoritos');
+          });
+        } catch (e) { $('[data-profile]').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+      }
+      if (v === 'chat') {
+        if (arg && chat.current?.id !== Number(arg)) chat.open(Number(arg));
+        if (!arg && chat.current) chat.close();
+      }
+      document.body.style.overflow = v === 'chat' ? 'hidden' : '';
+    }
+    window.addEventListener('hashchange', route);
+    route();
+
+    handleForm($('[data-profile-form]'), async (d) => {
+      me = await api('/api/patient/profile', { method: 'PUT', body: d });
+      renderMe(); toast('Salvo!');
+    });
+    handleForm($('[data-pw-form]'), async (d, f) => {
+      await api('/api/patient/password', { method: 'POST', body: d });
+      f.reset(); toast('Senha alterada!');
+    });
+    $('[data-photo-input]').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const fd = new FormData(); fd.append('photo', file);
+      try { me = await api('/api/patient/photo', { method: 'POST', form: fd }); renderMe(); toast('Foto atualizada!'); } catch (ex) { toast(ex.message, 'error'); }
+      e.target.value = '';
+    });
+    $('[data-install-btn]').addEventListener('click', installApp);
+    Acolia.setupNotifications($('[data-view=buscar]'));
+    $('[data-logout]').addEventListener('click', () => logout('/'));
+    AcoliaDeleteAccount($('[data-delete-account]'), '/api/patient/delete');
+  })();
+  </script>
+</body>
+</html>

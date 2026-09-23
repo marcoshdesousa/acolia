@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Acolia — Saúde mental ao seu alcance</title>
+  <meta name="description" content="Encontre psicólogos, psicanalistas e psiquiatras para atendimento online. Converse pelo chat e faça sua consulta por vídeo.">
+  <meta name="theme-color" content="#3f5550">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/img/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <a class="skip" href="#vitrine">Pular para a vitrine</a>
+  <header class="topbar"><div class="container">
+    <a class="brand" href="/"><span data-logo></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
+    <nav data-nav>
+      <a class="btn ghost sm" href="/atendimento">Entrar no atendimento</a>
+      <a class="btn secondary sm" href="/entrar">Entrar</a>
+    </nav>
+  </div></header>
+
+  <main class="container">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Escuta · Equilíbrio · Evolução</p>
+        <h1>Saúde mental ao seu alcance.</h1>
+        <p class="lead">Encontre psicólogos, psicanalistas e psiquiatras verificados. Converse pelo chat e faça sua consulta online por vídeo, com sigilo.</p>
+        <div class="choose" data-choose>
+          <a class="choice" href="/cadastro-paciente">
+            <span class="choice-icon" data-i="heart"></span>
+            <span><b>Quero ser atendido</b><span>Criar conta de paciente</span></span>
+          </a>
+          <a class="choice" href="/cadastro-profissional">
+            <span class="choice-icon" data-i="badge"></span>
+            <span><b>Sou profissional</b><span>Psicólogo, psicanalista, psiquiatra…</span></span>
+          </a>
+        </div>
+        <p class="small muted" style="margin-top:12px" data-have>Já tem conta? <a href="/entrar">Entrar</a> · <a href="#vitrine">Ver profissionais</a>
+          · <a href="#" data-install>Baixar o app</a></p>
+      </div>
+      <div class="hero-logo"><img src="/img/logo-completo-branco.png" alt="Acolia — Saúde mental ao seu alcance. Escuta, equilíbrio, evolução." width="780" height="664"></div>
+    </section>
+
+    <section class="features">
+      <div class="card flat feature"><span data-i="shield"></span><h3>Profissionais verificados</h3><p class="muted small">Todo profissional informa o seu registro (CRP, CRM…) e passa por aprovação antes de aparecer.</p></div>
+      <div class="card flat feature"><span data-i="chat"></span><h3>Chat direto</h3><p class="muted small">Tire dúvidas e combine sua consulta direto com o profissional, sem precisar de WhatsApp.</p></div>
+      <div class="card flat feature"><span data-i="video"></span><h3>Consulta por vídeo</h3><p class="muted small">Atendimento online por vídeo ou voz, com privacidade, de onde você estiver.</p></div>
+      <div class="card flat feature"><span data-i="pin"></span><h3>Perto de você</h3><p class="muted small">Escolha um profissional perto de você ou de outro lugar.</p></div>
+    </section>
+
+    <section class="section" id="vitrine">
+      <div class="row between"><h2>Profissionais em destaque</h2></div>
+      <div data-catalog></div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <img src="/img/logo-nome.png" alt="Acolia" class="brand-word" style="height:20px">
+        <p class="small muted">Saúde mental ao seu alcance. Profissionais verificados, chat e atendimento online em um só lugar.</p>
+        <div class="social" aria-label="Redes sociais">
+          <a href="https://www.instagram.com/acoliabrasil/" target="_blank" rel="noopener" aria-label="Instagram da Acolia (@acoliabrasil)" title="@acoliabrasil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor" stroke="none"/></svg></a>
+          <a href="https://wa.me/5511939023938" target="_blank" rel="noopener" aria-label="WhatsApp da Acolia" title="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.2a9.8 9.8 0 0 0-8.4 14.8L2.2 21.8l4.9-1.3A9.8 9.8 0 1 0 12 2.2zm0 17.8a8 8 0 0 1-4.1-1.1l-.3-.2-2.9.8.8-2.8-.2-.3A8 8 0 1 1 12 20zm4.4-6c-.2-.1-1.4-.7-1.7-.8-.2-.1-.4-.1-.5.1l-.8 1c-.1.2-.3.2-.5.1a6.5 6.5 0 0 1-3.2-2.8c-.2-.4.2-.4.7-1.2.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.5-.4h-.5a.9.9 0 0 0-.7.3 2.8 2.8 0 0 0-.9 2.1 4.9 4.9 0 0 0 1 2.6 11.2 11.2 0 0 0 4.3 3.8c1.6.7 2.2.7 3 .6a2.6 2.6 0 0 0 1.7-1.2 2.1 2.1 0 0 0 .1-1.2c0-.1-.2-.2-.5-.3z"/></svg></a>
+        </div>
+      </div>
+      <nav class="footer-col" aria-label="Para pacientes">
+        <h3>Para você</h3>
+        <a href="/cadastro-paciente">Criar conta</a>
+        <a href="/entrar">Entrar</a>
+        <a href="#vitrine">Encontrar profissional</a>
+        <a href="#" data-install>Baixar o app</a>
+      </nav>
+      <nav class="footer-col" aria-label="Para profissionais">
+        <h3>Para profissionais</h3>
+        <a href="/cadastro-profissional">Cadastrar-me</a>
+        <a href="/entrar#profissional">Área do profissional</a>
+        <a href="/atendimento">Entrar no atendimento</a>
+      </nav>
+      <div class="footer-col">
+        <h3>Precisa de ajuda agora?</h3>
+        <p class="small muted" style="margin:0">Em caso de crise ou risco de vida, ligue para o <b>CVV 188</b> (24h, gratuito) ou <b>SAMU 192</b>.</p>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <span>© <span data-year>2026</span> Acolia Brasil. Todos os direitos reservados.</span>
+      <a href="/admin" class="staff-link">acesso restrito</a>
+    </div>
+  </footer>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/catalog.js"></script>
+  <script>
+  (async function () {
+    const { $, $$, api, ICONS, esc } = Acolia;
+    $('[data-logo]').innerHTML = ICONS.logo;
+    $('[data-year]').textContent = new Date().getFullYear();
+    $$('[data-i]').forEach((el) => { if (el.classList.contains('choice-icon')) el.innerHTML = ICONS[el.dataset.i]; else el.outerHTML = ICONS[el.dataset.i]; });
+    const me = await api('/api/auth/me').catch(() => ({ role: null }));
+    const nav = $('[data-nav]');
+    if (me.role === 'patient') {
+      nav.innerHTML = `<a class="btn sm" href="/app">Abrir meu app</a>`;
+      $('[data-choose]').innerHTML = '<a class="btn" href="/app">Abrir meu app</a>';
+      $('[data-have]').classList.add('hidden');
+    } else if (me.role === 'professional') {
+      nav.innerHTML = `<a class="btn sm" href="/painel">Meu painel</a>`;
+    } else if (me.role === 'admin') {
+      nav.innerHTML = `<a class="btn sm" href="/admin">Administração</a>`;
+    }
+    AcoliaCatalog.mount($('[data-catalog]'), {
+      loggedIn: me.role === 'patient',
+      me: me.role === 'patient' ? me.user : null,
+      profileHref: (p) => me.role === 'patient' ? `/app#perfil/${p.id}` : `/${p.slug || 'profissional?id=' + p.id}`,
+      onMessage: (id) => { location.href = `/app#conversar/${id}`; },
+    });
+  })();
+  </script>
+</body>
+</html>

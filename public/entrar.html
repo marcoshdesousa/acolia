@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <title>Entrar — Acolia</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#3f5550">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/img/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="topbar"><div class="container">
+    <a class="brand" href="/"><span data-logo></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
+  </div></header>
+  <main class="narrow" style="padding-top:32px;padding-bottom:48px">
+    <h1 class="center">Entrar</h1>
+    <div class="tabs" role="tablist" style="margin-bottom:20px">
+      <button role="tab" data-tab="paciente" class="active">Sou paciente</button>
+      <button role="tab" data-tab="profissional">Sou profissional</button>
+    </div>
+
+    <section data-panel="paciente" class="card">
+      <form data-login-patient>
+        <div class="field"><label for="cpf">CPF</label><input id="cpf" name="cpf" inputmode="numeric" autocomplete="username" placeholder="000.000.000-00" required></div>
+        <div class="field"><label for="pw1">Senha</label><input id="pw1" name="password" type="password" autocomplete="current-password" required></div>
+        <button class="btn block" type="submit">Entrar</button>
+      </form>
+      <p class="center small" style="margin:16px 0 0"><a href="#" data-recover>Esqueci minha senha</a> · <a href="/cadastro-paciente">Criar conta</a></p>
+    </section>
+
+    <section data-panel="profissional" class="card hidden">
+      <form data-login-pro>
+        <div class="field"><label for="login">Seu código de profissional ou e-mail</label><input id="login" name="login" autocomplete="username" placeholder="Ex.: K7M2QX9A" required></div>
+        <div class="field"><label for="pw2">Senha</label><input id="pw2" name="password" type="password" autocomplete="current-password" required></div>
+        <button class="btn block" type="submit">Entrar no painel</button>
+      </form>
+      <p class="center small muted" style="margin:16px 0 0">Perdeu seu código ou senha? Fale com a administração da Acolia.<br><a href="/cadastro-profissional">Cadastrar-me como profissional</a></p>
+    </section>
+
+    <div class="card flat get-app" data-install-card style="margin-top:16px">
+      <img src="/img/app-icon-192.png" alt="">
+      <div class="grow"><b>Baixe o app da Acolia</b><div class="small muted">Grátis, pelo próprio site. Receba as mensagens como notificação.</div></div>
+      <button class="btn secondary sm" type="button" data-install>Como baixar</button>
+    </div>
+  </main>
+  <script src="/js/common.js"></script>
+  <script>
+  (function () {
+    const { $, $$, api, ICONS, handleForm, maskCpf, modal, esc, copyText } = Acolia;
+    $('[data-logo]').innerHTML = ICONS.logo;
+    const show = (t) => {
+      $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
+      $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== t));
+    };
+    $$('[data-tab]').forEach((b) => b.addEventListener('click', () => { show(b.dataset.tab); history.replaceState(null, '', '#' + b.dataset.tab); }));
+    if (location.hash === '#profissional') show('profissional');
+    maskCpf($('#cpf'));
+    const next = new URLSearchParams(location.search).get('next');
+    const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+    if (safeNext) $('a[href="/cadastro-paciente"]').href = '/cadastro-paciente?next=' + encodeURIComponent(safeNext);
+    handleForm($('[data-login-patient]'), async (d) => {
+      await api('/api/auth/patient/login', { method: 'POST', body: d });
+      location.href = safeNext || '/app';
+    });
+    handleForm($('[data-login-pro]'), async (d) => {
+      await api('/api/auth/professional/login', { method: 'POST', body: d });
+      location.href = safeNext || '/painel';
+    });
+    $('[data-recover]').addEventListener('click', async (e) => {
+      e.preventDefault();
+      const r = await modal({
+        title: 'Recuperar senha',
+        html: '<p class="muted">Informe seu CPF e seu nome completo exatamente como no cadastro. Se os dados conferirem, uma nova senha aleatória será gerada.</p>'
+          + '<div class="form-error hidden" data-err></div>'
+          + '<div class="field"><label for="rcpf">CPF</label><input id="rcpf" inputmode="numeric"></div>'
+          + '<div class="field"><label for="rname">Nome completo</label><input id="rname" autocomplete="name"></div>',
+        onOpen: (dlg) => maskCpf($('#rcpf', dlg)),
+        actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
+          label: 'Gerar nova senha', handler: async (dlg) => {
+            try {
+              const res = await api('/api/auth/patient/recover', { method: 'POST', body: { cpf: $('#rcpf', dlg).value, name: $('#rname', dlg).value } });
+              return res.password;
+            } catch (ex) { const el = $('[data-err]', dlg); el.textContent = ex.message; el.classList.remove('hidden'); return false; }
+          },
+        }],
+      });
+      if (!r) return;
+      await modal({
+        title: 'Sua nova senha',
+        html: '<p>Anote ou tire um print. Use-a para entrar com seu CPF. Depois você pode trocá-la em Configurações.</p><div class="code-box">' + esc(r) + '</div>',
+        actions: [{ label: 'Copiar', handler: () => { copyText(r); return false; }, class: 'secondary' }, { label: 'Pronto', value: true }],
+      });
+    });
+  })();
+  </script>
+</body>
+</html>

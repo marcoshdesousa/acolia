@@ -1,0 +1,26 @@
+# Publicação no Render (render.com) — plano Starter com disco permanente.
+# O disco guarda para sempre: contas (pacientes, profissionais, admin), logins,
+# mensagens, atendimentos, fotos e carteirinhas. Nada se perde em atualizações.
+services:
+  - type: web
+    name: acolia
+    runtime: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ADMIN_PASSWORD
+        sync: false # o Render pede para você digitar a senha do admin
+      - key: DATA_DIR
+        value: /var/data
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY
+        value: "true"
+    disk:
+      name: dados
+      mountPath: /var/data
+      sizeGB: 1
