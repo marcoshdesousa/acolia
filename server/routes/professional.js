@@ -33,7 +33,7 @@ function toCents(v) {
 
 router.get('/me', (req, res) => res.json(ownProfessional(req.auth.user)));
 
-router.put('/profile', (req, res) => {
+router.put('/profile', async (req, res) => {
   const b = req.body;
   const name = U.cleanText(b.name, 120);
   if (!U.isFullName(name)) throw new U.HttpError(400, 'Informe nome e sobrenome.');
@@ -61,15 +61,23 @@ router.put('/profile', (req, res) => {
   const clinicName = hasClinic ? U.cleanText(b.clinic_name, 120) : '';
   const clinicAddress = hasClinic ? U.cleanText(b.clinic_address, 250) : '';
   if (hasClinic && clinicAddress.length < 5) throw new U.HttpError(400, 'Informe o endereço da clínica.');
+  const maps = require('../maps');
+  let mapsUrl = hasClinic ? maps.cleanMapsUrl(b.maps_url) : '';
+  let mapsQuery = '';
+  if (mapsUrl) {
+    // Só consulta o link curto de novo se ele mudou
+    const prev = req.auth.user;
+    mapsQuery = prev.maps_url === mapsUrl && prev.maps_query ? prev.maps_query : maps.mapQuery(await maps.resolveShort(mapsUrl));
+  }
 
   const minutes = b.session_minutes ? Number(b.session_minutes) : null;
   if (minutes !== null && !SESSION_MINUTES.includes(minutes)) throw new U.HttpError(400, 'Escolha a duração da sessão.');
   const instagram = cleanInstagram(b.instagram);
 
   db.prepare(`UPDATE professionals SET name=?, profession=?, registry=?, phone=?, bio=?, specialties=?, price_cents=?, packages=?,
-      state=?, city=?, city_norm=?, has_clinic=?, clinic_name=?, clinic_address=?, pix_key=?, session_minutes=?, instagram=? WHERE id=?`)
+      state=?, city=?, city_norm=?, has_clinic=?, clinic_name=?, clinic_address=?, pix_key=?, session_minutes=?, instagram=?, maps_url=?, maps_query=? WHERE id=?`)
     .run(name, profession, registry, phone, U.cleanText(b.bio, 2000), U.cleanText(b.specialties, 300), price, JSON.stringify(packages),
-      state, city, U.norm(city), hasClinic, clinicName, clinicAddress, U.cleanText(b.pix_key, 140), minutes, instagram, req.auth.user.id);
+      state, city, U.norm(city), hasClinic, clinicName, clinicAddress, U.cleanText(b.pix_key, 140), minutes, instagram, mapsUrl, mapsQuery, req.auth.user.id);
   res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
 });
 
@@ -130,7 +138,7 @@ function wipeProfessional(me) {
   removeDocument(me.document_file);
   db.prepare(`UPDATE professionals SET status = 'excluido', name = 'Profissional removido', legal_name = NULL, registry = ?, email = ?,
     phone = '', bio = '', specialties = '', photo = NULL, document_file = NULL, pix_key = '', clinic_name = '', clinic_address = '',
-    has_clinic = 0, instagram = '', gallery = '[]', password_hash = '!' WHERE id = ?`).run(`excluido-${me.id}`, `excluido-${me.id}@removido.acolia`, me.id);
+    has_clinic = 0, instagram = '', gallery = '[]', maps_url = '', maps_query = '', password_hash = '!' WHERE id = ?`).run(`excluido-${me.id}`, `excluido-${me.id}@removido.acolia`, me.id);
   db.prepare('DELETE FROM favorites WHERE professional_id = ?').run(me.id);
   for (const c of db.prepare('SELECT id, patient_id FROM conversations WHERE professional_id = ?').all(me.id)) {
     rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });

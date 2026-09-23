@@ -677,3 +677,35 @@ test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitan
   assert.equal(patView.gallery_hidden, 0);
   assert.equal(patView.instagram, 'lia.psi');
 });
+
+test('clínica: link do Google Maps vira mini mapa, só para quem tem conta', async () => {
+  const created = await admin.post('/api/admin/professionals', {
+    name: 'Davi Nunes', profession: 'Psicólogo(a)', registry: 'X-11', email: 'davi@example.com', phone: '11955554444', state: 'SP', city: 'Campinas',
+  });
+  const dp = client();
+  await dp.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
+  const pf = { name: 'Davi Nunes', phone: '11955554444', state: 'SP', city: 'Campinas', has_clinic: true, clinic_name: 'Espaço Davi', clinic_address: 'Rua B, 200, Centro' };
+  let r = await dp.put('/api/professional/profile', { ...pf, maps_url: 'https://site-estranho.com/maps' });
+  assert.equal(r.status, 400, 'só aceita link do Google Maps');
+  r = await dp.put('/api/professional/profile', { ...pf, maps_url: 'https://www.google.com/maps/place/Espa%C3%A7o/@-22.9056,-47.0608,17z' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+
+  const anonView = (await anon.get(`/api/professionals/${created.data.id}`)).data;
+  assert.equal(anonView.has_clinic, true);
+  assert.equal(anonView.maps_url, undefined, 'visitante não vê o link');
+  assert.equal(anonView.map_embed, undefined, 'nem o mapa');
+  assert.equal(anonView.clinic_address, undefined);
+  const pt = client();
+  await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+  const v = (await pt.get(`/api/professionals/${created.data.id}`)).data;
+  assert.ok(v.maps_url.startsWith('https://www.google.com/maps/place/'));
+  assert.ok(v.map_embed.includes('-22.9056%2C-47.0608') && v.map_embed.includes('output=embed'), v.map_embed);
+
+  // Sem link, o mapa usa o endereço; sem clínica, não tem mapa
+  await dp.put('/api/professional/profile', { ...pf, maps_url: '' });
+  assert.ok((await pt.get(`/api/professionals/${created.data.id}`)).data.map_embed.includes('Rua%20B'));
+  await dp.put('/api/professional/profile', { ...pf, has_clinic: false, maps_url: 'https://www.google.com/maps/@1,1,1z' });
+  const none = (await pt.get(`/api/professionals/${created.data.id}`)).data;
+  assert.equal(none.map_embed, '');
+  assert.equal((await dp.get('/api/professional/me')).data.maps_url, '', 'sem clínica o link é descartado');
+});

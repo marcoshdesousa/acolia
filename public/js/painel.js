@@ -87,6 +87,7 @@
     $('[data-clinic]').classList.toggle('hidden', !me.has_clinic);
     form.clinic_name.value = me.clinic_name;
     form.clinic_address.value = me.clinic_address;
+    form.maps_url.value = me.maps_url || '';
     pkBox.innerHTML = '';
     me.packages.forEach(packageRow);
   }

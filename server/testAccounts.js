@@ -6,6 +6,13 @@ const { db } = require('./db');
 const U = require('./util');
 
 const PRO = { code: '123456789', password: '123456789' };
+// Clínica fictícia fora do Brasil (Lisboa), só para testar o mapa sem apontar para um lugar real daqui
+const TEST_CLINIC = {
+  name: 'Clínica Teste Acolia (fictícia)',
+  address: 'Avenida da Liberdade, 110 — Lisboa, Portugal',
+  maps_url: 'https://www.google.com/maps/place/Avenida+da+Liberdade,+Lisboa,+Portugal/@38.7194,-9.1449,17z',
+  maps_query: '38.7194,-9.1449',
+};
 const PATIENT = { cpf: '00000000000', password: '1234' };
 
 db.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
@@ -16,11 +23,11 @@ function ensureTestAccounts() {
     const name = 'Profissional Teste';
     db.prepare(`INSERT INTO professionals
       (code, name, legal_name, profession, registry, email, phone, password_hash, status, bio, price_cents,
-       state, city, city_norm, subscription_until, slug, is_test)
-      VALUES (?, ?, ?, 'Psicólogo(a)', 'TESTE', ?, '11939023938', ?, 'aprovado', ?, 10000, 'SP', 'São Paulo', ?, ?, ?, 1)`)
+       state, city, city_norm, subscription_until, slug, is_test, has_clinic, clinic_name, clinic_address, maps_url, maps_query)
+      VALUES (?, ?, ?, 'Psicólogo(a)', 'TESTE', ?, '11939023938', ?, 'aprovado', ?, 10000, 'SP', 'São Paulo', ?, ?, ?, 1, 1, ?, ?, ?, ?)`)
       .run(PRO.code, name, name, 'profissional@teste.acolia', U.hashPassword(PRO.password),
         'Conta de teste da plataforma.', U.norm('São Paulo'), U.addDaysISO(U.todayISO(), 3650),
-        require('./slug').uniqueSlug(db, name));
+        require('./slug').uniqueSlug(db, name), TEST_CLINIC.name, TEST_CLINIC.address, TEST_CLINIC.maps_url, TEST_CLINIC.maps_query);
     created.professional = true;
   }
   if (!db.prepare('SELECT 1 FROM patients WHERE cpf = ?').get(PATIENT.cpf)) {
@@ -32,8 +39,18 @@ function ensureTestAccounts() {
   return created;
 }
 
+// Uma vez só: coloca a clínica fictícia no profissional de teste que já existia
+// (só se ele ainda não tiver clínica cadastrada — não mexe no que foi editado à mão)
+function addTestClinicOnce() {
+  if (db.prepare("SELECT 1 FROM settings WHERE key = 'test_pro_clinic_v1'").get()) return;
+  db.prepare(`UPDATE professionals SET has_clinic = 1, clinic_name = ?, clinic_address = ?, maps_url = ?, maps_query = ?
+    WHERE code = ? AND is_test = 1 AND has_clinic = 0`).run(TEST_CLINIC.name, TEST_CLINIC.address, TEST_CLINIC.maps_url, TEST_CLINIC.maps_query, PRO.code);
+  db.prepare("INSERT INTO settings (key, value) VALUES ('test_pro_clinic_v1', ?)").run(new Date().toISOString());
+}
+
 // Na subida do servidor: cria só na primeira vez (se o admin apagar, não volta sozinha)
 function seedOnce() {
+  addTestClinicOnce();
   if (db.prepare("SELECT 1 FROM settings WHERE key = 'test_accounts_seeded'").get()) return;
   ensureTestAccounts();
   db.prepare("INSERT INTO settings (key, value) VALUES ('test_accounts_seeded', ?)").run(new Date().toISOString());

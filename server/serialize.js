@@ -1,5 +1,14 @@
 'use strict';
 const { todayISO } = require('./util');
+const maps = require('./maps');
+
+// Mapa da clínica (só para quem tem conta): usa o link do Google Maps ou, sem link, o endereço
+function clinicMap(p) {
+  if (!p.has_clinic) return { maps_url: '', map_embed: '' };
+  const address = [p.clinic_address, p.city && `${p.city} - ${p.state}`].filter(Boolean).join(', ');
+  const query = p.maps_query || maps.mapQuery(p.maps_url, p.clinic_address ? address : '');
+  return { maps_url: p.maps_url || (query ? maps.searchUrl(query) : ''), map_embed: maps.embedUrl(query) };
+}
 
 // Profissional aparece na vitrine se estiver aprovado e com a mensalidade em dia
 const VISIBLE_SQL = "p.status = 'aprovado' AND p.subscription_until IS NOT NULL AND p.subscription_until >= date('now')";
@@ -79,6 +88,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     packages: parsePackages(p.packages),
     clinic_name: p.has_clinic ? p.clinic_name : '',
     clinic_address: p.has_clinic ? p.clinic_address : '',
+    ...clinicMap(p),
     gallery,
     gallery_hidden: 0,
   };
@@ -105,6 +115,8 @@ function ownProfessional(p) {
     has_clinic: !!p.has_clinic,
     clinic_name: p.clinic_name,
     clinic_address: p.clinic_address,
+    maps_url: p.maps_url || '',
+    map_embed: clinicMap(p).map_embed,
     pix_key: p.pix_key,
     session_minutes: p.session_minutes || null,
     instagram: p.instagram || '',

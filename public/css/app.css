@@ -397,3 +397,5 @@ dialog .dlg-close { position: absolute; top: 8px; right: 8px; width: 32px; heigh
 dialog .dlg-close:hover { background: var(--primary-soft); color: var(--text); }
 dialog .dlg-body h2 { padding-right: 28px; }
 [data-gallery-need-account] { cursor: pointer; }
+.mini-map { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); aspect-ratio: 16 / 10; background: var(--primary-soft); }
+.mini-map iframe { width: 100%; height: 100%; border: 0; display: block; }
