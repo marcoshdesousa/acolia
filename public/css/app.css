@@ -665,7 +665,7 @@ dialog.post-dialog .dlg-actions:empty, dialog.sheet .dlg-actions:empty { display
 /* Botão "Seguir" em cima da publicação (quem a pessoa ainda não segue) */
 .post-card header { gap: 10px; }
 .post-card header .post-author { flex: 0 1 auto; }
-.follow-chip { flex: none; margin-right: auto; appearance: none; border: 0; cursor: pointer; font: inherit; font-weight: 800; font-size: .82rem;
+.follow-chip { flex: none; margin-left: auto; appearance: none; border: 0; cursor: pointer; font: inherit; font-weight: 800; font-size: .82rem;
   padding: 6px 14px; border-radius: 10px; color: var(--on-primary); background: var(--primary); transition: background-color .2s, color .2s, transform .1s; }
 .follow-chip:active { transform: scale(.96); }
 .follow-chip.following { background: var(--surface-2); color: var(--text); }

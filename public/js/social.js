@@ -63,10 +63,17 @@
   const multiIcon = '<span class="multi-ic" aria-label="Várias fotos"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 3h11a3 3 0 0 1 3 3v11a1 1 0 0 1-1 1h-1V6a1 1 0 0 0-1-1H6V4a1 1 0 0 1 1-1z"/><rect x="3" y="7" width="13" height="14" rx="2.5"/></svg></span>';
   const gridTile = (x) => `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação${x.count > 1 ? ` (${x.count} fotos)` : ''}"><img src="${esc(x.image)}" alt="" loading="lazy">${x.count > 1 ? multiIcon : ''}</button>`;
 
+  // Seguir / Seguindo no canto da publicação (não aparece na própria publicação — lá fica o ⋮)
+  function followChip(p) {
+    if (p.follow === 'official') return '<button type="button" class="follow-chip following" data-follow-official>Seguindo</button>';
+    if (p.follow !== true && p.follow !== false) return '';
+    return `<button type="button" class="follow-chip ${p.follow ? 'following' : ''}" data-follow-pro="${p.author.id}">${p.follow ? 'Seguindo' : 'Seguir'}</button>`;
+  }
+
   function postCard(p) {
     return `<article class="post-card" data-post="${p.id}">
       <header>${authorLink(p.author, `<small class="muted">· ${esc(timeAgo(p.created_at))}</small>`)}
-        ${p.follow === false ? `<button type="button" class="follow-chip" data-follow-pro="${p.author.id}">Seguir</button>` : ''}
+        ${followChip(p)}
         ${p.mine ? `<button type="button" class="icon-btn" data-post-menu="${p.id}" aria-label="Opções">⋮</button>` : ''}</header>
       ${mediaHtml(p)}
       <div class="post-actions">
@@ -200,7 +207,7 @@
     try {
       const r = await api(`/api/social/follow/${id}`, { method: on ? 'DELETE' : 'POST' });
       all.forEach((b) => { b.classList.toggle('following', r.following); b.textContent = r.following ? 'Seguindo' : 'Seguir'; });
-      if (r.following) toast('Agora você segue este profissional');
+      toast(r.following ? 'Agora você segue este profissional' : 'Você deixou de seguir este profissional');
     } catch (e) { toast(e.message, 'error'); }
     all.forEach((b) => { b.disabled = false; });
   }
@@ -220,6 +227,7 @@
       if (sh) return share(Number(sh.dataset.share));
       const fol = e.target.closest('[data-follow-pro]');
       if (fol) return ctx.anon ? ctx.onNeedAccount?.() : followFromPost(fol);
+      if (e.target.closest('[data-follow-official]')) return toast('Todos seguem a Acolia Brasil 💚');
       const pro = e.target.closest('[data-open-pro]');
       if (pro) { e.preventDefault(); return openProfile(Number(pro.dataset.openPro)); }
       const menu = e.target.closest('[data-post-menu]');
