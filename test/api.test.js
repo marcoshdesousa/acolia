@@ -922,3 +922,31 @@ test('v1.2 — seguir, feed (não vistas primeiro), curtir, comentar, stories e 
   assert.deepEqual(r.data, { followers: 1, following: false });
   assert.equal((await pt.get('/api/social/feed')).data.items.length, 0);
 });
+
+test('carrossel: uma publicação com até 10 fotos e uma descrição só', async () => {
+  const c = await admin.post('/api/admin/professionals', { name: 'Caro Sel', profession: 'Psicólogo(a)', registry: 'R-car', email: 'carosel@example.com', phone: '11922220000', state: 'SP', city: 'Campinas' });
+  const cl = client();
+  await cl.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+  const send = async (n) => {
+    const fd = new FormData();
+    fd.append('caption', 'Várias fotos');
+    for (let i = 0; i < n; i++) fd.append('photos', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, i])], { type: 'image/png' }), `f${i}.png`);
+    const res = await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: cl.cookie } });
+    return { status: res.status, data: await res.json() };
+  };
+  const r = await send(3);
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.images.length, 3);
+  assert.equal(r.data.image, r.data.images[0], 'a 1ª foto é a capa');
+  assert.equal(r.data.caption, 'Várias fotos');
+  assert.equal((await send(11)).status, 400, 'no máximo 10');
+  const grid = (await cl.get(`/api/social/professionals/${c.data.id}/posts`)).data.items;
+  assert.equal(grid.length, 1, 'no perfil conta como 1 publicação');
+  assert.equal(grid[0].count, 3, 'com o ícone de várias fotos');
+  const prof = (await cl.get(`/api/professionals/${c.data.id}`)).data;
+  assert.equal(prof.posts_count, 1);
+  assert.equal(prof.gallery_posts[0].count, 3);
+  assert.equal((await cl.del(`/api/social/posts/${r.data.id}`)).status, 200);
+  const { db } = require('../server/db');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM post_images WHERE post_id = ?').get(r.data.id).n, 0, 'fotos do carrossel apagadas junto');
+});

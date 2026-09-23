@@ -8,7 +8,7 @@ const U = require('../util');
 const A = require('../auth');
 const rt = require('../realtime');
 const { VISIBLE_SQL, freeGalleryCount } = require('../serialize');
-const { handlePhoto, handleMedia, removePhoto } = require('../upload');
+const { handlePhoto, handlePhotos, handleMedia, removePhoto } = require('../upload');
 
 const router = express.Router();
 const STORY_HOURS = 24;
@@ -43,12 +43,19 @@ function visiblePro(id) {
   return db.prepare(`SELECT * FROM professionals p WHERE id = ? AND ${VISIBLE_SQL}`).get(id);
 }
 
+// Fotos da publicação na ordem (carrossel); publicações antigas têm só a capa
+function postImages(p) {
+  const rows = db.prepare('SELECT image FROM post_images WHERE post_id = ? ORDER BY position').all(p.id).map((r) => r.image);
+  return rows.length ? rows : [p.image];
+}
+const imageCount = (postId) => Math.max(1, db.prepare('SELECT COUNT(*) n FROM post_images WHERE post_id = ?').get(postId).n);
+
 function postOut(p, me) {
   const likes = db.prepare('SELECT COUNT(*) n FROM post_likes WHERE post_id = ?').get(p.id).n;
   const comments = db.prepare('SELECT COUNT(*) n FROM post_comments WHERE post_id = ?').get(p.id).n;
   const liked = me ? !!db.prepare('SELECT 1 FROM post_likes WHERE post_id = ? AND role = ? AND user_id = ?').get(p.id, me.role, me.id) : false;
   return {
-    id: p.id, image: p.image, caption: p.caption, created_at: p.created_at,
+    id: p.id, image: p.image, images: postImages(p), caption: p.caption, created_at: p.created_at,
     likes, comments, liked,
     mine: !!me && me.role === 'professional' && me.id === p.professional_id,
     author: actor('professional', p.professional_id),
@@ -77,7 +84,7 @@ router.get('/professionals/:id/posts', (req, res) => {
   const offset = Math.max(0, Number(req.query.offset) || 0);
   const limit = Math.min(60, Number(req.query.limit) || PAGE);
   const rows = db.prepare('SELECT id, image FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT ? OFFSET ?').all(proId, limit, offset);
-  res.json({ locked: false, total, items: rows, has_more: offset + rows.length < total });
+  res.json({ locked: false, total, items: rows.map((r) => ({ ...r, count: imageCount(r.id) })), has_more: offset + rows.length < total });
 });
 
 // Publicação aberta pelo link compartilhado: qualquer pessoa vê a foto e a descrição.
@@ -119,12 +126,15 @@ router.post('/seen', (req, res) => {
 });
 
 
+// Uma publicação por vez, com 1 a 10 fotos (carrossel) e uma descrição para todas
 router.post('/posts', async (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
-  const url = await handlePhoto(req, res);
+  const urls = await handlePhotos(req, res);
   const caption = U.cleanText(req.body.caption, 2200);
-  const info = db.prepare('INSERT INTO posts (professional_id, image, caption) VALUES (?, ?, ?)').run(req.auth.user.id, url, caption);
-  res.status(201).json(postOut(db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(info.lastInsertRowid)), who(req)));
+  const info = db.prepare('INSERT INTO posts (professional_id, image, caption) VALUES (?, ?, ?)').run(req.auth.user.id, urls[0], caption);
+  const id = Number(info.lastInsertRowid);
+  urls.forEach((u, i) => db.prepare('INSERT INTO post_images (post_id, position, image) VALUES (?, ?, ?)').run(id, i, u));
+  res.status(201).json(postOut(db.prepare('SELECT * FROM posts WHERE id = ?').get(id), who(req)));
 });
 
 // Miniatura (até ~600 px) usada na prévia do link compartilhado
@@ -141,8 +151,9 @@ router.delete('/posts/:id', (req, res) => {
   const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(req.params.id));
   if (!p || !isPro(req) || p.professional_id !== req.auth.user.id) throw new U.HttpError(404, 'Publicação não encontrada.');
   db.prepare('DELETE FROM notifications WHERE post_id = ?').run(p.id);
+  const imgs = postImages(p);
   db.prepare('DELETE FROM posts WHERE id = ?').run(p.id);
-  removePhoto(p.image);
+  new Set([p.image, ...imgs]).forEach(removePhoto);
   if (p.thumb) removePhoto(p.thumb);
   res.json({ ok: true });
 });
@@ -342,4 +353,4 @@ router.post('/notifications/read', (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router, followInfo, cleanupStories, actor, visiblePro };
+module.exports = { router, followInfo, cleanupStories, actor, visiblePro, imageCount };

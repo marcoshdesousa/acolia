@@ -21,11 +21,50 @@
       : `<span class="post-author">${inner}</span>`;
   }
 
+  // Uma foto, ou carrossel (arrastar para o lado) com as bolinhas e o contador "1/5"
+  function mediaHtml(p) {
+    const imgs = p.images?.length ? p.images : [p.image];
+    const alt = `Publicação de ${esc(p.author.name)}`;
+    if (imgs.length === 1) return `<div class="post-img" data-dbl-like="${p.id}"><img src="${esc(imgs[0])}" alt="${alt}" loading="lazy"></div>`;
+    return `<div class="post-img carousel" data-dbl-like="${p.id}" data-carousel>
+        <div class="car-track" data-track>${imgs.map((src, i) => `<img src="${esc(src)}" alt="${alt} — foto ${i + 1} de ${imgs.length}" loading="lazy">`).join('')}</div>
+        <span class="car-count" data-count>1/${imgs.length}</span>
+        <button type="button" class="car-arrow prev" data-car="-1" aria-label="Foto anterior" hidden>‹</button>
+        <button type="button" class="car-arrow next" data-car="1" aria-label="Próxima foto">›</button>
+      </div>
+      <div class="car-dots" data-dots>${imgs.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>`;
+  }
+
+  // Atualiza bolinhas, contador e setas conforme a pessoa arrasta
+  function syncCarousel(car) {
+    const track = car.querySelector('[data-track]');
+    const n = track.children.length;
+    const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+    car.querySelector('[data-count]').textContent = `${i + 1}/${n}`;
+    car.nextElementSibling?.querySelectorAll('i').forEach((d, k) => d.classList.toggle('on', k === i));
+    car.querySelector('.prev').hidden = i === 0;
+    car.querySelector('.next').hidden = i === n - 1;
+  }
+  document.addEventListener('scroll', (e) => {
+    const t = e.target;
+    if (t instanceof Element && t.matches('[data-track]')) syncCarousel(t.closest('[data-carousel]'));
+  }, true);
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-car]');
+    if (!b) return;
+    const track = b.closest('[data-carousel]').querySelector('[data-track]');
+    track.scrollBy({ left: Number(b.dataset.car) * track.clientWidth, behavior: 'smooth' });
+  });
+
+  // Ícone de "várias fotos" na grade do perfil
+  const multiIcon = '<span class="multi-ic" aria-label="Várias fotos"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 3h11a3 3 0 0 1 3 3v11a1 1 0 0 1-1 1h-1V6a1 1 0 0 0-1-1H6V4a1 1 0 0 1 1-1z"/><rect x="3" y="7" width="13" height="14" rx="2.5"/></svg></span>';
+  const gridTile = (x) => `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação${x.count > 1 ? ` (${x.count} fotos)` : ''}"><img src="${esc(x.image)}" alt="" loading="lazy">${x.count > 1 ? multiIcon : ''}</button>`;
+
   function postCard(p) {
     return `<article class="post-card" data-post="${p.id}">
       <header>${authorLink(p.author, `<small class="muted">· ${esc(timeAgo(p.created_at))}</small>`)}
         ${p.mine ? `<button type="button" class="icon-btn" data-post-menu="${p.id}" aria-label="Opções">⋮</button>` : ''}</header>
-      <div class="post-img" data-dbl-like="${p.id}"><img src="${esc(p.image)}" alt="Publicação de ${esc(p.author.name)}" loading="lazy"></div>
+      ${mediaHtml(p)}
       <div class="post-actions">
         ${likeBtn(p.liked, `data-like="${p.id}"`)}
         <button type="button" class="icon-btn" data-comments="${p.id}" aria-label="Comentários">${ic('comment')}<span class="cnt" data-ccount="${p.id}">${p.comments || ''}</span></button>
@@ -182,37 +221,80 @@
   }
 
   // ---------- Nova publicação (profissional) ----------
+  // Uma publicação com 1 a 10 fotos (carrossel) e uma descrição para todas
+  const MAX_PHOTOS = 10;
   async function newPost(onDone) {
-    let file = null;
+    let files = [];
     await modal({
       title: 'Nova publicação',
-      html: `<label class="pick-media" data-pick><input type="file" accept="image/jpeg,image/png,image/webp" hidden data-file>
-          <span data-preview>${ic('image', 40)}<b>Escolher foto</b><small class="muted">Só imagens no feed</small></span></label>
-        <div class="field" style="margin-top:12px"><label for="cap">Descrição (opcional)</label><textarea id="cap" rows="3" maxlength="2200" placeholder="Escreva algo sobre esta foto…" data-cap></textarea></div>`,
+      html: `<label class="pick-media" data-pick><input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden data-file>
+          <span data-empty-pick>${ic('image', 40)}<b>Escolher fotos</b><small class="muted">Até ${MAX_PHOTOS} fotos numa publicação</small></span></label>
+        <div class="pick-strip hidden" data-strip></div>
+        <div class="field" style="margin-top:12px"><label for="cap">Descrição (opcional)</label><textarea id="cap" rows="3" maxlength="2200" placeholder="Escreva algo sobre esta publicação…" data-cap></textarea></div>`,
       actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
         label: 'Publicar',
         handler: async (dlg) => {
-          if (!file) { toast('Escolha uma foto.', 'error'); return false; }
+          if (!files.length) { toast('Escolha pelo menos uma foto.', 'error'); return false; }
+          const btn = $$('.dlg-actions .btn', dlg).at(-1);
+          btn.disabled = true;
+          btn.textContent = 'Publicando…';
           const fd = new FormData();
           fd.append('caption', $('[data-cap]', dlg).value);
-          fd.append('photo', await shrinkImage(file, 1600));
+          for (const f of files) fd.append('photos', await shrinkImage(f, 1600));
           try {
             const p = await api('/api/social/posts', { method: 'POST', form: fd });
-            // Miniatura leve para a prévia do link no WhatsApp
+            // Miniatura leve (da 1ª foto) para a prévia do link no WhatsApp
             const tf = new FormData();
-            tf.append('photo', await shrinkImage(file, 600));
+            tf.append('photo', await shrinkImage(files[0], 600));
             api(`/api/social/posts/${p.id}/thumb`, { method: 'POST', form: tf }).catch(() => {});
             toast('Publicado!');
             onDone?.(p);
             return true;
-          } catch (e) { toast(e.message, 'error'); return false; }
+          } catch (e) { toast(e.message, 'error'); btn.disabled = false; btn.textContent = 'Publicar'; return false; }
         },
       }],
       onOpen: (dlg) => {
+        const strip = $('[data-strip]', dlg);
+        const render = () => {
+          strip.classList.toggle('hidden', !files.length);
+          $('[data-empty-pick]', dlg).innerHTML = files.length
+            ? `${ic('plus', 28)}<b>Adicionar mais fotos</b><small class="muted">${files.length} de ${MAX_PHOTOS}</small>`
+            : `${ic('image', 40)}<b>Escolher fotos</b><small class="muted">Até ${MAX_PHOTOS} fotos numa publicação</small>`;
+          $('[data-pick]', dlg).classList.toggle('compact', files.length > 0);
+          $('[data-pick]', dlg).classList.toggle('hidden', files.length >= MAX_PHOTOS);
+          strip.innerHTML = files.map((f, i) => `<div class="pick-thumb"><img src="${URL.createObjectURL(f)}" alt="Foto ${i + 1}">
+            <span class="n">${i + 1}</span><button type="button" data-rm="${i}" aria-label="Tirar foto ${i + 1}">${ic('close', 14)}</button></div>`).join('');
+        };
         $('[data-file]', dlg).addEventListener('change', (e) => {
-          file = e.target.files[0] || null;
-          if (file) $('[data-preview]', dlg).innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Prévia">`;
+          const picked = [...e.target.files];
+          if (files.length + picked.length > MAX_PHOTOS) toast(`No máximo ${MAX_PHOTOS} fotos por publicação.`, 'error');
+          files = [...files, ...picked].slice(0, MAX_PHOTOS);
+          e.target.value = '';
+          render();
         });
+        strip.addEventListener('click', (e) => {
+          const rm = e.target.closest('[data-rm]');
+          if (rm) { files.splice(Number(rm.dataset.rm), 1); render(); }
+        });
+      },
+    });
+  }
+
+  // Cruz do Início: escolher entre publicar fotos ou story
+  function createMenu(onPost, onStory) {
+    modal({
+      title: 'Criar',
+      html: `<div class="create-menu">
+        <button type="button" data-v="post">${ic('image', 30)}<b>Publicar fotos</b><small>No feed e no seu perfil (até ${MAX_PHOTOS} fotos)</small></button>
+        <button type="button" data-v="story">${ic('video', 30)}<b>Publicar story</b><small>Foto ou vídeo de até ${MAX_STORY_SECS} s, some em 24 h</small></button></div>`,
+      actions: [],
+      onOpen: (dlg) => {
+        dlg.classList.add('sheet');
+        $$('[data-v]', dlg).forEach((b) => b.addEventListener('click', () => {
+          dlg.close();
+          dlg.remove();
+          if (b.dataset.v === 'post') onPost(); else onStory();
+        }));
       },
     });
   }
@@ -371,7 +453,7 @@
         <div class="home-top">
           <h1>Início</h1>
           <div class="row" style="gap:4px">
-            ${isPro ? `<button type="button" class="icon-btn" data-new-post aria-label="Nova publicação" title="Nova publicação">${ic('plus', 26)}</button>` : ''}
+            ${isPro ? `<button type="button" class="icon-btn create-btn" data-create aria-label="Criar: publicar fotos ou story" title="Publicar fotos ou story">${ic('plus', 26)}</button>` : ''}
             <button type="button" class="icon-btn bell" data-bell aria-label="Notificações" title="Notificações">${ic('bell', 26)}<span class="nav-badge" data-bell-count></span></button>
           </div>
         </div>
@@ -401,8 +483,7 @@
       };
       const ordered = own ? [own, ...others] : others;
       groups = ordered;
-      const addOwn = isPro ? `<button type="button" class="story-bubble add" data-new-story>
-          <span class="ring">${avatar(opts.me.name, opts.me.photo, 'lg')}<span class="plus">${ic('plus', 16)}</span></span><small>${own ? 'Adicionar' : 'Seu story'}</small></button>` : '';
+      const addOwn = '';
       $('[data-stories]', root).innerHTML = addOwn + ordered.map(bubble).join('');
       $('[data-stories]', root).classList.toggle('hidden', !addOwn && !ordered.length);
     }
@@ -457,23 +538,7 @@
     root.addEventListener('click', (e) => {
       const sb = e.target.closest('[data-story-group]');
       if (sb) return openStories(groups, Number(sb.dataset.storyGroup), loadStories);
-      if (e.target.closest('[data-new-story]')) {
-        const own = groups.find((x) => x.mine);
-        // Toque no próprio círculo: ver os seus stories; o "+" sempre posta um novo
-        if (own && !e.target.closest('.plus')) {
-          modal({
-            title: 'Seu story',
-            html: '<p class="muted">O que você quer fazer?</p>',
-            actions: [{ label: 'Ver meus stories', value: 'ver', class: 'secondary' }, { label: 'Postar novo', value: 'novo' }],
-          }).then((v) => {
-            if (v === 'ver') openStories(groups, groups.indexOf(own), loadStories);
-            if (v === 'novo') newStory(loadStories);
-          });
-          return;
-        }
-        return newStory(loadStories);
-      }
-      if (e.target.closest('[data-new-post]')) return newPost(() => loadFeed(true));
+      if (e.target.closest('[data-create]')) return createMenu(() => newPost(() => loadFeed(true)), () => newStory(loadStories));
       if (e.target.closest('[data-bell]')) return openNotifications(refreshBell);
     });
 
@@ -500,7 +565,7 @@
         moreBtn.disabled = true;
         try {
           const data = await api(`/api/social/professionals/${p.id}/posts?offset=${offset}&limit=60`);
-          grid.insertAdjacentHTML('beforeend', data.items.map((x) => `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação"><img src="${esc(x.image)}" alt="" loading="lazy"></button>`).join(''));
+          grid.insertAdjacentHTML('beforeend', data.items.map(gridTile).join(''));
           offset += data.items.length;
           if (!data.has_more) moreBtn.remove(); else moreBtn.disabled = false;
         } catch (e) { toast(e.message, 'error'); moreBtn.disabled = false; }
@@ -525,5 +590,5 @@
     }
   }
 
-  window.AcoliaSocial = { mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
+  window.AcoliaSocial = { gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
 })();

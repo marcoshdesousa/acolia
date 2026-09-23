@@ -208,6 +208,13 @@ CREATE INDEX IF NOT EXISTS idx_notif_to ON notifications(recipient_role, recipie
 `);
 
 addColumn('posts', 'thumb', 'TEXT'); // miniatura leve para a prévia do link (WhatsApp etc.)
+// Carrossel: até 10 fotos por publicação (a 1ª também fica em posts.image, como capa)
+db.exec(`CREATE TABLE IF NOT EXISTS post_images (
+  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  image TEXT NOT NULL,
+  PRIMARY KEY (post_id, position)
+)`);
 
 // Uma vez só: as fotos da galeria antiga viram as primeiras publicações do profissional
 {

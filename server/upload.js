@@ -36,6 +36,35 @@ function handlePhoto(req, res) {
   });
 }
 
+// Publicação com várias fotos (carrossel): até 10 imagens de até 3 MB cada
+const photosUpload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (_req, file, cb) => cb(null, crypto.randomBytes(16).toString('hex') + EXT[file.mimetype]),
+  }),
+  limits: { fileSize: 3 * 1024 * 1024, files: 10 },
+  fileFilter: (_req, file, cb) => {
+    if (!['photos', 'photo'].includes(file.fieldname) || !EXT[file.mimetype]) return cb(new HttpError(400, 'Envie imagens JPG, PNG ou WEBP.'));
+    cb(null, true);
+  },
+}).fields([{ name: 'photos', maxCount: 10 }, { name: 'photo', maxCount: 1 }]);
+
+function handlePhotos(req, res) {
+  return new Promise((resolve, reject) => {
+    photosUpload(req, res, (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') return reject(new HttpError(400, 'Cada foto deve ter no máximo 3 MB.'));
+        if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return reject(new HttpError(400, 'No máximo 10 fotos por publicação.'));
+        return reject(err.status ? err : new HttpError(400, 'Não foi possível enviar as fotos.'));
+      }
+      const files = [...(req.files?.photos || []), ...(req.files?.photo || [])];
+      if (!files.length) return reject(new HttpError(400, 'Escolha pelo menos uma foto.'));
+      files.forEach((f) => cloud.uploadFile('uploads', f.path));
+      resolve(files.map((f) => `/uploads/${f.filename}`));
+    });
+  });
+}
+
 // Carteirinha profissional: fica em pasta PRIVADA (não é servida publicamente)
 const DOC_DIR = path.join(DATA_DIR, 'documents');
 const DOC_EXT = { ...EXT, 'application/pdf': '.pdf' };
@@ -137,4 +166,4 @@ function removePhoto(url) {
   cloud.removeFile('uploads', url);
 }
 
-module.exports = { handleMedia, handleAudio, AUDIO_DIR, handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };
+module.exports = { handlePhotos, handleMedia, handleAudio, AUDIO_DIR, handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };

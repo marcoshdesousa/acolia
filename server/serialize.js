@@ -101,7 +101,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     clinic_address: p.has_clinic ? p.clinic_address : '',
     ...clinicMap(p),
     gallery,
-    gallery_posts: recent,
+    gallery_posts: recent.map((r) => ({ ...r, count: Math.max(1, db.prepare('SELECT COUNT(*) n FROM post_images WHERE post_id = ?').get(r.id).n) })),
     gallery_hidden: 0,
   };
 }

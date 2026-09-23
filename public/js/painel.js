@@ -111,7 +111,7 @@
     try {
       const data = await api(`/api/social/professionals/${me.id}/posts?limit=60`);
       box.innerHTML = data.items.length
-        ? data.items.map((x) => `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação"><img src="${esc(x.image)}" alt="" loading="lazy"></button>`).join('')
+        ? data.items.map(AcoliaSocial.gridTile).join('')
         : '<p class="muted small" style="grid-column:1/-1;margin:0">Você ainda não publicou nada.</p>';
     } catch (e) { box.innerHTML = `<p class="muted small">${esc(e.message)}</p>`; }
   }
@@ -119,7 +119,6 @@
     const b = e.target.closest('[data-post-open]');
     if (b) { await AcoliaSocial.openPost(Number(b.dataset.postOpen)); loadMyPosts(); }
   });
-  $('[data-my-new-post]').addEventListener('click', () => AcoliaSocial.openNewPost(loadMyPosts));
   loadMyPosts();
 
   $('[data-photo-input]').addEventListener('change', async (e) => {
@@ -233,6 +232,7 @@
       AcoliaCatalog.mount($('[data-catalog]'), { loggedIn: false, viewerRole: 'professional', profileHref: (p) => `#verpro/${p.id}` });
     }
     if (v === 'verpro' && arg) showPro(Number(arg));
+    if (v === 'perfil') loadMyPosts(); // sempre atualizada (inclusive depois de publicar no Início)
     if (v === 'atendimento') loadCalls().catch((e) => toast(e.message, 'error'));
     if (v === 'conversas') {
       if (arg && chat.current?.id !== Number(arg)) chat.open(Number(arg));

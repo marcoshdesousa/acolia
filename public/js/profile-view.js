@@ -72,7 +72,8 @@
         tiles = photos.map((src, i) => `<button type="button" class="gallery-item" data-gallery-need-account="${esc(next || '')}" aria-label="Crie conta para ampliar"><img src="${esc(src)}" alt="Foto ${i + 1} de ${esc(p.name)}" loading="lazy"></button>`).join('')
           + Array.from({ length: lockedTiles }, () => `<a class="gallery-item gallery-locked" href="${signup}">${ic('lock', 20)}<span>Crie conta para ver</span></a>`).join('');
       } else {
-        tiles = (p.gallery_posts || []).map((x) => `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação"><img src="${esc(x.image)}" alt="" loading="lazy"></button>`).join('');
+        tiles = (p.gallery_posts || []).map((x) => window.AcoliaSocial ? window.AcoliaSocial.gridTile(x)
+          : `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação"><img src="${esc(x.image)}" alt="" loading="lazy"></button>`).join('');
       }
       const more = total > 6 ? `<button type="button" class="btn secondary sm" data-all-posts style="margin-top:10px">${ic('image', 16)} Ver todas as fotos (${total})</button>` : '';
       gallery = `<div><h3>Publicações</h3><div class="gallery-grid" data-post-grid>${tiles}</div>${more}</div>`;

@@ -544,3 +544,36 @@ dialog.post-dialog .dlg-actions:empty, dialog.sheet .dlg-actions:empty { display
 .sv-foot .like-btn .mind { background: #fff; opacity: .8; width: 32px; height: 32px; }
 .sv-foot .like-btn.on .mind { background: #ff3b6b; opacity: 1; }
 .sv-likes { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }
+
+/* Carrossel (até 10 fotos por publicação) */
+.post-img.carousel { position: relative; }
+.car-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.car-track::-webkit-scrollbar { display: none; }
+.car-track img { flex: 0 0 100%; width: 100%; scroll-snap-align: center; scroll-snap-stop: always; max-height: 80vh; object-fit: contain; }
+.car-count { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,.6); color: #fff; font-size: .75rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; pointer-events: none; }
+.car-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(255,255,255,.85); color: #222; font-size: 1.3rem; line-height: 1; cursor: pointer; display: grid; place-items: center; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.car-arrow.prev { left: 8px; } .car-arrow.next { right: 8px; }
+.car-arrow[hidden] { display: none; }
+@media (hover: none) { .car-arrow { display: none; } }
+.car-dots { display: flex; justify-content: center; gap: 4px; padding-top: 8px; }
+.car-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.car-dots i.on { background: var(--primary); }
+.gallery-item { position: relative; }
+.multi-ic { position: absolute; top: 6px; right: 6px; color: #fff; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+.multi-ic svg { width: 20px; height: 20px; display: block; }
+
+/* Escolher fotos da publicação */
+.pick-media.compact { min-height: 64px; }
+.pick-media.compact span { flex-direction: row; gap: 8px; }
+.pick-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin-top: 10px; }
+.pick-thumb { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--line); }
+.pick-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pick-thumb .n { position: absolute; left: 4px; top: 4px; background: rgba(0,0,0,.6); color: #fff; font-size: .7rem; font-weight: 800; border-radius: 999px; padding: 0 6px; }
+.pick-thumb button { position: absolute; right: 4px; top: 4px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; display: grid; place-items: center; cursor: pointer; padding: 0; }
+
+/* Menu da cruz: publicar fotos ou story */
+.create-menu { display: grid; gap: 10px; }
+.create-menu button { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 14px; align-items: center; text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 14px; padding: 14px 16px; cursor: pointer; font: inherit; }
+.create-menu button svg { grid-row: 1 / 3; color: var(--primary); }
+.create-menu button small { color: var(--muted); }
+.create-menu button:hover { background: var(--primary-soft); }
