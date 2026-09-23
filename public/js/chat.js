@@ -332,7 +332,7 @@
             : `<a class="btn sm" href="${esc(link)}" target="_blank" rel="noopener">${ICONS.video} Entrar no atendimento</a>`}</div>`;
       } else if (m.kind === 'audio') {
         const a = audioParts(m.body);
-        inner = window.AcoliaVoice.playerHtml({ src: `/api/chat/audio/${encodeURIComponent(a.file)}`, secs: a.secs, peaks: a.peaks });
+        inner = window.AcoliaVoice.playerHtml({ src: `/api/chat/audio/${encodeURIComponent(a.file)}`, secs: a.secs, peaks: a.peaks, hint: true });
       } else if (m.kind === 'deleted') {
         inner = `<span class="msg-deleted">${ICONS.ban} ${mine ? 'Você apagou esta mensagem' : 'Mensagem apagada'}</span>`;
       } else {

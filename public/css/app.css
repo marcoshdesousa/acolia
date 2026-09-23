@@ -444,3 +444,4 @@ dialog .dlg-body h2 { padding-right: 28px; }
 .pip-src { position: fixed; left: 0; bottom: 0; width: 2px; height: 2px; opacity: 0.01; pointer-events: none; z-index: -1; }
 .vplayer.loading .vplay { animation: vpulse .9s ease-in-out infinite; }
 @keyframes vpulse { 50% { opacity: .55; } }
+.vhint { font-size: .58rem; line-height: 1.2; color: var(--muted); opacity: .75; margin: 2px 0 0 2px; }

@@ -139,12 +139,14 @@
   const PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
   let current = null;
 
-  function playerHtml({ src, secs, peaks }) {
-    return `<div class="vplayer" data-vsrc="${src}" data-vsecs="${Number(secs) || 0}">
+  function playerHtml({ src, secs, peaks, hint = false }) {
+    const player = `<div class="vplayer" data-vsrc="${src}" data-vsecs="${Number(secs) || 0}">
       <button type="button" class="vplay" aria-label="Ouvir áudio">${PLAY}</button>
       <div class="vwave" role="slider" aria-label="Posição do áudio" tabindex="0">${barsHtml(peaks)}</div>
       <span class="vtime">${fmt(secs)}</span>
     </div>`;
+    // Aviso miudinho embaixo do áudio enviado
+    return hint ? `${player}<div class="vhint">Pode levar de 0 a 15 segundos para reproduzir.</div>` : player;
   }
 
   // O áudio toca direto do servidor (começa na hora, sem esperar baixar tudo) e o play()
