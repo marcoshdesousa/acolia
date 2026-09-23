@@ -11,6 +11,10 @@ router.use(A.requireRole('patient', 'professional'));
 
 const MSG_COLS = 'id, conversation_id, sender_role, kind, body, read_at, created_at';
 
+// O profissional só enxerga a conversa depois que o paciente manda a primeira mensagem
+// (o profissional nunca inicia conversa nem vê quem só abriu o chat).
+const PATIENT_WROTE = "EXISTS (SELECT 1 FROM messages pm WHERE pm.conversation_id = c.id AND pm.sender_role = 'patient')";
+
 function side(req) {
   return req.auth.role === 'patient'
     ? { col: 'patient_id', archivedCol: 'archived_by_patient', other: 'professional' }
@@ -19,7 +23,8 @@ function side(req) {
 
 function loadConversation(req, id) {
   const s = side(req);
-  const c = db.prepare(`SELECT * FROM conversations WHERE id = ? AND ${s.col} = ?`).get(Number(id), req.auth.user.id);
+  const onlyWritten = req.auth.role === 'professional' ? ` AND ${PATIENT_WROTE}` : '';
+  const c = db.prepare(`SELECT * FROM conversations c WHERE id = ? AND ${s.col} = ?${onlyWritten}`).get(Number(id), req.auth.user.id);
   if (!c) throw new U.HttpError(404, 'Conversa não encontrada.');
   return c;
 }
@@ -44,11 +49,12 @@ function summarize(role, c) {
 router.get('/conversations', (req, res) => {
   const s = side(req);
   const archived = req.query.archived === '1' ? 1 : 0;
-  const rows = db.prepare(`SELECT * FROM conversations WHERE ${s.col} = ? AND ${s.archivedCol} = ?
+  const onlyWritten = req.auth.role === 'professional' ? ` AND ${PATIENT_WROTE}` : '';
+  const rows = db.prepare(`SELECT * FROM conversations c WHERE ${s.col} = ? AND ${s.archivedCol} = ?${onlyWritten}
     ORDER BY COALESCE(last_message_at, created_at) DESC`).all(req.auth.user.id, archived);
   const archivedUnread = db.prepare(`SELECT COUNT(*) n FROM messages m JOIN conversations c ON c.id = m.conversation_id
     WHERE c.${s.col} = ? AND c.${s.archivedCol} = 1 AND m.sender_role = ? AND m.read_at IS NULL`).get(req.auth.user.id, s.other).n;
-  const archivedCount = db.prepare(`SELECT COUNT(*) n FROM conversations WHERE ${s.col} = ? AND ${s.archivedCol} = 1`).get(req.auth.user.id).n;
+  const archivedCount = db.prepare(`SELECT COUNT(*) n FROM conversations c WHERE ${s.col} = ? AND ${s.archivedCol} = 1${onlyWritten}`).get(req.auth.user.id).n;
   res.json({ items: rows.map((c) => summarize(req.auth.role, c)), archived_count: archivedCount, archived_unread: archivedUnread });
 });
 

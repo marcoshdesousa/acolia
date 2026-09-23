@@ -7,7 +7,7 @@ Plataforma que funciona como **vitrine** de profissionais de saúde mental (psic
 | Área | Endereço | O que faz |
 |---|---|---|
 | Administrador geral | `/admin` | Aprova/recusa cadastros de profissionais, cadastra profissionais, restringe/bloqueia, controla a mensalidade, vê e filtra pacientes e profissionais por estado/município, bloqueia pacientes, gera nova senha, exporta planilha (CSV). **Não tem acesso às mensagens nem às chamadas.** |
-| Profissional | `/cadastro-profissional`, `/painel` | Cadastro com registro (CRP/CRM), e-mail e WhatsApp → recebe um **código único** (anotar/printar). Após aprovação: perfil (foto, nome, registro, valor da consulta, pacotes, estado/município, clínica presencial opcional, chave Pix), chat com pacientes (arquivar/desarquivar, enviar Pix), criar atendimento. |
+| Profissional | `/cadastro-profissional`, `/painel` | Cadastro com registro (CRP/CRM), e-mail e WhatsApp → recebe um **código único** (anotar/printar). Após aprovação: perfil (foto, nome, registro, valor da consulta, pacotes, estado/município, clínica presencial opcional, chave Pix, duração da sessão, Instagram e galeria de até 6 fotos — galeria e Instagram aparecem só para quem tem conta), chat com pacientes (arquivar/desarquivar, enviar Pix), criar atendimento. |
 | Paciente | `/cadastro-paciente`, `/app` | Cadastro com nome completo, CPF válido, estado/município e senha. Login com CPF + senha. Vitrine com os da sua cidade primeiro, busca por nome, estado, município e localidade, favoritos (coração), chat, configurações (foto e nome exibido). |
 
 Sem conta, o visitante vê os profissionais na página inicial, mas **sem valores e sem localização**.
@@ -16,9 +16,12 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 
 1. O profissional cria o atendimento informando o nome (real ou fictício) do paciente — pelo painel ou direto no chat.
 2. É gerado um código para o paciente, que começa com os **2 primeiros caracteres do código do profissional** + 6 caracteres aleatórios (letras e números).
-3. Em `/atendimento`, o profissional entra com o **seu código único** (precisa estar logado) e o paciente com o **código dele**.
-4. Vídeo e voz. O paciente pode desligar a câmera; **o profissional não** (não existe botão, e a câmera é exigida para entrar). Os dois podem silenciar o microfone.
-5. Só é possível ter **um atendimento aberto por vez**. Ao clicar em **Finalizar atendimento**, o código do paciente deixa de funcionar.
+3. O profissional (logado) entra pelo botão **Entrar na chamada** de cada atendimento no painel; o paciente, com o **código dele** em `/atendimento`.
+4. Vídeo e voz. Os dois podem ligar/desligar a câmera e o microfone.
+5. O profissional pode ter **até 2 atendimentos abertos ao mesmo tempo**. Ao clicar em **Finalizar atendimento**, o código do paciente deixa de funcionar.
+6. A chamada continua se a pessoa sair da tela para usar outro app: onde o navegador permite, o vídeo vai para uma **janelinha flutuante** (botão ao lado da câmera; no Chrome e no Safari ela também abre sozinha ao trocar de app).
+
+O profissional só vê uma conversa depois que o paciente manda a primeira mensagem — o profissional nunca inicia conversa.
 
 A chamada é ponto a ponto (WebRTC): o áudio e o vídeo não passam pelo servidor nem ficam gravados.
 

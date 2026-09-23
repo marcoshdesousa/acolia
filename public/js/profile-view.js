@@ -4,12 +4,21 @@
   const { esc, ICONS, avatar, money } = window.Acolia;
   const ic = (name, s = 18) => ICONS[name].replace('<svg', `<svg style="width:${s}px;height:${s}px;vertical-align:-4px"`);
 
+  // 50 → "50 min", 60 → "1h", 90 → "1h30"
+  function duration(min) {
+    if (!min) return '';
+    if (min < 60) return `${min} min`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+  }
+
   function render(p, { actions = '', next = '' } = {}) {
     const specialties = (p.specialties || '').split(',').map((s) => s.trim()).filter(Boolean);
     let details;
     if (p.locked) {
       details = `<div class="card flat stack">
-        <div class="locked">${ic('lock')} Valores, pacotes e localização aparecem somente para quem tem conta.</div>
+        <div class="locked">${ic('lock')} Valores, pacotes, localização, galeria de fotos e Instagram aparecem somente para quem tem conta.</div>
         <div class="row"><a class="btn" href="/cadastro-paciente${next ? `?next=${encodeURIComponent(next)}` : ''}">Criar conta grátis</a><a class="btn secondary" href="/entrar?next=${encodeURIComponent(next || '/app#perfil/' + p.id)}">Já tenho conta</a></div></div>`;
     } else {
       const pk = p.packages || [];
@@ -34,15 +43,26 @@
           <div class="grow" style="min-width:220px">
             <h1 style="font-size:1.6rem;margin-bottom:4px">${esc(p.name)}</h1>
             <div class="muted" style="font-weight:700">${esc(p.profession)}</div>
-            <div style="margin-top:6px"><span class="badge ok">${ic('badge', 15)} ${esc(p.registry)}</span></div>
+            <div class="row" style="margin-top:6px;gap:6px"><span class="badge ok">${ic('badge', 15)} ${esc(p.registry)}</span>
+              ${p.session_minutes ? `<span class="badge">${ic('clock', 15)} Sessão de ${duration(p.session_minutes)}</span>` : ''}</div>
+            ${!p.locked && p.instagram ? `<a class="insta-btn" href="https://www.instagram.com/${encodeURIComponent(p.instagram)}/" target="_blank" rel="noopener">${ic('instagram', 18)} @${esc(p.instagram)}</a>` : ''}
             ${specialties.length ? `<div class="meta row" style="gap:6px;margin-top:10px">${specialties.map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
           </div>
           <div class="row">${actions}</div>
         </div>
         ${p.bio ? `<div><h3>Sobre</h3><p style="white-space:pre-wrap">${esc(p.bio)}</p></div>` : ''}
+        ${!p.locked && p.gallery?.length ? `<div><h3>Galeria</h3><div class="gallery-grid">${p.gallery.map((src, i) => `
+          <button type="button" class="gallery-item" data-gallery-open="${esc(src)}" aria-label="Abrir foto ${i + 1}"><img src="${esc(src)}" alt="Foto ${i + 1} de ${esc(p.name)}" loading="lazy"></button>`).join('')}</div></div>` : ''}
       </div>
       <div class="grid-2" style="margin-top:16px;align-items:start">${details}</div>`;
   }
 
-  window.AcoliaProfile = { render };
+  // Toque numa foto da galeria abre em tamanho grande
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-gallery-open]');
+    if (!b) return;
+    window.Acolia.modal({ title: 'Galeria', html: `<img src="${esc(b.dataset.galleryOpen)}" alt="" style="width:100%;border-radius:12px">`, actions: [{ label: 'Fechar' }] });
+  });
+
+  window.AcoliaProfile = { render, duration };
 })();

@@ -125,6 +125,9 @@ addColumn('professionals', 'legal_name', 'TEXT');                 // nome comple
 addColumn('professionals', 'registry_verified', 'INTEGER NOT NULL DEFAULT 0'); // conferido no conselho por API
 addColumn('professionals', 'slug', 'TEXT');                        // link próprio: site.com/<slug>
 addColumn('professionals', 'is_test', 'INTEGER NOT NULL DEFAULT 0');  // conta de teste (o admin pode apagar)
+addColumn('professionals', 'session_minutes', 'INTEGER');          // duração de cada sessão
+addColumn('professionals', 'instagram', "TEXT NOT NULL DEFAULT ''");  // @ do Instagram (sem o link)
+addColumn('professionals', 'gallery', "TEXT NOT NULL DEFAULT '[]'");  // até 6 fotos: [url|null, ...] (posições 1 a 6)
 addColumn('patients', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_professionals_slug ON professionals(slug)');
 fs.mkdirSync(path.join(DATA_DIR, 'documents'), { recursive: true });

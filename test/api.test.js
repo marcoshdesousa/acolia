@@ -282,14 +282,24 @@ test('admin não tem acesso a mensagens', async () => {
 });
 
 let call;
-test('atendimento: código do paciente, um por vez, finalizar invalida', async () => {
+test('atendimento: código do paciente, até dois ao mesmo tempo, finalizar invalida', async () => {
   let r = await pro.post('/api/calls', { patient_label: 'Paciente X' });
   assert.equal(r.status, 201);
   call = r.data;
   assert.equal(call.patient_code.slice(0, 2), proCode.slice(0, 2));
   assert.equal(call.patient_code.length, 8);
   r = await pro.post('/api/calls', { patient_label: 'Outro' });
-  assert.equal(r.status, 409, 'só um atendimento por vez');
+  assert.equal(r.status, 201, 'dois atendimentos ao mesmo tempo');
+  const second = r.data;
+  r = await pro.post('/api/calls', { patient_label: 'Terceiro' });
+  assert.equal(r.status, 409, 'no máximo dois');
+  assert.equal((await pro.get('/api/calls')).data.actives.length, 2);
+  r = await pro.post('/api/calls/resolve', { code: proCode });
+  assert.equal(r.status, 409, 'com dois abertos, o código único não sabe qual abrir');
+  r = await pro.post('/api/calls/resolve', { code: second.patient_code });
+  assert.equal(r.data.role, 'host', 'profissional entra pelo código do paciente como anfitrião');
+  assert.equal(r.data.call.id, second.id);
+  await pro.post(`/api/calls/${second.id}/end`);
 
   r = await anon.post('/api/calls/resolve', { code: call.patient_code });
   assert.equal(r.data.role, 'guest');
@@ -586,4 +596,69 @@ test('contas de teste: o admin cria, entram com os dados combinados e só elas p
 
   r = await admin.post('/api/admin/test-accounts');
   assert.deepEqual(r.data.created, { professional: true, patient: true }, 'pode criar de novo');
+});
+
+test('profissional só vê a conversa depois que o paciente manda mensagem', async () => {
+  const created = await admin.post('/api/admin/professionals', {
+    name: 'Caio Mendes', profession: 'Psicanalista', registry: 'X-9', email: 'caio@example.com', phone: '11977776666', state: 'SP', city: 'Campinas',
+  });
+  const cp = client();
+  await cp.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
+  const pt = client();
+  await pt.post('/api/auth/patient/register', { name: 'Rita Souza', cpf: '453.178.287-91', state: 'SP', city: 'Campinas', password: '123456' });
+  const conv = (await pt.post('/api/chat/conversations', { professional_id: created.data.id })).data;
+  assert.equal((await cp.get('/api/chat/conversations')).data.items.length, 0, 'só abrir o chat não aparece para o profissional');
+  let r = await cp.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Oi' });
+  assert.equal(r.status, 404, 'profissional não escreve antes do paciente');
+  r = await cp.post('/api/calls', { patient_label: 'Rita', conversation_id: conv.id });
+  assert.equal(r.status, 404);
+  await pt.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Olá, gostaria de agendar' });
+  assert.equal((await cp.get('/api/chat/conversations')).data.items.length, 1, 'aparece depois da mensagem do paciente');
+  r = await cp.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Olá, Rita!' });
+  assert.equal(r.status, 201);
+});
+
+test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (galeria e Instagram só com conta)', async () => {
+  const created = await admin.post('/api/admin/professionals', {
+    name: 'Lia Campos', profession: 'Psicólogo(a)', registry: 'X-10', email: 'lia@example.com', phone: '11966665555', state: 'SP', city: 'Campinas',
+  });
+  const lp = client();
+  await lp.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
+  const pf = { name: 'Lia Campos', phone: '11966665555', state: 'SP', city: 'Campinas', bio: '', specialties: '', price: '120' };
+  let r = await lp.put('/api/professional/profile', { ...pf, session_minutes: 50, instagram: 'https://www.instagram.com/lia.psi/' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.instagram, 'lia.psi', 'guarda só o @');
+  assert.equal(r.data.session_minutes, 50);
+  r = await lp.put('/api/professional/profile', { ...pf, session_minutes: 50, instagram: '@lia psi!' });
+  assert.equal(r.status, 400, 'Instagram inválido');
+  r = await lp.put('/api/professional/profile', { ...pf, session_minutes: 51, instagram: '@lia.psi' });
+  assert.equal(r.status, 400, 'duração fora da lista');
+  await lp.put('/api/professional/profile', { ...pf, session_minutes: 50, instagram: '@lia.psi' });
+
+  const upload = async (slot) => {
+    const fd = new FormData();
+    fd.append('photo', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'f.png');
+    const res = await fetch(`${base_}/api/professional/gallery/${slot}`, { method: 'POST', body: fd, headers: { Cookie: lp.cookie } });
+    return { status: res.status, data: await res.json() };
+  };
+  const base_ = base;
+  r = await upload(1);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await upload(3);
+  assert.equal(r.data.gallery.filter(Boolean).length, 2);
+  assert.equal(r.data.gallery.length, 6, 'sempre 6 posições');
+  assert.equal((await upload(7)).status, 400, 'no máximo 6');
+  r = await lp.del('/api/professional/gallery/1');
+  assert.equal(r.data.gallery[0], null);
+  assert.ok(r.data.gallery[2]);
+
+  const anonView = (await anon.get(`/api/professionals/${created.data.id}`)).data;
+  assert.equal(anonView.session_minutes, 50, 'duração aparece para todos');
+  assert.equal(anonView.gallery, undefined, 'visitante não vê a galeria');
+  assert.equal(anonView.instagram, undefined, 'visitante não vê o Instagram');
+  const pt = client();
+  await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
+  const patView = (await pt.get(`/api/professionals/${created.data.id}`)).data;
+  assert.equal(patView.gallery.length, 1, 'paciente vê só as fotos colocadas');
+  assert.equal(patView.instagram, 'lia.psi');
 });

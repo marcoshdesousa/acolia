@@ -20,6 +20,9 @@ function setupSocket(httpServer) {
       const col = auth.role === 'patient' ? 'patient_id' : 'professional_id';
       const c = db.prepare(`SELECT * FROM conversations WHERE id = ? AND ${col} = ?`).get(Number(conversation_id), auth.user.id);
       if (!c) return;
+      // Antes da primeira mensagem do paciente, o profissional não sabe da conversa
+      const wrote = db.prepare("SELECT 1 FROM messages WHERE conversation_id = ? AND sender_role = 'patient'").get(c.id);
+      if (!wrote) return;
       const target = auth.role === 'patient' ? `professional:${c.professional_id}` : `patient:${c.patient_id}`;
       io.to(target).emit('chat:typing', { conversation_id: c.id });
     });

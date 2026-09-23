@@ -1,9 +1,9 @@
 /* Sala de atendimento — chamada de vídeo/voz 1:1 via WebRTC.
    Regras:
    - O profissional entra com o seu código único; o paciente com o código gerado para ele.
-   - Profissional: câmera obrigatória (não existe botão para desligá-la).
-   - Paciente: pode desligar a câmera (atendimento só por voz).
-   - Ambos podem silenciar o microfone.
+   - Profissional e paciente podem ligar/desligar a câmera e o microfone.
+   - A chamada continua se a pessoa sair da tela (responder WhatsApp etc.): o vídeo vai
+     para uma janelinha flutuante (picture-in-picture) quando o aparelho permite.
    - Quando o profissional finaliza, o código do paciente deixa de valer. */
 (function () {
   'use strict';
@@ -47,7 +47,7 @@
     const p = S.info.professional;
     const host = S.role === 'host';
     $('[data-pro-info]').innerHTML = host
-      ? `<h2>Atendimento com ${esc(S.info.call.patient_label)}</h2><p class="muted">Sua câmera precisa ficar ligada durante todo o atendimento.</p>`
+      ? `<h2>Atendimento com ${esc(S.info.call.patient_label)}</h2>`
       : `<div class="row" style="justify-content:center">${avatar(p.name, p.photo)}<div style="text-align:left"><b>${esc(p.name)}</b><div class="muted small">${esc(p.profession)} · ${esc(p.registry)}</div></div></div>`;
     const msg = $('[data-prejoin-msg]');
     const actions = $('[data-prejoin-actions]');
@@ -59,12 +59,6 @@
     try {
       S.local = await getMedia(true);
     } catch (e) {
-      if (host) {
-        msg.innerHTML = `<div class="notice danger">Não foi possível ligar sua câmera. Para o profissional, a câmera é obrigatória. Verifique a permissão do navegador e tente de novo.</div>`;
-        actions.innerHTML = '<button class="btn" data-retry>Tentar de novo</button>';
-        $('[data-retry]').onclick = prejoin;
-        return;
-      }
       try {
         S.local = await getMedia(false);
         msg.innerHTML = '<div class="notice info">Câmera indisponível — você vai entrar só com voz.</div>';
@@ -77,54 +71,57 @@
     }
     $('[data-preview]').srcObject = S.local;
     const hasVideo = S.local.getVideoTracks().length > 0;
-    if (host) {
-      if (hasVideo) msg.innerHTML = '';
-      actions.innerHTML = `<button class="btn" data-join>${ICONS.video.replace('<svg', '<svg style="width:20px;height:20px"')} Iniciar atendimento</button>`;
-      $('[data-join]').onclick = () => join();
-    } else {
-      if (hasVideo) msg.innerHTML = '';
-      actions.innerHTML = (hasVideo ? `<button class="btn" data-join-video>${ICONS.video.replace('<svg', '<svg style="width:20px;height:20px"')} Entrar com vídeo</button>` : '')
-        + `<button class="btn ${hasVideo ? 'secondary' : ''}" data-join-audio>${ICONS.mic.replace('<svg', '<svg style="width:20px;height:20px"')} Entrar só com voz</button>`;
-      $('[data-join-video]')?.addEventListener('click', () => join());
-      $('[data-join-audio]').onclick = () => { setCamera(false); join(); };
-    }
+    if (hasVideo) msg.innerHTML = '';
+    actions.innerHTML = (hasVideo ? `<button class="btn" data-join-video>${ICONS.video.replace('<svg', '<svg style="width:20px;height:20px"')} ${host ? 'Iniciar com vídeo' : 'Entrar com vídeo'}</button>` : '')
+      + `<button class="btn ${hasVideo ? 'secondary' : ''}" data-join-audio>${ICONS.mic.replace('<svg', '<svg style="width:20px;height:20px"')} ${host ? 'Iniciar só com voz' : 'Entrar só com voz'}</button>`;
+    $('[data-join-video]')?.addEventListener('click', () => join());
+    $('[data-join-audio]').onclick = () => { setCamera(false); join(); };
   }
 
-  // ---------- Proteção da chamada ----------
-  // Um site não consegue impedir o print do sistema do celular/computador. O que dá para fazer:
-  // tela preta e sem som quando a chamada sai de primeiro plano (troca de app, gravação por
-  // outro app que tira o foco, tecla Print Screen) e nada de salvar, copiar ou abrir em janela flutuante.
-  function setupProtection() {
-    const shield = $('[data-shield]');
-    const remote = $('#remoteVideo');
-    let hidden = false;
-    const hide = (why) => {
-      if (S.ended) return;
-      hidden = true;
-      shield.classList.remove('hidden');
-      document.body.classList.add('call-protected');
-      if (why === 'background') remote.muted = true; // sem som enquanto a tela não está visível
-    };
-    const show = () => {
-      if (!hidden) return;
-      hidden = false;
-      shield.classList.add('hidden');
-      document.body.classList.remove('call-protected');
-      remote.muted = false;
-    };
-    document.addEventListener('visibilitychange', () => (document.visibilityState === 'hidden' ? hide('background') : show()));
-    window.addEventListener('blur', () => hide('blur'));
-    window.addEventListener('focus', show);
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'PrintScreen' || (e.metaKey && e.shiftKey && ['3', '4', '5', 's', 'S'].includes(e.key))) {
-        hide('print');
-        try { navigator.clipboard.writeText('Conteúdo protegido — Acolia'); } catch { /* ignora */ }
-        setTimeout(show, 3000);
-      }
+  // ---------- Chamada em segundo plano (janelinha flutuante) ----------
+  // Ao sair da tela (WhatsApp, Instagram…) a chamada continua. Quando o navegador permite,
+  // o vídeo da outra pessoa vai para uma janelinha flutuante (picture-in-picture).
+  const remoteEl = () => $('#remoteVideo');
+  const pipSupported = () => !!(document.pictureInPictureEnabled || remoteEl().webkitSupportsPresentationMode);
+
+  async function enterPip() {
+    const v = remoteEl();
+    if (!v.srcObject || S.ended) return;
+    try {
+      if (document.pictureInPictureElement === v) return;
+      if (v.requestPictureInPicture) await v.requestPictureInPicture();
+      else if (v.webkitSetPresentationMode) v.webkitSetPresentationMode('picture-in-picture');
+    } catch { /* o navegador não deixou (precisa de um toque) */ }
+  }
+  async function exitPip() {
+    try {
+      if (document.pictureInPictureElement) await document.exitPictureInPicture();
+      else if (remoteEl().webkitPresentationMode === 'picture-in-picture') remoteEl().webkitSetPresentationMode('inline');
+    } catch { /* ignora */ }
+  }
+
+  function setupBackground() {
+    const v = remoteEl();
+    v.autoPictureInPicture = true; // Safari (iPhone/iPad/Mac): entra sozinho na janelinha ao sair
+    v.setAttribute('autopictureinpicture', '');
+    const ms = navigator.mediaSession;
+    if (ms) {
+      try { ms.metadata = new MediaMetadata({ title: 'Atendimento Acolia', artist: $('[data-top-name]').textContent, artwork: [{ src: '/img/app-icon-512.png', sizes: '512x512', type: 'image/png' }] }); } catch { /* ignora */ }
+      const on = (action, fn) => { try { ms.setActionHandler(action, fn); } catch { /* não suportado */ } };
+      on('enterpictureinpicture', enterPip); // Chrome: janelinha automática ao trocar de app/aba
+      on('togglemicrophone', () => $('[data-mic]').click());
+      on('togglecamera', () => $('[data-cam]').click());
+      on('hangup', () => $('[data-end]').click());
+    }
+    // Tentativa extra ao sair da tela (funciona em alguns navegadores)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') enterPip();
+      else if (!S.ended) { v.play().catch(() => {}); $('#localVideo').play().catch(() => {}); }
     });
-    document.addEventListener('keyup', (e) => { if (e.key === 'PrintScreen') { hide('print'); setTimeout(show, 3000); } });
-    ['contextmenu', 'dragstart', 'copy'].forEach((ev) => $('.call-stage').addEventListener(ev, (e) => e.preventDefault()));
-    $$('video').forEach((v) => { v.disablePictureInPicture = true; });
+    const btn = $('[data-pip]');
+    btn.classList.toggle('hidden', !pipSupported());
+    btn.innerHTML = ICONS.pip;
+    btn.addEventListener('click', () => (document.pictureInPictureElement ? exitPip() : enterPip()));
   }
 
   // ---------- 3. Sala ----------
@@ -142,7 +139,7 @@
     overlay(host ? 'Aguardando o paciente entrar…' : 'Aguardando o profissional…');
 
     renderControls();
-    setupProtection();
+    setupBackground();
     S.socket = io();
     S.socket.on('connect', () => {
       S.socket.emit('call:join', { code: S.code }, (r) => {
@@ -212,10 +209,13 @@
   // O profissional sempre inicia a negociação
   async function startOffer() {
     const pc = newPc();
+    S.videoSender = null;
     S.local.getTracks().forEach((t) => {
       const sender = pc.addTrack(t, S.local);
       if (t.kind === 'video') S.videoSender = sender;
     });
+    // Sem câmera agora: reserva o canal de vídeo para poder ligar depois sem renegociar
+    if (!S.videoSender) S.videoSender = pc.addTransceiver('video', { direction: 'sendrecv' }).sender;
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     S.socket.emit('call:signal', { description: pc.localDescription });
@@ -261,8 +261,7 @@
     mic.setAttribute('aria-label', S.micOn ? 'Desligar microfone' : 'Ligar microfone');
     const cam = $('[data-cam]');
     const hasVideo = S.local.getVideoTracks().length > 0 || S.videoSender;
-    // Profissional não pode desligar a câmera
-    cam.classList.toggle('hidden', host || !navigator.mediaDevices);
+    cam.classList.toggle('hidden', !navigator.mediaDevices);
     cam.innerHTML = S.camOn ? ICONS.video : ICONS.videoOff;
     cam.classList.toggle('off', !S.camOn);
     cam.setAttribute('aria-label', S.camOn ? 'Desligar câmera' : 'Ligar câmera');
@@ -280,7 +279,6 @@
   });
 
   $('[data-cam]').addEventListener('click', async () => {
-    if (S.role === 'host') return;
     if (S.camOn) setCamera(false);
     else {
       try {
@@ -288,6 +286,7 @@
         const track = s.getVideoTracks()[0];
         S.local.addTrack(track);
         S.camOn = true;
+        if (S.role === 'host') track.addEventListener('ended', reacquireHostCamera);
         if (S.videoSender) await S.videoSender.replaceTrack(track);
         $('#localVideo').srcObject = S.local;
       } catch {
@@ -298,7 +297,7 @@
     sendMediaState();
   });
 
-  // Desliga de verdade a câmera do paciente (a luz da câmera apaga)
+  // Desliga de verdade a câmera (a luz da câmera apaga)
   function setCamera(on) {
     if (on) return;
     S.camOn = false;
@@ -307,6 +306,7 @@
   }
 
   async function reacquireHostCamera() {
+    if (!S.camOn || S.ended) return;
     overlay('Sua câmera foi desconectada. Reconectando…');
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -325,7 +325,7 @@
   }
 
   function sendMediaState() {
-    S.socket?.emit('call:media-state', { mic: S.micOn, cam: S.role === 'host' ? true : S.camOn });
+    S.socket?.emit('call:media-state', { mic: S.micOn, cam: S.camOn });
   }
 
   function showPeerFlags({ mic, cam }) {
@@ -362,6 +362,7 @@
   function finish(message, isError = false, canRejoin = false) {
     if (S.ended) return;
     S.ended = true;
+    exitPip();
     stopTimer();
     closePc();
     S.local?.getTracks().forEach((t) => t.stop());

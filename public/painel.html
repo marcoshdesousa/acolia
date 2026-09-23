@@ -37,10 +37,11 @@
         <div class="card stack">
           <div class="row between">
             <div><div class="muted small" style="font-weight:700">SEU CÓDIGO ÚNICO</div><div class="code-box" style="font-size:1.4rem;padding:8px 16px" data-my-code></div></div>
-            <p class="small muted grow" style="margin:0;min-width:220px">Use este código para <b>entrar</b> na sala de atendimento. Não compartilhe com pacientes — para eles você gera um código próprio abaixo. Você atende <b>uma pessoa por vez</b>.</p>
+            <p class="small muted grow" style="margin:0;min-width:220px">Este é o seu código de login. Não compartilhe com pacientes — para eles você gera um código próprio abaixo. Você pode ter <b>até 2 atendimentos abertos</b> ao mesmo tempo; entre em cada um pelo botão <b>Entrar na chamada</b>.</p>
           </div>
         </div>
         <div data-active-call style="margin-top:16px"></div>
+        <p class="small muted" data-calls-left style="margin:0"></p>
         <form class="card" data-new-call style="margin-top:16px">
           <h2>Criar atendimento</h2>
           <p class="muted small">Gera um código para o paciente (começa com os 2 primeiros caracteres do seu código). Envie para ele pelo chat ou como preferir. Ao finalizar o atendimento, o código deixa de funcionar.</p>
@@ -75,6 +76,11 @@
             <div class="stack"><label class="btn secondary sm" style="margin:0;width:max-content">Trocar foto de perfil<input type="file" accept="image/jpeg,image/png,image/webp" data-photo-input hidden></label>
             <span class="small muted">JPG, PNG ou WEBP, até 3 MB.</span></div></div>
         </div>
+        <div class="card stack" style="margin-top:16px">
+          <h2 style="margin:0">Galeria de fotos</h2>
+          <p class="small muted" style="margin:0">Até 6 fotos (consultório, eventos, certificados…). Aparecem no seu perfil em 3 linhas de 2, só para pacientes com conta. Se não colocar nenhuma, a galeria não aparece.</p>
+          <div class="gallery-edit" data-gallery-edit></div>
+        </div>
         <form class="card" data-profile-form style="margin-top:16px" novalidate>
           <h2>Dados profissionais</h2>
           <div class="field"><label for="name">Nome exibido (nome completo ou nome e sobrenome)</label><input id="name" name="name" required maxlength="120"></div>
@@ -87,6 +93,16 @@
           <div class="field"><label for="specialties">Especialidades / abordagens</label><input id="specialties" name="specialties" maxlength="300" placeholder="Ex.: Ansiedade, Depressão, TCC, Casais">
             <div class="hint">Separe por vírgula.</div></div>
           <div class="field"><label for="bio">Sobre você</label><textarea id="bio" name="bio" maxlength="2000" rows="5" placeholder="Conte sua formação, experiência e como é o seu atendimento."></textarea></div>
+          <div class="grid-2">
+            <div class="field"><label for="session_minutes">Duração de cada sessão</label>
+              <select id="session_minutes" name="session_minutes">
+                <option value="">Não informar</option><option value="30">30 min</option><option value="40">40 min</option><option value="45">45 min</option>
+                <option value="50">50 min</option><option value="60">1 hora</option><option value="90">1h30</option><option value="120">2 horas</option>
+              </select></div>
+            <div class="field"><label for="instagram">Instagram</label>
+              <div class="slug-input"><span>instagram.com/</span><input id="instagram" name="instagram" maxlength="60" placeholder="seu.usuario" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
+              <div class="hint">Digite só o seu @. O botão do Instagram aparece no seu perfil para pacientes com conta.</div></div>
+          </div>
 
           <h2 style="margin-top:24px">Valores</h2>
           <div class="grid-2">

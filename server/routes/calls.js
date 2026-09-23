@@ -22,8 +22,11 @@ function newPatientCode(proCode) {
   }
 }
 
-function activeCall(proId) {
-  return db.prepare("SELECT * FROM calls WHERE professional_id = ? AND status = 'ativo'").get(proId) || null;
+// O profissional pode ter até 2 atendimentos abertos ao mesmo tempo
+const MAX_ACTIVE_CALLS = 2;
+
+function activeCalls(proId) {
+  return db.prepare("SELECT * FROM calls WHERE professional_id = ? AND status = 'ativo' ORDER BY id").all(proId);
 }
 
 function endCall(call) {
@@ -42,13 +45,16 @@ function resolveCode(code, auth) {
     if (auth?.role !== 'professional' || auth.user.id !== pro.id) {
       throw new U.HttpError(403, 'Este é um código de profissional. Entre na sua conta de profissional para iniciar o atendimento.');
     }
-    const call = activeCall(pro.id);
-    if (!call) throw new U.HttpError(404, 'Você não tem atendimento criado. Crie um atendimento no seu painel primeiro.');
-    return { role: 'host', call, pro };
+    const calls = activeCalls(pro.id);
+    if (!calls.length) throw new U.HttpError(404, 'Você não tem atendimento criado. Crie um atendimento no seu painel primeiro.');
+    if (calls.length > 1) throw new U.HttpError(409, 'Você tem 2 atendimentos abertos. Entre pelo botão "Entrar na chamada" de cada um no seu painel.');
+    return { role: 'host', call: calls[0], pro };
   }
   const call = db.prepare("SELECT * FROM calls WHERE patient_code = ? AND status = 'ativo'").get(code);
   if (!call) throw new U.HttpError(404, 'Código inválido ou atendimento já finalizado. Peça um novo código ao profissional.');
   const p = db.prepare('SELECT * FROM professionals WHERE id = ?').get(call.professional_id);
+  // O próprio profissional, logado, entra no atendimento dele pelo código do paciente (como anfitrião)
+  if (auth?.role === 'professional' && auth.user.id === p.id) return { role: 'host', call, pro: p };
   return { role: 'guest', call, pro: p };
 }
 
@@ -65,7 +71,8 @@ router.use(A.requireRole('professional'));
 
 router.get('/', (req, res) => {
   const rows = db.prepare('SELECT * FROM calls WHERE professional_id = ? ORDER BY id DESC LIMIT 50').all(req.auth.user.id);
-  res.json({ active: activeCall(req.auth.user.id), items: rows });
+  const actives = activeCalls(req.auth.user.id);
+  res.json({ active: actives[0] || null, actives, max_active: MAX_ACTIVE_CALLS, items: rows });
 });
 
 router.post('/', (req, res) => {
@@ -75,7 +82,9 @@ router.post('/', (req, res) => {
   let conv = null;
   if (req.body.conversation_id) conv = loadConversation(req, req.body.conversation_id);
   const call = tx(() => {
-    if (activeCall(pro.id)) throw new U.HttpError(409, 'Você já tem um atendimento em aberto. Finalize-o antes de criar outro — só é possível atender uma pessoa por vez.');
+    if (activeCalls(pro.id).length >= MAX_ACTIVE_CALLS) {
+      throw new U.HttpError(409, `Você já tem ${MAX_ACTIVE_CALLS} atendimentos em aberto. Finalize um deles antes de criar outro.`);
+    }
     const code = newPatientCode(pro.code);
     const info = db.prepare('INSERT INTO calls (professional_id, patient_label, patient_code) VALUES (?, ?, ?)').run(pro.id, label, code);
     return db.prepare('SELECT * FROM calls WHERE id = ?').get(Number(info.lastInsertRowid));

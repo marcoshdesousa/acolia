@@ -41,16 +41,16 @@
 
   <div data-step="call" class="hidden call-page">
     <div class="call-stage">
-      <video id="remoteVideo" autoplay playsinline disablepictureinpicture controlslist="nodownload noplaybackrate noremoteplayback"></video>
-      <video id="localVideo" autoplay playsinline muted disablepictureinpicture></video>
+      <video id="remoteVideo" autoplay playsinline autopictureinpicture></video>
+      <video id="localVideo" autoplay playsinline muted></video>
       <div class="call-brand" aria-hidden="true"><img src="/img/logo-simbolo.png" alt="" width="28" height="28"><img src="/img/logo-nome.png" alt="" class="call-brand-word"></div>
-      <div class="call-shield hidden" data-shield><div><img src="/img/logo-simbolo.png" alt="" width="64" height="64"><p><b>Atendimento protegido</b></p><p class="small">A imagem e o som ficam ocultos enquanto a Acolia não está em primeiro plano. Volte para esta tela para continuar.</p></div></div>
       <div class="call-overlay" data-overlay><div><div data-overlay-avatar></div><div style="font-weight:800;font-size:1.2rem" data-overlay-title></div><div style="opacity:.8" data-overlay-sub></div></div></div>
       <div class="call-top"><span data-top-avatar></span><div><div class="nm" data-top-name></div><div class="st" data-top-status>Conectando…</div></div></div>
       <div class="peer-flags" data-peer-flags></div>
       <div class="call-bar">
         <button class="call-btn" data-mic aria-label="Desligar microfone" title="Microfone"></button>
         <button class="call-btn" data-cam aria-label="Desligar câmera" title="Câmera"></button>
+        <button class="call-btn hidden" data-pip aria-label="Janelinha flutuante" title="Janelinha flutuante (continuar vendo em outros apps)"></button>
         <button class="call-btn end" data-end></button>
       </div>
     </div>

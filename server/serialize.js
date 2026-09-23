@@ -15,6 +15,16 @@ function parsePackages(json) {
   } catch { return []; }
 }
 
+const GALLERY_SLOTS = 6;
+
+// Galeria: 6 posições fixas (Foto 1 a Foto 6); posição vazia = null
+function parseGallery(json) {
+  let arr;
+  try { arr = JSON.parse(json || '[]'); } catch { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+  return Array.from({ length: GALLERY_SLOTS }, (_, i) => (typeof arr[i] === 'string' && arr[i].startsWith('/uploads/') ? arr[i] : null));
+}
+
 // Visitante sem conta vê o profissional, mas sem valores e sem localização
 function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
   const base = {
@@ -26,6 +36,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     bio: p.bio,
     specialties: p.specialties,
     photo: p.photo,
+    session_minutes: p.session_minutes || null,
   };
   if (!loggedIn) return { ...base, locked: true };
   return {
@@ -39,6 +50,9 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     has_clinic: !!p.has_clinic,
     clinic_name: p.has_clinic ? p.clinic_name : '',
     clinic_address: p.has_clinic ? p.clinic_address : '',
+    // Galeria e Instagram: só para quem tem conta
+    gallery: parseGallery(p.gallery).filter(Boolean),
+    instagram: p.instagram || '',
   };
 }
 
@@ -64,6 +78,9 @@ function ownProfessional(p) {
     clinic_name: p.clinic_name,
     clinic_address: p.clinic_address,
     pix_key: p.pix_key,
+    session_minutes: p.session_minutes || null,
+    instagram: p.instagram || '',
+    gallery: parseGallery(p.gallery),
     subscription_until: p.subscription_until,
     visible: isVisible(p),
     created_at: p.created_at,
@@ -82,4 +99,4 @@ function ownPatient(p) {
   };
 }
 
-module.exports = { VISIBLE_SQL, isVisible, parsePackages, publicProfessional, ownProfessional, ownPatient };
+module.exports = { VISIBLE_SQL, isVisible, parsePackages, parseGallery, GALLERY_SLOTS, publicProfessional, ownProfessional, ownPatient };

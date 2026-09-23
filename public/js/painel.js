@@ -77,6 +77,8 @@
     form.phone.value = fmtPhone(me.phone);
     form.specialties.value = me.specialties;
     form.bio.value = me.bio;
+    form.session_minutes.value = me.session_minutes ? String(me.session_minutes) : '';
+    form.instagram.value = me.instagram || '';
     form.price.value = me.price_cents != null ? (me.price_cents / 100).toFixed(2).replace('.', ',') : '';
     form.pix_key.value = me.pix_key;
     form.state.innerHTML = ufOptions(me.state, 'UF');
@@ -102,18 +104,49 @@
     toast('Perfil salvo!');
   });
 
+  // ---------- Galeria (Foto 1 a Foto 6) ----------
+  function renderGallery() {
+    $('[data-gallery-edit]').innerHTML = (me.gallery || []).map((src, i) => `
+      <div class="gallery-slot">
+        <div class="lbl">Foto ${i + 1}</div>
+        <div class="thumb">${src ? `<img src="${esc(src)}" alt="Foto ${i + 1}">` : 'Vazia'}</div>
+        <label class="btn secondary sm" style="margin:0">${src ? 'Trocar' : 'Adicionar'}<input type="file" accept="image/jpeg,image/png,image/webp" data-gallery-input="${i + 1}" hidden></label>
+        ${src ? `<button type="button" class="btn ghost sm" data-gallery-remove="${i + 1}">Remover</button>` : ''}
+      </div>`).join('');
+  }
+  renderGallery();
+  $('[data-gallery-edit]').addEventListener('change', async (e) => {
+    const input = e.target.closest('[data-gallery-input]');
+    if (!input?.files[0]) return;
+    const fd = new FormData();
+    fd.append('photo', await Acolia.shrinkImage(input.files[0]));
+    try {
+      me = await api(`/api/professional/gallery/${input.dataset.galleryInput}`, { method: 'POST', form: fd });
+      renderGallery();
+      toast('Foto adicionada à galeria!');
+    } catch (ex) { toast(ex.message, 'error'); }
+  });
+  $('[data-gallery-edit]').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-gallery-remove]');
+    if (!b) return;
+    if (!await confirmDialog(`Remover a Foto ${b.dataset.galleryRemove} da galeria?`, { okLabel: 'Remover', danger: true })) return;
+    me = await api(`/api/professional/gallery/${b.dataset.galleryRemove}`, { method: 'DELETE' });
+    renderGallery();
+    toast('Foto removida');
+  });
+
   $('[data-photo-input]').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const fd = new FormData();
-    fd.append('photo', file);
+    fd.append('photo', await Acolia.shrinkImage(file));
     try { me = await api('/api/professional/photo', { method: 'POST', form: fd }); renderMe(); toast('Foto atualizada!'); } catch (ex) { toast(ex.message, 'error'); }
     e.target.value = '';
   });
 
   $('[data-preview]').addEventListener('click', (e) => {
     e.preventDefault();
-    const p = { ...me, locked: false };
+    const p = { ...me, locked: false, gallery: (me.gallery || []).filter(Boolean) };
     modal({ title: 'Prévia do seu perfil', html: `<div style="zoom:.85">${AcoliaProfile.render(p)}</div>`, actions: [{ label: 'Fechar' }] })
       .then(() => {});
     $$('dialog').at(-1).style.maxWidth = 'min(900px, calc(100vw - 32px))';
@@ -134,31 +167,29 @@
   async function loadCalls() {
     const data = await api('/api/calls');
     const box = $('[data-active-call]');
-    const c = data.active;
-    $('[data-new-call]').classList.toggle('hidden', !!c);
-    if (c) {
-      const link = `${location.origin}/atendimento?codigo=${c.patient_code}`;
-      box.innerHTML = `<div class="card stack" style="border-color:var(--primary)">
-        <div class="row between"><h2 style="margin:0">Atendimento em aberto</h2><span class="badge ok">Ativo</span></div>
-        <div>Paciente: <b>${esc(c.patient_label)}</b></div>
+    const actives = data.actives || [];
+    $('[data-new-call]').classList.toggle('hidden', actives.length >= data.max_active);
+    $('[data-calls-left]').textContent = actives.length
+      ? `Você tem ${actives.length} de ${data.max_active} atendimentos abertos.` : '';
+    const small = (name) => ICONS[name].replace('<svg', '<svg style="width:16px;height:16px"');
+    box.innerHTML = actives.map((c) => `<div class="card stack" style="border-color:var(--primary);margin-bottom:16px" data-call="${c.id}">
+        <div class="row between"><h2 style="margin:0">Atendimento com ${esc(c.patient_label)}</h2><span class="badge ok">Aberto</span></div>
         <div><div class="muted small" style="font-weight:700">CÓDIGO DO PACIENTE</div><div class="code-box">${esc(c.patient_code)}</div></div>
-        <div class="row"><button class="btn secondary sm" data-copy-code>${ICONS.copy.replace('<svg', '<svg style="width:16px;height:16px"')} Copiar código</button>
-          <button class="btn secondary sm" data-copy-link>${ICONS.copy.replace('<svg', '<svg style="width:16px;height:16px"')} Copiar link para o paciente</button></div>
+        <div class="row"><button class="btn secondary sm" data-copy-code="${esc(c.patient_code)}">${small('copy')} Copiar código</button>
+          <button class="btn secondary sm" data-copy-link="${esc(c.patient_code)}">${small('copy')} Copiar link para o paciente</button></div>
         <div class="row">
-          <a class="btn" href="/atendimento?codigo=${encodeURIComponent(me.code)}" target="_blank" rel="noopener">${ICONS.video.replace('<svg', '<svg style="width:20px;height:20px"')} Iniciar atendimento</a>
-          <button class="btn danger" data-end>Finalizar atendimento</button>
+          <a class="btn" href="/atendimento?codigo=${encodeURIComponent(c.patient_code)}" target="_blank" rel="noopener">${ICONS.video.replace('<svg', '<svg style="width:20px;height:20px"')} Entrar na chamada</a>
+          <button class="btn danger" data-end-call="${c.id}">Finalizar atendimento</button>
         </div>
-        <p class="small muted" style="margin:0">Na sala, você entra com o seu código único; o paciente, com o código dele. Sua câmera precisa ficar ligada durante todo o atendimento.</p>
-      </div>`;
-      $('[data-copy-code]', box).addEventListener('click', () => copyText(c.patient_code));
-      $('[data-copy-link]', box).addEventListener('click', () => copyText(link));
-      $('[data-end]', box).addEventListener('click', async () => {
-        if (!await confirmDialog('Finalizar este atendimento? O código do paciente deixará de funcionar.', { okLabel: 'Finalizar', danger: true })) return;
-        await api(`/api/calls/${c.id}/end`, { method: 'POST' });
-        toast('Atendimento finalizado');
-        loadCalls();
-      });
-    } else box.innerHTML = '';
+      </div>`).join('');
+    $$('[data-copy-code]', box).forEach((b) => b.addEventListener('click', () => copyText(b.dataset.copyCode)));
+    $$('[data-copy-link]', box).forEach((b) => b.addEventListener('click', () => copyText(`${location.origin}/atendimento?codigo=${b.dataset.copyLink}`)));
+    $$('[data-end-call]', box).forEach((b) => b.addEventListener('click', async () => {
+      if (!await confirmDialog('Finalizar este atendimento? O código do paciente deixará de funcionar.', { okLabel: 'Finalizar', danger: true })) return;
+      await api(`/api/calls/${b.dataset.endCall}/end`, { method: 'POST' });
+      toast('Atendimento finalizado');
+      loadCalls();
+    }));
     $('[data-history]').innerHTML = data.items.length ? data.items.map((h) => `<tr>
       <td>${esc(h.patient_label)}</td><td><code>${esc(h.patient_code)}</code></td>
       <td>${parseDate(h.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</td>

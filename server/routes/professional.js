@@ -4,12 +4,25 @@ const { db } = require('../db');
 const U = require('../util');
 const A = require('../auth');
 const { handlePhoto, removePhoto, removeDocument } = require('../upload');
-const { ownProfessional } = require('../serialize');
+const { ownProfessional, parseGallery, GALLERY_SLOTS } = require('../serialize');
 const { requirePassword, validateLocation } = require('./auth');
 const rt = require('../realtime');
 
 const router = express.Router();
 router.use(A.requireRole('professional'));
+
+// Aceita "@nome", "nome" ou o link do perfil; guarda só o nome de usuário
+function cleanInstagram(v) {
+  let h = String(v || '').trim();
+  const m = h.match(/instagram\.com\/([^/?#\s]+)/i);
+  if (m) h = m[1];
+  h = h.replace(/^@+/, '');
+  if (!h) return '';
+  if (!/^[A-Za-z0-9._]{1,30}$/.test(h)) throw new U.HttpError(400, 'Instagram inválido. Digite só o seu @ (letras, números, ponto e _).');
+  return h;
+}
+
+const SESSION_MINUTES = [30, 40, 45, 50, 60, 90, 120];
 
 function toCents(v) {
   if (v === null || v === undefined || v === '') return null;
@@ -49,10 +62,14 @@ router.put('/profile', (req, res) => {
   const clinicAddress = hasClinic ? U.cleanText(b.clinic_address, 250) : '';
   if (hasClinic && clinicAddress.length < 5) throw new U.HttpError(400, 'Informe o endereço da clínica.');
 
+  const minutes = b.session_minutes ? Number(b.session_minutes) : null;
+  if (minutes !== null && !SESSION_MINUTES.includes(minutes)) throw new U.HttpError(400, 'Escolha a duração da sessão.');
+  const instagram = cleanInstagram(b.instagram);
+
   db.prepare(`UPDATE professionals SET name=?, profession=?, registry=?, phone=?, bio=?, specialties=?, price_cents=?, packages=?,
-      state=?, city=?, city_norm=?, has_clinic=?, clinic_name=?, clinic_address=?, pix_key=? WHERE id=?`)
+      state=?, city=?, city_norm=?, has_clinic=?, clinic_name=?, clinic_address=?, pix_key=?, session_minutes=?, instagram=? WHERE id=?`)
     .run(name, profession, registry, phone, U.cleanText(b.bio, 2000), U.cleanText(b.specialties, 300), price, JSON.stringify(packages),
-      state, city, U.norm(city), hasClinic, clinicName, clinicAddress, U.cleanText(b.pix_key, 140), req.auth.user.id);
+      state, city, U.norm(city), hasClinic, clinicName, clinicAddress, U.cleanText(b.pix_key, 140), minutes, instagram, req.auth.user.id);
   res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
 });
 
@@ -64,6 +81,34 @@ router.post('/photo', async (req, res) => {
     rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });
   }
   res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
+});
+
+// Galeria: Foto 1 a Foto 6 (cada posição pode ser trocada ou removida)
+function gallerySlot(req) {
+  const slot = Number(req.params.slot);
+  if (!Number.isInteger(slot) || slot < 1 || slot > GALLERY_SLOTS) throw new U.HttpError(400, 'Foto inválida.');
+  return slot - 1;
+}
+
+router.post('/gallery/:slot', async (req, res) => {
+  const i = gallerySlot(req);
+  const url = await handlePhoto(req, res);
+  const me = db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id);
+  const g = parseGallery(me.gallery);
+  removePhoto(g[i]);
+  g[i] = url;
+  db.prepare('UPDATE professionals SET gallery = ? WHERE id = ?').run(JSON.stringify(g), me.id);
+  res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(me.id)));
+});
+
+router.delete('/gallery/:slot', (req, res) => {
+  const i = gallerySlot(req);
+  const me = db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id);
+  const g = parseGallery(me.gallery);
+  removePhoto(g[i]);
+  g[i] = null;
+  db.prepare('UPDATE professionals SET gallery = ? WHERE id = ?').run(JSON.stringify(g), me.id);
+  res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(me.id)));
 });
 
 // O profissional exclui a própria conta: sai da vitrine, os dados pessoais são apagados
@@ -81,10 +126,11 @@ function wipeProfessional(me) {
   const active = db.prepare("SELECT * FROM calls WHERE professional_id = ? AND status = 'ativo'").get(me.id);
   if (active) require('./calls').endCall(active);
   removePhoto(me.photo);
+  parseGallery(me.gallery).forEach(removePhoto);
   removeDocument(me.document_file);
   db.prepare(`UPDATE professionals SET status = 'excluido', name = 'Profissional removido', legal_name = NULL, registry = ?, email = ?,
     phone = '', bio = '', specialties = '', photo = NULL, document_file = NULL, pix_key = '', clinic_name = '', clinic_address = '',
-    has_clinic = 0, password_hash = '!' WHERE id = ?`).run(`excluido-${me.id}`, `excluido-${me.id}@removido.acolia`, me.id);
+    has_clinic = 0, instagram = '', gallery = '[]', password_hash = '!' WHERE id = ?`).run(`excluido-${me.id}`, `excluido-${me.id}@removido.acolia`, me.id);
   db.prepare('DELETE FROM favorites WHERE professional_id = ?').run(me.id);
   for (const c of db.prepare('SELECT id, patient_id FROM conversations WHERE professional_id = ?').all(me.id)) {
     rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });

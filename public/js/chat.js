@@ -128,12 +128,11 @@
             <div class="sub" data-sub>${esc(c.peer.subtitle || '')}${c.peer.active ? '' : ' · conta inativa'}</div>
           </div>
           ${proActions}
-          <img class="brand-mark" src="/img/logo-simbolo.png" alt="Acolia" title="Conversa protegida pela Acolia">
+          <img class="brand-mark" src="/img/logo-simbolo.png" alt="Acolia" title="Acolia">
           <button class="icon-btn" data-archive title="${c.archived ? 'Desarquivar' : 'Arquivar'}" aria-label="${c.archived ? 'Desarquivar conversa' : 'Arquivar conversa'}">${c.archived ? ICONS.unarchive : ICONS.archive}</button>
         </div>
         <div class="messages-wrap">
           <div class="messages" data-messages></div>
-          <div class="chat-shield hidden" data-chat-shield><div><img src="/img/logo-simbolo.png" alt="" width="48" height="48"><p><b>Conversa protegida</b></p><p class="small">As mensagens ficam ocultas enquanto a Acolia não está na tela.</p></div></div>
         </div>
         <form class="composer" data-composer>
           <textarea rows="1" placeholder="${c.peer.active ? 'Digite uma mensagem' : 'Esta conta não está mais ativa'}" aria-label="Mensagem" ${c.peer.active ? '' : 'disabled'} maxlength="4000"></textarea>
@@ -172,23 +171,6 @@
       const box = $('[data-messages]', threadWrap);
       box.addEventListener('scroll', () => { if (box.scrollTop < 60) loadOlder(); });
     }
-
-    // ---------- Proteção da conversa ----------
-    // As mensagens ficam ocultas quando o app sai da tela ou ao apertar Print Screen.
-    const shieldOn = () => { const sh = $('[data-chat-shield]', threadWrap); if (sh) { sh.classList.remove('hidden'); chatEl.classList.add('chat-protected'); } };
-    const shieldOff = () => { const sh = $('[data-chat-shield]', threadWrap); if (sh) { sh.classList.add('hidden'); chatEl.classList.remove('chat-protected'); } };
-    document.addEventListener('visibilitychange', () => (document.visibilityState === 'hidden' ? shieldOn() : shieldOff()));
-    const printKey = (e) => {
-      if (e.key === 'PrintScreen' || (e.metaKey && e.shiftKey && ['3', '4', '5', 's', 'S'].includes(e.key))) {
-        shieldOn();
-        try { navigator.clipboard.writeText('Conteúdo protegido — Acolia'); } catch { /* ignora */ }
-        setTimeout(shieldOff, 3000);
-      }
-    };
-    document.addEventListener('keydown', printKey);
-    document.addEventListener('keyup', printKey);
-    root.addEventListener('contextmenu', (e) => { if (e.target.closest('.messages')) e.preventDefault(); });
-    root.addEventListener('copy', (e) => { if (e.target.closest?.('.messages')) e.preventDefault(); });
 
     function msgHtml(m) {
       const mine = m.sender_role === role;
@@ -284,14 +266,14 @@
       const c = state.current;
       const label = await modal({
         title: 'Criar atendimento',
-        html: `<p class="muted">Será gerado um código para este paciente e ele será enviado aqui na conversa. Só é possível ter um atendimento aberto por vez.</p>
+        html: `<p class="muted">Será gerado um código para este paciente e ele será enviado aqui na conversa. Você pode ter até 2 atendimentos abertos ao mesmo tempo.</p>
           <div class="field"><label for="callLabel">Nome do paciente (pode ser fictício)</label><input id="callLabel" maxlength="80" value="${esc(c.peer.name)}"></div>`,
         actions: [{ label: 'Cancelar', value: null, class: 'secondary' },
           { label: 'Criar e enviar código', handler: (dlg) => $('#callLabel', dlg).value.trim() || false }],
       });
       if (!label) return;
       try {
-        await api('/api/calls', { method: 'POST', body: { patient_label: label, conversation_id: c.id } });
+        const call = await api('/api/calls', { method: 'POST', body: { patient_label: label, conversation_id: c.id } });
         const again = await api(`/api/chat/conversations/${c.id}/messages`);
         state.messages = again.items; state.hasMore = again.has_more;
         renderMessages(true);
@@ -299,7 +281,7 @@
           title: 'Atendimento criado', html: '<p>O código foi enviado ao paciente. Deseja entrar na sala de atendimento agora?</p>',
           actions: [{ label: 'Depois', value: false, class: 'secondary' }, { label: 'Iniciar atendimento', value: true }],
         });
-        if (go) window.open('/atendimento', '_blank', 'noopener');
+        if (go) window.open(`/atendimento?codigo=${encodeURIComponent(call.patient_code)}`, '_blank', 'noopener');
       } catch (e) { toast(e.message, 'error'); }
     }
 
