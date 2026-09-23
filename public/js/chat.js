@@ -23,7 +23,7 @@
           <div class="chat-empty" data-empty>
             <div>${ICONS.chat.replace('<svg', '<svg style="width:64px;height:64px;opacity:.4;margin:0 auto 8px"')}
             <p>${role === 'patient' ? 'Escolha um profissional para conversar.' : 'Selecione uma conversa para responder.'}</p>
-            <p class="small">Você pode apagar mensagens (para você ou para todos), limpar a conversa e bloquear pelo ⋮.</p></div>
+            <p class="small">Você pode apagar as suas mensagens para todos e, pelo ⋮ da conversa, limpar a conversa (só para você) ou bloquear.</p></div>
           </div>
           <div class="hidden" data-thread style="display:contents"></div>
         </section>
@@ -245,9 +245,8 @@
         e.stopPropagation();
         const pop = document.createElement('div');
         pop.className = 'msg-pop';
-        const m = state.messages.find((x) => x.id === Number(b.dataset.msgMenu));
-        const everyone = m && m.sender_role === role && m.kind !== 'deleted';
-        pop.innerHTML = `<button type="button" data-del="me">${ICONS.trash} Apagar para mim</button>${everyone ? `<button type="button" data-del="everyone">${ICONS.trash} Apagar para todos</button>` : ''}`;
+        // Mensagem por mensagem: só as suas, e apaga para todos (para só você, use "Limpar conversa")
+        pop.innerHTML = `<button type="button" data-del="everyone">${ICONS.trash} Apagar para todos</button>`;
         b.closest('.msg').appendChild(pop);
         pop.addEventListener('click', (ev) => {
           const d = ev.target.closest('[data-del]');
@@ -352,8 +351,8 @@
     }
 
     // ---------- Apagar mensagem ----------
-    // "Apagar para mim": some só para você. "Apagar para todos" (suas mensagens): o outro vê
-    // "Mensagem apagada" e para você some. Quando os dois apagam, sai do banco de vez.
+    // Uma a uma: "Apagar para todos" (só as suas) — o outro vê "Mensagem apagada" e para você some.
+    // Para apagar só para você (as suas e as do outro), use "Limpar conversa" no ⋮ da conversa.
     async function deleteMessage(id, mode) {
       const ok = await Acolia.confirmDialog(mode === 'everyone'
         ? 'Apagar esta mensagem para todos? Para a outra pessoa vai aparecer "Mensagem apagada".'
@@ -437,7 +436,8 @@
       } else {
         inner = esc(m.body);
       }
-      const menu = `<button type="button" class="msg-menu" data-msg-menu="${m.id}" aria-label="Opções da mensagem" title="Opções">⋮</button>`;
+      const menu = mine && m.kind !== 'deleted'
+        ? `<button type="button" class="msg-menu" data-msg-menu="${m.id}" aria-label="Opções da mensagem" title="Opções">⋮</button>` : '';
       return `<div class="msg ${mine ? 'me' : ''} ${m.kind === 'audio' ? 'is-audio' : ''}" data-mid="${m.id}">${menu}${inner}<span class="when">${fmtTime(m.created_at)}${ticks}</span></div>`;
     }
 
