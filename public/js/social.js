@@ -142,8 +142,10 @@
     root._socialBound = true;
     root.addEventListener('click', (e) => {
       const like = e.target.closest('[data-like]');
-      if (like) return toggleLike(Number(like.dataset.like), like);
       const com = e.target.closest('[data-comments]');
+      // Sem conta: vê a publicação e compartilha, mas curtir e comentar pedem conta
+      if (ctx.anon && (like || com)) return ctx.onNeedAccount?.();
+      if (like) return toggleLike(Number(like.dataset.like), like);
       if (com) return openComments(Number(com.dataset.comments));
       const sh = e.target.closest('[data-share]');
       if (sh) return share(Number(sh.dataset.share));
@@ -156,6 +158,7 @@
     root.addEventListener('dblclick', (e) => {
       const img = e.target.closest('[data-dbl-like]');
       if (!img) return;
+      if (ctx.anon) return ctx.onNeedAccount?.();
       const btn = $(`[data-like="${img.dataset.dblLike}"]`, img.closest('.post-card'));
       if (btn && !btn.classList.contains('on')) toggleLike(Number(img.dataset.dblLike), btn);
     });
@@ -195,6 +198,10 @@
           fd.append('photo', await shrinkImage(file, 1600));
           try {
             const p = await api('/api/social/posts', { method: 'POST', form: fd });
+            // Miniatura leve para a prévia do link no WhatsApp
+            const tf = new FormData();
+            tf.append('photo', await shrinkImage(file, 600));
+            api(`/api/social/posts/${p.id}/thumb`, { method: 'POST', form: tf }).catch(() => {});
             toast('Publicado!');
             onDone?.(p);
             return true;

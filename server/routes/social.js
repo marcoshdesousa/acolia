@@ -80,6 +80,16 @@ router.get('/professionals/:id/posts', (req, res) => {
   res.json({ locked: false, total, items: rows, has_more: offset + rows.length < total });
 });
 
+// Publicação aberta pelo link compartilhado: qualquer pessoa vê a foto e a descrição.
+// Curtir e comentar pedem conta (sem conta não vê os comentários, só o número).
+router.get('/posts/:id', (req, res) => {
+  const logged = req.auth && ['patient', 'professional'].includes(req.auth.role);
+  const p = loadPost(logged ? req : {}, req.params.id);
+  if (logged) return res.json(postOut(p, who(req)));
+  const out = postOut(p, null);
+  res.json({ ...out, locked: true });
+});
+
 router.use(A.requireRole('patient', 'professional'));
 
 // Feed: publicações de quem a pessoa segue (e as próprias, no caso do profissional).
@@ -108,7 +118,6 @@ router.post('/seen', (req, res) => {
   res.json({ ok: true });
 });
 
-router.get('/posts/:id', (req, res) => res.json(postOut(loadPost(req, req.params.id), who(req))));
 
 router.post('/posts', async (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
@@ -118,12 +127,23 @@ router.post('/posts', async (req, res) => {
   res.status(201).json(postOut(db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(info.lastInsertRowid)), who(req)));
 });
 
+// Miniatura (até ~600 px) usada na prévia do link compartilhado
+router.post('/posts/:id/thumb', async (req, res) => {
+  const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(req.params.id));
+  if (!p || !isPro(req) || p.professional_id !== req.auth.user.id) throw new U.HttpError(404, 'Publicação não encontrada.');
+  const url = await handlePhoto(req, res);
+  if (p.thumb) removePhoto(p.thumb);
+  db.prepare('UPDATE posts SET thumb = ? WHERE id = ?').run(url, p.id);
+  res.json({ ok: true });
+});
+
 router.delete('/posts/:id', (req, res) => {
   const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(req.params.id));
   if (!p || !isPro(req) || p.professional_id !== req.auth.user.id) throw new U.HttpError(404, 'Publicação não encontrada.');
   db.prepare('DELETE FROM notifications WHERE post_id = ?').run(p.id);
   db.prepare('DELETE FROM posts WHERE id = ?').run(p.id);
   removePhoto(p.image);
+  if (p.thumb) removePhoto(p.thumb);
   res.json({ ok: true });
 });
 
@@ -322,4 +342,4 @@ router.post('/notifications/read', (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router, followInfo, cleanupStories, actor };
+module.exports = { router, followInfo, cleanupStories, actor, visiblePro };

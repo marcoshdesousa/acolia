@@ -900,9 +900,19 @@ test('v1.2 — seguir, feed (não vistas primeiro), curtir, comentar, stories e 
   assert.equal(vis.locked, true);
   assert.equal(vis.items.length, 1, 'com 2 fotos, 1 aberta');
   assert.equal(vis.items[0].id, undefined, 'visitante não abre a publicação');
-  assert.equal((await anon.get(`/api/social/posts/${p1.id}`)).status, 401);
+  // Link compartilhado: sem conta vê a publicação, mas não curte nem vê comentários
+  r = await anon.get(`/api/social/posts/${p1.id}`);
+  assert.equal(r.status, 200);
+  assert.equal(r.data.locked, true);
+  assert.equal(r.data.caption, 'Post 1');
+  assert.equal((await anon.get(`/api/social/posts/${p1.id}/comments`)).status, 401);
+  assert.equal((await anon.post(`/api/social/posts/${p1.id}/like`)).status, 401);
   const shared = await fetch(`${base}/p/${p1.id}`);
-  assert.equal(shared.status, 200, 'link compartilhado abre a página (que pede login)');
+  assert.equal(shared.status, 200);
+  const html = await shared.text();
+  assert.ok(html.includes(`<meta property="og:image" content="http://localhost:`) && html.includes(p1.image), 'prévia com a foto');
+  assert.ok(html.includes('<meta property="og:title" content="Ana Feed na Acolia">'), 'prévia com o nome');
+  assert.ok(html.includes('<meta property="og:description" content="Post 1">'), 'prévia com a descrição');
 
   // Profissional não inicia conversa com profissional
   assert.equal((await B.cl.post('/api/chat/conversations', { professional_id: A.id })).status, 403);

@@ -27,7 +27,7 @@
   <script src="/js/common.js"></script>
   <script src="/js/social.js"></script>
   <script>
-  // Publicação compartilhada pelo aviãozinho: só abre para quem tem conta
+  // Publicação compartilhada pelo aviãozinho: qualquer pessoa vê; curtir e comentar pedem conta
   (async function () {
     const { $, api, ICONS, esc } = Acolia;
     $('[data-logo]').innerHTML = ICONS.logo;
@@ -35,25 +35,36 @@
     const here = location.pathname;
     const me = await api('/api/auth/me').catch(() => ({}));
     const box = $('[data-post]');
-    if (!['patient', 'professional'].includes(me.role)) {
-      $('[data-nav]').innerHTML = '<a class="btn secondary sm" href="/entrar?next=' + encodeURIComponent(here) + '">Entrar</a>';
-      box.innerHTML = `<div class="card stack center" style="padding:28px">
-        <img src="/img/logo-simbolo.png" alt="" width="64" height="64" style="margin:0 auto">
-        <h1 style="font-size:1.4rem">Alguém compartilhou uma publicação com você</h1>
-        <p class="muted">Para ver esta publicação, crie sua conta grátis ou entre. Depois você volta direto para ela.</p>
-        <div class="row" style="justify-content:center"><a class="btn" href="/cadastro-paciente?next=${encodeURIComponent(here)}">Criar conta grátis</a>
-          <a class="btn secondary" href="/entrar?next=${encodeURIComponent(here)}">Já tenho conta</a></div></div>`;
-      return;
-    }
-    const app = me.role === 'patient' ? '/app' : '/painel';
-    $('[data-nav]').innerHTML = `<a class="btn secondary sm" href="${app}">${me.role === 'patient' ? 'Abrir meu app' : 'Meu painel'}</a>`;
-    AcoliaSocial.setContext({
-      role: me.role, me: me.user,
-      onOpenProfile: (pid) => { location.href = me.role === 'patient' ? `/app#perfil/${pid}` : `/painel#verpro/${pid}`; },
+    const logged = ['patient', 'professional'].includes(me.role);
+    const needAccount = () => Acolia.modal({
+      title: 'Crie sua conta grátis',
+      html: '<p>Para curtir, comentar, seguir e marcar sua consulta, crie sua conta grátis. Depois você volta direto para esta publicação.</p>',
+      actions: [{ label: 'Já tenho conta', value: 'entrar', class: 'secondary' }, { label: 'Criar conta', value: 'criar' }],
+    }).then((v) => {
+      if (v === 'criar') location.href = '/cadastro-paciente?next=' + encodeURIComponent(here);
+      if (v === 'entrar') location.href = '/entrar?next=' + encodeURIComponent(here);
     });
+    const app = me.role === 'patient' ? '/app' : '/painel';
+    if (logged) $('[data-nav]').innerHTML = `<a class="btn secondary sm" href="${app}">${me.role === 'patient' ? 'Abrir meu app' : 'Meu painel'}</a>`;
+    else $('[data-nav]').innerHTML = '<a class="btn secondary sm" href="/entrar?next=' + encodeURIComponent(here) + '">Entrar</a>';
     try {
       const p = await api(`/api/social/posts/${id}`);
-      box.innerHTML = AcoliaSocial.postCard(p) + `<p class="center" style="margin-top:16px"><a class="btn secondary" href="${app}">Ir para o Início</a></p>`;
+      AcoliaSocial.setContext({
+        role: me.role, me: me.user, anon: !logged, onNeedAccount: needAccount,
+        // Sem conta, o perfil abre na versão com as informações bloqueadas
+        onOpenProfile: (pid) => {
+          if (me.role === 'patient') location.href = `/app#perfil/${pid}`;
+          else if (me.role === 'professional') location.href = `/painel#verpro/${pid}`;
+          else location.href = p.author.slug ? `/${p.author.slug}` : `/profissional.html?id=${pid}`;
+        },
+      });
+      box.innerHTML = AcoliaSocial.postCard(p) + (logged
+        ? `<p class="center" style="margin-top:16px"><a class="btn secondary" href="${app}">Ir para o Início</a></p>`
+        : `<div class="card stack center" style="margin-top:16px;padding:20px">
+            <b style="display:block;font-size:1.05rem">Gostou? Crie sua conta grátis na Acolia</b>
+            <span class="muted small" style="display:block">Com a conta você curte, comenta, segue profissionais e marca sua consulta.</span>
+            <div class="row" style="justify-content:center"><a class="btn" href="/cadastro-paciente?next=${encodeURIComponent(here)}">Criar conta grátis</a>
+              <a class="btn secondary" href="/entrar?next=${encodeURIComponent(here)}">Já tenho conta</a></div></div>`);
       AcoliaSocial.bindActions(box);
     } catch (e) {
       box.innerHTML = `<div class="empty">${esc(e.message)}</div>`;

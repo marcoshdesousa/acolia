@@ -207,6 +207,8 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE INDEX IF NOT EXISTS idx_notif_to ON notifications(recipient_role, recipient_id, id);
 `);
 
+addColumn('posts', 'thumb', 'TEXT'); // miniatura leve para a prévia do link (WhatsApp etc.)
+
 // Uma vez só: as fotos da galeria antiga viram as primeiras publicações do profissional
 {
   db.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');

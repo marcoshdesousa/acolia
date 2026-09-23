@@ -72,8 +72,31 @@ function createApp() {
   app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
   const pub = path.join(__dirname, '..', 'public');
   app.use(express.static(pub, { extensions: ['html'] }));
-  // Publicação compartilhada (aviãozinho): só abre para quem tem conta
-  app.get('/p/:id', (_req, res) => res.sendFile(path.join(pub, 'post.html')));
+  // Publicação compartilhada (aviãozinho): qualquer pessoa vê. A página já sai com a prévia
+  // (foto, nome e descrição) para aparecer bonita no WhatsApp e em outras redes.
+  const postHtml = require('node:fs').readFileSync(path.join(pub, 'post.html'), 'utf8');
+  app.get('/p/:id', (req, res) => {
+    const { db } = require('./db');
+    const safe = (t, n) => U.cleanText(t, n).replace(/[<>&"]/g, '');
+    const post = db.prepare('SELECT po.*, p.name, p.profession FROM posts po JOIN professionals p ON p.id = po.professional_id WHERE po.id = ?').get(Number(req.params.id));
+    let html = postHtml;
+    if (post && require('./routes/social').visiblePro(post.professional_id)) {
+      const origin = `${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}`;
+      const title = safe(`${post.name} na Acolia`, 120);
+      const desc = safe(post.caption || `Veja a publicação de ${post.name} (${post.profession}) na Acolia.`, 200);
+      const img = `${origin}${post.thumb || post.image}`;
+      html = html
+        .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`)
+        .replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${desc}">`)
+        .replace(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${title}">`)
+        .replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${desc}">`)
+        .replace(/<meta property="og:image"[^>]*>/, `<meta property="og:image" content="${img}">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="${origin}/p/${post.id}">
+  <meta name="twitter:card" content="summary_large_image">`);
+    }
+    res.type('html').send(html);
+  });
   // Link próprio do profissional: site.com/<slug> abre o perfil dele
   const profileHtml = require('node:fs').readFileSync(path.join(pub, 'profissional.html'), 'utf8');
   app.get(/^\/([a-zA-Z0-9-]{3,40})\/?$/, (req, res, next) => {
