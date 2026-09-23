@@ -25,6 +25,7 @@ function parsePackages(json) {
 }
 
 const GALLERY_SLOTS = 6;
+const PROFILE_POSTS = 4; // publicações que aparecem no perfil
 
 // Galeria: 6 posições fixas (Foto 1 a Foto 6); posição vazia = null
 function parseGallery(json) {
@@ -55,9 +56,9 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     specialties: p.specialties,
     photo: p.photo,
   };
-  // A galeria do perfil agora são as publicações (as 6 mais recentes aparecem primeiro)
+  // No perfil aparecem só as 4 publicações mais recentes; "Ver todas" abre a página de publicações
   const { db } = require('./db');
-  const recent = db.prepare('SELECT id, image FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT 6').all(p.id);
+  const recent = db.prepare(`SELECT id, image FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id);
   const postsCount = db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(p.id).n;
   const gallery = recent.map((r) => r.image);
   const social = {
@@ -151,4 +152,4 @@ function ownPatient(p) {
   };
 }
 
-module.exports = { freeGalleryCount, VISIBLE_SQL, isVisible, parsePackages, parseGallery, GALLERY_SLOTS, publicProfessional, ownProfessional, ownPatient };
+module.exports = { PROFILE_POSTS, freeGalleryCount, VISIBLE_SQL, isVisible, parsePackages, parseGallery, GALLERY_SLOTS, publicProfessional, ownProfessional, ownPatient };

@@ -199,7 +199,7 @@
 
   // ---------- Início estilo Instagram e outros profissionais (versão 1.2) ----------
   const openPro = (id) => { location.hash = id === me.id ? 'perfil' : `verpro/${id}`; };
-  AcoliaSocial.setContext({ role: 'professional', me, onOpenProfile: openPro });
+  AcoliaSocial.setContext({ role: 'professional', me, onOpenProfile: openPro, onAllPosts: (id) => { location.hash = `posts/${id}`; } });
   let home = null;
   let catalogMounted = false;
 
@@ -217,9 +217,10 @@
   // ---------- Rotas ----------
   function route() {
     const [view, arg] = (location.hash.slice(1) || 'inicio').split('/');
-    const v = ['inicio', 'profissionais', 'verpro', 'conversas', 'atendimento', 'perfil', 'conta'].includes(view) ? view : 'inicio';
+    const v = ['inicio', 'profissionais', 'verpro', 'posts', 'conversas', 'atendimento', 'perfil', 'conta'].includes(view) ? view : 'inicio';
     $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
-    $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'verpro' ? 'profissionais' : v)));
+    $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'verpro' || v === 'posts' ? 'profissionais' : v)));
+    if (v === 'posts' && arg) AcoliaSocial.mountPostsPage($('[data-posts-page]'), Number(arg), { onBack: (id) => openPro(id) });
     if (v === 'inicio' && !home) {
       home = AcoliaSocial.mountHome($('[data-home]'), {
         role: 'professional', me, socket, onOpenProfile: openPro,

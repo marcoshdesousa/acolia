@@ -7,7 +7,7 @@ const { db } = require('../db');
 const U = require('../util');
 const A = require('../auth');
 const rt = require('../realtime');
-const { VISIBLE_SQL, freeGalleryCount } = require('../serialize');
+const { VISIBLE_SQL, freeGalleryCount, PROFILE_POSTS } = require('../serialize');
 const { handlePhoto, handlePhotos, handleMedia, removePhoto } = require('../upload');
 
 const router = express.Router();
@@ -77,7 +77,7 @@ router.get('/professionals/:id/posts', (req, res) => {
   if (!mine && !visiblePro(proId)) throw new U.HttpError(404, 'Profissional não encontrado.');
   const total = db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(proId).n;
   if (!req.auth || !['patient', 'professional'].includes(req.auth.role)) {
-    const first = db.prepare('SELECT image FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT 6').all(proId);
+    const first = db.prepare(`SELECT image FROM posts WHERE professional_id = ? ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(proId);
     const free = freeGalleryCount(first.length);
     return res.json({ locked: true, total, items: first.slice(0, free).map((r) => ({ image: r.image })), hidden: total - free });
   }

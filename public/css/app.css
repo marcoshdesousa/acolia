@@ -588,3 +588,10 @@ dialog.post-dialog .dlg-actions:empty, dialog.sheet .dlg-actions:empty { display
 .sv-post-img img { width: 100%; max-height: 50vh; object-fit: cover; display: block; }
 .sv-post-cap { padding: 10px 12px 12px; font-size: .9rem; }
 .sv-post-hint { position: relative; z-index: 3; font-size: .8rem; opacity: .85; }
+
+/* Página "Todas as publicações" */
+.posts-page { max-width: 900px; margin: 0 auto; }
+.posts-top { margin-bottom: 10px; }
+.posts-head { margin-bottom: 14px; }
+.gallery-grid.posts-grid { grid-template-columns: repeat(3, 1fr); max-width: none; gap: 4px; }
+.posts-grid .gallery-item { border-radius: 4px; }

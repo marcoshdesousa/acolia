@@ -60,7 +60,7 @@
     if (p.locked && p.has_bio) about = `<div><h3>Sobre</h3>${lockLink()}</div>`;
     else if (p.bio) about = `<div><h3>Sobre</h3><p style="white-space:pre-wrap">${esc(p.bio)}</p></div>`;
 
-    // ---------- Publicações (as 6 mais recentes; "Ver todas as fotos" carrega o resto) ----------
+    // ---------- Publicações (só as 4 mais recentes; "Ver todas as fotos" abre a página de publicações) ----------
     // Visitante: no máximo 2 abertas (sem ampliar) e o resto com "Crie conta para ver"
     const total = p.posts_count ?? ((p.gallery || []).length + (p.gallery_hidden || 0));
     let gallery = '';
@@ -68,14 +68,14 @@
       let tiles;
       if (p.locked) {
         const photos = p.gallery || [];
-        const lockedTiles = Math.min(p.gallery_hidden || 0, 6 - photos.length);
+        const lockedTiles = Math.min(p.gallery_hidden || 0, 4 - photos.length);
         tiles = photos.map((src, i) => `<button type="button" class="gallery-item" data-gallery-need-account="${esc(next || '')}" aria-label="Crie conta para ampliar"><img src="${esc(src)}" alt="Foto ${i + 1} de ${esc(p.name)}" loading="lazy"></button>`).join('')
           + Array.from({ length: lockedTiles }, () => `<a class="gallery-item gallery-locked" href="${signup}">${ic('lock', 20)}<span>Crie conta para ver</span></a>`).join('');
       } else {
         tiles = (p.gallery_posts || []).map((x) => window.AcoliaSocial ? window.AcoliaSocial.gridTile(x)
           : `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação"><img src="${esc(x.image)}" alt="" loading="lazy"></button>`).join('');
       }
-      const more = total > 6 ? `<button type="button" class="btn secondary sm" data-all-posts style="margin-top:10px">${ic('image', 16)} Ver todas as fotos (${total})</button>` : '';
+      const more = total > 4 ? `<button type="button" class="btn secondary sm" data-all-posts style="margin-top:10px">${ic('image', 16)} Ver todas as fotos (${total})</button>` : '';
       gallery = `<div><h3>Publicações</h3><div class="gallery-grid" data-post-grid>${tiles}</div>${more}</div>`;
     }
 

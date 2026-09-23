@@ -580,19 +580,12 @@
   // Primeiras 6 fotos; "Ver todas as fotos" carrega o resto (só com conta). Visitante não abre.
   function bindProfile(container, p, { onNeedAccount } = {}) {
     bindActions(container);
-    const grid = $('[data-post-grid]', container);
     const moreBtn = $('[data-all-posts]', container);
-    let offset = 6;
     if (moreBtn) {
-      moreBtn.addEventListener('click', async () => {
-        if (p.locked) return onNeedAccount?.();
-        moreBtn.disabled = true;
-        try {
-          const data = await api(`/api/social/professionals/${p.id}/posts?offset=${offset}&limit=60`);
-          grid.insertAdjacentHTML('beforeend', data.items.map(gridTile).join(''));
-          offset += data.items.length;
-          if (!data.has_more) moreBtn.remove(); else moreBtn.disabled = false;
-        } catch (e) { toast(e.message, 'error'); moreBtn.disabled = false; }
+      moreBtn.addEventListener('click', () => {
+        if (p.locked || !p.viewer_role) return onNeedAccount?.();
+        if (ctx.onAllPosts) ctx.onAllPosts(p.id);
+        else location.href = `${ctx.role === 'professional' ? '/painel' : '/app'}#posts/${p.id}`;
       });
     }
     container.addEventListener('click', (e) => {
@@ -614,5 +607,48 @@
     }
   }
 
-  window.AcoliaSocial = { gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
+  // ---------- Página "Todas as publicações" de um profissional ----------
+  // Grade com rolagem infinita; tocar abre a publicação. Botão para voltar ao perfil.
+  function mountPostsPage(root, proId, { onBack } = {}) {
+    root.innerHTML = `<div class="posts-page">
+        <div class="posts-top"><button type="button" class="btn ghost sm" data-back-profile>← Voltar para o perfil</button></div>
+        <div class="posts-head" data-head></div>
+        <div class="gallery-grid posts-grid" data-grid></div>
+        <div class="spinner" data-loading></div>
+        <div data-end style="height:1px"></div>
+      </div>`;
+    bindActions(root);
+    $('[data-back-profile]', root).addEventListener('click', () => onBack?.(proId));
+    const grid = $('[data-grid]', root);
+    let offset = 0;
+    let more = true;
+    let busy = false;
+    api(`/api/professionals/${proId}`).then((p) => {
+      $('[data-head]', root).innerHTML = `<div class="row" style="gap:12px">${avatar(p.name, p.photo)}<div><b>${esc(p.name)}</b>
+        <div class="muted small">${p.posts_count} ${p.posts_count === 1 ? 'publicação' : 'publicações'}</div></div></div>`;
+    }).catch(() => {});
+    async function load() {
+      if (busy || !more) return;
+      busy = true;
+      try {
+        const data = await api(`/api/social/professionals/${proId}/posts?offset=${offset}&limit=24`);
+        grid.insertAdjacentHTML('beforeend', data.items.map(gridTile).join(''));
+        offset += data.items.length;
+        more = data.has_more;
+        if (!offset) grid.innerHTML = '<p class="muted" style="grid-column:1/-1">Nenhuma publicação ainda.</p>';
+      } catch (e) { toast(e.message, 'error'); more = false; }
+      $('[data-loading]', root).classList.toggle('hidden', !more);
+      busy = false;
+    }
+    root.addEventListener('click', (e) => {
+      const open = e.target.closest('[data-post-open]');
+      if (open) openPost(Number(open.dataset.postOpen));
+    });
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver((en) => { if (en[0].isIntersecting) load(); }, { rootMargin: '400px' }).observe($('[data-end]', root));
+    }
+    load();
+  }
+
+  window.AcoliaSocial = { mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
 })();
