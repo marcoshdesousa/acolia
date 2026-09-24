@@ -392,7 +392,7 @@ footer.site .social { width: auto; margin: 0; }
 .call-brand-word { height: 13px; width: auto; }
 .call-stage, .call-stage * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 /* Aviso pequeno embaixo da logo: ficar na tela da chamada */
-.call-warn { position: absolute; left: 50%; top: calc(56px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 5; background: rgba(0,0,0,.5); color: #fff; font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; pointer-events: none; }
+.call-warn { position: absolute; left: 50%; top: calc(64px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 5; background: rgba(0,0,0,.5); color: #fff; font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; pointer-events: none; }
 @media (max-width: 560px) { .call-top { top: calc(86px + env(safe-area-inset-top, 0px)); } .call-brand { top: calc(10px + env(safe-area-inset-top, 0px)); } .call-warn { top: calc(50px + env(safe-area-inset-top, 0px)); } #localVideo, .local-off { top: calc(86px + env(safe-area-inset-top, 0px)); } }
 
 /* Conversa protegida */
@@ -1057,29 +1057,34 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 .dm-head b { font-size: 1.1rem; }
 .dm-score { flex: 1; font-size: .85rem; opacity: .85; font-weight: 700; }
 .dm-x { width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(255,255,255,.18); color: #fff; font-size: 1rem; cursor: pointer; }
-.dm-robot { display: flex; align-items: center; gap: 10px; font-size: .85rem; font-weight: 700; opacity: .9; }
+.dm-row { display: flex; align-items: center; justify-content: space-between; gap: 6px 12px; font-size: .82rem; font-weight: 700; flex-wrap: wrap; }
+.dm-grp { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.dm-row .dm-backs i { width: 6px; height: 11px; }
 .dm-backs { display: flex; align-items: center; gap: 3px; }
-.dm-backs i { width: 9px; height: 16px; border-radius: 2px; background: #9db8b0; display: inline-block; }
+.dm-backs i { width: 8px; height: 14px; border-radius: 2px; background: #9db8b0; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
 .dm-backs small { margin-left: 4px; opacity: .8; }
-.dm-board { flex: 1; min-height: 70px; overflow-y: auto; display: flex; flex-wrap: wrap; align-content: flex-start; align-items: center; gap: 4px; padding: 8px; border-radius: 12px; background: rgba(46,64,60,.55); }
+.dm-board { flex: 1; min-height: 70px; overflow-y: auto; display: flex; flex-wrap: wrap; align-content: flex-start; align-items: center; gap: 8px; padding: 10px; border-radius: 12px; background: rgba(46,64,60,.55); }
 .dm-empty { opacity: .7; font-size: .85rem; margin: auto; }
-.dm-status { font-size: .88rem; font-weight: 700; min-height: 1.2em; }
+.dm-status { font-size: .88rem; font-weight: 700; min-height: 1.2em; opacity: .85; }
+.dm-status.you { opacity: 1; color: #cfe0d6; font-size: .95rem; }
 .dm-sides, .dm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .dm-sides.hidden, .dm-btn.hidden { display: none; }
 .dm-btn { border: 0; border-radius: 999px; padding: 8px 14px; font: inherit; font-weight: 800; font-size: .85rem; background: rgba(255,255,255,.18); color: #fff; cursor: pointer; }
 .dm-btn.main { background: #cfe0d6; color: #2e403c; padding: 10px 20px; }
-.dm-hand { display: flex; flex-wrap: wrap; gap: 6px; }
+.dm-hand { display: flex; flex-wrap: wrap; gap: 10px; transition: filter .2s, opacity .2s; }
+/* Vez do robô: suas peças ficam cinza e não se mexem */
+.dm-hand.locked { filter: grayscale(1) brightness(.7); opacity: .55; pointer-events: none; }
 /* Peça: duas metades com os pontinhos */
-.dm-tile { display: inline-flex; background: #faf9f5; border-radius: 5px; box-shadow: 0 1px 2px rgba(0,0,0,.35); --s: 15px; }
+.dm-tile { display: inline-flex; background: #faf9f5; border: 1px solid #d8d3c8; border-radius: 5px; box-shadow: 0 1px 2px rgba(0,0,0,.35); --s: 15px; }
 .dm-tile.v { flex-direction: column; }
 .dm-half { width: var(--s); height: var(--s); display: grid; grid-template-columns: repeat(3, 1fr); padding: 2px; }
-.dm-tile:not(.v) .dm-half + .dm-half { border-left: 1px solid #c2ae9d; }
-.dm-tile.v .dm-half + .dm-half { border-top: 1px solid #c2ae9d; }
+.dm-tile:not(.v) .dm-half + .dm-half { border-left: 2px solid #5e4b3e; }
+.dm-tile.v .dm-half + .dm-half { border-top: 2px solid #5e4b3e; }
 .dm-half i { display: block; margin: auto; width: 70%; height: 70%; border-radius: 50%; }
 .dm-half i.on { background: #26322f; }
 .dm-tile.end { box-shadow: 0 0 0 2px #cfe0d6; }
-.dm-tile.big { --s: 26px; opacity: .55; cursor: not-allowed; }
-.dm-tile.big.can { opacity: 1; cursor: pointer; box-shadow: 0 0 0 2px #9db8b0, 0 2px 6px rgba(0,0,0,.4); }
+.dm-tile.big { --s: 26px; cursor: pointer; }
+.dm-tile.big.can { box-shadow: 0 0 0 3px #9db8b0, 0 2px 6px rgba(0,0,0,.4); }
 .dm-tile.big.sel { box-shadow: 0 0 0 3px #c2ae9d; transform: translateY(-4px); }
 .dm-over { position: absolute; inset: var(--dm-top, 60px) 0 0 0; display: grid; place-items: center; text-align: center; background: rgba(28,40,38,.88); border-radius: 12px; }
 .dm-over.hidden { display: none; }
@@ -1098,10 +1103,11 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 }
 /* Celular: o profissional fica em cima (visível) e o jogo embaixo, sem cobrir o rosto dele */
 @media (max-width: 899px) {
-  .call-stage.game-open #remoteVideo { height: 40dvh; object-fit: cover; }
-  .call-stage.game-open .call-overlay { bottom: auto; height: 40dvh; }
+  /* o vídeo do profissional continua inteiro; o jogo fica por cima, meio transparente e desfocado */
   .call-stage.game-open #localVideo, .call-stage.game-open .local-off { width: 22vw; }
-  .call-stage.game-open .peer-flags { bottom: auto; top: calc(40dvh - 34px); }
-  .dm-panel { --dm-top: 52px; left: 0; right: 0; top: 40dvh; bottom: 0; padding: 10px 12px calc(96px + env(safe-area-inset-bottom)); background: rgba(28,40,38,.9); }
+  .call-stage.game-open .peer-flags { bottom: auto; top: calc(34dvh - 34px); }
+  .dm-panel { --dm-top: 52px; left: 0; right: 0; top: 34dvh; bottom: 0; padding: 10px 12px calc(96px + env(safe-area-inset-bottom));
+    background: rgba(28,40,38,.42); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-radius: 20px 20px 0 0; }
+  .dm-board { background: rgba(28,40,38,.45); }
   .dm-tile.big { --s: 22px; }
 }
