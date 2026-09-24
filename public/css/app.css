@@ -1004,5 +1004,5 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 @media (max-width: 480px) { .font-pick { grid-template-columns: repeat(2, 1fr); } }
 .font-pick button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Contador de caracteres (legendas e textos) */
-.char-count { display: block; text-align: right; margin-top: 4px; font-size: .78rem; }
+.char-count { display: block; text-align: right; margin-top: 4px; font-size: .78rem; font-family: var(--font); font-weight: 400; letter-spacing: 0; text-transform: none; }
 .char-count.full { color: var(--danger, #b3261e); font-weight: 700; }
