@@ -41,7 +41,9 @@
 
   <div data-step="call" class="hidden call-page">
     <div class="call-stage">
-      <video id="remoteVideo" autoplay playsinline></video>
+      <video id="remoteVideo" autoplay playsinline muted></video>
+      <!-- O som da outra pessoa toca por aqui: continua tocando mesmo com o site em segundo plano -->
+      <audio id="remoteAudio" autoplay playsinline></audio>
       <video id="localVideo" autoplay playsinline muted></video>
       <div id="localOff" class="local-off hidden" aria-label="Sua câmera está desligada"></div>
       <!-- Janelinha flutuante: junta a outra pessoa (grande) e você (pequeno) numa imagem só -->

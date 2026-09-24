@@ -98,7 +98,8 @@
   const pipEl = () => $('#pipVideo');
   const PIP = { canvas: null, ctx: null, tick: null, fast: false, images: {} };
   const pipSupported = () => !!(document.pictureInPictureEnabled || pipEl().webkitSupportsPresentationMode);
-  const inPip = () => document.pictureInPictureElement === pipEl() || pipEl().webkitPresentationMode === 'picture-in-picture';
+  const inPip = () => !!document.pictureInPictureElement
+    || pipEl().webkitPresentationMode === 'picture-in-picture' || remoteEl().webkitPresentationMode === 'picture-in-picture';
 
   function photoImage(url) {
     if (!url) return null;
@@ -213,23 +214,78 @@
     return true;
   }
 
-  async function enterPip() {
-    if (S.ended || !PIP.canvas) return;
+  // A janelinha precisa ser pedida NA HORA do toque: nada de esperar outra coisa antes, senão o
+  // Safari (iPhone) e alguns Android recusam. Se a imagem montada (os dois vídeos) não puder ir
+  // para a janelinha, tenta o vídeo da outra pessoa direto (plano B).
+  function enterPip({ fromTap = false } = {}) {
+    if (S.ended || !PIP.canvas || inPip()) return;
     const v = pipEl();
+    startPipClock(24);
+    drawPip();
+    if (v.paused) v.play().catch(() => {});
+    const planB = () => {
+      const r = remoteEl();
+      try {
+        if (r.requestPictureInPicture && r.readyState >= 1 && r.videoWidth) return r.requestPictureInPicture();
+        if (r.webkitSupportsPresentationMode?.('picture-in-picture')) { r.webkitSetPresentationMode('picture-in-picture'); return Promise.resolve(); }
+      } catch (e) { return Promise.reject(e); }
+      return Promise.reject(new Error('sem janelinha'));
+    };
+    let p;
     try {
-      if (inPip()) return;
-      startPipClock(24);
-      drawPip();
-      if (v.paused) await v.play().catch(() => {});
-      if (v.requestPictureInPicture) await v.requestPictureInPicture();
-      else if (v.webkitSetPresentationMode) v.webkitSetPresentationMode('picture-in-picture');
-    } catch { /* o navegador não deixou (precisa de um toque) */ }
+      if (v.webkitSupportsPresentationMode?.('picture-in-picture') && !document.pictureInPictureEnabled) {
+        v.webkitSetPresentationMode('picture-in-picture'); // Safari antigo: é síncrono
+        p = Promise.resolve();
+      } else if (v.requestPictureInPicture && v.readyState >= 1) p = v.requestPictureInPicture();
+      else p = planB();
+    } catch { p = planB(); }
+    p.catch(() => planB()).catch(() => {
+      if (fromTap) toast('Seu navegador não abriu a janelinha. Se sair do site, a chamada continua só com áudio.', 'error');
+    });
   }
   async function exitPip() {
     try {
       if (document.pictureInPictureElement) await document.exitPictureInPicture();
       else if (pipEl().webkitPresentationMode === 'picture-in-picture') pipEl().webkitSetPresentationMode('inline');
+      else if (remoteEl().webkitPresentationMode === 'picture-in-picture') remoteEl().webkitSetPresentationMode('inline');
     } catch { /* ignora */ }
+  }
+
+  // ---------- Saiu do site ----------
+  // Sem a janelinha: a câmera desliga (a outra pessoa vê a sua foto), mas o áudio continua —
+  // você fala e escuta normalmente. Com a janelinha: tudo continua (câmera e vídeos).
+  // Ao voltar, a câmera religa sozinha (se estava ligada antes).
+  let bgTimer = null;
+  function pauseCameraForBackground() {
+    if (S.ended || !S.camOn || inPip() || document.visibilityState !== 'hidden') return;
+    S.bgCamPaused = true;
+    setCamera(false);
+    renderControls();
+    sendMediaState();
+  }
+  async function backToForeground() {
+    clearTimeout(bgTimer);
+    if (S.ended) return;
+    remoteEl().play().catch(() => {});
+    $('#remoteAudio').play().catch(() => {});
+    $('#localVideo').play().catch(() => {});
+    await ensureMic();
+    const wantCam = S.bgCamPaused || (S.camOn && !S.local.getVideoTracks().some((t) => t.readyState === 'live'));
+    S.bgCamPaused = false;
+    if (wantCam) await cameraOn(true);
+  }
+  // O celular pode ter cortado o microfone enquanto estava fora: pega de novo e devolve para a chamada
+  async function ensureMic() {
+    if (S.local.getAudioTracks().some((t) => t.readyState === 'live')) return;
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      const track = s.getAudioTracks()[0];
+      track.enabled = S.micOn;
+      S.local.getAudioTracks().forEach((t) => S.local.removeTrack(t));
+      S.local.addTrack(track);
+      const tr = S.pc?.getTransceivers().find((t) => t.receiver.track.kind === 'audio');
+      if (tr) await tr.sender.replaceTrack(track);
+    } catch { /* sem permissão agora */ }
   }
 
   function setupBackground() {
@@ -247,13 +303,21 @@
     }
     // Tentativa extra ao sair da tela (funciona em alguns navegadores)
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') enterPip();
-      else if (!S.ended) { remoteEl().play().catch(() => {}); $('#localVideo').play().catch(() => {}); }
+      if (document.visibilityState === 'hidden') {
+        enterPip(); // alguns navegadores abrem a janelinha sozinhos ao sair
+        clearTimeout(bgTimer);
+        bgTimer = setTimeout(pauseCameraForBackground, 1200); // não abriu? desliga só a câmera
+      } else backToForeground();
     });
+    // Fechou a janelinha estando fora do site: aí a câmera desliga (o áudio continua)
+    for (const el of [pipEl(), remoteEl()]) {
+      el.addEventListener('leavepictureinpicture', () => { clearTimeout(bgTimer); bgTimer = setTimeout(pauseCameraForBackground, 300); });
+      el.addEventListener('webkitpresentationmodechanged', () => { if (!inPip()) { clearTimeout(bgTimer); bgTimer = setTimeout(pauseCameraForBackground, 300); } });
+    }
     const btn = $('[data-pip]');
     btn.classList.toggle('hidden', !ok || !pipSupported());
     btn.innerHTML = ICONS.pip;
-    btn.addEventListener('click', () => (inPip() ? exitPip() : enterPip()));
+    btn.addEventListener('click', () => (inPip() ? exitPip() : enterPip({ fromTap: true })));
   }
 
   // ---------- 3. Sala ----------
@@ -291,6 +355,7 @@
     S.socket.on('call:peer-left', () => {
       closePc();
       $('#remoteVideo').srcObject = null;
+      $('#remoteAudio').srcObject = null;
       overlay(host ? 'O paciente saiu. Aguardando retornar…' : 'O profissional saiu. Aguardando retornar…');
       status('Aguardando…');
       stopTimer();
@@ -333,6 +398,12 @@
       remote.getTracks().filter((t) => t.kind === e.track.kind).forEach((t) => remote.removeTrack(t));
       remote.addTrack(e.track);
       $('#remoteVideo').play().catch(() => {});
+      // O som vai por um elemento de áudio próprio: o navegador pausa vídeos em segundo plano, áudio não
+      if (e.track.kind === 'audio') {
+        const a = $('#remoteAudio');
+        a.srcObject = new MediaStream([e.track]);
+        a.play().catch(() => {});
+      }
     };
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState;
@@ -428,23 +499,30 @@
   });
 
   $('[data-cam]').addEventListener('click', async () => {
+    S.bgCamPaused = false;
     if (S.camOn) setCamera(false);
-    else {
-      try {
-        const s = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } });
-        const track = s.getVideoTracks()[0];
-        S.local.addTrack(track);
-        S.camOn = true;
-        if (S.role === 'host') track.addEventListener('ended', reacquireHostCamera);
-        if (S.videoSender) await S.videoSender.replaceTrack(track);
-        $('#localVideo').srcObject = S.local;
-      } catch {
-        toast('Não foi possível ligar a câmera.', 'error');
-      }
-    }
+    else await cameraOn(false);
     renderControls();
     sendMediaState();
   });
+
+  async function cameraOn(quiet) {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } });
+      const track = s.getVideoTracks()[0];
+      S.local.getVideoTracks().forEach((t) => { t.stop(); S.local.removeTrack(t); });
+      S.local.addTrack(track);
+      S.camOn = true;
+      if (S.role === 'host') track.addEventListener('ended', reacquireHostCamera);
+      if (S.videoSender) await S.videoSender.replaceTrack(track);
+      $('#localVideo').srcObject = S.local;
+    } catch {
+      S.camOn = false;
+      if (!quiet) toast('Não foi possível ligar a câmera.', 'error');
+    }
+    renderControls();
+    sendMediaState();
+  }
 
   // Desliga de verdade a câmera (a luz da câmera apaga)
   function setCamera(on) {
@@ -456,6 +534,7 @@
 
   async function reacquireHostCamera() {
     if (!S.camOn || S.ended) return;
+    if (document.visibilityState === 'hidden') return; // fora do site: religa quando a pessoa voltar
     overlay('Sua câmera foi desconectada. Reconectando…');
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: true });
