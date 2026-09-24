@@ -384,7 +384,7 @@ router.post('/limits', (req, res) => {
     return p;
   };
   const postRow = (p) => ({
-    id: p.id, kind: p.kind || 'photo', video: p.video || null, image: p.image, images: S.postImages(p), caption: p.caption, created_at: p.created_at,
+    id: p.id, kind: p.kind || 'photo', video: p.video || null, font: p.font || null, image: p.image, images: S.postImages(p), caption: p.caption, created_at: p.created_at,
     likes: db.prepare('SELECT COUNT(*) n FROM post_likes WHERE post_id = ?').get(p.id).n,
     comments: db.prepare('SELECT COUNT(*) n FROM post_comments WHERE post_id = ?').get(p.id).n,
   });
@@ -404,6 +404,11 @@ router.post('/limits', (req, res) => {
   router.post('/official/posts', async (req, res) => {
     const urls = await handlePhotos(req, res);
     res.status(201).json(postRow(S.createPost(O.officialId(), urls, req.body.caption, req.body.aspect)));
+  });
+
+  // Texto do perfil oficial (sem foto), com uma das 4 fontes
+  router.post('/official/texts', (req, res) => {
+    res.status(201).json(postRow(S.createText(O.officialId(), req.body.text, req.body.font)));
   });
 
   // Vídeo (reel) do perfil oficial: aparece no feed, nos Reels e no perfil da Acolia Brasil

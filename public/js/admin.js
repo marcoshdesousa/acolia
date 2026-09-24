@@ -381,6 +381,10 @@
   let offOffset = 0;
   const offGrid = $('[data-official-posts]');
   function offTile(p) {
+    if (p.kind === 'text') {
+      return `<button type="button" class="gallery-item text-tile font-${esc(p.font || 'padrao')}" data-off-post="${p.id}" aria-label="Abrir texto"><span>${esc(p.caption.slice(0, 160))}</span>
+      <span class="off-stats">♥ ${p.likes} · 💬 ${p.comments}</span></button>`;
+    }
     return `<button type="button" class="gallery-item ${p.kind === 'reel' ? 'is-reel' : ''}" data-off-post="${p.id}" aria-label="Abrir publicação"><img src="${esc(p.image)}" alt="" loading="lazy">${p.kind === 'reel' ? `<span class="multi-ic" aria-hidden="true">${ICONS.play}</span>` : ''}
       <span class="off-stats">♥ ${p.likes} · 💬 ${p.comments}</span></button>`;
   }
@@ -405,6 +409,7 @@
     $('[data-official-more]').classList.toggle('hidden', !d.has_more);
   }
   $('[data-official-more]').addEventListener('click', () => loadOfficial(false).catch((e) => toast(e.message, 'error')));
+  $('[data-official-text]').addEventListener('click', () => AcoliaSocial.openNewText(() => loadOfficial(), { base: '/api/admin/official/texts', title: 'Novo texto da Acolia Brasil' }));
   $('[data-official-new]').addEventListener('click', () => AcoliaSocial.openNewPost(() => loadOfficial(), { base: '/api/admin/official/posts', title: 'Nova publicação da Acolia Brasil' }));
   // Vídeo (reel) da Acolia Brasil: até 2 minutos, qualquer tamanho; a capa é tirada do próprio vídeo
   $('[data-official-reel]').addEventListener('click', () => {
@@ -475,8 +480,8 @@
         <button type="button" class="icon-btn" data-del-c="${c.id}" aria-label="Apagar comentário" title="Apagar">${ICONS.trash}</button></li>`;
     const v = await modal({
       title: 'Publicação',
-      html: `<div class="off-imgs">${p.images.map((src) => `<img src="${esc(src)}" alt="">`).join('')}</div>
-        ${p.caption ? `<p style="white-space:pre-wrap">${esc(p.caption)}</p>` : ''}
+      html: `${p.kind === 'text' ? '' : `<div class="off-imgs">${p.images.map((src) => `<img src="${esc(src)}" alt="">`).join('')}</div>`}
+        ${p.caption ? `<p class="${p.kind === 'text' ? `text-post font-${esc(p.font || 'padrao')}` : ''}" style="white-space:pre-wrap">${esc(p.caption)}</p>` : ''}
         <p class="muted small">${p.likes} ${p.likes === 1 ? 'curtida' : 'curtidas'} · ${comments.length} ${comments.length === 1 ? 'comentário' : 'comentários'}</p>
         <h3 style="margin-top:12px">Comentários</h3>
         <ul class="comments" data-clist>${comments.length ? comments.map(cHtml).join('') : '<li class="muted small">Nenhum comentário.</li>'}</ul>`,

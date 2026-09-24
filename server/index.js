@@ -100,7 +100,7 @@ function createApp() {
       const origin = `${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}`;
       const title = safe(`${post.name} na Acolia`, 120);
       const desc = safe(post.caption || `Veja a publicação de ${post.name} (${post.profession}) na Acolia.`, 200);
-      const img = `${origin}${post.thumb || post.image}`;
+      const img = `${origin}${post.thumb || post.image || '/img/app-icon-512.png'}`; // texto: usa o ícone da Acolia
       html = html
         .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`)
         .replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${desc}">`)

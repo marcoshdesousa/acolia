@@ -25,7 +25,18 @@
   }
 
   // Uma foto, ou carrossel (arrastar para o lado) com as bolinhas e o contador "1/5"
+  // Resumo com "Ler mais": textão aparece cortado no feed; tocar em Ler mais abre o texto todo
+  const LONG = { text: [300, 6], photo: [180, 4], reel: [90, 2] };
+  function isLong(text, kind) {
+    const [chars, lines] = LONG[kind] || LONG.photo;
+    return text.length > chars || text.split('\n').length > lines;
+  }
+  const moreBtn = '<button type="button" class="link-btn more-btn" data-more>Ler mais</button>';
   function mediaHtml(p) {
+    if (p.kind === 'text') {
+      const long = isLong(p.caption || '', 'text');
+      return `<div class="text-post font-${esc(p.font || 'padrao')}" data-dbl-like="${p.id}"><div class="tp-body${long ? ' clamp' : ''}" data-clamp>${esc(p.caption || '')}</div>${long ? moreBtn : ''}</div>`;
+    }
     // Reel no feed: toca sozinho sem som quando aparece na tela; tocar no vídeo liga/desliga o som
     if (p.kind === 'reel') {
       return `<div class="post-img reel-media" data-dbl-like="${p.id}">
@@ -82,7 +93,9 @@
   // Ícone de "várias fotos" na grade do perfil
   const multiIcon = '<span class="multi-ic" aria-label="Várias fotos"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 3h11a3 3 0 0 1 3 3v11a1 1 0 0 1-1 1h-1V6a1 1 0 0 0-1-1H6V4a1 1 0 0 1 1-1z"/><rect x="3" y="7" width="13" height="14" rx="2.5"/></svg></span>';
   const reelIcon = `<span class="multi-ic" aria-label="Vídeo">${ICONS.play}</span>`;
-  const gridTile = (x) => `<button type="button" class="gallery-item ${x.kind === 'reel' ? 'is-reel' : ''}" data-post-open="${x.id}" aria-label="${x.kind === 'reel' ? 'Abrir vídeo' : `Abrir publicação${x.count > 1 ? ` (${x.count} fotos)` : ''}`}"><img src="${esc(x.thumb || x.image)}" alt="" loading="lazy" decoding="async">${x.kind === 'reel' ? reelIcon : x.count > 1 ? multiIcon : ''}</button>`;
+  // Texto: quadrinho com o começo do texto, na fonte escolhida
+  const textTile = (x) => `<button type="button" class="gallery-item text-tile font-${esc(x.font || 'padrao')}" data-post-open="${x.id}" aria-label="Abrir texto"><span>${esc((x.caption || '').slice(0, 160))}</span></button>`;
+  const gridTile = (x) => x.kind === 'text' ? textTile(x) : `<button type="button" class="gallery-item ${x.kind === 'reel' ? 'is-reel' : ''}" data-post-open="${x.id}" aria-label="${x.kind === 'reel' ? 'Abrir vídeo' : `Abrir publicação${x.count > 1 ? ` (${x.count} fotos)` : ''}`}"><img src="${esc(x.thumb || x.image)}" alt="" loading="lazy" decoding="async">${x.kind === 'reel' ? reelIcon : x.count > 1 ? multiIcon : ''}</button>`;
 
   // ---------- Vídeos: tocam sozinhos quando aparecem na tela ----------
   let feedSound = false; // no feed começam sem som (tocar no vídeo liga)
@@ -128,11 +141,14 @@
         ${likeBtn(p.liked, `data-like="${p.id}"`)}
         <button type="button" class="icon-btn" data-comments="${p.id}" aria-label="Comentários">${ic('comment')}<span class="cnt" data-ccount="${p.id}">${p.comments || ''}</span></button>
         <button type="button" class="icon-btn" data-share="${p.id}" aria-label="Compartilhar">${ic('plane')}</button>
-        ${p.mine ? `<button type="button" class="icon-btn to-story" data-to-story="${p.id}" aria-label="Colocar no meu story" title="Colocar no meu story">${ic('storyAdd')}</button>` : ''}
+        ${p.mine && p.kind !== 'text' ? `<button type="button" class="icon-btn to-story" data-to-story="${p.id}" aria-label="Colocar no meu story" title="Colocar no meu story">${ic('storyAdd')}</button>` : ''}
         ${canMsg(p) ? `<button type="button" class="msg-pill" data-msg-pro="${p.author.id}" title="Enviar mensagem para marcar a consulta">${ic('send', 16)} Mensagem</button>` : ''}
       </div>
       ${p.likes ? `<div class="post-likes" data-lcount="${p.id}">${p.likes} ${p.likes === 1 ? 'curtida' : 'curtidas'}</div>` : `<div class="post-likes" data-lcount="${p.id}"></div>`}
-      ${p.caption ? `<p class="post-caption"><b>${esc(p.author.name)}</b> ${esc(p.caption)}</p>` : ''}
+      ${p.caption && p.kind !== 'text' ? (() => {
+        const long = isLong(p.caption, p.kind === 'reel' ? 'reel' : 'photo');
+        return `<div class="post-caption-wrap"><p class="post-caption${long ? ` clamp clamp-${p.kind === 'reel' ? 2 : 4}` : ''}" data-clamp><b>${esc(p.author.name)}</b> ${esc(p.caption)}</p>${long ? moreBtn : ''}</div>`;
+      })() : ''}
     </article>`;
   }
 
@@ -427,7 +443,7 @@
           <small class="muted" data-fmt-size></small>
         </div>
         <div class="pick-strip hidden" data-strip></div>
-        <div class="field" style="margin-top:12px"><label for="cap">Descrição (opcional)</label><textarea id="cap" rows="3" maxlength="2200" placeholder="Escreva algo sobre esta publicação…" data-cap></textarea></div>`,
+        <div class="field" style="margin-top:12px"><label for="cap">Descrição (opcional)</label><textarea id="cap" rows="3" placeholder="Escreva algo sobre esta publicação…" data-cap></textarea></div>`,
       actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
         label: 'Publicar',
         handler: async (dlg) => {
@@ -555,12 +571,13 @@
 
 
   // Cruz do Início: escolher entre publicar fotos ou story
-  function createMenu(onPost, onStory, onReel) {
+  function createMenu(onPost, onStory, onReel, onText) {
     modal({
       title: 'Criar',
       html: `<div class="create-menu">
         <button type="button" data-v="post">${ic('image', 30)}<b>Publicar fotos</b><small>No feed e no seu perfil (até ${MAX_PHOTOS} fotos)</small></button>
         <button type="button" data-v="reel">${ic('reel', 30)}<b>Publicar reel</b><small>Vídeo de até 1 min e 30 s, no feed, nos Reels e no seu perfil</small></button>
+        <button type="button" data-v="text">${ic('text', 30)}<b>Publicar texto</b><small>Reflexões, dicas e avisos — escolha entre 4 fontes</small></button>
         <button type="button" data-v="story">${ic('video', 30)}<b>Publicar story</b><small>Foto ou vídeo de até ${MAX_STORY_SECS} s, some em 24 h</small></button></div>`,
       actions: [],
       onOpen: (dlg) => {
@@ -568,7 +585,7 @@
         $$('[data-v]', dlg).forEach((b) => b.addEventListener('click', () => {
           dlg.close();
           dlg.remove();
-          if (b.dataset.v === 'post') onPost(); else if (b.dataset.v === 'reel') onReel?.(); else onStory();
+          if (b.dataset.v === 'post') onPost(); else if (b.dataset.v === 'reel') onReel?.(); else if (b.dataset.v === 'text') onText?.(); else onStory();
         }));
       },
     });
@@ -1018,7 +1035,7 @@
         <label class="pick-media" data-pick><input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" hidden data-file>
           <span data-empty-pick>${ic('reel', 40)}<b>Escolher vídeo</b><small class="muted">Até 1 min e 30 s · ideal: em pé, 1080 × 1920 (9:16)</small></span></label>
         <div class="reel-preview hidden" data-prev><video playsinline muted controls data-pv></video><small class="muted" data-dur></small></div>
-        <div class="field" style="margin-top:12px"><label for="rcap">Descrição (opcional)</label><textarea id="rcap" rows="3" maxlength="2200" placeholder="Escreva algo sobre este vídeo…" data-cap></textarea></div>
+        <div class="field" style="margin-top:12px"><label for="rcap">Descrição (opcional)</label><textarea id="rcap" rows="3" placeholder="Escreva algo sobre este vídeo…" data-cap></textarea></div>
         <p class="muted small" style="margin:10px 0 0">Depois de tocar em Publicar, o vídeo envia em segundo plano — você pode continuar usando o app.</p>`,
       actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
         label: 'Publicar',
@@ -1073,7 +1090,7 @@
       </div>
       <div class="rv-info">
         <div class="rv-author">${authorLink(p.author)}${followChip(p)}</div>
-        ${p.caption ? `<p class="rv-cap" data-rv-cap>${esc(p.caption)}</p>` : ''}
+        ${p.caption ? `<p class="rv-cap" data-rv-cap>${esc(p.caption)}</p>${isLong(p.caption, 'reel') ? '<button type="button" class="link-btn rv-more" data-rv-more>Ler mais</button>' : ''}` : ''}
       </div>
     </section>`;
   }
@@ -1190,7 +1207,9 @@
         if (sc) { restart(sc.dataset.rvScope); return; }
         if (e.target.closest('[data-rv-again]')) { restart(scope); return; }
         const cap = e.target.closest('[data-rv-cap]');
-        if (cap) { cap.classList.toggle('open'); return; }
+        if (cap) { cap.classList.toggle('open'); const m = cap.nextElementSibling; if (m?.matches('[data-rv-more]')) m.hidden = cap.classList.contains('open'); return; }
+        const rm = e.target.closest('[data-rv-more]');
+        if (rm) { rm.previousElementSibling?.classList.add('open'); rm.hidden = true; return; }
         const tap = e.target.closest('[data-rv-tap]');
         if (tap) {
           const slide = tap.closest('.rv-slide');
@@ -1323,7 +1342,7 @@
     root.addEventListener('click', (e) => {
       const sb = e.target.closest('[data-story-group]');
       if (sb) return openStories(groups, Number(sb.dataset.storyGroup), loadStories);
-      if (e.target.closest('[data-create]')) return createMenu(() => newPost(() => loadFeed(true)), () => newStory(loadStories), () => newReel(() => loadFeed(true)));
+      if (e.target.closest('[data-create]')) return createMenu(() => newPost(() => loadFeed(true)), () => newStory(loadStories), () => newReel(() => loadFeed(true)), () => newText(() => loadFeed(true)));
       if (e.target.closest('[data-home-tab="reels"]')) return openReels();
       if (e.target.closest('[data-bell]')) return openNotifications(refreshBell);
       if (e.target.closest('[data-home-top]') || e.target.closest('[data-home-tab="feed"]')) return toTop();
@@ -1354,7 +1373,7 @@
     $$('[data-all-posts]', container).forEach((moreBtn) => {
       moreBtn.addEventListener('click', () => {
         if (p.locked || !p.viewer_role) return onNeedAccount?.();
-        const kind = moreBtn.dataset.allPosts === 'reel' ? 'reel' : 'photo';
+        const kind = ['reel', 'text'].includes(moreBtn.dataset.allPosts) ? moreBtn.dataset.allPosts : 'photo';
         if (ctx.onAllPosts) ctx.onAllPosts(p.id, kind);
         else location.href = `${ctx.role === 'professional' ? '/painel' : '/app'}#posts/${p.id}/${kind}`;
       });
@@ -1415,7 +1434,9 @@
         if (data.locked) {
           const next = location.pathname + location.search;
           const lockedTiles = Math.min(data.hidden || 0, 4 - data.items.length);
-          grid.innerHTML = data.items.map((x, i) => `<button type="button" class="gallery-item" data-gallery-need-account="${esc(next)}" aria-label="Crie conta para ampliar"><img src="${esc(x.image)}" alt="Publicação ${i + 1} da Acolia Brasil" loading="lazy"></button>`).join('')
+          grid.innerHTML = data.items.map((x, i) => (x.kind === 'text'
+            ? `<button type="button" class="gallery-item text-tile font-${esc(x.font || 'padrao')}" data-gallery-need-account="${esc(next)}" aria-label="Crie conta para ler"><span>${esc(x.caption || '')}</span></button>`
+            : `<button type="button" class="gallery-item" data-gallery-need-account="${esc(next)}" aria-label="Crie conta para ampliar"><img src="${esc(x.image)}" alt="Publicação ${i + 1} da Acolia Brasil" loading="lazy"></button>`)).join('')
             + Array.from({ length: lockedTiles }, () => `<a class="gallery-item gallery-locked" href="/cadastro-paciente?next=${encodeURIComponent(next)}">${ic('lock', 20)}<span>Crie conta para ver</span></a>`).join('');
           more = false;
         } else {
@@ -1423,7 +1444,7 @@
           offset += data.items.length;
           more = data.has_more;
         }
-        if (!grid.children.length) grid.innerHTML = `<p class="muted" style="grid-column:1/-1">${kind === 'reel' ? 'Nenhum vídeo ainda.' : 'Nenhuma foto ainda.'}</p>`;
+        if (!grid.children.length) grid.innerHTML = `<p class="muted" style="grid-column:1/-1">${kind === 'reel' ? 'Nenhum vídeo ainda.' : kind === 'text' ? 'Nenhum texto ainda.' : 'Nenhuma foto ainda.'}</p>`;
       } catch (e) { toast(e.message, 'error'); more = false; }
       spin?.classList.toggle('hidden', !more);
       busy = false;
@@ -1437,13 +1458,14 @@
   // ---------- Página "Todas as publicações" de um profissional ----------
   // Grade com rolagem infinita; tocar abre a publicação. Botão para voltar ao perfil.
   function mountPostsPage(root, proId, { onBack, kind } = {}) {
-    kind = kind || (location.hash.split('/')[2] === 'reel' ? 'reel' : 'photo');
+    kind = kind || (['reel', 'text'].includes(location.hash.split('/')[2]) ? location.hash.split('/')[2] : 'photo');
     root.innerHTML = `<div class="posts-page">
         <div class="posts-top"><button type="button" class="btn ghost sm" data-back-profile>← Voltar para o perfil</button></div>
         <div class="posts-head" data-head></div>
         <div class="pv-tabs" role="tablist">
           <button type="button" role="tab" data-pp-tab="photo" class="${kind === 'photo' ? 'active' : ''}">${ic('grid', 20)} Fotos</button>
           <button type="button" role="tab" data-pp-tab="reel" class="${kind === 'reel' ? 'active' : ''}">${ic('reel', 20)} Vídeos</button>
+          <button type="button" role="tab" data-pp-tab="text" class="${kind === 'text' ? 'active' : ''}">${ic('text', 20)} Textos</button>
         </div>
         <div class="gallery-grid posts-grid" data-grid></div>
         <div class="spinner" data-loading></div>
@@ -1469,7 +1491,7 @@
         grid.insertAdjacentHTML('beforeend', data.items.map(gridTile).join(''));
         offset += data.items.length;
         more = data.has_more;
-        if (!offset) grid.innerHTML = `<p class="muted" style="grid-column:1/-1">${kind === 'reel' ? 'Nenhum vídeo ainda.' : 'Nenhuma foto ainda.'}</p>`;
+        if (!offset) grid.innerHTML = `<p class="muted" style="grid-column:1/-1">${kind === 'reel' ? 'Nenhum vídeo ainda.' : kind === 'text' ? 'Nenhum texto ainda.' : 'Nenhuma foto ainda.'}</p>`;
       } catch (e) { toast(e.message, 'error'); more = false; }
       $('[data-loading]', root).classList.toggle('hidden', !more);
       busy = false;
@@ -1495,5 +1517,51 @@
     load();
   }
 
-  window.AcoliaSocial = { resumeUploads: () => Uploads.resume(), openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
+  // ---------- Nova publicação de texto (sem foto), com 4 fontes ----------
+  const FONTS = [['padrao', 'Padrão'], ['classica', 'Clássica'], ['manuscrita', 'Manuscrita'], ['destaque', 'Destaque']];
+  function newText(onDone, { base = '/api/social/texts', title = 'Publicar texto' } = {}) {
+    let font = 'padrao';
+    modal({
+      title,
+      html: `<div class="form-error hidden" data-err></div>
+        <div class="font-pick" role="radiogroup" aria-label="Fonte">${FONTS.map(([k, n], i) => `<button type="button" role="radio" aria-checked="${i === 0}" class="font-${k}${i === 0 ? ' on' : ''}" data-font="${k}">${n}</button>`).join('')}</div>
+        <div class="text-post font-padrao text-compose" data-box><textarea data-text rows="6" placeholder="Escreva sua reflexão, dica ou aviso…" aria-label="Texto da publicação"></textarea></div>
+        <small class="muted">Sem limite de tamanho. No feed aparecem as primeiras linhas, com "Ler mais".</small>`,
+      actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
+        label: 'Publicar',
+        handler: async (dlg) => {
+          const text = $('[data-text]', dlg).value.trim();
+          const err = $('[data-err]', dlg);
+          if (!text) { err.textContent = 'Escreva o texto da publicação.'; err.classList.remove('hidden'); return false; }
+          try { await api(base, { method: 'POST', body: { text, font } }); } catch (e) { err.textContent = e.message; err.classList.remove('hidden'); return false; }
+          toast('Texto publicado!');
+          onDone?.();
+          return true;
+        },
+      }],
+      onOpen: (dlg) => {
+        const ta = $('[data-text]', dlg);
+        const grow = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 420)}px`; };
+        ta.addEventListener('input', grow);
+        $$('[data-font]', dlg).forEach((b) => b.addEventListener('click', () => {
+          font = b.dataset.font;
+          $$('[data-font]', dlg).forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', String(x === b)); });
+          $('[data-box]', dlg).className = `text-post font-${font} text-compose`;
+          grow();
+        }));
+        ta.focus();
+      },
+    });
+  }
+
+  // "Ler mais" no feed e nas publicações abertas
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-more]');
+    if (!b) return;
+    const box = b.parentElement.querySelector('[data-clamp]');
+    box?.classList.remove('clamp', 'clamp-2', 'clamp-4');
+    b.remove();
+  });
+
+  window.AcoliaSocial = { openNewText: newText, resumeUploads: () => Uploads.resume(), openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
 })();

@@ -1724,6 +1724,43 @@ test('Acolia Brasil publica vídeo (reel) pelo admin e ele aparece nos Reels', a
   assert.equal((await pt.post('/api/admin/official/reels')).status, 401, 'paciente não publica pelo admin');
 });
 
+test('publicação de texto: profissional e Acolia Brasil, 4 fontes, sem limite de tamanho; legenda longa', async () => {
+  const c = await admin.post('/api/admin/professionals', { name: 'Teo Texto', profession: 'Psicanalista', registry: '', email: 'teo.texto@example.com', phone: '11916161616', state: 'SP', city: 'Campinas' });
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+  const longo = 'Reflexão do dia.\n' + 'Cuidar da mente é um ato diário. '.repeat(400); // ~13 mil caracteres
+  let r = await pro.post('/api/social/texts', { text: longo, font: 'manuscrita' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.kind, 'text');
+  assert.equal(r.data.font, 'manuscrita');
+  assert.equal(r.data.caption.length, longo.trim().length, 'texto inteiro, sem corte');
+  assert.equal((await pro.post('/api/social/texts', { text: '  ', font: 'classica' })).status, 400, 'texto vazio não');
+  r = await pro.post('/api/social/texts', { text: 'Oi', font: 'comic-sans' });
+  assert.equal(r.data.font, 'padrao', 'fonte fora das 4 vira a padrão');
+  // perfil conta textos e mostra na aba
+  const prof = (await pro.get(`/api/professionals/${c.data.id}`)).data;
+  assert.equal(prof.texts_count, 2);
+  const list = (await pro.get(`/api/social/professionals/${c.data.id}/posts?kind=text`)).data;
+  assert.equal(list.items.length, 2);
+  assert.ok(list.items[0].caption.length <= 300, 'na grade vai só o começo');
+  // não vai para o story
+  assert.equal((await pro.post(`/api/social/posts/${r.data.id}/story`)).status, 400);
+  // paciente não publica texto
+  const pt = client();
+  await pt.post('/api/auth/patient/register', { name: 'Iara Texto', cpf: '100.031.656-47', birth_date: '1990-01-01', state: 'SP', city: 'Campinas', password: '123456' });
+  assert.equal((await pt.post('/api/social/texts', { text: 'x' })).status, 403);
+  // Acolia Brasil também publica texto
+  r = await admin.post('/api/admin/official/texts', { text: 'Bem-vindos! 💚', font: 'destaque' });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.kind, 'text');
+  // legenda de foto sem limite de 2200
+  const fd = new FormData();
+  fd.append('photo', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'f.png');
+  fd.append('caption', 'x'.repeat(5000));
+  const post = await (await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } })).json();
+  assert.equal(post.caption.length, 5000, 'legenda longa inteira');
+});
+
 // Por último: apaga tudo (é o que acontece uma vez só no início oficial da plataforma)
 test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {
   const { db } = require('../server/db');

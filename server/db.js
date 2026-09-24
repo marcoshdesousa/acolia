@@ -216,6 +216,7 @@ addColumn('posts', 'kind', "TEXT NOT NULL DEFAULT 'photo'");
 addColumn('posts', 'video', 'TEXT');
 addColumn('posts', 'duration', 'REAL');
 addColumn('posts', 'aspect', 'TEXT');
+addColumn('posts', 'font', 'TEXT'); // publicação de texto: padrao | classica | manuscrita | destaque
 // Chat: "apagar para mim" — cada lado esconde a mensagem só para si; quando os dois apagaram,
 // a mensagem sai do banco de vez
 addColumn('messages', 'hidden_for_patient', 'INTEGER NOT NULL DEFAULT 0');

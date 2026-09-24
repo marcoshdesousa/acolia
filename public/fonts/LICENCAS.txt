@@ -1,0 +1,5 @@
+Fontes usadas nas publicações de texto (todas gratuitas, licença SIL Open Font License 1.1):
+- Lora (The Lora Project Authors)
+- Caveat (The Caveat Project Authors)
+- Montserrat (The Montserrat Project Authors)
+Arquivos obtidos do pacote Fontsource. A licença permite uso, cópia e distribuição, inclusive comercial.

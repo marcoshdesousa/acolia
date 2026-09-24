@@ -962,3 +962,42 @@ input.switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 
 .bio-head b { font-size: 1.1rem; }
 .bio-body { max-width: 720px; margin: 0 auto; padding: 22px 20px calc(40px + env(safe-area-inset-bottom)); }
 html.no-scroll, html.no-scroll body { overflow: hidden; }
+
+/* ---------- Publicações de texto: 4 fontes (arquivos em /fonts, licença livre OFL) ---------- */
+@font-face { font-family: "Lora"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/lora-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "Caveat"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/caveat-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Montserrat"; font-style: normal; font-weight: 700; font-display: swap; src: url(/fonts/montserrat-latin-700-normal.woff2) format("woff2"); }
+.font-padrao { font-family: var(--font); font-weight: 600; }
+.font-classica { font-family: "Lora", Georgia, serif; font-weight: 500; }
+.font-manuscrita { font-family: "Caveat", "Segoe Print", cursive; font-weight: 600; font-size: 1.35em; line-height: 1.3; }
+.font-destaque { font-family: "Montserrat", var(--font); font-weight: 700; letter-spacing: -.01em; }
+
+.text-post { margin: 0; padding: 26px 22px 20px; background: linear-gradient(160deg, #f6f1e8, #e4ede7); color: #1f2d29; font-size: 1.12rem; line-height: 1.55; }
+.text-post .tp-body { white-space: pre-wrap; word-wrap: break-word; }
+.text-post .more-btn { margin-top: 6px; font-family: var(--font); font-size: .95rem; }
+.clamp { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; -webkit-line-clamp: 6; }
+.post-caption.clamp-4 { -webkit-line-clamp: 4; }
+.post-caption.clamp-2 { -webkit-line-clamp: 2; }
+.post-caption-wrap { padding: 0 0 10px; }
+.post-caption-wrap .post-caption { padding-bottom: 2px; }
+.post-caption-wrap .more-btn { margin-left: 14px; font-size: .92rem; }
+.rv-more { color: #fff; font-size: .9rem; padding: 2px 0; }
+
+/* Quadrinho de texto na grade do perfil */
+.gallery-item.text-tile { display: flex; align-items: center; justify-content: center; padding: 10px; background: linear-gradient(160deg, #f6f1e8, #dfe9e2); color: #1f2d29; border: 0; text-align: left; }
+.gallery-item.text-tile > span:first-child { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; font-size: .8rem; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
+.gallery-item.text-tile.font-manuscrita > span:first-child { font-size: 1.05rem; line-height: 1.15; }
+
+/* Escolha da fonte ao escrever */
+.font-pick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+.font-pick button { border: 1.5px solid var(--line); background: var(--surface); color: var(--text); border-radius: 12px; padding: 10px 4px; cursor: pointer; font-size: 1rem; }
+.font-pick button.font-manuscrita { font-size: 1.3rem; line-height: 1; }
+.font-pick button.on { border-color: var(--primary); background: var(--surface-2); box-shadow: 0 0 0 2px var(--primary) inset; }
+.text-compose { border-radius: 16px; }
+.text-compose textarea { width: 100%; min-height: 150px; border: 0; background: transparent; resize: none; font: inherit; color: inherit; line-height: inherit; padding: 0; outline: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .text-post, :root:not([data-theme="light"]) .gallery-item.text-tile { background: linear-gradient(160deg, #26352f, #1d2a25); color: #eef3ef; }
+}
+:root[data-theme="dark"] .text-post, :root[data-theme="dark"] .gallery-item.text-tile { background: linear-gradient(160deg, #26352f, #1d2a25); color: #eef3ef; }
+@media (max-width: 480px) { .font-pick { grid-template-columns: repeat(2, 1fr); } }
+.font-pick button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

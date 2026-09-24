@@ -9,6 +9,9 @@ const A = require('../auth');
 const rt = require('../realtime');
 const { VISIBLE_SQL, freeGalleryCount, PROFILE_POSTS } = require('../serialize');
 const { handlePhoto, handlePhotos, handleMedia, handleReel, removePhoto } = require('../upload');
+// Legendas e publicações de texto: sem limite prático (no feed aparecem resumidas, com "Ler mais")
+const CAPTION_MAX = 100000;
+const TEXT_FONTS = ['padrao', 'classica', 'manuscrita', 'destaque'];
 const REEL_MAX_SECS = 90; // Reels dos profissionais: até 1 minuto e 30 segundos (sem limite de tamanho)
 const OFFICIAL_REEL_MAX_SECS = 2 * 60; // Acolia Brasil (admin): até 2 minutos
 const O = require('../official');
@@ -72,7 +75,8 @@ function postOut(p, me) {
   const comments = db.prepare('SELECT COUNT(*) n FROM post_comments WHERE post_id = ?').get(p.id).n;
   const liked = me ? !!db.prepare('SELECT 1 FROM post_likes WHERE post_id = ? AND role = ? AND user_id = ?').get(p.id, me.role, me.id) : false;
   return {
-    id: p.id, kind: p.kind || 'photo', aspect: p.aspect || null, image: p.image, images: postImages(p), caption: p.caption, created_at: p.created_at,
+    id: p.id, kind: p.kind || 'photo', aspect: p.aspect || null, image: p.kind === 'text' ? null : p.image, images: p.kind === 'text' ? [] : postImages(p), caption: p.caption, created_at: p.created_at,
+    font: p.kind === 'text' ? (TEXT_FONTS.includes(p.font) ? p.font : 'padrao') : undefined,
     video: p.kind === 'reel' ? p.video : undefined, duration: p.kind === 'reel' ? p.duration : undefined,
     likes, comments, liked,
     mine: !!me && me.role === 'professional' && me.id === p.professional_id,
@@ -94,19 +98,21 @@ router.get('/professionals/:id/posts', (req, res) => {
   const proId = Number(req.params.id);
   const mine = isPro(req) && req.auth.user.id === proId;
   if (!mine && !socialPro(proId)) throw new U.HttpError(404, 'Profissional não encontrado.');
-  // ?kind=photo (fotos) | reel (vídeos); sem kind = tudo
-  const kind = ['photo', 'reel'].includes(req.query.kind) ? req.query.kind : null;
+  // ?kind=photo (fotos) | reel (vídeos) | text (textos); sem kind = tudo
+  const kind = ['photo', 'reel', 'text'].includes(req.query.kind) ? req.query.kind : null;
   const kindSql = kind ? `AND kind = '${kind}'` : '';
   const total = db.prepare(`SELECT COUNT(*) n FROM posts WHERE professional_id = ? ${kindSql}`).get(proId).n;
   if (!req.auth || !['patient', 'professional'].includes(req.auth.role)) {
-    const first = db.prepare(`SELECT image, kind FROM posts WHERE professional_id = ? ${kindSql} ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(proId);
+    const first = db.prepare(`SELECT image, kind, caption, font FROM posts WHERE professional_id = ? ${kindSql} ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(proId);
     const free = freeGalleryCount(first.length);
-    return res.json({ locked: true, total, items: first.slice(0, free).map((r) => ({ image: r.image, kind: r.kind })), hidden: total - free });
+    return res.json({ locked: true, total, items: first.slice(0, free).map((r) => (r.kind === 'text' ? { kind: 'text', caption: r.caption.slice(0, 300), font: r.font } : { image: r.image, kind: r.kind })), hidden: total - free });
   }
   const offset = Math.max(0, Number(req.query.offset) || 0);
   const limit = Math.min(60, Number(req.query.limit) || PAGE);
-  const rows = db.prepare(`SELECT id, image, thumb, kind FROM posts WHERE professional_id = ? ${kindSql} ORDER BY id DESC LIMIT ? OFFSET ?`).all(proId, limit, offset);
-  res.json({ locked: false, total, items: rows.map((r) => ({ ...r, count: r.kind === 'reel' ? 1 : imageCount(r.id) })), has_more: offset + rows.length < total });
+  const rows = db.prepare(`SELECT id, image, thumb, kind, caption, font FROM posts WHERE professional_id = ? ${kindSql} ORDER BY id DESC LIMIT ? OFFSET ?`).all(proId, limit, offset);
+  res.json({ locked: false, total, items: rows.map(({ caption, font, ...r }) => (r.kind === 'text'
+    ? { id: r.id, kind: 'text', caption: caption.slice(0, 300), font }
+    : { ...r, count: r.kind === 'reel' ? 1 : imageCount(r.id) })), has_more: offset + rows.length < total });
 });
 
 // Publicação aberta pelo link compartilhado: qualquer pessoa vê a foto e a descrição.
@@ -247,7 +253,7 @@ function enforceLimits(proId = null) {
 function createPost(proId, urls, caption, aspect) {
   if (!ASPECTS.includes(aspect)) aspect = aspectOfUpload(urls[0]); // sem formato: mede a foto e escolhe o mais próximo
   const info = db.prepare('INSERT INTO posts (professional_id, image, caption, aspect) VALUES (?, ?, ?, ?)')
-    .run(proId, urls[0], U.cleanText(caption, 2200), ASPECTS.includes(aspect) ? aspect : null);
+    .run(proId, urls[0], U.cleanText(caption, CAPTION_MAX), ASPECTS.includes(aspect) ? aspect : null);
   const id = Number(info.lastInsertRowid);
   urls.forEach((u, i) => db.prepare('INSERT INTO post_images (post_id, position, image) VALUES (?, ?, ?)').run(id, i, u));
   if (!O.isOfficial(proId)) enforceLimits(proId); // passou do limite: a mais antiga sai
@@ -258,10 +264,23 @@ function createPost(proId, urls, caption, aspect) {
 // O vídeo vai junto com a capa (um quadro tirado no aparelho) e a duração
 function createReel(proId, media, caption, duration) {
   const info = db.prepare("INSERT INTO posts (professional_id, image, caption, kind, video, duration) VALUES (?, ?, ?, 'reel', ?, ?)")
-    .run(proId, media.poster, U.cleanText(caption, 2200), media.video, duration);
+    .run(proId, media.poster, U.cleanText(caption, CAPTION_MAX), media.video, duration);
   if (!O.isOfficial(proId)) enforceLimits(proId); // passou do limite: o vídeo mais antigo sai
   return db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(info.lastInsertRowid));
 }
+
+// ---------- Publicação de texto (sem foto): 4 fontes para escolher ----------
+function createText(proId, text, font) {
+  const body = U.cleanText(text, CAPTION_MAX);
+  if (!body) throw new U.HttpError(400, 'Escreva o texto da publicação.');
+  const info = db.prepare("INSERT INTO posts (professional_id, image, caption, kind, font) VALUES (?, '', ?, 'text', ?)")
+    .run(proId, body, TEXT_FONTS.includes(font) ? font : 'padrao');
+  return db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(info.lastInsertRowid));
+}
+router.post('/texts', (req, res) => {
+  if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
+  res.status(201).json(postOut(createText(req.auth.user.id, req.body.text, req.body.font), who(req)));
+});
 
 router.post('/reels', async (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
@@ -550,6 +569,7 @@ router.post('/posts/:id/story', (req, res) => {
   const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Publicação não encontrada.');
   if (!isPro(req) || p.professional_id !== req.auth.user.id) throw new U.HttpError(403, 'Só quem publicou pode colocar esta publicação no story.');
+  if (p.kind === 'text') throw new U.HttpError(400, 'Publicação de texto não vai para o story.');
   const info = db.prepare("INSERT INTO stories (professional_id, media, kind, post_id) VALUES (?, ?, 'post', ?)").run(p.professional_id, p.image, p.id);
   res.status(201).json(storyOut(db.prepare('SELECT * FROM stories WHERE id = ?').get(Number(info.lastInsertRowid)), who(req)));
 });
@@ -650,4 +670,4 @@ function purgeUserSocial(role, id) {
   db.prepare('DELETE FROM notifications WHERE (recipient_role = ? AND recipient_id = ?) OR (actor_role = ? AND actor_id = ?)').run(role, id, role, id);
 }
 
-module.exports = { createReel, REEL_MAX_SECS, OFFICIAL_REEL_MAX_SECS, getLimits, setLimits, overLimit, enforceLimits, purgeUserSocial, fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };
+module.exports = { createText, TEXT_FONTS, createReel, REEL_MAX_SECS, OFFICIAL_REEL_MAX_SECS, getLimits, setLimits, overLimit, enforceLimits, purgeUserSocial, fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };

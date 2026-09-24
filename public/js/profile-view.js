@@ -34,7 +34,7 @@
           <div class="row"><button type="button" class="btn ${p.following ? 'following' : ''}" data-follow>${p.following ? 'Seguindo' : 'Seguir'}</button></div>
         </div>
         <div><h3>Publicações</h3>
-          <div class="pv-tabs" role="tablist"><button type="button" role="tab" class="active" data-of-tab="photo">${ic('grid', 20)} Fotos</button><button type="button" role="tab" data-of-tab="reel">${ic('reel', 20)} Vídeos</button></div>
+          <div class="pv-tabs" role="tablist"><button type="button" role="tab" class="active" data-of-tab="photo">${ic('grid', 20)} Fotos</button><button type="button" role="tab" data-of-tab="reel">${ic('reel', 20)} Vídeos</button><button type="button" role="tab" data-of-tab="text">${ic('text', 20)} Textos</button></div>
           <div class="gallery-grid posts-grid" data-official-grid></div>
           <div class="spinner" data-official-loading></div><div data-official-end style="height:1px"></div></div>
       </div>
@@ -137,16 +137,21 @@
     const total = p.posts_count ?? ((p.gallery || []).length + (p.gallery_hidden || 0));
     const photosTotal = p.photos_count ?? total;
     const reelsTotal = p.reels_count || 0;
+    const textsTotal = p.texts_count || 0;
     const play = `<span class="multi-ic" aria-hidden="true">${ICONS.play}</span>`;
     const lockedTiles = (n) => Array.from({ length: n }, () => `<a class="gallery-item gallery-locked" href="${signup}">${ic('lock', 20)}<span>Crie conta para ver</span></a>`).join('');
     const freeTile = (src, i, isReel) => `<button type="button" class="gallery-item" data-gallery-need-account="${esc(next || '')}" aria-label="Crie conta para ver"><img src="${esc(src)}" alt="${isReel ? 'Vídeo' : 'Foto'} ${i + 1} de ${esc(p.name)}" loading="lazy">${isReel ? play : ''}</button>`;
+    const freeText = (x) => `<button type="button" class="gallery-item text-tile font-${esc(x.font || 'padrao')}" data-gallery-need-account="${esc(next || '')}" aria-label="Crie conta para ler"><span>${esc(x.caption || '')}</span></button>`;
     const tile = (x) => (window.AcoliaSocial ? window.AcoliaSocial.gridTile(x)
       : `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação"><img src="${esc(x.image)}" alt="" loading="lazy"></button>`);
     let gallery = '';
     if (total) {
       let photoTiles;
       let reelTiles;
+      let textTiles;
       if (p.locked) {
+        const texts = p.texts || [];
+        textTiles = texts.map(freeText).join('') + lockedTiles(Math.min(p.texts_hidden || 0, 4 - texts.length));
         const photos = p.gallery || [];
         const reels = p.reels || [];
         photoTiles = photos.map((src, i) => freeTile(src, i, false)).join('') + lockedTiles(Math.min(p.gallery_hidden || 0, 4 - photos.length));
@@ -154,17 +159,21 @@
       } else {
         photoTiles = (p.gallery_posts || []).map(tile).join('');
         reelTiles = (p.reels_posts || []).map(tile).join('');
+        textTiles = (p.texts_posts || []).map(tile).join('');
       }
       const empty = (t) => `<p class="muted small" style="grid-column:1/-1;margin:0">${t}</p>`;
       gallery = `<div><h3>Publicações</h3>
         <div class="pv-tabs" role="tablist">
           <button type="button" role="tab" class="active" data-pv-tab="photo" aria-label="Fotos" title="Fotos">${ic('grid', 22)}<span>${photosTotal}</span></button>
           <button type="button" role="tab" data-pv-tab="reel" aria-label="Vídeos" title="Vídeos">${ic('reel', 22)}<span>${reelsTotal}</span></button>
+          ${textsTotal ? `<button type="button" role="tab" data-pv-tab="text" aria-label="Textos" title="Textos">${ic('text', 22)}<span>${textsTotal}</span></button>` : ''}
         </div>
         <div data-pv-pane="photo"><div class="gallery-grid" data-post-grid>${photoTiles || empty('Nenhuma foto ainda.')}</div>
           ${photosTotal > 4 ? `<button type="button" class="btn secondary sm" data-all-posts="photo" style="margin-top:10px">${ic('image', 16)} Ver todas as fotos (${photosTotal})</button>` : ''}</div>
         <div data-pv-pane="reel" hidden><div class="gallery-grid" data-reel-grid>${reelTiles || empty('Nenhum vídeo ainda.')}</div>
           ${reelsTotal > 4 ? `<button type="button" class="btn secondary sm" data-all-posts="reel" style="margin-top:10px">${ic('reel', 16)} Ver todos os vídeos (${reelsTotal})</button>` : ''}</div>
+        ${textsTotal ? `<div data-pv-pane="text" hidden><div class="gallery-grid">${textTiles}</div>
+          ${textsTotal > 4 ? `<button type="button" class="btn secondary sm" data-all-posts="text" style="margin-top:10px">${ic('text', 16)} Ver todos os textos (${textsTotal})</button>` : ''}</div>` : ''}
       </div>`;
     }
 
