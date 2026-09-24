@@ -468,6 +468,7 @@
         },
       }],
       onOpen: (dlg) => {
+        AcoliaSocial.charCount($('[data-cap]', dlg), AcoliaSocial.CAPTION_MAX);
         const v = $('[data-prev]', dlg);
         $('[data-file]', dlg).addEventListener('change', (e) => {
           const f = e.target.files[0];

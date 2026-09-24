@@ -1741,12 +1741,17 @@ test('Acolia Brasil publica vídeo (reel) pelo admin e ele aparece nos Reels', a
   assert.ok((await pt.get('/api/social/reels')).data.items.some((x) => x.id === big.id), 'vídeo em partes aparece nos Reels');
 });
 
-test('publicação de texto: profissional e Acolia Brasil, 4 fontes, sem limite de tamanho; legenda longa', async () => {
+test('publicação de texto: profissional e Acolia Brasil, 4 fontes, até 3.000 caracteres; legenda até 1.700', async () => {
   const c = await admin.post('/api/admin/professionals', { name: 'Teo Texto', profession: 'Psicanalista', registry: '', email: 'teo.texto@example.com', phone: '11916161616', state: 'SP', city: 'Campinas' });
   const pro = client();
   await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
-  const longo = 'Reflexão do dia.\n' + 'Cuidar da mente é um ato diário. '.repeat(400); // ~13 mil caracteres
-  let r = await pro.post('/api/social/texts', { text: longo, font: 'manuscrita' });
+  const grande = 'x'.repeat(3001);
+  let r = await pro.post('/api/social/texts', { text: grande, font: 'manuscrita' });
+  assert.equal(r.status, 400, 'mais de 3.000 caracteres não');
+  assert.match(r.data.error, /3\.000/);
+  const longo = 'Reflexão do dia.\n' + 'Cuidar da mente é um ato diário. '.repeat(90); // ~2.900 caracteres
+  assert.ok(longo.length <= 3000);
+  r = await pro.post('/api/social/texts', { text: longo, font: 'manuscrita' });
   assert.equal(r.status, 201, JSON.stringify(r.data));
   assert.equal(r.data.kind, 'text');
   assert.equal(r.data.font, 'manuscrita');
@@ -1772,12 +1777,12 @@ test('publicação de texto: profissional e Acolia Brasil, 4 fontes, sem limite 
   r = await admin.post('/api/admin/official/texts', { text: 'Bem-vindos! 💚', font: 'destaque' });
   assert.equal(r.status, 201);
   assert.equal(r.data.kind, 'text');
-  // legenda de foto sem limite de 2200
+  // legenda de foto: até 1.700 caracteres
   const fd = new FormData();
   fd.append('photo', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'f.png');
   fd.append('caption', 'x'.repeat(5000));
   const post = await (await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } })).json();
-  assert.equal(post.caption.length, 5000, 'legenda longa inteira');
+  assert.equal(post.caption.length, 1700, 'legenda fica em 1.700');
 });
 
 // Por último: apaga tudo (é o que acontece uma vez só no início oficial da plataforma)

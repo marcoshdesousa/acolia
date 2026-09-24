@@ -10,7 +10,8 @@ const rt = require('../realtime');
 const { VISIBLE_SQL, freeGalleryCount, PROFILE_POSTS } = require('../serialize');
 const { handlePhoto, handlePhotos, handleMedia, handleReel, removePhoto } = require('../upload');
 // Legendas e publicações de texto: sem limite prático (no feed aparecem resumidas, com "Ler mais")
-const CAPTION_MAX = 100000;
+const CAPTION_MAX = 1700; // legenda de foto e vídeo (no feed aparece o começo, com "Ler mais")
+const TEXT_MAX = 3000; // publicação de texto
 const TEXT_FONTS = ['padrao', 'classica', 'manuscrita', 'destaque'];
 const REEL_MAX_SECS = 90; // Reels dos profissionais: até 1 minuto e 30 segundos (sem limite de tamanho)
 const OFFICIAL_REEL_MAX_SECS = 2 * 60; // Acolia Brasil (admin): até 2 minutos
@@ -271,8 +272,9 @@ function createReel(proId, media, caption, duration) {
 
 // ---------- Publicação de texto (sem foto): 4 fontes para escolher ----------
 function createText(proId, text, font) {
-  const body = U.cleanText(text, CAPTION_MAX);
+  const body = U.cleanText(text, 1e6);
   if (!body) throw new U.HttpError(400, 'Escreva o texto da publicação.');
+  if (body.length > TEXT_MAX) throw new U.HttpError(400, `O texto pode ter no máximo ${TEXT_MAX.toLocaleString('pt-BR')} caracteres. Este tem ${body.length.toLocaleString('pt-BR')}.`);
   const info = db.prepare("INSERT INTO posts (professional_id, image, caption, kind, font) VALUES (?, '', ?, 'text', ?)")
     .run(proId, body, TEXT_FONTS.includes(font) ? font : 'padrao');
   return db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(info.lastInsertRowid));
@@ -670,4 +672,4 @@ function purgeUserSocial(role, id) {
   db.prepare('DELETE FROM notifications WHERE (recipient_role = ? AND recipient_id = ?) OR (actor_role = ? AND actor_id = ?)').run(role, id, role, id);
 }
 
-module.exports = { createText, TEXT_FONTS, createReel, REEL_MAX_SECS, OFFICIAL_REEL_MAX_SECS, getLimits, setLimits, overLimit, enforceLimits, purgeUserSocial, fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };
+module.exports = { CAPTION_MAX, TEXT_MAX, createText, TEXT_FONTS, createReel, REEL_MAX_SECS, OFFICIAL_REEL_MAX_SECS, getLimits, setLimits, overLimit, enforceLimits, purgeUserSocial, fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };

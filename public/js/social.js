@@ -459,6 +459,7 @@
         },
       }],
       onOpen: (dlg) => {
+        charCount($('[data-cap]', dlg), CAPTION_MAX);
         if (base === '/api/social/posts') limitNote($('[data-limit-note]', dlg), 'photo');
         const strip = $('[data-strip]', dlg);
         const frame = $('[data-frame]', dlg);
@@ -1054,6 +1055,7 @@
         },
       }],
       onOpen: (dlg) => {
+        charCount($('[data-cap]', dlg), CAPTION_MAX);
         limitNote($('[data-limit-note]', dlg), 'reel');
         $('[data-file]', dlg).addEventListener('change', async (e) => {
           const f = e.target.files[0];
@@ -1528,6 +1530,19 @@
     load();
   }
 
+  // Contador de caracteres embaixo do campo (ex.: 120 / 1.700); o campo não deixa passar do limite
+  const CAPTION_MAX = 1700;
+  const TEXT_MAX = 3000;
+  function charCount(ta, max) {
+    ta.maxLength = max;
+    const c = document.createElement('small');
+    c.className = 'muted char-count';
+    const upd = () => { c.textContent = `${ta.value.length.toLocaleString('pt-BR')} / ${max.toLocaleString('pt-BR')}`; c.classList.toggle('full', ta.value.length >= max); };
+    ta.addEventListener('input', upd);
+    ta.insertAdjacentElement('afterend', c);
+    upd();
+  }
+
   // ---------- Nova publicação de texto (sem foto), com 4 fontes ----------
   const FONTS = [['padrao', 'Padrão'], ['classica', 'Clássica'], ['manuscrita', 'Manuscrita'], ['destaque', 'Destaque']];
   function newText(onDone, { base = '/api/social/texts', title = 'Publicar texto' } = {}) {
@@ -1537,7 +1552,7 @@
       html: `<div class="form-error hidden" data-err></div>
         <div class="font-pick" role="radiogroup" aria-label="Fonte">${FONTS.map(([k, n], i) => `<button type="button" role="radio" aria-checked="${i === 0}" class="font-${k}${i === 0 ? ' on' : ''}" data-font="${k}">${n}</button>`).join('')}</div>
         <div class="text-post font-padrao text-compose" data-box><textarea data-text rows="6" placeholder="Escreva sua reflexão, dica ou aviso…" aria-label="Texto da publicação"></textarea></div>
-        <small class="muted">Sem limite de tamanho. No feed aparecem as primeiras linhas, com "Ler mais".</small>`,
+        <small class="muted">Até 3.000 caracteres. No feed aparecem as primeiras linhas, com "Ler mais".</small>`,
       actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
         label: 'Publicar',
         handler: async (dlg) => {
@@ -1552,6 +1567,7 @@
       }],
       onOpen: (dlg) => {
         const ta = $('[data-text]', dlg);
+        charCount(ta, TEXT_MAX);
         const grow = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 420)}px`; };
         ta.addEventListener('input', grow);
         $$('[data-font]', dlg).forEach((b) => b.addEventListener('click', () => {
@@ -1574,5 +1590,5 @@
     b.remove();
   });
 
-  window.AcoliaSocial = { readVideo, openNewText: newText, resumeUploads: () => Uploads.resume(), openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
+  window.AcoliaSocial = { readVideo, charCount, CAPTION_MAX, openNewText: newText, resumeUploads: () => Uploads.resume(), openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
 })();

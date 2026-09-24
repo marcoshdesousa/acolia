@@ -1003,3 +1003,6 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 :root[data-theme="dark"] .text-post, :root[data-theme="dark"] .gallery-item.text-tile { background: linear-gradient(160deg, #26352f, #1d2a25); color: #eef3ef; }
 @media (max-width: 480px) { .font-pick { grid-template-columns: repeat(2, 1fr); } }
 .font-pick button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Contador de caracteres (legendas e textos) */
+.char-count { display: block; text-align: right; margin-top: 4px; font-size: .78rem; }
+.char-count.full { color: var(--danger, #b3261e); font-weight: 700; }
