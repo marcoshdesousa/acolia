@@ -98,9 +98,9 @@ router.get('/professionals/:id/posts', (req, res) => {
   const proId = Number(req.params.id);
   const mine = isPro(req) && req.auth.user.id === proId;
   if (!mine && !socialPro(proId)) throw new U.HttpError(404, 'Profissional não encontrado.');
-  // ?kind=photo (fotos) | reel (vídeos) | text (textos); sem kind = tudo
-  const kind = ['photo', 'reel', 'text'].includes(req.query.kind) ? req.query.kind : null;
-  const kindSql = kind ? `AND kind = '${kind}'` : '';
+  // ?kind=photo (aba Publicações: fotos e textos) | reel (aba Vídeos); sem kind = tudo
+  const kind = ['photo', 'reel'].includes(req.query.kind) ? req.query.kind : null;
+  const kindSql = kind === 'reel' ? "AND kind = 'reel'" : kind === 'photo' ? "AND kind <> 'reel'" : '';
   const total = db.prepare(`SELECT COUNT(*) n FROM posts WHERE professional_id = ? ${kindSql}`).get(proId).n;
   if (!req.auth || !['patient', 'professional'].includes(req.auth.role)) {
     const first = db.prepare(`SELECT image, kind, caption, font FROM posts WHERE professional_id = ? ${kindSql} ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(proId);
@@ -307,9 +307,9 @@ function ownUpload(req) {
 
 router.post('/uploads', (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
-  const mime = String(req.body.mime || '').split(';')[0];
+  const mime = String(req.body.mime || '').split(';')[0].toLowerCase();
   const size = Number(req.body.size);
-  if (!UP.VIDEO_EXT[mime]) throw new U.HttpError(400, 'Envie um vídeo MP4, MOV ou WEBM.');
+  if (!(mime in UP.VIDEO_EXT)) throw new U.HttpError(400, 'Envie um vídeo MP4, MOV ou WEBM.');
   if (!(size > 0)) throw new U.HttpError(400, 'Vídeo inválido.');
   const id = require('node:crypto').randomBytes(16).toString('hex');
   require('node:fs').writeFileSync(UP.partPath(id), Buffer.alloc(0));

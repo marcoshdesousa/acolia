@@ -995,9 +995,13 @@
         if (done) return;
         done = true;
         const c = canvas || fallbackPoster();
-        c.toBlob((blob) => { URL.revokeObjectURL(url); resolve({ duration, poster: blob }); }, 'image/jpeg', 0.82);
+        c.toBlob((blob) => {
+          URL.revokeObjectURL(url);
+          if (blob) return resolve({ duration, poster: blob });
+          fallbackPoster().toBlob((b2) => resolve({ duration, poster: b2 }), 'image/jpeg', 0.82); // capa não saiu: usa a padrão
+        }, 'image/jpeg', 0.82);
       };
-      setTimeout(() => finish(Number.isFinite(v.duration) ? v.duration : null, null), 15000);
+      setTimeout(() => finish(Number.isFinite(v.duration) ? v.duration : null, null), 8000);
       v.addEventListener('loadedmetadata', () => {
         const d = Number.isFinite(v.duration) ? v.duration : null;
         if (!v.videoWidth) return finish(d, null);
@@ -1029,6 +1033,7 @@
   async function newReel(onDone) {
     let file = null;
     let meta = null;
+    let pending = null;
     await modal({
       title: 'Novo reel',
       html: `<p class="limit-note hidden" data-limit-note></p>
@@ -1040,7 +1045,9 @@
       actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
         label: 'Publicar',
         handler: async (dlg) => {
+          if (pending) meta = await pending; // tocou em Publicar enquanto o vídeo ainda era preparado
           if (!file || !meta) { toast('Escolha um vídeo.', 'error'); return false; }
+          if (meta.duration && meta.duration > REEL_MAX_SECS + 1) { toast(`O vídeo pode ter no máximo 1 minuto e 30 segundos. Este tem ${fmtSecs(meta.duration)}.`, 'error'); return false; }
           Uploads.add({ type: 'reel', label: 'Reel', file, poster: meta.poster, caption: $('[data-cap]', dlg).value,
             duration: meta.duration ? Math.round(meta.duration * 10) / 10 : null, onDone });
           return true;
@@ -1053,8 +1060,13 @@
           e.target.value = '';
           if (!f) return;
           $('[data-empty-pick]', dlg).innerHTML = `<span class="spinner"></span><small class="muted">Preparando o vídeo…</small>`;
-          const m = await readVideo(f);
+          file = f; meta = null;
+          pending = readVideo(f);
+          const m = await pending;
+          pending = null;
+          if (file !== f) return;
           if (m.duration && m.duration > REEL_MAX_SECS + 1) {
+            file = null;
             toast(`O vídeo pode ter no máximo 1 minuto e 30 segundos. Este tem ${fmtSecs(m.duration)}.`, 'error');
             $('[data-empty-pick]', dlg).innerHTML = `${ic('reel', 40)}<b>Escolher outro vídeo</b><small class="muted">Até 1 min e 30 s</small>`;
             return;
@@ -1373,7 +1385,7 @@
     $$('[data-all-posts]', container).forEach((moreBtn) => {
       moreBtn.addEventListener('click', () => {
         if (p.locked || !p.viewer_role) return onNeedAccount?.();
-        const kind = ['reel', 'text'].includes(moreBtn.dataset.allPosts) ? moreBtn.dataset.allPosts : 'photo';
+        const kind = moreBtn.dataset.allPosts === 'reel' ? 'reel' : 'photo';
         if (ctx.onAllPosts) ctx.onAllPosts(p.id, kind);
         else location.href = `${ctx.role === 'professional' ? '/painel' : '/app'}#posts/${p.id}/${kind}`;
       });
@@ -1444,7 +1456,7 @@
           offset += data.items.length;
           more = data.has_more;
         }
-        if (!grid.children.length) grid.innerHTML = `<p class="muted" style="grid-column:1/-1">${kind === 'reel' ? 'Nenhum vídeo ainda.' : kind === 'text' ? 'Nenhum texto ainda.' : 'Nenhuma foto ainda.'}</p>`;
+        if (!grid.children.length) grid.innerHTML = `<p class="muted" style="grid-column:1/-1">${kind === 'reel' ? 'Nenhum vídeo ainda.' : 'Nenhuma publicação ainda.'}</p>`;
       } catch (e) { toast(e.message, 'error'); more = false; }
       spin?.classList.toggle('hidden', !more);
       busy = false;
@@ -1458,14 +1470,13 @@
   // ---------- Página "Todas as publicações" de um profissional ----------
   // Grade com rolagem infinita; tocar abre a publicação. Botão para voltar ao perfil.
   function mountPostsPage(root, proId, { onBack, kind } = {}) {
-    kind = kind || (['reel', 'text'].includes(location.hash.split('/')[2]) ? location.hash.split('/')[2] : 'photo');
+    kind = kind || (location.hash.split('/')[2] === 'reel' ? 'reel' : 'photo');
     root.innerHTML = `<div class="posts-page">
         <div class="posts-top"><button type="button" class="btn ghost sm" data-back-profile>← Voltar para o perfil</button></div>
         <div class="posts-head" data-head></div>
         <div class="pv-tabs" role="tablist">
-          <button type="button" role="tab" data-pp-tab="photo" class="${kind === 'photo' ? 'active' : ''}">${ic('grid', 20)} Fotos</button>
+          <button type="button" role="tab" data-pp-tab="photo" class="${kind === 'photo' ? 'active' : ''}">${ic('grid', 20)} Publicações</button>
           <button type="button" role="tab" data-pp-tab="reel" class="${kind === 'reel' ? 'active' : ''}">${ic('reel', 20)} Vídeos</button>
-          <button type="button" role="tab" data-pp-tab="text" class="${kind === 'text' ? 'active' : ''}">${ic('text', 20)} Textos</button>
         </div>
         <div class="gallery-grid posts-grid" data-grid></div>
         <div class="spinner" data-loading></div>
@@ -1491,7 +1502,7 @@
         grid.insertAdjacentHTML('beforeend', data.items.map(gridTile).join(''));
         offset += data.items.length;
         more = data.has_more;
-        if (!offset) grid.innerHTML = `<p class="muted" style="grid-column:1/-1">${kind === 'reel' ? 'Nenhum vídeo ainda.' : kind === 'text' ? 'Nenhum texto ainda.' : 'Nenhuma foto ainda.'}</p>`;
+        if (!offset) grid.innerHTML = `<p class="muted" style="grid-column:1/-1">${kind === 'reel' ? 'Nenhum vídeo ainda.' : 'Nenhuma publicação ainda.'}</p>`;
       } catch (e) { toast(e.message, 'error'); more = false; }
       $('[data-loading]', root).classList.toggle('hidden', !more);
       busy = false;
@@ -1563,5 +1574,5 @@
     b.remove();
   });
 
-  window.AcoliaSocial = { openNewText: newText, resumeUploads: () => Uploads.resume(), openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
+  window.AcoliaSocial = { readVideo, openNewText: newText, resumeUploads: () => Uploads.resume(), openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
 })();

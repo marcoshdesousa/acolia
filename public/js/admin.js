@@ -411,28 +411,58 @@
   $('[data-official-more]').addEventListener('click', () => loadOfficial(false).catch((e) => toast(e.message, 'error')));
   $('[data-official-text]').addEventListener('click', () => AcoliaSocial.openNewText(() => loadOfficial(), { base: '/api/admin/official/texts', title: 'Novo texto da Acolia Brasil' }));
   $('[data-official-new]').addEventListener('click', () => AcoliaSocial.openNewPost(() => loadOfficial(), { base: '/api/admin/official/posts', title: 'Nova publicação da Acolia Brasil' }));
-  // Vídeo (reel) da Acolia Brasil: até 2 minutos, qualquer tamanho; a capa é tirada do próprio vídeo
+  // Vídeo (reel) da Acolia Brasil: até 2 minutos, qualquer tamanho. O aparelho lê a duração e tira
+  // a capa (se não conseguir, usa uma capa padrão) e o envio vai em pedaços, com a barrinha de progresso.
   $('[data-official-reel]').addEventListener('click', () => {
-    let file = null; let meta = null;
+    let file = null;
+    let metaP = null;
     modal({
       title: 'Novo vídeo da Acolia Brasil',
       html: `<div class="form-error hidden" data-err></div>
-        <label class="btn secondary block" style="margin-bottom:10px">Escolher vídeo<input type="file" accept="video/mp4,video/quicktime,video/webm" data-file hidden></label>
+        <label class="btn secondary block" style="margin-bottom:10px">Escolher vídeo<input type="file" accept="video/*" data-file hidden></label>
         <div class="small muted" data-info>Até 2 minutos · ideal em pé (1080 × 1920)</div>
         <video data-prev playsinline muted controls class="hidden" style="width:100%;max-height:360px;border-radius:12px;margin-top:10px;background:#000"></video>
-        <div class="field" style="margin-top:12px"><label>Descrição</label><textarea data-cap rows="3" maxlength="2200"></textarea></div>`,
+        <div class="up-bar hidden" data-bar style="height:8px;border-radius:4px;background:var(--surface-2);margin-top:12px;overflow:hidden"><i style="display:block;height:100%;width:0;background:var(--primary)"></i></div>
+        <div class="field" style="margin-top:12px"><label>Descrição</label><textarea data-cap rows="3"></textarea></div>`,
       actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
         label: 'Publicar',
         handler: async (dlg) => {
           const err = $('[data-err]', dlg);
-          const fail = (m) => { err.textContent = m; err.classList.remove('hidden'); return false; };
-          if (!file || !meta) return fail('Escolha um vídeo.');
-          if (meta.secs > 121) return fail('O vídeo pode ter no máximo 2 minutos.');
-          const fd = new FormData();
-          fd.append('video', file); fd.append('poster', meta.poster, 'capa.jpg');
-          fd.append('caption', $('[data-cap]', dlg).value); fd.append('duration', String(meta.secs));
-          $('[data-info]', dlg).textContent = 'Enviando… não feche esta janela.';
-          try { await api('/api/admin/official/reels', { method: 'POST', form: fd }); } catch (e) { return fail(e.message); }
+          const info = $('[data-info]', dlg);
+          const fail = (m) => { err.textContent = m; err.classList.remove('hidden'); btns.forEach((b) => { b.disabled = false; }); return false; };
+          const btns = $$('.dlg-actions .btn', dlg);
+          err.classList.add('hidden');
+          if (!file) return fail('Escolha um vídeo.');
+          btns.forEach((b) => { b.disabled = true; });
+          info.textContent = 'Preparando o vídeo…';
+          const meta = await metaP; // espera a leitura do vídeo terminar (não dá mais "escolha um vídeo")
+          if (meta.duration && meta.duration > 121) return fail(`O vídeo pode ter no máximo 2 minutos. Este tem ${Math.floor(meta.duration / 60)}:${String(Math.round(meta.duration % 60)).padStart(2, '0')}.`);
+          const bar = $('[data-bar]', dlg); bar.classList.remove('hidden');
+          try {
+            const s0 = await api('/api/admin/official/uploads', { method: 'POST', body: { mime: file.type || 'video/mp4', size: file.size } });
+            let got = 0;
+            const CH = 4 * 1024 * 1024;
+            while (got < file.size) {
+              const chunk = file.slice(got, Math.min(file.size, got + CH));
+              let r;
+              for (let tries = 0; ; tries++) {
+                try {
+                  const res = await fetch(`/api/admin/official/uploads/${s0.id}?offset=${got}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: chunk, credentials: 'same-origin' });
+                  r = await res.json();
+                  if (res.status === 409 || res.ok) break;
+                  throw new Error(r.error || 'Falha no envio.');
+                } catch (e) { if (tries >= 4) throw e; await new Promise((ok) => setTimeout(ok, 1500 * (tries + 1))); }
+              }
+              got = r.received;
+              bar.firstChild.style.width = `${Math.round((got / file.size) * 100)}%`;
+              info.textContent = `Enviando… ${Math.round((got / file.size) * 100)}% — não feche esta janela.`;
+            }
+            const fd = new FormData();
+            fd.append('photo', meta.poster, 'capa.jpg');
+            fd.append('caption', $('[data-cap]', dlg).value);
+            if (meta.duration) fd.append('duration', String(Math.round(meta.duration * 10) / 10));
+            await api(`/api/admin/official/uploads/${s0.id}/finish`, { method: 'POST', form: fd });
+          } catch (e) { return fail(e.message || 'Não foi possível enviar o vídeo. Tente de novo.'); }
           toast('Vídeo publicado!'); loadOfficial();
           return true;
         },
@@ -440,25 +470,17 @@
       onOpen: (dlg) => {
         const v = $('[data-prev]', dlg);
         $('[data-file]', dlg).addEventListener('change', (e) => {
-          file = e.target.files[0]; meta = null;
-          if (!file) return;
-          v.src = URL.createObjectURL(file); v.classList.remove('hidden');
-          // Navegador que não abre esse formato de vídeo: usa uma capa padrão da Acolia e publica assim mesmo
-          v.onerror = () => {
-            v.classList.add('hidden');
-            const c = document.createElement('canvas'); c.width = 1080; c.height = 1920; const g = c.getContext('2d');
-            const gr = g.createLinearGradient(0, 0, 0, 1920); gr.addColorStop(0, '#3f5a52'); gr.addColorStop(1, '#1d302b'); g.fillStyle = gr; g.fillRect(0, 0, 1080, 1920);
-            const img = new Image(); img.onload = () => { g.drawImage(img, 340, 760, 400, 400); c.toBlob((b) => { meta = { poster: b, secs: 0 }; $('[data-info]', dlg).textContent = `${(file.size / 1048576).toFixed(1)} MB · prévia indisponível neste navegador (a capa será o logo)`; }, 'image/jpeg', 0.85); };
-            img.src = '/img/logo-simbolo.png';
-          };
-          v.onloadedmetadata = () => { v.currentTime = Math.min(1, v.duration / 3); };
-          v.onseeked = () => {
-            if (meta) return;
-            const c = document.createElement('canvas'); const s = Math.min(1, 1080 / Math.max(v.videoWidth, v.videoHeight));
-            c.width = Math.round(v.videoWidth * s); c.height = Math.round(v.videoHeight * s);
-            c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-            c.toBlob((b) => { meta = { poster: b, secs: v.duration }; $('[data-info]', dlg).textContent = `${Math.round(v.duration)} s · ${(file.size / 1048576).toFixed(1)} MB`; }, 'image/jpeg', 0.85);
-          };
+          const f = e.target.files[0];
+          if (!f) return;
+          file = f;
+          $('[data-err]', dlg).classList.add('hidden');
+          $('[data-info]', dlg).textContent = `${(f.size / 1048576).toFixed(1)} MB · preparando…`;
+          v.src = URL.createObjectURL(f); v.classList.remove('hidden');
+          v.onerror = () => v.classList.add('hidden'); // navegador sem prévia desse formato: publica assim mesmo
+          metaP = AcoliaSocial.readVideo(f).then((m) => {
+            if (file === f) $('[data-info]', dlg).textContent = `${m.duration ? `${Math.round(m.duration)} s · ` : ''}${(f.size / 1048576).toFixed(1)} MB · pronto para publicar`;
+            return m;
+          });
         });
       },
     });

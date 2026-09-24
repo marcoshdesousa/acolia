@@ -59,21 +59,19 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
   };
   // No perfil aparecem só as 4 publicações mais recentes; "Ver todas" abre a página de publicações
   const { db } = require('./db');
-  // Fotos e vídeos (Reels) ficam separados no perfil: 4 de cada, cada um na sua aba
-  const recent = db.prepare(`SELECT id, image, thumb FROM posts WHERE professional_id = ? AND kind = 'photo' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id);
+  // Perfil: aba "Publicações" (fotos e textos juntos) e aba "Vídeos" (Reels): 4 de cada
+  const recent = db.prepare(`SELECT id, image, thumb, kind, caption, font FROM posts WHERE professional_id = ? AND kind <> 'reel' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id)
+    .map((r) => (r.kind === 'text' ? { id: r.id, kind: 'text', caption: r.caption.slice(0, 300), font: r.font || 'padrao' } : { id: r.id, image: r.image, thumb: r.thumb, kind: 'photo' }));
   const recentReels = db.prepare(`SELECT id, image, thumb FROM posts WHERE professional_id = ? AND kind = 'reel' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id);
-  const recentTexts = db.prepare(`SELECT id, caption, font FROM posts WHERE professional_id = ? AND kind = 'text' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id)
-    .map((r) => ({ id: r.id, kind: 'text', caption: r.caption.slice(0, 300), font: r.font || 'padrao' }));
   const postsCount = db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(p.id).n;
-  const photosCount = db.prepare("SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = 'photo'").get(p.id).n;
   const reelsCount = db.prepare("SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = 'reel'").get(p.id).n;
-  const textsCount = postsCount - photosCount - reelsCount;
-  const gallery = recent.map((r) => r.thumb || r.image); // miniatura leve (600 px) quando existe
+  const photosCount = postsCount - reelsCount; // fotos + textos
+  // Visitante: foto vira a miniatura (600 px); texto vai como texto
+  const gallery = recent.map((r) => (r.kind === 'text' ? { kind: 'text', caption: r.caption, font: r.font } : r.thumb || r.image));
   const social = {
     posts_count: postsCount,
     photos_count: photosCount,
     reels_count: reelsCount,
-    texts_count: textsCount,
     // +1 nos dois: a Acolia Brasil segue todo profissional e todo profissional segue a Acolia Brasil
     followers_count: db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(p.id).n + 1,
     following_count: db.prepare("SELECT COUNT(*) n FROM follows WHERE follower_role = 'professional' AND follower_id = ?").get(p.id).n + 1,
@@ -102,8 +100,6 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
       gallery_hidden: photosCount - free,
       reels: recentReels.slice(0, freeGalleryCount(recentReels.length)).map((r) => r.image),
       reels_hidden: reelsCount - freeGalleryCount(recentReels.length),
-      texts: recentTexts.slice(0, freeGalleryCount(recentTexts.length)),
-      texts_hidden: textsCount - freeGalleryCount(recentTexts.length),
     };
   }
   return {
@@ -121,7 +117,6 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     gallery,
     gallery_posts: recent.map((r) => ({ ...r, count: Math.max(1, db.prepare('SELECT COUNT(*) n FROM post_images WHERE post_id = ?').get(r.id).n) })),
     reels_posts: recentReels.map((r) => ({ ...r, kind: 'reel', count: 1 })),
-    texts_posts: recentTexts,
     gallery_hidden: 0,
   };
 }

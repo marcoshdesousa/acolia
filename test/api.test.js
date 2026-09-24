@@ -1722,6 +1722,23 @@ test('Acolia Brasil publica vídeo (reel) pelo admin e ele aparece nos Reels', a
   const reels = (await pt.get('/api/social/reels')).data.items;
   assert.ok(reels.some((x) => x.id === d.id), 'aparece nos Reels do paciente');
   assert.equal((await pt.post('/api/admin/official/reels')).status, 401, 'paciente não publica pelo admin');
+  // envio em partes (vídeo grande pelo painel)
+  const video = Buffer.alloc(9 * 1024 * 1024, 7);
+  const s = await admin.post('/api/admin/official/uploads', { mime: 'video/mp4', size: video.length });
+  assert.equal(s.status, 201, JSON.stringify(s.data));
+  for (let off = 0; off < video.length; off += 4 * 1024 * 1024) {
+    const part = video.subarray(off, off + 4 * 1024 * 1024);
+    const pr = await fetch(`${base}/api/admin/official/uploads/${s.data.id}?offset=${off}`, { method: 'PUT', body: part, headers: { Cookie: admin.cookie, 'Content-Type': 'application/octet-stream' } });
+    assert.equal(pr.status, 200, await pr.text());
+  }
+  const fin = new FormData();
+  fin.append('photo', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'c.png');
+  fin.append('caption', 'Vídeo grande'); fin.append('duration', '100');
+  r = await fetch(`${base}/api/admin/official/uploads/${s.data.id}/finish`, { method: 'POST', body: fin, headers: { Cookie: admin.cookie } });
+  const big = await r.json();
+  assert.equal(r.status, 201, JSON.stringify(big));
+  assert.equal(big.kind, 'reel');
+  assert.ok((await pt.get('/api/social/reels')).data.items.some((x) => x.id === big.id), 'vídeo em partes aparece nos Reels');
 });
 
 test('publicação de texto: profissional e Acolia Brasil, 4 fontes, sem limite de tamanho; legenda longa', async () => {
@@ -1739,9 +1756,11 @@ test('publicação de texto: profissional e Acolia Brasil, 4 fontes, sem limite 
   assert.equal(r.data.font, 'padrao', 'fonte fora das 4 vira a padrão');
   // perfil conta textos e mostra na aba
   const prof = (await pro.get(`/api/professionals/${c.data.id}`)).data;
-  assert.equal(prof.texts_count, 2);
-  const list = (await pro.get(`/api/social/professionals/${c.data.id}/posts?kind=text`)).data;
+  assert.equal(prof.photos_count, 2, 'textos entram em Publicações (sem aba própria)');
+  assert.equal(prof.texts_count, undefined);
+  const list = (await pro.get(`/api/social/professionals/${c.data.id}/posts?kind=photo`)).data;
   assert.equal(list.items.length, 2);
+  assert.ok(list.items.every((x) => x.kind === 'text'));
   assert.ok(list.items[0].caption.length <= 300, 'na grade vai só o começo');
   // não vai para o story
   assert.equal((await pro.post(`/api/social/posts/${r.data.id}/story`)).status, 400);

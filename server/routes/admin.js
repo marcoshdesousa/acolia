@@ -411,6 +411,48 @@ router.post('/limits', (req, res) => {
     res.status(201).json(postRow(S.createText(O.officialId(), req.body.text, req.body.font)));
   });
 
+  // Vídeo da Acolia Brasil em pedaços (igual ao dos profissionais): aguenta vídeo grande e internet instável
+  const UPL = require('../upload');
+  const offUpload = (id) => {
+    const u = db.prepare('SELECT * FROM upload_sessions WHERE id = ? AND professional_id = ?').get(String(id), O.officialId());
+    if (!u) throw new U.HttpError(404, 'Envio não encontrado. Comece de novo.');
+    return u;
+  };
+  router.post('/official/uploads', (req, res) => {
+    const mime = String(req.body.mime || '').split(';')[0].toLowerCase();
+    const size = Number(req.body.size);
+    if (!(mime in UPL.VIDEO_EXT)) throw new U.HttpError(400, 'Envie um vídeo MP4, MOV ou WEBM.');
+    if (!(size > 0)) throw new U.HttpError(400, 'Vídeo inválido.');
+    const id = require('node:crypto').randomBytes(16).toString('hex');
+    require('node:fs').writeFileSync(UPL.partPath(id), Buffer.alloc(0));
+    db.prepare("INSERT INTO upload_sessions (id, professional_id, kind, mime, size) VALUES (?, ?, 'reel', ?, ?)").run(id, O.officialId(), mime, size);
+    res.status(201).json({ id, received: 0, size });
+  });
+  router.put('/official/uploads/:id', require('express').raw({ type: 'application/octet-stream', limit: 8 * 1024 * 1024 }), (req, res) => {
+    const u = offUpload(req.params.id);
+    const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (Number(req.query.offset) !== u.received) return res.status(409).json({ received: u.received, size: u.size });
+    if (u.received + buf.length > u.size) throw new U.HttpError(400, 'O vídeo ficou maior do que o informado.');
+    require('node:fs').appendFileSync(UPL.partPath(u.id), buf);
+    db.prepare('UPDATE upload_sessions SET received = received + ? WHERE id = ?').run(buf.length, u.id);
+    res.json({ received: u.received + buf.length, size: u.size });
+  });
+  router.post('/official/uploads/:id/finish', async (req, res) => {
+    const u = offUpload(req.params.id);
+    if (u.received !== u.size) return res.status(409).json({ error: 'O vídeo ainda não chegou inteiro.', received: u.received, size: u.size });
+    const poster = await handlePhoto(req, res);
+    const secs = Number(req.body.duration) || 0;
+    if (secs > S.OFFICIAL_REEL_MAX_SECS + 1) {
+      removePhoto(poster);
+      db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(u.id);
+      require('node:fs').promises.unlink(UPL.partPath(u.id)).catch(() => {});
+      throw new U.HttpError(400, 'O vídeo pode ter no máximo 2 minutos.');
+    }
+    const video = UPL.finishPart(u.id, u.mime);
+    db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(u.id);
+    res.status(201).json(postRow(S.createReel(O.officialId(), { video, poster }, req.body.caption, secs || null)));
+  });
+
   // Vídeo (reel) do perfil oficial: aparece no feed, nos Reels e no perfil da Acolia Brasil
   router.post('/official/reels', async (req, res) => {
     const UP = require('../upload');

@@ -128,7 +128,8 @@ function handleMedia(req, res) {
 }
 
 // Reels: vídeo (sem limite de tamanho; a duração é conferida na publicação) + a capa (um quadro do vídeo, gerado no aparelho)
-const VIDEO_EXT = { 'video/mp4': '.mp4', 'video/quicktime': '.mov', 'video/webm': '.webm' };
+// Formatos de vídeo aceitos (celulares às vezes informam m4v/3gp ou nada — aí vale como MP4)
+const VIDEO_EXT = { 'video/mp4': '.mp4', 'video/quicktime': '.mov', 'video/webm': '.webm', 'video/x-m4v': '.mp4', 'video/3gpp': '.3gp', 'application/octet-stream': '.mp4', '': '.mp4' };
 const reelUpload = multer({
   storage: multer.diskStorage({
     destination: UPLOAD_DIR,
