@@ -818,6 +818,9 @@ test('apagar mensagem: só quem enviou, para todos; o conteúdo sai do banco', a
   assert.equal(r.status, 200);
   r = await pt.post(`/api/chat/messages/${m2.id}/delete`);
   assert.equal(r.status, 200);
+  assert.equal((await gp.get('/api/chat/unread')).data.unread, 0, 'mensagem apagada não conta como nova');
+  const convList = (await gp.get('/api/chat/conversations')).data.items.find((c) => c.id === conv.id);
+  assert.equal(convList.unread, 0, 'nem no número da conversa');
 
   const { db } = require('../server/db');
   const row = db.prepare('SELECT kind, body FROM messages WHERE id = ?').get(m1.id);

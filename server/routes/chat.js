@@ -76,7 +76,7 @@ function summarize(role, c) {
   const hc = hideCol(role);
   const last = db.prepare(`SELECT ${MSG_COLS} FROM messages WHERE conversation_id = ? AND ${hc} = 0 ORDER BY id DESC LIMIT 1`).get(c.id) || null;
   const other = role === 'patient' ? 'professional' : 'patient';
-  const unread = db.prepare(`SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND sender_role = ? AND read_at IS NULL AND ${hc} = 0`).get(c.id, other).n;
+  const unread = db.prepare(`SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND sender_role = ? AND read_at IS NULL AND kind <> 'deleted' AND ${hc} = 0`).get(c.id, other).n;
   const b = blocksOf(c);
   return { id: c.id, archived: !!c[s], peer: peerOf(role, c), last_message: last, unread, updated_at: c.last_message_at || c.created_at,
     blocked_by_me: b[role], blocked_me: b[other] };
@@ -92,7 +92,7 @@ router.get('/conversations', (req, res) => {
   const blockedCount = db.prepare(`SELECT COUNT(*) n FROM conversations c JOIN chat_blocks b ON b.conversation_id = c.id AND b.blocker_role = ?
     WHERE c.${s.col} = ?`).get(req.auth.role, req.auth.user.id).n;
   const archivedUnread = db.prepare(`SELECT COUNT(*) n FROM messages m JOIN conversations c ON c.id = m.conversation_id
-    WHERE c.${s.col} = ? AND c.${s.archivedCol} = 1 AND m.sender_role = ? AND m.read_at IS NULL AND m.${hideCol(req.auth.role)} = 0`).get(req.auth.user.id, s.other).n;
+    WHERE c.${s.col} = ? AND c.${s.archivedCol} = 1 AND m.sender_role = ? AND m.read_at IS NULL AND m.kind <> 'deleted' AND m.${hideCol(req.auth.role)} = 0`).get(req.auth.user.id, s.other).n;
   const archivedCount = db.prepare(`SELECT COUNT(*) n FROM conversations c WHERE ${s.col} = ? AND ${s.archivedCol} = 1${onlyWritten}`).get(req.auth.user.id).n;
   res.json({ items: rows.map((c) => summarize(req.auth.role, c)), archived_count: archivedCount, archived_unread: archivedUnread, blocked_count: blockedCount });
 });
@@ -303,7 +303,7 @@ router.post('/conversations/:id/archive', (req, res) => {
 router.get('/unread', (req, res) => {
   const s = side(req);
   const n = db.prepare(`SELECT COUNT(*) n FROM messages m JOIN conversations c ON c.id = m.conversation_id
-    WHERE c.${s.col} = ? AND m.sender_role = ? AND m.read_at IS NULL AND m.${hideCol(req.auth.role)} = 0
+    WHERE c.${s.col} = ? AND m.sender_role = ? AND m.read_at IS NULL AND m.kind <> 'deleted' AND m.${hideCol(req.auth.role)} = 0
       AND NOT EXISTS (SELECT 1 FROM chat_blocks b WHERE b.conversation_id = c.id AND b.blocker_role = ?)`).get(req.auth.user.id, s.other, req.auth.role).n;
   res.json({ unread: n });
 });

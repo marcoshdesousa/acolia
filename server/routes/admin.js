@@ -56,10 +56,11 @@ function filterRows(rows, q) {
 const storageInfo = () => require('../paths').storageStatus();
 
 // Quanto espaço está sendo usado no disco (fotos, vídeos, áudios, documentos, banco).
-// Conta os arquivos de verdade; guarda o resultado por 1 minuto para não pesar.
+// Conta os arquivos de verdade; guarda o resultado por 5 segundos (só para não repetir a conta
+// várias vezes ao abrir a tela — logo depois de publicar ou apagar, o número já aparece certo).
 let usageCache = { at: 0, data: null };
 function diskUsage() {
-  if (Date.now() - usageCache.at < 60e3 && usageCache.data) return usageCache.data;
+  if (Date.now() - usageCache.at < 5e3 && usageCache.data) return usageCache.data;
   const fs = require('node:fs');
   const path = require('node:path');
   const { DATA_DIR } = require('../paths');

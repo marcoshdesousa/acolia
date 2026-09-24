@@ -288,6 +288,7 @@
       const r = await api(`/api/social/follow/${id}`, { method: on ? 'DELETE' : 'POST' });
       all.forEach((b) => { b.classList.toggle('following', r.following); b.textContent = r.following ? 'Seguindo' : 'Seguir'; });
       toast(r.following ? 'Agora você segue este profissional' : 'Você deixou de seguir este profissional');
+      window.dispatchEvent(new Event('acolia:follow-changed'));
     } catch (e) { toast(e.message, 'error'); }
     all.forEach((b) => { b.disabled = false; });
   }
@@ -1369,6 +1370,9 @@
     opts.socket?.on('social:notification', refreshBell);
     window.addEventListener('acolia:stories', loadStories);
     window.addEventListener('acolia:posted', () => loadFeed(true));
+    // Seguiu ou deixou de seguir alguém: os stories atualizam na hora e o feed quando voltar ao Início
+    let stale = false;
+    window.addEventListener('acolia:follow-changed', () => { stale = true; loadStories(); });
     if (isPro) Uploads.resume();
 
     const topBar = $('.home-top', root);
@@ -1377,7 +1381,8 @@
     // Tocar na casinha (ou no título "Início") já estando no Início: sobe e atualiza
     const toTop = () => { window.scrollTo({ top: 0, behavior: 'smooth' }); reload(); };
     reload();
-    return { reload, refreshBell, toTop };
+    const refreshIfStale = () => { if (stale) { stale = false; reload(); } };
+    return { reload, refreshBell, toTop, refreshIfStale };
   }
 
   // ---------- Perfil: grade de publicações e botão Seguir ----------
@@ -1407,6 +1412,7 @@
           fb.classList.toggle('following', r.following);
           fb.textContent = r.following ? 'Seguindo' : 'Seguir';
           $$('[data-followers]', container).forEach((el) => { el.textContent = r.followers; });
+          window.dispatchEvent(new Event('acolia:follow-changed'));
         } catch (ex) { toast(ex.message, 'error'); }
       });
     }

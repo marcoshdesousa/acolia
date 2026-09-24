@@ -76,6 +76,7 @@
     form.name.value = me.name;
     form.profession.value = me.profession;
     form.registry.value = me.registry;
+    form.registry.closest('.field').classList.toggle('hidden', !me.registry); // psicanalista, psicoterapeuta e terapeuta: sem conselho
     form.phone.value = fmtPhone(me.phone);
     form.email.value = me.email || '';
     form.specialties.value = me.specialties;
@@ -274,6 +275,7 @@
     $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
     $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'verpro' || v === 'posts' ? 'profissionais' : v)));
     if (v === 'posts' && arg) AcoliaSocial.mountPostsPage($('[data-posts-page]'), Number(arg), { onBack: (id) => openPro(id) });
+    if (v === 'inicio' && home) home.refreshIfStale();
     if (v === 'inicio' && !home) {
       home = AcoliaSocial.mountHome($('[data-home]'), {
         role: 'professional', me, socket, onOpenProfile: openPro,
@@ -283,7 +285,7 @@
     }
     if (v === 'profissionais' && !catalogMounted) {
       catalogMounted = true;
-      AcoliaCatalog.mount($('[data-catalog]'), { loggedIn: false, viewerRole: 'professional', profileHref: (p) => `#verpro/${p.id}` });
+      AcoliaCatalog.mount($('[data-catalog]'), { loggedIn: false, viewerRole: 'professional', excludeId: me.id, profileHref: (p) => `#verpro/${p.id}` });
     }
     if (v === 'verpro' && arg) showPro(Number(arg));
     if (v === 'perfil') loadMyPosts(); // sempre atualizada (inclusive depois de publicar no Início)

@@ -75,7 +75,7 @@
     $$('[data-pending]').forEach((el) => { el.textContent = s.pending || ''; });
     const st = s.storage;
     $('[data-storage]').innerHTML = st.permanent
-      ? `<div class="notice ok">✓ Dados salvos de forma permanente — ${esc(st.label)}. Contas, logins, mensagens e fotos não se perdem em atualizações. (${s.patients} pacientes, ${s.professionals} profissionais, ${s.messages} mensagens guardadas)</div>`
+      ? `<div class="notice ok">✓ Dados salvos de forma permanente — ${esc(st.label)}. Contas, logins, mensagens e fotos não se perdem em atualizações. (${s.patients} paciente${s.patients === 1 ? '' : 's'}, ${s.professionals} profissiona${s.professionals === 1 ? 'l' : 'is'}, ${s.messages} mensage${s.messages === 1 ? 'm guardada' : 'ns guardadas'})</div>`
       : `<div class="notice danger"><b>Atenção: os dados ainda não estão num disco permanente</b> (${esc(st.label)}). Contas criadas agora podem sumir na próxima atualização.<br>
           <b>Como resolver (uma vez só):</b> no Render, abra o serviço → <b>Disks</b> → <b>Add Disk</b> → Mount Path: <code>/var/data</code> → tamanho 1 GB → <b>Save</b>. O site encontra o disco sozinho e este aviso fica verde.</div>`;
     // Espaço usado no disco
@@ -237,11 +237,13 @@
     else if (p.status === 'excluido') statusBtns = '<span class="muted">Conta excluída pelo próprio profissional.</span>';
     else statusBtns = btn('aprovado', p.status === 'recusado' ? 'Aprovar' : 'Reativar', '') + (p.status !== 'bloqueado' ? btn('bloqueado', 'Bloquear', 'danger') : '');
 
+    // Psicanalista, psicoterapeuta e terapeuta não têm conselho: sem registro nem carteirinha para conferir
+    const council = ['Psicólogo(a)', 'Neuropsicólogo(a)', 'Psiquiatra'].includes(p.profession);
     await modal({
       title: p.name,
       html: `
         <div class="row" style="margin-bottom:12px">${avatar(p.name, p.photo, 'lg')}<div>
-          <div><b>${esc(p.profession)}</b> · ${esc(p.registry)}</div>
+          <div><b>${esc(p.profession)}</b>${p.registry ? ` · ${esc(p.registry)}` : ''}</div>
           <div class="small">${STATUS_BADGE[p.status]}${p.is_test ? ' <span class="badge warn">Teste</span>' : ''} ${p.visible ? '<span class="badge primary">Na vitrine</span>' : '<span class="badge">Fora da vitrine</span>'}</div>
         </div></div>
         <table style="font-size:.9rem"><tbody>
@@ -249,14 +251,14 @@
           <tr><th>Link</th><td>${p.slug ? `<a href="/${esc(p.slug)}" target="_blank" rel="noopener">${esc(location.host)}/${esc(p.slug)}</a>` : '—'}</td></tr>
           <tr><th>Nome na carteirinha</th><td>${esc(p.legal_name)}</td></tr>
           ${p.plan ? `<tr><th>Plano escolhido</th><td>${esc(p.plan)}</td></tr>` : ''}
-          <tr><th>Registro</th><td><div class="row" style="gap:6px"><input data-registry value="${esc(p.registry)}" maxlength="40" style="width:auto;min-height:34px;padding:4px 8px">
+          ${council || p.registry ? `<tr><th>Registro</th><td><div class="row" style="gap:6px"><input data-registry value="${esc(p.registry)}" maxlength="40" style="width:auto;min-height:34px;padding:4px 8px">
             <button type="button" class="btn ghost sm" data-save-registry>Salvar</button></div>
-            ${p.registry_verified ? '<span class="badge ok">Conferido no conselho</span>' : '<span class="badge warn">Conferir pela carteirinha</span>'}</td></tr>
+            ${p.registry_verified ? '<span class="badge ok">Conferido no conselho</span>' : '<span class="badge warn">Conferir pela carteirinha</span>'}</td></tr>` : ''}
           <tr><th>Carteirinha</th><td>${p.has_document
             ? (p.document_is_pdf ? `<a href="/api/admin/professionals/${p.id}/document" target="_blank" rel="noopener">Abrir PDF da carteirinha</a>`
               : `<a href="/api/admin/professionals/${p.id}/document" target="_blank" rel="noopener"><img src="/api/admin/professionals/${p.id}/document" alt="Carteirinha de ${esc(p.name)}" style="max-height:220px;border-radius:8px;border:1px solid var(--line)"></a>`)
-            : `<span class="muted">${['Psicólogo(a)', 'Neuropsicólogo(a)', 'Psiquiatra'].includes(p.profession) ? 'Não enviada (cadastrado pela administração)' : 'Não precisa (profissão sem conselho: sem CRP/CRM)'}</span>`}
-            <div class="small muted">Confira se nome, número e estado batem com os dados acima antes de aprovar.</div></td></tr>
+            : `<span class="muted">${council ? 'Não enviada (cadastrado pela administração)' : 'Não precisa (profissão sem conselho: sem CRP/CRM)'}</span>`}
+            ${council ? '<div class="small muted">Confira se nome, número e estado batem com os dados acima antes de aprovar.</div>' : ''}</td></tr>
           <tr><th>E-mail</th><td>${esc(p.email)}</td></tr>
           <tr><th>WhatsApp</th><td><a href="https://wa.me/55${esc(p.phone)}" target="_blank" rel="noopener">${esc(fmtPhone(p.phone))}</a></td></tr>
           <tr><th>Local</th><td>${esc(p.city)} - ${esc(p.state)}<div class="small muted">Atende online${p.has_clinic ? ' e presencial' : ''}</div>${p.has_clinic ? `<div class="small">${esc(p.clinic_name)} — ${esc(p.clinic_address)}</div>` : ''}</td></tr>
@@ -286,7 +288,7 @@
       onOpen: (dlg) => {
         const refresh = async () => { dlg.close(); dlg.remove(); await reloadAll(); openPro(id); };
         $('[data-copy-code]', dlg).addEventListener('click', () => copyText(p.code));
-        $('[data-save-registry]', dlg).addEventListener('click', async () => {
+        $('[data-save-registry]', dlg)?.addEventListener('click', async () => {
           try {
             await api(`/api/admin/professionals/${id}/registry`, { method: 'POST', body: { registry: $('[data-registry]', dlg).value } });
             toast('Registro atualizado');

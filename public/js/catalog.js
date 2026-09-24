@@ -140,7 +140,7 @@
       let data;
       try {
         data = await api(`/api/professionals?${params}`);
-        items = data.items;
+        items = data.items.filter((p) => p.id !== opts.excludeId); // painel: a própria pessoa não aparece em "outros profissionais"
       } catch (e) { grid.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
       if (auto) {
         // Mostra no painel o filtro que foi aplicado automaticamente

@@ -177,6 +177,7 @@
       $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'perfil' || v === 'posts' ? backTo.slice(1) : v)));
       if (v === 'posts' && arg) AcoliaSocial.mountPostsPage($('[data-posts-page]'), Number(arg), { onBack: (id) => { location.hash = 'perfil/' + id; } });
       $('[data-back]').setAttribute('href', backTo);
+      if (v === 'inicio' && home) home.refreshIfStale();
       if (v === 'inicio' && !home) {
         home = AcoliaSocial.mountHome($('[data-home]'), {
           role: 'patient', me, socket, onOpenProfile: openPro,

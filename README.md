@@ -40,6 +40,8 @@ O site pode ser instalado como app (Android, iPhone e computador) pelo próprio 
 - Quando **os dois** limparam/apagaram a mesma mensagem, ela **sai do banco de vez**.
 - **Bloquear** (⋮ da conversa → "Bloquear paciente/profissional"): só as mensagens — ninguém manda mensagem nessa conversa e ela é limpa para quem bloqueou. O paciente continua vendo o perfil, fotos e vídeos do profissional (para não ver, é só deixar de seguir). Desbloquear em **Conversas → Bloqueados**.
 - **Conta apagada**: as conversas dela somem por completo (mensagens dos dois lados, áudios e a conversa).
+- Mensagem **apagada para todos não conta como nova** (nem no número da conversa nem no ícone do chat).
+- **Seguir / deixar de seguir** alguém pelo perfil: os stories do Início atualizam na hora e o feed recarrega quando você volta para o Início.
 
 ## Colocar no ar com um clique
 

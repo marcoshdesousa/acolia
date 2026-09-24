@@ -138,14 +138,15 @@ input.ro:focus { outline: none; }
 .tabs button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 
 /* Vitrine */
-.pro-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.pro-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); gap: 16px; }
 .pro-card { display: flex; flex-direction: column; gap: 10px; position: relative; }
 .pro-card .head { display: flex; gap: 12px; align-items: center; }
 .pro-card .name { font-weight: 800; font-size: 1.05rem; }
 .pro-card .bio { color: var(--muted); font-size: .92rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin: 0; }
 .pro-card .meta { display: flex; flex-wrap: wrap; gap: 6px; }
 .pro-card .price { font-weight: 800; font-size: 1.1rem; }
-.pro-card .actions { margin-top: auto; display: flex; gap: 8px; }
+.pro-card .actions { margin-top: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.pro-card .actions .btn { flex: 1 1 auto; }
 .locked { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: .88rem; background: var(--surface-2); padding: 8px 10px; border-radius: 10px; }
 .fav { position: absolute; top: 12px; right: 12px; }
 .fav.on svg { fill: var(--accent); stroke: var(--accent); }
