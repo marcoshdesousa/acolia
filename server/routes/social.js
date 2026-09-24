@@ -649,4 +649,4 @@ function purgeUserSocial(role, id) {
   db.prepare('DELETE FROM notifications WHERE (recipient_role = ? AND recipient_id = ?) OR (actor_role = ? AND actor_id = ?)').run(role, id, role, id);
 }
 
-module.exports = { getLimits, setLimits, overLimit, enforceLimits, purgeUserSocial, fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };
+module.exports = { createReel, REEL_MAX_SECS, getLimits, setLimits, overLimit, enforceLimits, purgeUserSocial, fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };

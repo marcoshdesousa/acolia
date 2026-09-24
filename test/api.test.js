@@ -1699,6 +1699,28 @@ test('conta apagada some de tudo: conversa, atendimentos, curtida, comentário, 
   assert.equal((await pro.get(`/api/chat/conversations/${items[0].id}/messages`)).data.items.length, 1, 'só a mensagem nova (as antigas não voltam)');
 });
 
+test('Acolia Brasil publica vídeo (reel) pelo admin e ele aparece nos Reels', async () => {
+  const fd = new FormData();
+  fd.append('video', new Blob([Buffer.from('fake-mp4-video')], { type: 'video/mp4' }), 'v.mp4');
+  fd.append('poster', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'c.png');
+  fd.append('caption', 'Bem-vindo à Acolia'); fd.append('duration', '30');
+  let r = await fetch(`${base}/api/admin/official/reels`, { method: 'POST', body: fd, headers: { Cookie: admin.cookie } });
+  const d = await r.json();
+  assert.equal(r.status, 201, JSON.stringify(d));
+  assert.equal(d.kind, 'reel');
+  const long = new FormData();
+  long.append('video', new Blob([Buffer.from('x')], { type: 'video/mp4' }), 'v.mp4');
+  long.append('poster', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'c.png');
+  long.append('duration', '300');
+  r = await fetch(`${base}/api/admin/official/reels`, { method: 'POST', body: long, headers: { Cookie: admin.cookie } });
+  assert.equal(r.status, 400, 'mais de 2 minutos não');
+  const pt = client();
+  await pt.post('/api/auth/patient/register', { name: 'Vera Reels', cpf: '100.023.747-81', birth_date: '1990-01-01', state: 'SP', city: 'Campinas', password: '123456' });
+  const reels = (await pt.get('/api/social/reels')).data.items;
+  assert.ok(reels.some((x) => x.id === d.id), 'aparece nos Reels do paciente');
+  assert.equal((await pt.post('/api/admin/official/reels')).status, 401, 'paciente não publica pelo admin');
+});
+
 // Por último: apaga tudo (é o que acontece uma vez só no início oficial da plataforma)
 test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {
   const { db } = require('../server/db');

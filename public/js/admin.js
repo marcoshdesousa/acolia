@@ -381,7 +381,7 @@
   let offOffset = 0;
   const offGrid = $('[data-official-posts]');
   function offTile(p) {
-    return `<button type="button" class="gallery-item" data-off-post="${p.id}" aria-label="Abrir publicação"><img src="${esc(p.image)}" alt="" loading="lazy">
+    return `<button type="button" class="gallery-item ${p.kind === 'reel' ? 'is-reel' : ''}" data-off-post="${p.id}" aria-label="Abrir publicação"><img src="${esc(p.image)}" alt="" loading="lazy">${p.kind === 'reel' ? `<span class="multi-ic" aria-hidden="true">${ICONS.play}</span>` : ''}
       <span class="off-stats">♥ ${p.likes} · 💬 ${p.comments}</span></button>`;
   }
   async function loadOfficial(reset = true) {
@@ -406,6 +406,51 @@
   }
   $('[data-official-more]').addEventListener('click', () => loadOfficial(false).catch((e) => toast(e.message, 'error')));
   $('[data-official-new]').addEventListener('click', () => AcoliaSocial.openNewPost(() => loadOfficial(), { base: '/api/admin/official/posts', title: 'Nova publicação da Acolia Brasil' }));
+  // Vídeo (reel) da Acolia Brasil: até 2 minutos e 70 MB; a capa é tirada do próprio vídeo
+  $('[data-official-reel]').addEventListener('click', () => {
+    let file = null; let meta = null;
+    modal({
+      title: 'Novo vídeo da Acolia Brasil',
+      html: `<div class="form-error hidden" data-err></div>
+        <label class="btn secondary block" style="margin-bottom:10px">Escolher vídeo<input type="file" accept="video/mp4,video/quicktime,video/webm" data-file hidden></label>
+        <div class="small muted" data-info>Até 2 minutos e 70 MB · ideal em pé (1080 × 1920)</div>
+        <video data-prev playsinline muted controls class="hidden" style="width:100%;max-height:360px;border-radius:12px;margin-top:10px;background:#000"></video>
+        <div class="field" style="margin-top:12px"><label>Descrição</label><textarea data-cap rows="3" maxlength="2200"></textarea></div>`,
+      actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
+        label: 'Publicar',
+        handler: async (dlg) => {
+          const err = $('[data-err]', dlg);
+          const fail = (m) => { err.textContent = m; err.classList.remove('hidden'); return false; };
+          if (!file || !meta) return fail('Escolha um vídeo.');
+          if (meta.secs > 121) return fail('O vídeo pode ter no máximo 2 minutos.');
+          if (file.size > 70 * 1024 * 1024) return fail('Vídeo muito grande (máximo 70 MB).');
+          const fd = new FormData();
+          fd.append('video', file); fd.append('poster', meta.poster, 'capa.jpg');
+          fd.append('caption', $('[data-cap]', dlg).value); fd.append('duration', String(meta.secs));
+          $('[data-info]', dlg).textContent = 'Enviando… não feche esta janela.';
+          try { await api('/api/admin/official/reels', { method: 'POST', form: fd }); } catch (e) { return fail(e.message); }
+          toast('Vídeo publicado!'); loadOfficial();
+          return true;
+        },
+      }],
+      onOpen: (dlg) => {
+        const v = $('[data-prev]', dlg);
+        $('[data-file]', dlg).addEventListener('change', (e) => {
+          file = e.target.files[0]; meta = null;
+          if (!file) return;
+          v.src = URL.createObjectURL(file); v.classList.remove('hidden');
+          v.onloadedmetadata = () => { v.currentTime = Math.min(1, v.duration / 3); };
+          v.onseeked = () => {
+            if (meta) return;
+            const c = document.createElement('canvas'); const s = Math.min(1, 1080 / Math.max(v.videoWidth, v.videoHeight));
+            c.width = Math.round(v.videoWidth * s); c.height = Math.round(v.videoHeight * s);
+            c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+            c.toBlob((b) => { meta = { poster: b, secs: v.duration }; $('[data-info]', dlg).textContent = `${Math.round(v.duration)} s · ${(file.size / 1048576).toFixed(1)} MB`; }, 'image/jpeg', 0.85);
+          };
+        });
+      },
+    });
+  });
   handleForm($('[data-official-ig]'), async (d) => {
     await api('/api/admin/official/instagram', { method: 'POST', body: d });
     toast('Instagram salvo!');

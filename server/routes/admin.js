@@ -384,7 +384,7 @@ router.post('/limits', (req, res) => {
     return p;
   };
   const postRow = (p) => ({
-    id: p.id, image: p.image, images: S.postImages(p), caption: p.caption, created_at: p.created_at,
+    id: p.id, kind: p.kind || 'photo', video: p.video || null, image: p.image, images: S.postImages(p), caption: p.caption, created_at: p.created_at,
     likes: db.prepare('SELECT COUNT(*) n FROM post_likes WHERE post_id = ?').get(p.id).n,
     comments: db.prepare('SELECT COUNT(*) n FROM post_comments WHERE post_id = ?').get(p.id).n,
   });
@@ -404,6 +404,19 @@ router.post('/limits', (req, res) => {
   router.post('/official/posts', async (req, res) => {
     const urls = await handlePhotos(req, res);
     res.status(201).json(postRow(S.createPost(O.officialId(), urls, req.body.caption, req.body.aspect)));
+  });
+
+  // Vídeo (reel) do perfil oficial: aparece no feed, nos Reels e no perfil da Acolia Brasil
+  router.post('/official/reels', async (req, res) => {
+    const UP = require('../upload');
+    const media = await UP.handleReel(req, res);
+    const secs = Number(req.body.duration) || 0;
+    if (!media?.video) throw new U.HttpError(400, 'Escolha um vídeo.');
+    if (secs > S.REEL_MAX_SECS + 1) {
+      UP.removePhoto(media.video); UP.removePhoto(media.poster);
+      throw new U.HttpError(400, 'O vídeo pode ter no máximo 2 minutos.');
+    }
+    res.status(201).json(postRow(S.createReel(O.officialId(), media, req.body.caption, secs || null)));
   });
 
   router.post('/official/posts/:id/thumb', async (req, res) => {
