@@ -125,7 +125,7 @@
       loggedIn: me.role === 'patient',
       me: me.role === 'patient' ? me.user : null,
       profileHref: (p) => me.role === 'patient' ? `/app#perfil/${p.id}` : `/${p.slug || 'profissional?id=' + p.id}`,
-      onMessage: (id) => { location.href = `/app#conversar/${id}`; },
+      onMessage: (id, post) => { location.href = `/app#conversar/${id}${post ? `/${post}` : ''}`; },
     });
   })();
   </script>

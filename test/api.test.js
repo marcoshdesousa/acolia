@@ -1851,6 +1851,44 @@ test('cadastro do profissional: escolhe o plano mensal de R$ 30 (plano inválido
   await admin.post(`/api/admin/professionals/${it.id}/delete`);
 });
 
+test('mensagem a partir de um post: o paciente envia a publicação só para quem publicou; profissional não envia post', async () => {
+  const mkPro = async (name, email, phone) => {
+    const c = await admin.post('/api/admin/professionals', { name, profession: 'Psicanalista', registry: '', email, phone, state: 'SP', city: 'Campinas' });
+    const cl = client(); await cl.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+    return { id: c.data.id, cl };
+  };
+  const A = await mkPro('Ana Post Lima', 'ana.post@example.com', '11919191911');
+  const B = await mkPro('Beto Post Reis', 'beto.post@example.com', '11919191912');
+  const pa = (await A.cl.post('/api/social/texts', { text: 'Reflexão da Ana', font: 'classica' })).data;
+  const pb = (await B.cl.post('/api/social/texts', { text: 'Reflexão do Beto' })).data;
+  const pt = client();
+  const cpf = (() => { const d = [2, 7, 1, 8, 2, 8, 1, 8, 3]; const dv = (a) => { const s = a.reduce((x, n, i) => x + n * (a.length + 1 - i), 0); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; d.push(dv(d)); d.push(dv(d)); return d.join(''); })();
+  assert.equal((await pt.post('/api/auth/patient/register', { name: 'Lia Post Souza', cpf, birth_date: '1992-02-02', state: 'SP', city: 'Campinas', password: '123456' })).status, 201);
+  const conv = (await pt.post('/api/chat/conversations', { professional_id: A.id })).data;
+  // publicação da própria Ana: vai, com foto/texto, nome e começo da legenda
+  let r = await pt.post(`/api/chat/conversations/${conv.id}/messages`, { kind: 'post', post_id: pa.id });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.kind, 'post');
+  assert.equal(r.data.post.id, pa.id);
+  assert.equal(r.data.post.author, 'Ana Post Lima');
+  assert.match(r.data.post.caption, /Reflexão da Ana/);
+  // publicação de outro profissional para a Ana: não
+  r = await pt.post(`/api/chat/conversations/${conv.id}/messages`, { kind: 'post', post_id: pb.id });
+  assert.equal(r.status, 403);
+  // publicação que não existe
+  assert.equal((await pt.post(`/api/chat/conversations/${conv.id}/messages`, { kind: 'post', post_id: 999999 })).status, 404);
+  // a Ana vê o cartão da publicação e não pode mandar post
+  const msgs = (await A.cl.get(`/api/chat/conversations/${conv.id}/messages`)).data.items;
+  assert.equal(msgs.find((m) => m.kind === 'post').post.id, pa.id);
+  assert.equal((await A.cl.post(`/api/chat/conversations/${conv.id}/messages`, { kind: 'post', post_id: pa.id })).status, 403, 'profissional não envia post');
+  // profissional não conversa com profissional
+  assert.ok((await B.cl.post('/api/chat/conversations', { professional_id: A.id })).status >= 400);
+  // publicação apagada depois: a mensagem mostra "indisponível"
+  await A.cl.del(`/api/social/posts/${pa.id}`);
+  const after = (await pt.get(`/api/chat/conversations/${conv.id}/messages`)).data.items.find((m) => m.kind === 'post');
+  assert.equal(after.post, null);
+});
+
 // Por último: apaga tudo (é o que acontece uma vez só no início oficial da plataforma)
 test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {
   const { db } = require('../server/db');

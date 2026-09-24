@@ -119,9 +119,10 @@
 
   // Só paciente (ou visitante, que é levado a criar conta) manda mensagem; profissional não manda para profissional
   const canMsg = (p) => !p.mine && !p.author.official && ctx.role !== 'professional';
-  function sendMessage(proId) {
-    if (ctx.onMessage) ctx.onMessage(proId);
-    else location.href = `/app#conversar/${proId}`;
+  // A partir de um post: a conversa abre com aquela publicação anexada para enviar junto
+  function sendMessage(proId, postId) {
+    if (ctx.onMessage) ctx.onMessage(proId, postId);
+    else location.href = `/app#conversar/${proId}${postId ? `/${postId}` : ''}`;
   }
 
   // Seguir / Seguindo no canto da publicação (não aparece na própria publicação — lá fica o ⋮)
@@ -142,7 +143,7 @@
         <button type="button" class="icon-btn" data-comments="${p.id}" aria-label="Comentários">${ic('comment')}<span class="cnt" data-ccount="${p.id}">${p.comments || ''}</span></button>
         <button type="button" class="icon-btn" data-share="${p.id}" aria-label="Compartilhar">${ic('plane')}</button>
         ${p.mine && p.kind !== 'text' ? `<button type="button" class="icon-btn to-story" data-to-story="${p.id}" aria-label="Colocar no meu story" title="Colocar no meu story">${ic('storyAdd')}</button>` : ''}
-        ${canMsg(p) ? `<button type="button" class="msg-pill" data-msg-pro="${p.author.id}" title="Enviar mensagem para marcar a consulta">${ic('send', 16)} Mensagem</button>` : ''}
+        ${canMsg(p) ? `<button type="button" class="msg-pill" data-msg-pro="${p.author.id}" data-msg-post="${p.id}" title="Enviar mensagem sobre esta publicação">${ic('send', 16)} Mensagem</button>` : ''}
       </div>
       ${p.likes ? `<div class="post-likes" data-lcount="${p.id}">${p.likes} ${p.likes === 1 ? 'curtida' : 'curtidas'}</div>` : `<div class="post-likes" data-lcount="${p.id}"></div>`}
       ${p.caption && p.kind !== 'text' ? (() => {
@@ -294,7 +295,7 @@
       const sh = e.target.closest('[data-share]');
       if (sh) return share(Number(sh.dataset.share));
       const msg = e.target.closest('[data-msg-pro]');
-      if (msg) return ctx.anon ? ctx.onNeedAccount?.() : sendMessage(Number(msg.dataset.msgPro));
+      if (msg) return ctx.anon ? ctx.onNeedAccount?.() : sendMessage(Number(msg.dataset.msgPro), Number(msg.dataset.msgPost) || null);
       const ro = e.target.closest('[data-reel-open]');
       if (ro) return openPost(Number(ro.dataset.reelOpen));
       if (e.target.closest('[data-sound]') || e.target.closest('[data-feed-video]')) {
@@ -1098,7 +1099,7 @@
         <div class="rv-act">${likeBtn(p.liked, `data-like="${p.id}"`)}<span data-lnum="${p.id}">${p.likes || ''}</span></div>
         <button type="button" class="rv-act" data-comments="${p.id}" aria-label="Comentários">${ic('comment', 30)}<span data-ccount="${p.id}">${p.comments || ''}</span></button>
         <button type="button" class="rv-act" data-share="${p.id}" aria-label="Compartilhar">${ic('plane', 30)}</button>
-        ${canMsg(p) ? `<button type="button" class="rv-act rv-msg" data-msg-pro="${p.author.id}" aria-label="Enviar mensagem para marcar a consulta">${ic('send', 26)}<span>Mensagem</span></button>` : ''}
+        ${canMsg(p) ? `<button type="button" class="rv-act rv-msg" data-msg-pro="${p.author.id}" data-msg-post="${p.id}" aria-label="Enviar mensagem sobre este vídeo">${ic('send', 26)}<span>Mensagem</span></button>` : ''}
         ${p.mine ? `<button type="button" class="rv-act" data-to-story="${p.id}" aria-label="Colocar no meu story">${ic('storyAdd', 30)}</button>
           <button type="button" class="rv-act" data-post-menu="${p.id}" aria-label="Opções"><span style="font-size:1.6rem;line-height:1">⋮</span></button>` : ''}
       </div>

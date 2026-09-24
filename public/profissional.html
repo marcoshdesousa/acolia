@@ -61,7 +61,7 @@
         actions: pro ? '' : '<button class="btn secondary" data-fav>' + heart + ' <span>' + (p.favorite ? 'Favorito' : 'Favoritar') + '</span></button>'
           + '<button class="btn" data-msg>' + chat + ' Enviar mensagem</button>',
       });
-      AcoliaSocial.setContext({ role: me.role, me: me.user, onOpenProfile: (id) => { location.href = '/profissional.html?id=' + id; }, onMessage: (id) => { location.href = '/app#conversar/' + id; } });
+      AcoliaSocial.setContext({ role: me.role, me: me.user, onOpenProfile: (id) => { location.href = '/profissional.html?id=' + id; }, onMessage: (id, post) => { location.href = '/app#conversar/' + id + (post ? '/' + post : ''); } });
       AcoliaSocial.bindProfile($('[data-profile]'), p, { onNeedAccount: needAccount });
       if (pro || p.official) return;
       let fav = !!p.favorite;

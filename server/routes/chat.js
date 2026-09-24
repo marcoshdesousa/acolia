@@ -123,15 +123,28 @@ router.get('/conversations/:id/messages', (req, res) => {
   const before = Number(req.query.before) || Number.MAX_SAFE_INTEGER;
   const limit = Math.min(Number(req.query.limit) || 60, 200);
   const rows = db.prepare(`SELECT ${MSG_COLS} FROM messages WHERE conversation_id = ? AND id < ? AND ${hideCol(req.auth.role)} = 0 ORDER BY id DESC LIMIT ?`).all(c.id, before, limit);
-  res.json({ items: rows.reverse(), has_more: rows.length === limit });
+  res.json({ items: rows.reverse().map(withPost), has_more: rows.length === limit });
 });
+
+// Publicação enviada no chat (paciente toca em "Mensagem" num post): a mensagem guarda só o id
+// do post; a foto/capa, o começo do texto e o nome vêm na hora (post apagado = "indisponível").
+function postInfo(id) {
+  const p = db.prepare(`SELECT po.id, po.kind, po.image, po.thumb, po.caption, po.font, po.professional_id, pr.name
+    FROM posts po JOIN professionals pr ON pr.id = po.professional_id WHERE po.id = ?`).get(Number(id));
+  if (!p) return null;
+  return { id: p.id, kind: p.kind || 'photo', image: p.kind === 'text' ? null : (p.thumb || p.image), caption: String(p.caption || '').slice(0, 220),
+    font: p.font || null, author: p.name, professional_id: p.professional_id };
+}
+function withPost(m) {
+  return m && m.kind === 'post' ? { ...m, post: postInfo(m.body) } : m;
+}
 
 function postMessage(req, c, kind, body) {
   const role = req.auth.role;
   const sender = req.auth.user;
   assertCanSend(role, c);
   const info = db.prepare('INSERT INTO messages (conversation_id, sender_role, kind, body) VALUES (?, ?, ?, ?)').run(c.id, role, kind, body);
-  const msg = db.prepare(`SELECT ${MSG_COLS} FROM messages WHERE id = ?`).get(Number(info.lastInsertRowid));
+  const msg = withPost(db.prepare(`SELECT ${MSG_COLS} FROM messages WHERE id = ?`).get(Number(info.lastInsertRowid)));
   db.prepare(`UPDATE conversations SET last_message_at = ?${role === 'patient' ? ', patient_wrote = 1' : ''} WHERE id = ?`).run(msg.created_at, c.id);
   rt.emit(`patient:${c.patient_id}`, 'message:new', msg);
   rt.emit(`professional:${c.professional_id}`, 'message:new', msg);
@@ -139,7 +152,7 @@ function postMessage(req, c, kind, body) {
   const to = role === 'patient' ? ['professional', c.professional_id, `/painel#conversas/${c.id}`] : ['patient', c.patient_id, `/app#chat/${c.id}`];
   const from = role === 'patient' ? (sender.display_name || sender.name) : sender.name;
   const text = kind === 'pix' ? 'Enviou a chave Pix para pagamento' : kind === 'call' ? 'Enviou um código de atendimento'
-    : kind === 'audio' ? '🎤 Enviou um áudio' : kind === 'doc' ? `📄 Enviou um documento: ${String(body).split('|')[1] || ''}` : body;
+    : kind === 'audio' ? '🎤 Enviou um áudio' : kind === 'doc' ? `📄 Enviou um documento: ${String(body).split('|')[1] || ''}` : kind === 'post' ? '📌 Enviou uma das suas publicações' : body;
   require('../push').notify(to[0], to[1], {
     title: from, body: text.length > 140 ? `${text.slice(0, 137)}…` : text, url: to[2], tag: `conversa-${c.id}`,
   });
@@ -153,6 +166,14 @@ router.post('/conversations/:id/messages', (req, res) => {
   assertCanSend(req.auth.role, c);
   let kind = 'text';
   let body = U.cleanText(req.body.body, 4000);
+  // Publicação: só o paciente envia, e só uma publicação do próprio profissional desta conversa
+  if (req.body.kind === 'post') {
+    if (req.auth.role !== 'patient') throw new U.HttpError(403, 'Somente o paciente envia publicações no chat.');
+    const p = postInfo(req.body.post_id);
+    if (!p) throw new U.HttpError(404, 'Esta publicação não está mais disponível.');
+    if (p.professional_id !== c.professional_id) throw new U.HttpError(403, 'Você só pode enviar uma publicação para o profissional que a publicou.');
+    return res.status(201).json(postMessage(req, c, 'post', String(p.id)));
+  }
   if (req.body.kind === 'pix') {
     if (req.auth.role !== 'professional') throw new U.HttpError(403, 'Somente o profissional envia a chave Pix.');
     if (!req.auth.user.pix_key) throw new U.HttpError(400, 'Cadastre sua chave Pix no seu perfil primeiro.');

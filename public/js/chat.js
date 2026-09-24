@@ -80,6 +80,7 @@
       if (m.kind === 'audio') return `${prefix}🎤 Áudio (${fmtSecs(audioParts(m.body).secs)})`;
       if (m.kind === 'deleted') return `${prefix}🚫 Mensagem apagada`;
       if (m.kind === 'doc') return `${prefix}📄 ${String(m.body).split('|')[1] || 'Documento'}`;
+      if (m.kind === 'post') return `${prefix}📌 Publicação`;
       return prefix + m.body;
     }
 
@@ -182,6 +183,7 @@
         <div class="messages-wrap">
           <div class="messages" data-messages></div>
         </div>
+        <div class="attach-bar hidden" data-attach></div>
         <form class="composer" data-composer>
           <textarea rows="1" placeholder="${!c.peer.active ? 'Esta conta não está mais ativa' : c.blocked_by_me || c.blocked_me ? 'Mensagens bloqueadas' : 'Digite uma mensagem'}" aria-label="Mensagem" ${canWrite(c) ? '' : 'disabled'} maxlength="4000"></textarea>
           <button class="icon-btn rec-cancel" type="button" data-rec-cancel aria-label="Apagar áudio" title="Apagar áudio">${ICONS.trash}</button>
@@ -209,7 +211,32 @@
       const form = $('[data-composer]', threadWrap);
       const ta = $('textarea', form);
       // Igual ao WhatsApp: campo vazio mostra o microfone; com texto, o botão de enviar
-      const syncButtons = () => form.classList.toggle('has-text', ta.value.trim().length > 0);
+      const syncButtons = () => form.classList.toggle('has-text', ta.value.trim().length > 0 || !!attach);
+      // Veio de um post (botão "Mensagem"): a publicação fica anexada e vai junto com a mensagem
+      let attach = null;
+      const bar = $('[data-attach]', threadWrap);
+      const showAttach = (p) => {
+        attach = p;
+        bar.classList.toggle('hidden', !p);
+        bar.innerHTML = p ? `${p.image ? `<img src="${esc(p.image)}" alt="">` : `<span class="ab-text">${ICONS.text || ''}</span>`}
+          <div class="grow" style="min-width:0"><b class="small">Publicação de ${esc(p.author?.name || '')}</b><div class="small muted ab-cap">${esc((p.caption || '').slice(0, 90)) || (p.kind === 'reel' ? 'Vídeo' : 'Foto')}</div></div>
+          <button type="button" class="icon-btn" data-attach-x aria-label="Tirar publicação">✕</button>` : '';
+        if (p) $('[data-attach-x]', bar).onclick = () => { showAttach(null); syncButtons(); };
+        syncButtons();
+      };
+      if (role === 'patient' && canWrite(c)) {
+        let pend = null;
+        try { pend = JSON.parse(sessionStorage.getItem('acolia-attach') || 'null'); } catch { /* ignora */ }
+        if (pend && pend.conv === c.id) {
+          try { sessionStorage.removeItem('acolia-attach'); } catch { /* ignora */ }
+          api(`/api/social/posts/${pend.post}`).then((p) => {
+            if (state.current?.id !== c.id || p.author?.id !== c.peer.id) return;
+            showAttach({ id: p.id, kind: p.kind, image: p.kind === 'text' ? null : (p.thumb || p.image), caption: p.caption, author: p.author });
+            ta.placeholder = 'Escreva algo sobre esta publicação (opcional)';
+            ta.focus();
+          }).catch(() => {});
+        }
+      }
       syncButtons();
       $('[data-mic]', form).addEventListener('click', () => startRecording(form));
       $('[data-rec-cancel]', form).addEventListener('click', () => stopRecording(form, 'cancel'));
@@ -231,6 +258,14 @@
         if (form.classList.contains('recording')) { stopRecording(form, 'send'); return; }
         if (form.classList.contains('previewing')) { sendRecording(form); return; }
         const body = ta.value.trim();
+        if (attach) {
+          const sendingPost = attach;
+          showAttach(null);
+          try {
+            addMessage(await api(`/api/chat/conversations/${c.id}/messages`, { method: 'POST', body: { kind: 'post', post_id: sendingPost.id } }));
+          } catch (ex) { showAttach(sendingPost); toast(ex.message, 'error'); return; }
+          ta.placeholder = 'Digite uma mensagem';
+        }
         if (!body) return;
         ta.value = '';
         ta.style.height = 'auto';
@@ -244,6 +279,8 @@
       box.addEventListener('scroll', () => { if (box.scrollTop < 60) loadOlder(); });
       // ⋮ na mensagem → "Apagar mensagem"
       box.addEventListener('click', (e) => {
+        const op = e.target.closest('[data-open-post]');
+        if (op && !e.target.closest('[data-msg-menu]')) { window.AcoliaSocial?.openPost?.(Number(op.dataset.openPost)); return; }
         const b = e.target.closest('[data-msg-menu]');
         const old = $('.msg-pop', box);
         if (old) old.remove();
@@ -443,6 +480,8 @@
         inner = `<div class="msg-card doc-card"><strong>${ICONS.doc.replace('<svg', '<svg style="width:20px;height:20px;vertical-align:-4px"')} ${esc(title || 'Documento')}</strong>
           <span class="small muted">Código de verificação: <b>${esc(code)}</b></span>
           <button type="button" class="btn ${mine ? 'secondary' : ''} sm" data-open-doc="${esc(code)}">${ICONS.doc} ${mine ? 'Ver documento' : 'Ver e salvar documento'}</button></div>`;
+      } else if (m.kind === 'post') {
+        inner = postCardHtml(m.post, mine);
       } else if (m.kind === 'deleted') {
         inner = `<span class="msg-deleted">${ICONS.ban} Mensagem apagada</span>`;
       } else {
@@ -451,6 +490,19 @@
       const menu = mine && m.kind !== 'deleted'
         ? `<button type="button" class="msg-menu" data-msg-menu="${m.id}" aria-label="Opções da mensagem" title="Opções">⋮</button>` : '';
       return `<div class="msg ${mine ? 'me' : ''} ${m.kind === 'audio' ? 'is-audio' : ''}" data-mid="${m.id}">${menu}${inner}<span class="when">${fmtTime(m.created_at)}${ticks}</span></div>`;
+    }
+
+    // Publicação enviada pelo paciente (a partir do botão "Mensagem" do post)
+    function postCardHtml(p, mine) {
+      if (!p) return `<div class="msg-card chat-post off">${ICONS.ban} <span>Publicação indisponível</span></div>`;
+      const media = p.kind === 'text'
+        ? `<div class="cp-text text-post font-${esc(p.font || 'padrao')}">${esc(p.caption.slice(0, 140))}</div>`
+        : `<div class="cp-media"><img src="${esc(p.image)}" alt="" loading="lazy">${p.kind === 'reel' ? `<span class="cp-play">${ICONS.play || '▶'}</span>` : ''}</div>`;
+      return `<button type="button" class="msg-card chat-post" data-open-post="${p.id}" aria-label="Abrir publicação">
+        <span class="cp-head small">${mine ? 'Você enviou' : 'Enviou'} ${p.kind === 'reel' ? 'um vídeo' : p.kind === 'text' ? 'um texto' : 'uma foto'} de <b>${esc(p.author)}</b></span>
+        ${media}
+        ${p.kind !== 'text' && p.caption ? `<span class="cp-cap small">${esc(p.caption)}</span>` : ''}
+        <span class="cp-open small">Ver publicação</span></button>`;
     }
 
     function renderMessages(scrollBottom) {
@@ -472,6 +524,8 @@
       $$('[data-open-doc]', box).forEach((b) => b.addEventListener('click', () => window.AcoliaDocs.openDoc(b.dataset.openDoc)));
       if (scrollBottom) box.scrollTop = box.scrollHeight;
       else box.scrollTop = box.scrollHeight - prevHeight + prevTop;
+      // Foto de publicação que termina de carregar depois: continua no fim da conversa
+      if (scrollBottom) $$('img', box).forEach((im) => { if (!im.complete) im.addEventListener('load', () => { box.scrollTop = box.scrollHeight; }, { once: true }); });
     }
 
     async function loadOlder() {
