@@ -49,6 +49,15 @@
   function supportLink(support, text) {
     return `https://wa.me/${String(support || '').replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
   }
+  // Profissional com cadastro em análise: aviso + botão para o WhatsApp de atendimento
+  function pendingProBox({ support, name = '', code = '' }) {
+    const msg = `Olá! Sou ${name}${code ? ` (código ${code})` : ''} e acabei de me cadastrar como profissional na Acolia. Gostaria de agilizar a análise do meu cadastro.`;
+    return `<div class="notice info" style="text-align:left">
+        <b>Seus dados estão sendo analisados pela nossa equipe.</b><br>
+        Para agilizar a aprovação, mande uma mensagem para o nosso canal de atendimento no WhatsApp. É por lá que conferimos sua carteirinha e combinamos a mensalidade.
+      </div>
+      <a class="btn block" href="${esc(supportLink(support, msg))}" target="_blank" rel="noopener" style="margin-top:12px">${ICONS.send} Falar com o atendimento no WhatsApp</a>`;
+  }
   function showBlocked(me) {
     const a = me.account || {};
     const isPro = me.role === 'professional';
@@ -155,7 +164,7 @@
     }
     const data = await res.json().catch(() => ({}));
     if (res.status === 423 && data.blocked) onBlocked();
-    if (!res.ok) throw Object.assign(new Error(data.error || 'Algo deu errado.'), { status: res.status });
+    if (!res.ok) throw Object.assign(new Error(data.error || 'Algo deu errado.'), { status: res.status, data });
     return data;
   }
 
@@ -664,7 +673,7 @@
 
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
-    confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
+    supportLink, pendingProBox, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
     handleForm, logout, showBlocked, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
   };
 })();

@@ -65,6 +65,7 @@ function createApp() {
     }
     next();
   });
+  require('./blocklist'); // lista de bloqueados (cria a tabela e inclui quem já estava bloqueado)
   app.use('/api/auth', require('./routes/auth').router);
   app.use('/api', require('./routes/public').router);
   app.use('/api/patient', require('./routes/patient').router);

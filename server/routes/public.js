@@ -12,7 +12,7 @@ router.get('/config', (_req, res) => {
   if (process.env.ICE_SERVERS) {
     try { iceServers = JSON.parse(process.env.ICE_SERVERS); } catch { console.error('ICE_SERVERS inválido (JSON)'); }
   }
-  res.json({ iceServers, professions: PROFESSIONS, ufs: U.UFS });
+  res.json({ iceServers, professions: PROFESSIONS, ufs: U.UFS, support: require('../accountState').SUPPORT_WHATSAPP });
 });
 
 // Vitrine de profissionais.

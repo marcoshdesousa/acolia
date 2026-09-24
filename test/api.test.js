@@ -1554,3 +1554,57 @@ test('paciente: nascimento obrigatório no cadastro (menor pode), não muda; reg
   me = (await pt.get('/api/auth/me')).data.user;
   assert.equal(me.cpf_masked, '***.602.380-**', 'CPF não muda');
 });
+
+test('bloqueio fica na lista: apagar a própria conta não libera; admin apagar libera', async () => {
+  const { db } = require('../server/db');
+  const CPF = '100.007.919-89';
+  const pdata = { name: 'Bia Bloqueio', cpf: CPF, birth_date: '1990-01-01', state: 'SP', city: 'Campinas', password: '123456' };
+  // paciente: cria, admin bloqueia, ela apaga a conta e cria de novo → nasce bloqueada
+  let pt = client();
+  assert.equal((await pt.post('/api/auth/patient/register', pdata)).status, 201);
+  let id = db.prepare('SELECT id FROM patients WHERE cpf = ?').get('10000791989').id;
+  assert.equal((await admin.post(`/api/admin/patients/${id}/status`, { status: 'bloqueado' })).status, 200);
+  assert.equal((await pt.post('/api/patient/delete', { cpf: CPF })).status, 200, 'bloqueada consegue apagar a conta');
+  pt = client();
+  assert.equal((await pt.post('/api/auth/patient/register', pdata)).status, 201, 'consegue criar de novo…');
+  assert.equal((await pt.get('/api/auth/me')).data.account.blocked, 'admin', '…mas já nasce bloqueada');
+  id = db.prepare('SELECT id FROM patients WHERE cpf = ?').get('10000791989').id;
+  // admin desbloqueia → libera
+  await admin.post(`/api/admin/patients/${id}/status`, { status: 'ativo' });
+  assert.ok(!(await pt.get('/api/auth/me')).data.account.blocked, 'desbloqueada pelo admin');
+  // bloqueia de novo e o ADMIN apaga → pode criar de novo, sem bloqueio
+  await admin.post(`/api/admin/patients/${id}/status`, { status: 'bloqueado' });
+  assert.equal((await admin.post(`/api/admin/patients/${id}/delete`)).status, 200);
+  pt = client();
+  assert.equal((await pt.post('/api/auth/patient/register', pdata)).status, 201);
+  assert.ok(!(await pt.get('/api/auth/me')).data.account.blocked, 'admin apagou: conta nova normal');
+
+  // profissional: cadastro em análise → login avisa com o WhatsApp de atendimento
+  const PRO2 = { name: 'Caio Bloqueio', profession: 'Psicanalista', registry: '', email: 'caio.bloq@example.com', phone: '(11) 97777-1234', state: 'SP', city: 'Campinas', password: 'segredo1' };
+  let r = await anon.form('/api/auth/professional/register', PRO2);
+  assert.equal(r.status, 201);
+  assert.equal(r.data.blocked, false);
+  assert.ok(r.data.support, 'cadastro devolve o WhatsApp de atendimento');
+  const code = r.data.code;
+  let pro = client();
+  r = await pro.post('/api/auth/professional/login', { login: code, password: 'segredo1' });
+  assert.equal(r.status, 403);
+  assert.equal(r.data.pending, true);
+  assert.ok(r.data.support);
+  const pid = db.prepare('SELECT id FROM professionals WHERE code = ?').get(code).id;
+  // admin bloqueia; ele entra, apaga a conta e se cadastra de novo → nasce bloqueado
+  await admin.post(`/api/admin/professionals/${pid}/status`, { status: 'bloqueado' });
+  assert.equal((await pro.post('/api/auth/professional/login', { login: code, password: 'segredo1' })).status, 200);
+  assert.equal((await pro.post('/api/professional/delete', { code })).status, 200);
+  r = await anon.form('/api/auth/professional/register', { ...PRO2, email: 'outro.email@example.com' });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.blocked, true, 'mesmo WhatsApp de conta bloqueada: nasce bloqueado');
+  assert.equal(db.prepare('SELECT status FROM professionals WHERE code = ?').get(r.data.code).status, 'bloqueado');
+  // admin apaga essa conta → pode se cadastrar de novo (e volta para a análise)
+  const pid2 = db.prepare('SELECT id FROM professionals WHERE code = ?').get(r.data.code).id;
+  await admin.post(`/api/admin/professionals/${pid2}/delete`);
+  r = await anon.form('/api/auth/professional/register', { ...PRO2, email: 'terceiro@example.com' });
+  assert.equal(r.data.blocked, false);
+  assert.equal(db.prepare('SELECT status FROM professionals WHERE code = ?').get(r.data.code).status, 'pendente', 'volta para a aprovação');
+  for (const e of ['terceiro@example.com']) db.prepare("DELETE FROM professionals WHERE email = ?").run(e);
+});

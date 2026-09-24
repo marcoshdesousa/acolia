@@ -45,8 +45,10 @@ router.post('/patient/register', async (req, res) => {
     verified = 1;
   }
 
-  const info = db.prepare(`INSERT INTO patients (name, cpf, cpf_name_verified, birth_date, state, city, city_norm, password_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(name, cpf, verified, birth, state, city, U.norm(city), U.hashPassword(req.body.password));
+  // CPF bloqueado pela administração (mesmo que tenha apagado a conta antiga): a conta nasce bloqueada
+  const status = require('../blocklist').isBlocked('patient', { cpf }) ? 'bloqueado' : 'ativo';
+  const info = db.prepare(`INSERT INTO patients (name, cpf, cpf_name_verified, birth_date, state, city, city_norm, password_hash, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name, cpf, verified, birth, state, city, U.norm(city), U.hashPassword(req.body.password), status);
   A.createSession(res, 'patient', Number(info.lastInsertRowid));
   res.status(201).json({ ok: true });
 });
@@ -142,9 +144,11 @@ router.post('/professional/register', async (req, res) => {
       verified = true;
     }
     if (!needsCard && documentFile) removeDocument(documentFile); // quem não tem conselho não precisa (nem guarda) carteirinha
+    // Bloqueado pela administração antes (mesmo e-mail, registro ou WhatsApp): a conta nasce bloqueada
+    const blocked = require('../blocklist').isBlocked('professional', { email: d.email, registry: reg.registry, phone: d.phone });
     const { code } = insertProfessional({ ...d, registry: reg.registry, document_file: needsCard ? documentFile : null, registry_verified: verified },
-      U.hashPassword(req.body.password), 'pendente');
-    res.status(201).json({ ok: true, code });
+      U.hashPassword(req.body.password), blocked ? 'bloqueado' : 'pendente');
+    res.status(201).json({ ok: true, code, blocked, support: require('../accountState').SUPPORT_WHATSAPP });
   } catch (e) {
     removeDocument(documentFile);
     throw e;
@@ -161,7 +165,10 @@ router.post('/professional/login', (req, res) => {
     throw new HttpError(401, 'Código/e-mail ou senha incorretos.');
   }
   A.clearLoginFailures(key);
-  if (p.status === 'pendente') throw new HttpError(403, 'Seu cadastro ainda está em análise. Você poderá entrar assim que a administração aprovar.');
+  if (p.status === 'pendente') {
+    return res.status(403).json({ error: 'Seus dados estão sendo analisados pela nossa equipe. Você poderá entrar assim que o cadastro for aprovado.',
+      pending: true, support: require('../accountState').SUPPORT_WHATSAPP, name: p.name, code: p.code });
+  }
   if (p.status === 'recusado') throw new HttpError(403, 'Seu cadastro não foi aprovado. Fale com a administração.');
   if (p.status === 'excluido') throw new HttpError(401, 'Código/e-mail ou senha incorretos.');
   A.createSession(res, 'professional', p.id);

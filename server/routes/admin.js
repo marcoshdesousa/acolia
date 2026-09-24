@@ -159,6 +159,9 @@ router.post('/professionals/:id/status', (req, res) => {
   // Na primeira aprovação, libera o primeiro período de mensalidade
   if (status === 'aprovado' && !until) until = U.addDaysISO(U.todayISO(), 30);
   db.prepare('UPDATE professionals SET status = ?, subscription_until = ? WHERE id = ?').run(status, until, p.id);
+  // Bloqueado fica na lista (mesmo que apague a conta e crie outra); qualquer outro status libera
+  if (status === 'bloqueado') require('../blocklist').block('professional', p);
+  else if (p.status === 'bloqueado') require('../blocklist').unblock('professional', p);
   // Bloqueado: continua conseguindo entrar, mas só vê a tela de bloqueio (o aparelho recarrega na hora)
   if (status === 'bloqueado') require('../realtime').emit(`professional:${p.id}`, 'account:blocked', {});
   if (status === 'recusado') A.destroyUserSessions('professional', p.id);
@@ -247,6 +250,7 @@ router.post('/professionals/:id/delete', (req, res) => {
   const p = db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
   if (p.status === 'excluido') throw new U.HttpError(400, 'Esta conta já foi apagada.');
+  require('../blocklist').unblock('professional', p); // o admin apagou: pode se cadastrar de novo (passa pela aprovação)
   require('./professional').wipeProfessional(p);
   res.json({ ok: true });
 });
@@ -255,6 +259,7 @@ router.post('/patients/:id/delete', (req, res) => {
   const p = db.prepare('SELECT * FROM patients WHERE id = ?').get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Paciente não encontrado.');
   if (p.status === 'excluido') throw new U.HttpError(400, 'Esta conta já foi apagada.');
+  require('../blocklist').unblock('patient', p); // o admin apagou: a pessoa pode criar a conta de novo
   require('./patient').wipePatient(p);
   res.json({ ok: true });
 });
@@ -281,6 +286,9 @@ router.post('/patients/:id/status', (req, res) => {
   if (!['ativo', 'bloqueado'].includes(status)) throw new U.HttpError(400, 'Status inválido.');
   const r = db.prepare("UPDATE patients SET status = ? WHERE id = ? AND status <> 'excluido'").run(status, Number(req.params.id));
   if (!r.changes) throw new U.HttpError(404, 'Paciente não encontrado.');
+  const pat = db.prepare('SELECT * FROM patients WHERE id = ?').get(Number(req.params.id));
+  if (status === 'bloqueado') require('../blocklist').block('patient', pat);
+  else require('../blocklist').unblock('patient', pat);
   if (status === 'bloqueado') require('../realtime').emit(`patient:${Number(req.params.id)}`, 'account:blocked', {});
   res.json({ ok: true, status });
 });

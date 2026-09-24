@@ -68,8 +68,19 @@
       await api('/api/auth/patient/login', { method: 'POST', body: d });
       location.replace(safeNext || '/');
     });
-    handleForm($('[data-login-pro]'), async (d) => {
-      await api('/api/auth/professional/login', { method: 'POST', body: d });
+    handleForm($('[data-login-pro]'), async (d, f) => {
+      try {
+        await api('/api/auth/professional/login', { method: 'POST', body: d });
+      } catch (e) {
+        // Cadastro em análise: mostra o aviso com o botão do WhatsApp de atendimento
+        if (e.data?.pending) {
+          let box = $('[data-pending-login]', f);
+          if (!box) { box = document.createElement('div'); box.dataset.pendingLogin = ''; box.style.marginTop = '14px'; f.appendChild(box); }
+          box.innerHTML = Acolia.pendingProBox(e.data);
+          return;
+        }
+        throw e;
+      }
       location.replace(safeNext || '/');
     });
     $('[data-recover]').addEventListener('click', async (e) => {

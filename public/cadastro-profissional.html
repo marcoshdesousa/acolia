@@ -32,7 +32,8 @@
           <input id="doc" name="document" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required>
           <div class="hint">Frente da carteirinha, com nome e número legíveis (JPG, PNG ou PDF, até 8 MB). Só a administração vê este arquivo.</div></div>
         <div class="field"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="email" required></div>
-        <div class="field"><label for="phone">WhatsApp (com DDD)</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="(94) 99999-9999" required></div>
+        <div class="field"><label for="phone">WhatsApp (com DDD)</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="(94) 99999-9999" required>
+          <div class="hint">Obrigatório. É por ele que a equipe Acolia fala com você (aprovação e mensalidade).</div></div>
         <div class="field"><label>Estado e município (o estado precisa ser o mesmo do seu conselho regional)</label>
           <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
         <div class="grid-2">
@@ -49,6 +50,7 @@
       <div class="code-box" data-code></div>
       <div class="notice">Tire um print ou anote este código agora. Se você perdê-lo, terá que pedir à administração, o que pode demorar.</div>
       <div class="row" style="justify-content:center"><button class="btn secondary" data-copy>Copiar código</button><button class="btn secondary" onclick="print()">Imprimir</button></div>
+      <div data-pending-box></div>
       <p class="muted">Assim que a administração aprovar seu cadastro, você poderá entrar e completar o seu perfil (foto, valores, pacotes e endereço).</p>
       <a class="btn" href="/">Ir para a página inicial</a>
     </div>
@@ -97,6 +99,10 @@
       fd.delete('password2');
       const r = await api('/api/auth/professional/register', { method: 'POST', form: fd });
       $('[data-code]').textContent = r.code;
+      $('[data-pending-box]').innerHTML = r.blocked
+        ? `<div class="notice danger" style="text-align:left"><b>Este cadastro está bloqueado.</b><br>Os dados informados pertencem a uma conta bloqueada pela administração. Para liberar, fale com o nosso atendimento.</div>
+           <a class="btn block" href="${esc(Acolia.supportLink(r.support, 'Olá! Meu cadastro de profissional na Acolia (código ' + r.code + ') está bloqueado. Gostaria de falar sobre a liberação.'))}" target="_blank" rel="noopener" style="margin-top:12px">Falar com o atendimento no WhatsApp</a>`
+        : Acolia.pendingProBox({ support: r.support, name: d.name, code: r.code });
       $('[data-copy]').onclick = () => copyText(r.code);
       $('[data-step1]').classList.add('hidden');
       $('[data-step2]').classList.remove('hidden');
