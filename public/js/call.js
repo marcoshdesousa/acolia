@@ -152,6 +152,17 @@
     });
   }
 
+  // ---------- Minijogo (1.3): dominó contra o robô, só para o paciente ----------
+  function setupGame(host) {
+    const btn = $('[data-game]');
+    if (host || !window.AcoliaDomino || !btn) return;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M7 12h10"/><circle cx="12" cy="7.2" r="1.2" fill="currentColor"/><circle cx="10" cy="15" r="1.1" fill="currentColor"/><circle cx="14" cy="18" r="1.1" fill="currentColor"/></svg>';
+    btn.classList.remove('hidden');
+    const game = window.AcoliaDomino.mount($('.call-stage'), { onToggle: (on) => { btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', String(on)); } });
+    btn.addEventListener('click', () => (game.isOpen ? game.close() : game.open()));
+    S.game = game;
+  }
+
   // ---------- 3. Sala ----------
   function join() {
     show('call');
@@ -172,6 +183,7 @@
 
     renderControls();
     setupBackground();
+    setupGame(host);
     S.socket = io();
     S.socket.on('connect', () => {
       S.socket.emit('call:join', { code: S.code }, (r) => {
@@ -427,6 +439,7 @@
   function finish(message, isError = false, canRejoin = false) {
     if (S.ended) return;
     S.ended = true;
+    S.game?.close(); // minijogo (1.3)
     stopTimer();
     closePc();
     S.local?.getTracks().forEach((t) => t.stop());
