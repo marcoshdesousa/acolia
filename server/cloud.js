@@ -63,6 +63,25 @@ async function get(objectPath) {
   throw new Error(`Supabase: falha ao baixar ${objectPath} (${res.status}) ${text.slice(0, 200)}`);
 }
 
+// Apaga tudo de uma pasta do bucket (ex.: "uploads"), de 100 em 100
+async function removeFolder(folder) {
+  if (!enabled) return 0;
+  let removed = 0;
+  for (let round = 0; round < 500; round++) {
+    const res = await request('POST', `object/list/${BUCKET}`, {
+      body: JSON.stringify({ prefix: `${folder}/`, limit: 100, offset: 0 }), headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) break;
+    const items = (await res.json()).filter((o) => o && o.name && o.id); // só arquivos (pastas vêm sem id)
+    if (!items.length) break;
+    await request('DELETE', `object/${BUCKET}`, {
+      body: JSON.stringify({ prefixes: items.map((o) => `${folder}/${o.name}`) }), headers: { 'Content-Type': 'application/json' },
+    });
+    removed += items.length;
+  }
+  return removed;
+}
+
 async function remove(objectPath) {
   await request('DELETE', `object/${BUCKET}`, {
     body: JSON.stringify({ prefixes: [objectPath] }), headers: { 'Content-Type': 'application/json' },
@@ -170,5 +189,5 @@ async function ensureLocalFile(folder, localFile) {
 }
 
 module.exports = {
-  enabled, restoreDb, attachDb, scheduleBackup, flush, backupNow, uploadFile, removeFile, ensureLocalFile,
+  enabled, restoreDb, attachDb, scheduleBackup, flush, backupNow, uploadFile, removeFile, removeFolder, ensureLocalFile,
 };

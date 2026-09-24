@@ -70,6 +70,7 @@ const CPF_A = '529.982.247-25';
 const CPF_B = '111.444.777-35';
 
 const admin = client();
+let CRP_SEQ = 30000; // CRPs válidos e diferentes para os profissionais criados nos testes
 const pro = client();
 const pat = client();
 const anon = client();
@@ -669,7 +670,7 @@ test('profissional só vê a conversa depois que o paciente manda mensagem', asy
 
 test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitante vê no máximo 2, sem ampliar)', async () => {
   const created = await admin.post('/api/admin/professionals', {
-    name: 'Lia Campos', profession: 'Psicólogo(a)', registry: 'X-10', email: 'lia@example.com', phone: '11966665555', state: 'SP', city: 'Campinas',
+    name: 'Lia Campos', profession: 'Psicólogo(a)', registry: 'CRP 06/20010', email: 'lia@example.com', phone: '11966665555', state: 'SP', city: 'Campinas',
   });
   const lp = client();
   await lp.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
@@ -723,7 +724,7 @@ test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitan
 
 test('clínica: link do Google Maps vira mini mapa, só para quem tem conta', async () => {
   const created = await admin.post('/api/admin/professionals', {
-    name: 'Davi Nunes', profession: 'Psicólogo(a)', registry: 'X-11', email: 'davi@example.com', phone: '11955554444', state: 'SP', city: 'Campinas',
+    name: 'Davi Nunes', profession: 'Psicólogo(a)', registry: 'CRP 06/20011', email: 'davi@example.com', phone: '11955554444', state: 'SP', city: 'Campinas',
   });
   const dp = client();
   await dp.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
@@ -755,7 +756,7 @@ test('clínica: link do Google Maps vira mini mapa, só para quem tem conta', as
 
 test('mensagem de voz: paciente e profissional mandam áudio; só quem participa ouve', async () => {
   const created = await admin.post('/api/admin/professionals', {
-    name: 'Eva Prado', profession: 'Psicólogo(a)', registry: 'X-12', email: 'eva@example.com', phone: '11944443333', state: 'SP', city: 'Campinas',
+    name: 'Eva Prado', profession: 'Psicólogo(a)', registry: 'CRP 06/20012', email: 'eva@example.com', phone: '11944443333', state: 'SP', city: 'Campinas',
   });
   const ep = client();
   await ep.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
@@ -792,7 +793,7 @@ test('mensagem de voz: paciente e profissional mandam áudio; só quem participa
 
 test('apagar mensagem: só quem enviou, para todos; o conteúdo sai do banco', async () => {
   const created = await admin.post('/api/admin/professionals', {
-    name: 'Gil Souto', profession: 'Psicólogo(a)', registry: 'X-13', email: 'gil@example.com', phone: '11933332222', state: 'SP', city: 'Campinas',
+    name: 'Gil Souto', profession: 'Psicólogo(a)', registry: 'CRP 06/20013', email: 'gil@example.com', phone: '11933332222', state: 'SP', city: 'Campinas',
   });
   const gp = client();
   await gp.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
@@ -863,7 +864,7 @@ test('vitrine do paciente: filtro automático pelo estado e, se houver, pelo mun
 
 test('v1.2 — seguir, feed (não vistas primeiro), curtir, comentar, stories e notificações', async () => {
   const mk = async (name, email) => {
-    const c = await admin.post('/api/admin/professionals', { name, profession: 'Psicólogo(a)', registry: `R-${email}`, email, phone: '11922221111', state: 'SP', city: 'Campinas' });
+    const c = await admin.post('/api/admin/professionals', { name, profession: 'Psicólogo(a)', registry: `CRP 06/${++CRP_SEQ}`, email, phone: '11922221111', state: 'SP', city: 'Campinas' });
     const cl = client();
     await cl.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
     return { id: c.data.id, cl };
@@ -988,7 +989,7 @@ test('v1.2 — seguir, feed (não vistas primeiro), curtir, comentar, stories e 
 });
 
 test('carrossel: uma publicação com até 10 fotos e uma descrição só', async () => {
-  const c = await admin.post('/api/admin/professionals', { name: 'Caro Sel', profession: 'Psicólogo(a)', registry: 'R-car', email: 'carosel@example.com', phone: '11922220000', state: 'SP', city: 'Campinas' });
+  const c = await admin.post('/api/admin/professionals', { name: 'Caro Sel', profession: 'Psicólogo(a)', registry: 'CRP 06/20020', email: 'carosel@example.com', phone: '11922220000', state: 'SP', city: 'Campinas' });
   const cl = client();
   await cl.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
   const send = async (n) => {
@@ -1019,7 +1020,7 @@ test('carrossel: uma publicação com até 10 fotos e uma descrição só', asyn
 
 test('publicação no story: só o dono coloca; quem segue vê e abre a publicação', async () => {
   const mk = async (name, email) => {
-    const c = await admin.post('/api/admin/professionals', { name, profession: 'Psicólogo(a)', registry: `R-${email}`, email, phone: '11911110000', state: 'SP', city: 'Campinas' });
+    const c = await admin.post('/api/admin/professionals', { name, profession: 'Psicólogo(a)', registry: `CRP 06/${++CRP_SEQ}`, email, phone: '11911110000', state: 'SP', city: 'Campinas' });
     const cl = client();
     await cl.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
     return { id: c.data.id, cl };
@@ -1057,7 +1058,7 @@ test('Acolia Brasil: o admin publica, todos seguem (sem deixar de seguir) e o pe
   const O = require('../server/official');
   const offId = O.officialId();
   const mkPro = async (name, email) => {
-    const c = await admin.post('/api/admin/professionals', { name, profession: 'Psicólogo(a)', registry: `R-${email}`, email, phone: '11933330000', state: 'SP', city: 'Campinas' });
+    const c = await admin.post('/api/admin/professionals', { name, profession: 'Psicólogo(a)', registry: `CRP 06/${++CRP_SEQ}`, email, phone: '11933330000', state: 'SP', city: 'Campinas' });
     const cl = client();
     await cl.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
     return { id: c.data.id, cl };
@@ -1143,7 +1144,7 @@ test('Acolia Brasil: o admin publica, todos seguem (sem deixar de seguir) e o pe
 });
 
 test('Reels: profissional publica vídeo de até 2 min; aparece no feed, na aba Reels e no perfil separado das fotos', async () => {
-  const c = await admin.post('/api/admin/professionals', { name: 'Rafa Reels', profession: 'Psicólogo(a)', registry: 'R-reels', email: 'rafareels@example.com', phone: '11944440000', state: 'SP', city: 'Campinas' });
+  const c = await admin.post('/api/admin/professionals', { name: 'Rafa Reels', profession: 'Psicólogo(a)', registry: 'CRP 06/20021', email: 'rafareels@example.com', phone: '11944440000', state: 'SP', city: 'Campinas' });
   const pro = client();
   await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
   const sendReel = async (who, duration, caption = 'Meu vídeo') => {
@@ -1214,7 +1215,7 @@ test('Reels: profissional publica vídeo de até 2 min; aparece no feed, na aba 
 });
 
 test('reel em pedaços: continua de onde parou (internet caiu / app no fundo) e publica no fim', async () => {
-  const c = await admin.post('/api/admin/professionals', { name: 'Pedro Pedaços', profession: 'Psicólogo(a)', registry: 'R-chunk', email: 'pedaco@example.com', phone: '11955550000', state: 'SP', city: 'Campinas' });
+  const c = await admin.post('/api/admin/professionals', { name: 'Pedro Pedaços', profession: 'Psicólogo(a)', registry: 'CRP 06/20022', email: 'pedaco@example.com', phone: '11955550000', state: 'SP', city: 'Campinas' });
   const pro = client();
   await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
   const video = Buffer.from('0123456789'.repeat(1000)); // 10 KB
@@ -1353,7 +1354,7 @@ test('limite de publicações: ao passar, a mais antiga sai; o admin muda o limi
   const path = require('node:path');
   // Começa com 15 fotos e 10 vídeos
   assert.deepEqual((await admin.get('/api/admin/limits')).data, { photo: 15, reel: 10 });
-  const c = await admin.post('/api/admin/professionals', { name: 'Lia Limite', profession: 'Psicólogo(a)', registry: 'R-limite', email: 'lia.limite@example.com', phone: '11955554444', state: 'SP', city: 'Campinas' });
+  const c = await admin.post('/api/admin/professionals', { name: 'Lia Limite', profession: 'Psicólogo(a)', registry: 'CRP 06/20023', email: 'lia.limite@example.com', phone: '11955554444', state: 'SP', city: 'Campinas' });
   const pro = client();
   await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
   const photo = async (i) => {
@@ -1408,7 +1409,7 @@ test('reel: mais de 70 MB é recusado (inteiro ou em pedaços)', async () => {
 
 test('chat: apagar para mim, limpar conversa, bloquear (só mensagens) e conta apagada some com tudo', async () => {
   const { db } = require('../server/db');
-  const created = await admin.post('/api/admin/professionals', { name: 'Téo Chat', profession: 'Psicólogo(a)', registry: 'R-chatblk', email: 'teo.chat@example.com', phone: '11922223333', state: 'SP', city: 'Campinas' });
+  const created = await admin.post('/api/admin/professionals', { name: 'Téo Chat', profession: 'Psicólogo(a)', registry: 'CRP 06/20024', email: 'teo.chat@example.com', phone: '11922223333', state: 'SP', city: 'Campinas' });
   const pro = client();
   await pro.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
   const pt = client();
@@ -1647,4 +1648,35 @@ test('plano de saúde: o profissional liga/desliga e aparece no perfil (online t
   assert.equal((await anon.get(`/api/professionals/${c.data.id}`)).data.accepts_insurance, true, 'visitante vê que aceita plano');
   r = await p.put('/api/professional/profile', { ...base, accepts_insurance: false });
   assert.equal(r.data.accepts_insurance, false);
+});
+
+test('admin não cadastra CRP/CRM inválido; profissão sem conselho entra sem registro', async () => {
+  const base = { name: 'Nina Registro', email: 'nina.reg@example.com', phone: '11912121212', state: 'SP', city: 'Campinas' };
+  assert.equal((await admin.post('/api/admin/professionals', { ...base, profession: 'Psicólogo(a)', registry: 'X-1' })).status, 400, 'CRP inválido');
+  assert.equal((await admin.post('/api/admin/professionals', { ...base, profession: 'Psicólogo(a)', registry: 'CRP 10/12346' })).status, 400, 'CRP de outro estado');
+  assert.equal((await admin.post('/api/admin/professionals', { ...base, profession: 'Psiquiatra', registry: 'CRM-PA 12345' })).status, 400, 'CRM de outro estado');
+  assert.equal((await admin.post('/api/admin/professionals', { ...base, profession: 'Psicólogo(a)', registry: '' })).status, 400, 'psicólogo sem CRP');
+  const ok = await admin.post('/api/admin/professionals', { ...base, profession: 'Psicanalista', registry: '' });
+  assert.equal(ok.status, 201, 'psicanalista sem registro');
+  assert.ok(ok.data.password, 'o admin recebe a senha gerada');
+});
+
+// Por último: apaga tudo (é o que acontece uma vez só no início oficial da plataforma)
+test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {
+  const { db } = require('../server/db');
+  const R = require('../server/launchReset');
+  assert.ok(db.prepare('SELECT COUNT(*) n FROM patients').get().n > 0);
+  db.prepare('DELETE FROM settings WHERE key = ?').run(R.KEY);
+  const before = R.runOnce();
+  assert.ok(before.patients > 0 && before.professionals > 0);
+  for (const t of ['patients', 'posts', 'messages', 'conversations', 'stories', 'follows', 'documents']) {
+    assert.equal(db.prepare(`SELECT COUNT(*) n FROM ${t}`).get().n, 0, `${t} vazio`);
+  }
+  assert.deepEqual(db.prepare('SELECT status FROM professionals').all().map((r) => r.status), ['oficial']);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM admins').get().n, 1);
+  assert.equal(R.runOnce(), null, 'não roda de novo');
+  const again = client();
+  assert.equal((await again.post('/api/auth/patient/register', { name: 'Maria Souza', cpf: CPF_A, birth_date: '1990-05-10', state: 'PA', city: 'Parauapebas', password: '123456' })).status, 201, 'CPF livre para criar de novo');
+  const t = (await admin.post('/api/admin/test-accounts')).data;
+  assert.equal(t.created.professional, true, 'admin reativa as contas de teste pelo botão');
 });

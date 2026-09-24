@@ -140,8 +140,25 @@ router.get('/professionals/:id', (req, res) => {
 });
 
 // Administrador cadastra um profissional diretamente (já aprovado)
-router.post('/professionals', (req, res) => {
+// O admin também não cadastra CRP/CRM inválido: psicólogo, neuropsicólogo e psiquiatra precisam de
+// registro válido e do mesmo estado (e, com a consulta ao conselho configurada, o nome tem que bater).
+// Psicanalista, psicoterapeuta e terapeuta (sem conselho) podem ser cadastrados sem registro.
+router.post('/professionals', async (req, res) => {
   const d = validateProfessionalInput(req.body);
+  const R = require('../registry');
+  if (R.councilFor(d.profession)) {
+    const reg = R.validateRegistry(d.profession, req.body.registry, d.state);
+    if (db.prepare('SELECT 1 FROM professionals WHERE registry = ?').get(reg.registry)) {
+      throw new U.HttpError(409, `Já existe um cadastro com o ${reg.registry}.`);
+    }
+    if (R.isApiConfigured()) {
+      const v = await R.verifyRegistry(reg, d.name);
+      if (v.error) throw new U.HttpError(503, 'Não foi possível consultar o conselho agora. Tente novamente em alguns minutos.');
+      if (!v.match) throw new U.HttpError(400, v.message || 'O registro não confere com o nome informado.');
+      d.registry_verified = true;
+    }
+    d.registry = reg.registry;
+  }
   const password = req.body.password ? String(req.body.password) : U.randomPassword(10);
   requirePassword(password);
   const until = U.addDaysISO(U.todayISO(), Number(req.body.days) > 0 ? Math.min(Number(req.body.days), 3650) : 30);

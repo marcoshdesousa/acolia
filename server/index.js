@@ -155,6 +155,7 @@ async function start(port = Number(process.env.PORT) || 3000) {
   console.log(`[dados] ${st.label}${st.permanent ? '' : ' — ATENÇÃO: não é permanente, adicione um disco no Render'}`);
   const { setupSocket } = require('./socket');
   ensureAdmin();
+  require('./launchReset').runOnce(); // início oficial: zera as contas de teste/antigas (uma vez só)
   require('./official').officialId(); // cria o perfil oficial Acolia Brasil (uma vez só)
   if (process.env.TEST_ACCOUNTS !== '0') require('./testAccounts').seedOnce();
   // Stories somem depois de 24 h
