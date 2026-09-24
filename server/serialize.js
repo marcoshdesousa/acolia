@@ -78,6 +78,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     state: p.state,
     city: p.city,
     has_clinic: !!p.has_clinic,
+    accepts_insurance: !!p.accepts_insurance,
     instagram: p.instagram || '',
   };
   if (!loggedIn) {
@@ -137,6 +138,7 @@ function ownProfessional(p) {
     state: p.state,
     city: p.city,
     has_clinic: !!p.has_clinic,
+    accepts_insurance: !!p.accepts_insurance,
     clinic_name: p.clinic_name,
     clinic_address: p.clinic_address,
     maps_url: p.maps_url || '',

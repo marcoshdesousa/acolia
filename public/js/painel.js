@@ -87,6 +87,7 @@
     form.state.innerHTML = ufOptions(me.state, 'UF');
     form.city.value = me.city;
     form.has_clinic.checked = me.has_clinic;
+    form.accepts_insurance.checked = me.accepts_insurance;
     $('[data-clinic]').classList.toggle('hidden', !me.has_clinic);
     form.clinic_name.value = me.clinic_name;
     form.clinic_address.value = me.clinic_address;
@@ -100,6 +101,7 @@
 
   handleForm(form, async (d) => {
     d.has_clinic = form.has_clinic.checked;
+    d.accepts_insurance = form.accepts_insurance.checked;
     d.packages = $$('.row', pkBox).map((r) => ({
       sessions: $('[data-pk-sessions]', r).value, price: $('[data-pk-price]', r).value, description: $('[data-pk-desc]', r).value,
     })).filter((p) => p.sessions || p.price);

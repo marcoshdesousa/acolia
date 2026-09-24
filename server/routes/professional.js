@@ -84,7 +84,8 @@ router.put('/profile', async (req, res) => {
       state=?, city=?, city_norm=?, has_clinic=?, clinic_name=?, clinic_address=?, pix_key=?, session_minutes=?, instagram=?, maps_url=?, maps_query=? WHERE id=?`)
     .run(name, profession, registry, phone, U.cleanText(b.bio, 2000), U.cleanText(b.specialties, 300), price, JSON.stringify(packages),
       state, city, U.norm(city), hasClinic, clinicName, clinicAddress, U.cleanText(b.pix_key, 140), minutes, instagram, mapsUrl, mapsQuery, req.auth.user.id);
-  db.prepare('UPDATE professionals SET email = ? WHERE id = ?').run(email, req.auth.user.id);
+  // Plano de saúde: o profissional escolhe (vale para online e presencial; detalhes ele combina pelo chat)
+  db.prepare('UPDATE professionals SET email = ?, accepts_insurance = ? WHERE id = ?').run(email, b.accepts_insurance ? 1 : 0, req.auth.user.id);
   res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
 });
 

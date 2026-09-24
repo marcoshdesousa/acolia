@@ -134,7 +134,8 @@ addColumn('professionals', 'gallery', "TEXT NOT NULL DEFAULT '[]'");  // até 6 
 addColumn('professionals', 'maps_url', "TEXT NOT NULL DEFAULT ''");   // link do Google Maps da clínica
 addColumn('professionals', 'maps_query', "TEXT NOT NULL DEFAULT ''"); // o que o mini mapa mostra (coordenadas/local)
 addColumn('patients', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
-addColumn('patients', 'birth_date', 'TEXT'); // data de nascimento (AAAA-MM-DD): não muda depois de informada
+addColumn('patients', 'birth_date', 'TEXT');
+addColumn('professionals', 'accepts_insurance', 'INTEGER NOT NULL DEFAULT 0'); // aceita plano de saúde (online ou presencial) // data de nascimento (AAAA-MM-DD): não muda depois de informada
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_professionals_slug ON professionals(slug)');
 fs.mkdirSync(path.join(DATA_DIR, 'documents'), { recursive: true });
 

@@ -42,6 +42,37 @@
         <div class="row" style="margin-top:10px"><a class="btn sm" href="${signup}">Criar conta grátis</a><a class="btn secondary sm" href="/entrar?next=${encodeURIComponent(next || '/acolia')}">Já tenho conta</a></div></div>` : ''}`;
   }
 
+  const BIO_SHORT = 260; // acima disso (ou mais de 4 linhas), o "Sobre" aparece resumido com "Ler mais"
+  const BIO_CACHE = new Map();
+
+  // "Ler mais": abre uma página com a história completa, com botão Voltar (o voltar do celular também fecha)
+  function openBio(pro) {
+    const el = document.createElement('div');
+    el.className = 'bio-page';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', `Sobre ${pro.name}`);
+    el.innerHTML = `<div class="bio-head"><button type="button" class="icon-btn" data-bio-back aria-label="Voltar">${ICONS.back}</button><b>Sobre</b></div>
+      <div class="bio-body">
+        <div class="row" style="gap:14px;margin-bottom:18px">${avatar(pro.name, pro.photo, 'lg')}<div><div style="font-weight:800;font-size:1.2rem">${esc(pro.name)}</div><div class="muted">${esc(pro.profession || '')}</div></div></div>
+        <p style="white-space:pre-wrap;line-height:1.65;margin:0">${esc(pro.bio)}</p>
+        <button type="button" class="btn secondary" data-bio-back style="margin-top:24px">${ICONS.back} Voltar ao perfil</button>
+      </div>`;
+    document.body.appendChild(el);
+    document.documentElement.classList.add('no-scroll');
+    const close = () => { el.remove(); document.documentElement.classList.remove('no-scroll'); window.removeEventListener('popstate', onPop); };
+    const onPop = () => close();
+    history.pushState({ bio: 1 }, '');
+    window.addEventListener('popstate', onPop);
+    el.addEventListener('click', (e) => { if (e.target.closest('[data-bio-back]')) history.back(); });
+  }
+  document.addEventListener('click', (e) => {
+    const more = e.target.closest('[data-bio-more]');
+    if (!more) return;
+    const id = Number(more.closest('[data-pro-id]')?.dataset.proId);
+    const pro = BIO_CACHE.get(id) || [...BIO_CACHE.values()].pop();
+    if (pro) openBio(pro);
+  });
+
   function render(p, { actions = '', next = '' } = {}) {
     if (p.official) return renderOfficial(p, { next });
     const specialties = (p.specialties || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -50,6 +81,8 @@
     const lockLink = (text = 'Crie conta para ver') => `<a class="lock-link" href="${signup}">${ic('lock', 15)} ${esc(text)}</a>`;
 
     // ---------- Valores ----------
+    // Plano de saúde: só o aviso de que aceita (qual plano e como funciona, o paciente pergunta pelo chat)
+    const insurance = p.accepts_insurance ? `<div class="insurance">${ic('shield', 18)} <span><b>Aceita plano de saúde</b><br><span class="muted small">Pergunte ao profissional pelo chat quais planos e como funciona.</span></span></div>` : '';
     let values;
     if (p.locked) {
       const pk = p.package_sessions || [];
@@ -57,6 +90,7 @@
           <h3>${ic('calendar')} Valores</h3>
           <div class="row between"><span>Sessão online</span>${lockLink()}</div>
           ${pk.map((n) => `<div class="row between"><span>Pacote de ${n} sessões</span>${lockLink()}</div>`).join('')}
+          ${insurance}
         </div>`;
     } else {
       const pk = p.packages || [];
@@ -64,13 +98,15 @@
           <h3>${ic('calendar')} Valores</h3>
           <div><span class="price" style="font-size:1.5rem;font-weight:800">${p.price_cents != null ? money(p.price_cents) : 'A combinar'}</span> <span class="muted">por sessão online</span></div>
           ${pk.length ? `<div><b>Pacotes</b><ul style="margin:6px 0 0;padding-left:20px">${pk.map((k) => `<li>${k.sessions} sessões por <b>${money(k.price_cents)}</b> <span class="muted small">(${money(Math.round(k.price_cents / k.sessions))}/sessão)</span>${k.description ? ` — ${esc(k.description)}` : ''}</li>`).join('')}</ul></div>` : ''}
+          ${insurance}
         </div>`;
     }
 
     // ---------- Localização (visível para todos; endereço da clínica só com conta) ----------
     // Todos atendem online; alguns também presencial — as duas opções aparecem
     const modes = `<div class="row" style="gap:6px"><span class="badge ok">${ic('video', 15)} Atende online</span>
-        ${p.has_clinic ? `<span class="badge ok">${ic('clinic', 15)} Atende presencial</span>` : ''}</div>`;
+        ${p.has_clinic ? `<span class="badge ok">${ic('clinic', 15)} Atende presencial</span>` : ''}
+        ${p.accepts_insurance ? `<span class="badge ok">${ic('shield', 15)} Aceita plano de saúde</span>` : ''}</div>`;
     let clinic = '';
     if (p.has_clinic && p.locked) clinic = `<div>${lockLink('Crie conta para ver o endereço e o mapa')}</div>`;
     else if (p.has_clinic) {
@@ -88,7 +124,12 @@
     // ---------- Sobre ----------
     let about = '';
     if (p.locked && p.has_bio) about = `<div><h3>Sobre</h3>${lockLink()}</div>`;
-    else if (p.bio) about = `<div><h3>Sobre</h3><p style="white-space:pre-wrap">${esc(p.bio)}</p></div>`;
+    else if (p.bio) {
+      const long = p.bio.length > BIO_SHORT || p.bio.split('\n').length > 4;
+      about = `<div><h3>Sobre</h3><p class="bio-short${long ? ' clamp' : ''}">${esc(p.bio)}</p>
+        ${long ? `<button type="button" class="link-btn" data-bio-more>Ler mais</button>` : ''}</div>`;
+      BIO_CACHE.set(p.id, { name: p.name, bio: p.bio, photo: p.photo, profession: p.profession });
+    }
 
     // ---------- Publicações: fotos e vídeos (Reels) em abas, 4 de cada ----------
     // "Ver todas as fotos" / "Ver todos os vídeos" abre a página com as duas abas.
@@ -133,7 +174,7 @@
     const followBtn = p.is_self ? '' : `<button type="button" class="btn ${p.following ? 'following' : ''}" data-follow>${p.following ? 'Seguindo' : 'Seguir'}</button>`;
 
     return `
-      <div class="card stack">
+      <div class="card stack" data-pro-id="${p.id}">
         <div class="row" style="align-items:flex-start;gap:20px;flex-wrap:wrap">
           ${avatar(p.name, p.photo, 'xl')}
           <div class="grow" style="min-width:220px">

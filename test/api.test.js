@@ -1635,3 +1635,16 @@ test('profissional muda WhatsApp e e-mail; profissão, registro e código não',
   assert.equal(after.code, c.data.code, 'código não muda');
   assert.equal((await p.put('/api/professional/profile', { ...body, email: 'joao@example.com' })).status, 409, 'e-mail de outra conta');
 });
+
+test('plano de saúde: o profissional liga/desliga e aparece no perfil (online também)', async () => {
+  const c = await admin.post('/api/admin/professionals', { name: 'Rui Plano', profession: 'Psicólogo(a)', registry: 'CRP 06/66666', email: 'rui.plano@example.com', phone: '11933334444', state: 'SP', city: 'Campinas' });
+  const p = client();
+  await p.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+  const base = { name: 'Rui Plano', phone: '11933334444', state: 'SP', city: 'Campinas' };
+  let r = await p.put('/api/professional/profile', { ...base, accepts_insurance: true });
+  assert.equal(r.data.accepts_insurance, true, 'aceita plano mesmo atendendo só online');
+  assert.equal(r.data.has_clinic, false);
+  assert.equal((await anon.get(`/api/professionals/${c.data.id}`)).data.accepts_insurance, true, 'visitante vê que aceita plano');
+  r = await p.put('/api/professional/profile', { ...base, accepts_insurance: false });
+  assert.equal(r.data.accepts_insurance, false);
+});
