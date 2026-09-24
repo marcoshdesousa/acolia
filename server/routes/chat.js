@@ -294,6 +294,11 @@ function eraseMessagesOf(role, userId) {
     n += db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(c.id).changes;
     db.prepare('DELETE FROM chat_blocks WHERE conversation_id = ?').run(c.id);
     try { db.prepare('DELETE FROM documents WHERE conversation_id = ?').run(c.id); } catch { /* tabela ainda não existe */ }
+    // Atendimentos (videochamadas) criados nesta conversa também somem (levam o nome do paciente)
+    for (const call of db.prepare("SELECT * FROM calls WHERE conversation_id = ?").all(c.id)) {
+      if (call.status === 'ativo') require('./calls').endCall(call);
+      db.prepare('DELETE FROM calls WHERE id = ?').run(call.id);
+    }
     db.prepare('DELETE FROM conversations WHERE id = ?').run(c.id);
     rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });
     rt.emit(`professional:${c.professional_id}`, 'conversation:peer', { conversation_id: c.id });

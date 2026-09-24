@@ -97,7 +97,9 @@
           <div class="field"><label for="n-name">Nome e sobrenome</label><input id="n-name" name="name" required maxlength="120"></div>
           <div class="grid-2">
             <div class="field"><label for="n-prof">Profissão</label><select id="n-prof" name="profession"></select></div>
-            <div class="field"><label for="n-reg">Registro (CRP, CRM…)</label><input id="n-reg" name="registry" required maxlength="40"></div>
+            <div class="field" data-n-reg-field><label for="n-reg" data-n-reg-label>Registro (CRP, CRM…)</label><input id="n-reg" name="registry" required maxlength="40">
+              <div class="hint" data-n-reg-hint>CRP ou CRM válido e do mesmo estado.</div></div>
+            <p class="small notice info hidden" data-n-no-reg style="margin:0;align-self:end">Esta profissão não tem conselho: não precisa de CRP/CRM.</p>
           </div>
           <div class="grid-2">
             <div class="field"><label for="n-email">E-mail</label><input id="n-email" name="email" type="email" required></div>

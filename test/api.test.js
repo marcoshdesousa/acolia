@@ -1661,6 +1661,44 @@ test('admin não cadastra CRP/CRM inválido; profissão sem conselho entra sem r
   assert.ok(ok.data.password, 'o admin recebe a senha gerada');
 });
 
+test('conta apagada some de tudo: conversa, atendimentos, curtida, comentário, seguidor; volta só se escrever de novo', async () => {
+  const { db } = require('../server/db');
+  const c = await admin.post('/api/admin/professionals', { name: 'Olga Some', profession: 'Psicanalista', registry: '', email: 'olga.some@example.com', phone: '11915151515', state: 'SP', city: 'Campinas' });
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+  const fd = new FormData(); fd.append('photo', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'f.png'); fd.append('caption', 'oi');
+  const post = await (await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } })).json();
+  const CPF = '100.015.838-16';
+  const reg = { name: 'Ugo Some', cpf: CPF, birth_date: '1990-01-01', state: 'SP', city: 'Campinas', password: '123456' };
+  let pt = client();
+  assert.equal((await pt.post('/api/auth/patient/register', reg)).status, 201);
+  await pt.post(`/api/social/follow/${c.data.id}`);
+  await pt.post(`/api/social/posts/${post.id}/like`);
+  await pt.post(`/api/social/posts/${post.id}/comments`, { body: 'Muito bom' });
+  const conv = (await pt.post('/api/chat/conversations', { professional_id: c.data.id })).data;
+  await pt.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Olá' });
+  await pro.post('/api/calls', { patient_label: 'Ugo Some', conversation_id: conv.id });
+  assert.equal((await pro.get('/api/chat/conversations')).data.items.length, 1);
+  // apaga a própria conta
+  assert.equal((await pt.post('/api/patient/delete', { cpf: CPF })).status, 200);
+  assert.equal((await pro.get('/api/chat/conversations')).data.items.length, 0, 'a conversa sumiu para o profissional');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM calls WHERE conversation_id = ?').get(conv.id).n, 0, 'atendimentos da conversa sumiram');
+  const p2 = (await pro.get(`/api/social/posts/${post.id}`)).data;
+  assert.equal(p2.likes, 0, 'curtida sumiu');
+  assert.equal((await pro.get(`/api/social/posts/${post.id}/comments`)).data.items.length, 0, 'comentário sumiu');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(c.data.id).n, 0, 'deixou de seguir');
+  assert.ok(!JSON.stringify((await pro.get('/api/social/notifications')).data).includes('Ugo'), 'nome não aparece nas notificações');
+  // cria de novo: só aparece para o profissional se escrever de novo
+  pt = client();
+  assert.equal((await pt.post('/api/auth/patient/register', reg)).status, 201);
+  assert.equal((await pro.get('/api/chat/conversations')).data.items.length, 0, 'não volta sozinho');
+  const conv2 = (await pt.post('/api/chat/conversations', { professional_id: c.data.id })).data;
+  await pt.post(`/api/chat/conversations/${conv2.id}/messages`, { body: 'Oi de novo' });
+  const items = (await pro.get('/api/chat/conversations')).data.items;
+  assert.equal(items.length, 1, 'escreveu de novo: aparece');
+  assert.equal((await pro.get(`/api/chat/conversations/${items[0].id}/messages`)).data.items.length, 1, 'só a mensagem nova (as antigas não voltam)');
+});
+
 // Por último: apaga tudo (é o que acontece uma vez só no início oficial da plataforma)
 test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {
   const { db } = require('../server/db');

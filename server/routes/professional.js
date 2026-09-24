@@ -157,6 +157,7 @@ function wipeProfessional(me) {
     packages = '[]', price_cents = NULL, session_minutes = NULL, admin_note = '', city = '', city_norm = '', state = '' WHERE id = ?`)
     .run(`excluido-${me.id}`, `excluido-${me.id}@removido.acolia`, `excluido-${me.id}`, me.id);
   db.prepare('DELETE FROM favorites WHERE professional_id = ?').run(me.id);
+  db.prepare("DELETE FROM calls WHERE professional_id = ? AND status <> 'ativo'").run(me.id); // histórico de atendimentos some junto
   for (const c of db.prepare('SELECT id, patient_id FROM conversations WHERE professional_id = ?').all(me.id)) {
     rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });
   }

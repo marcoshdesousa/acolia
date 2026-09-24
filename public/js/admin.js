@@ -341,9 +341,29 @@
   nf.state.innerHTML = ufOptions('', 'UF');
   bindUfCity(nf.state, nf.city);
   maskPhone(nf.phone);
+  // Registro só para quem tem conselho (igual ao cadastro pelo site): CRP para psicólogo e
+  // neuropsicólogo, CRM para psiquiatra. Psicanalista, psicoterapeuta e terapeuta não têm.
+  const REG = {
+    'Psicólogo(a)': ['CRP', 'Ex.: CRP 06/12345'], 'Neuropsicólogo(a)': ['CRP', 'Ex.: CRP 06/12345'], Psiquiatra: ['CRM', 'Ex.: CRM-SP 123456'],
+  };
+  const syncReg = () => {
+    const r = REG[nf.profession.value];
+    $('[data-n-reg-field]', nf).classList.toggle('hidden', !r);
+    $('[data-n-no-reg]', nf).classList.toggle('hidden', !!r);
+    nf.registry.required = !!r;
+    if (!r) nf.registry.value = '';
+    else {
+      $('[data-n-reg-label]', nf).textContent = r[0];
+      nf.registry.placeholder = r[1];
+      $('[data-n-reg-hint]', nf).textContent = `${r[0]} válido e do mesmo estado do profissional.`;
+    }
+  };
+  nf.profession.addEventListener('change', syncReg);
+  syncReg();
   handleForm(nf, async (d, f) => {
     const r = await api('/api/admin/professionals', { method: 'POST', body: d });
     f.reset();
+    syncReg();
     await modal({
       title: 'Profissional cadastrado',
       html: `<p>Repasse os dados de acesso ao profissional:</p>
