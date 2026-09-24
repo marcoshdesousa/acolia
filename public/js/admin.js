@@ -439,6 +439,14 @@
           file = e.target.files[0]; meta = null;
           if (!file) return;
           v.src = URL.createObjectURL(file); v.classList.remove('hidden');
+          // Navegador que não abre esse formato de vídeo: usa uma capa padrão da Acolia e publica assim mesmo
+          v.onerror = () => {
+            v.classList.add('hidden');
+            const c = document.createElement('canvas'); c.width = 1080; c.height = 1920; const g = c.getContext('2d');
+            const gr = g.createLinearGradient(0, 0, 0, 1920); gr.addColorStop(0, '#3f5a52'); gr.addColorStop(1, '#1d302b'); g.fillStyle = gr; g.fillRect(0, 0, 1080, 1920);
+            const img = new Image(); img.onload = () => { g.drawImage(img, 340, 760, 400, 400); c.toBlob((b) => { meta = { poster: b, secs: 0 }; $('[data-info]', dlg).textContent = `${(file.size / 1048576).toFixed(1)} MB · prévia indisponível neste navegador (a capa será o logo)`; }, 'image/jpeg', 0.85); };
+            img.src = '/img/logo-simbolo.png';
+          };
           v.onloadedmetadata = () => { v.currentTime = Math.min(1, v.duration / 3); };
           v.onseeked = () => {
             if (meta) return;
