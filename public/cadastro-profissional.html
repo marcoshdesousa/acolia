@@ -90,6 +90,8 @@
       form.registry.placeholder = form.profession.value === 'Psiquiatra' ? 'Ex.: CRM-PA 12345' : HINTS[form.profession.value] ? 'Ex.: CRP 10/12345' : 'Número do registro';
     });
     handleForm(form, async (d) => {
+      if (!form.profession.value) throw new Error('Selecione sua profissão.');
+      if (needsCard() && !form.registry.value.trim()) throw new Error(form.profession.value === 'Psiquiatra' ? 'Informe o número do seu CRM.' : 'Informe o número do seu CRP.');
       if (needsCard() && !form.document.files.length) throw new Error('Envie a foto da sua carteirinha profissional.');
       const fd = new FormData(form);
       const r = await api('/api/auth/professional/register', { method: 'POST', form: fd });
