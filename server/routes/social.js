@@ -134,55 +134,67 @@ router.use(A.requireRole('patient', 'professional'));
 // (sugestões, com o botão Seguir). Quando acabam as de quem ela segue, o feed continua só com
 // sugestões — assim quem não segue ninguém também vê publicações.
 // ?sug=1,2,3 = sugestões que o aparelho já mostrou (para não repetir).
+// Feed: primeiro as novidades (ainda não vistas, a mais nova primeiro); depois as já vistas
+// misturadas em ordem aleatória, com publicações de outros profissionais no meio.
+// "seed" deixa a mistura fixa enquanto a pessoa rola a mesma lista (muda ao abrir de novo) e
+// "snap" é a hora em que a lista começou: o que foi visto depois disso não muda de lugar.
 router.get('/feed', (req, res) => {
   const me = who(req);
   const offset = Math.max(0, Number(req.query.offset) || 0);
   const official = O.officialId();
+  const seed = Math.abs(Math.trunc(Number(req.query.seed))) % 1000003 || 1 + Math.floor(Math.random() * 1000000);
+  const snap = Number(req.query.snap) > 0 ? Math.trunc(Number(req.query.snap)) : Date.now();
+  const SEEN = '(SELECT 1 FROM post_views v WHERE v.post_id = po.id AND v.role = ? AND v.user_id = ? AND (v.seen_at IS NULL OR v.seen_at < ?))';
   const rows = db.prepare(`
-    SELECT po.*, (SELECT 1 FROM post_views v WHERE v.post_id = po.id AND v.role = ? AND v.user_id = ?) AS seen
+    SELECT po.*, ${SEEN} AS seen
     FROM posts po JOIN professionals p ON p.id = po.professional_id
     WHERE (${VISIBLE_SQL} AND po.professional_id IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?))
        OR (? = 'professional' AND po.professional_id = ?)
        OR po.professional_id = ?
-    ORDER BY seen IS NOT NULL, po.id DESC
-    LIMIT ? OFFSET ?`).all(me.role, me.id, me.role, me.id, me.role, me.id, official, PAGE + 1, offset);
+    ORDER BY seen IS NOT NULL, CASE WHEN seen IS NULL THEN -po.id ELSE feed_mix(po.id, ?) END
+    LIMIT ? OFFSET ?`).all(me.role, me.id, snap, me.role, me.id, me.role, me.id, official, seed, PAGE + 1, offset);
   const mainMore = rows.length > PAGE;
   const main = rows.slice(0, PAGE);
 
-  // Sugestões: poucas no meio (0 a 2 a cada página); se acabou o resto, a página inteira
+  // Publicações de quem a pessoa não segue: algumas no meio de cada página (mais quando não há novidade);
+  // se acabou o resto, a página inteira
+  const fresh = main.filter((p) => !p.seen).length;
   const shown = String(req.query.sug || '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(-500);
-  const want = mainMore ? Math.floor(Math.random() * 3) : PAGE - main.length;
+  const want = !mainMore ? PAGE - main.length : fresh >= main.length ? Math.floor(Math.random() * 2) : 2 + Math.floor(Math.random() * 3);
   let sug = [];
   if (want > 0 || !mainMore) {
     sug = db.prepare(`
-      SELECT po.*, (SELECT 1 FROM post_views v WHERE v.post_id = po.id AND v.role = ? AND v.user_id = ?) AS seen
+      SELECT po.*, ${SEEN} AS seen
       FROM posts po JOIN professionals p ON p.id = po.professional_id
       WHERE ${VISIBLE_SQL} AND po.professional_id <> ?
         AND NOT (? = 'professional' AND po.professional_id = ?)
         AND po.professional_id NOT IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?)
         AND po.id NOT IN (SELECT value FROM json_each(?))
       ORDER BY seen IS NOT NULL, RANDOM()
-      LIMIT ?`).all(me.role, me.id, official, me.role, me.id, me.role, me.id, JSON.stringify(shown), want + 1);
+      LIMIT ?`).all(me.role, me.id, snap, official, me.role, me.id, me.role, me.id, JSON.stringify(shown), want + 1);
   }
   const sugMore = sug.length > want;
   sug = sug.slice(0, Math.max(0, want));
 
-  // Espalha as sugestões em posições aleatórias (nunca como a primeira do feed)
+  // Espalha as sugestões em posições aleatórias, sempre depois das novidades
   const items = main.map((p) => ({ ...postOut(p, me), seen: !!p.seen }));
+  const firstMix = offset === 0 ? Math.max(1, fresh) : 0;
   for (const p of sug) {
-    const at = items.length < 2 ? items.length : 1 + Math.floor(Math.random() * items.length);
+    const from = Math.min(firstMix, items.length);
+    const at = from + Math.floor(Math.random() * (items.length - from + 1));
     items.splice(at, 0, { ...postOut(p, me), seen: !!p.seen, suggested: true });
   }
   const following = db.prepare('SELECT COUNT(*) n FROM follows WHERE follower_role = ? AND follower_id = ?').get(me.role, me.id).n;
-  res.json({ items, main_count: main.length, has_more: mainMore || sugMore, following });
+  res.json({ items, main_count: main.length, has_more: mainMore || sugMore, following, seed, snap });
 });
 
 // O aparelho avisa quais publicações apareceram na tela
 router.post('/seen', (req, res) => {
   const me = who(req);
   const ids = (Array.isArray(req.body.ids) ? req.body.ids : []).slice(0, 100).map(Number).filter(Number.isInteger);
-  const ins = db.prepare('INSERT OR IGNORE INTO post_views (post_id, role, user_id) SELECT id, ?, ? FROM posts WHERE id = ?');
-  for (const id of ids) ins.run(me.role, me.id, id);
+  const ins = db.prepare('INSERT OR IGNORE INTO post_views (post_id, role, user_id, seen_at) SELECT id, ?, ?, ? FROM posts WHERE id = ?');
+  const now = Date.now();
+  for (const id of ids) ins.run(me.role, me.id, now, id);
   res.json({ ok: true });
 });
 

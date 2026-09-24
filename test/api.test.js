@@ -1785,6 +1785,52 @@ test('publicação de texto: profissional e Acolia Brasil, 4 fontes, até 3.000 
   assert.equal(post.caption.length, 1700, 'legenda fica em 1.700');
 });
 
+test('feed: novidade primeiro (a mais nova no topo); as já vistas vêm misturadas e a lista não repete nem pula', async () => {
+  const c = await admin.post('/api/admin/professionals', { name: 'Fabi Feed', profession: 'Psicanalista', registry: '', email: 'fabi.feed@example.com', phone: '11917171717', state: 'SP', city: 'Campinas' });
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+  const ids = [];
+  for (let i = 0; i < 30; i++) ids.push((await pro.post('/api/social/texts', { text: `Texto ${i}` })).data.id);
+  const pt = client();
+  const cpf = (() => { // CPF válido novo
+    const d = [3, 1, 4, 1, 5, 9, 2, 6, 5];
+    const dv = (arr) => { const s = arr.reduce((a, n, i) => a + n * (arr.length + 1 - i), 0); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
+    d.push(dv(d)); d.push(dv(d)); return d.join('');
+  })();
+  assert.equal((await pt.post('/api/auth/patient/register', { name: 'Gil Feed', cpf, birth_date: '1990-01-01', state: 'SP', city: 'Campinas', password: '123456' })).status, 201);
+  await pt.post(`/api/social/follow/${c.data.id}`);
+  const mine = (items) => items.filter((p) => !p.suggested && p.author.id === c.data.id).map((p) => p.id);
+  // tudo novo: a mais nova primeiro
+  let d = (await pt.get('/api/social/feed')).data;
+  assert.equal(mine(d.items)[0], ids[29], 'a última publicada aparece primeiro');
+  // viu tudo -> a ordem vira uma mistura (não é mais do mais novo para o mais velho)
+  await pt.post('/api/social/seen', { ids });
+  const all = async (seed) => {
+    const got = []; let offset = 0; let snap = 0; let more = true;
+    while (more) {
+      const r = (await pt.get(`/api/social/feed?offset=${offset}&seed=${seed}&snap=${snap}`)).data;
+      got.push(...mine(r.items)); offset += r.main_count; snap = r.snap; more = r.has_more && r.main_count > 0;
+    }
+    return got;
+  };
+  const a = await all(111), b = await all(222);
+  assert.equal(new Set(a).size, 30, 'mostra as 30, sem repetir');
+  assert.notDeepEqual(a, [...ids].reverse(), 'já vistas não ficam na ordem de sempre');
+  assert.notDeepEqual(a, b, 'cada vez que abre, outra mistura');
+  // publicação nova volta para o topo
+  const novo = (await pro.post('/api/social/texts', { text: 'Novidade' })).data.id;
+  d = (await pt.get('/api/social/feed')).data;
+  assert.equal(mine(d.items)[0], novo, 'novidade no topo');
+  // rolando: o que foi visto no meio do caminho não faz a lista pular itens
+  const r1 = (await pt.get('/api/social/feed?offset=0&seed=5')).data;
+  await pt.post('/api/social/seen', { ids: mine(r1.items) });
+  const r2 = (await pt.get(`/api/social/feed?offset=${r1.main_count}&seed=5&snap=${r1.snap}`)).data;
+  const r3 = (await pt.get(`/api/social/feed?offset=${r1.main_count + r2.main_count}&seed=5&snap=${r1.snap}`)).data;
+  const seq = [...mine(r1.items), ...mine(r2.items), ...mine(r3.items)];
+  assert.equal(new Set(seq).size, seq.length, 'sem repetir');
+  assert.equal(seq.length, 31, 'todas as 31 apareceram');
+});
+
 // Por último: apaga tudo (é o que acontece uma vez só no início oficial da plataforma)
 test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {
   const { db } = require('../server/db');

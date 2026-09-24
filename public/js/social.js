@@ -1306,6 +1306,7 @@
 
     const seenQueue = new Set();
     let seenTimer = null;
+    let feedSeed = 0, feedSnap = 0;
     const io = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => {
       entries.forEach((en) => {
         if (en.isIntersecting && en.intersectionRatio >= 0.6) {
@@ -1324,9 +1325,10 @@
     async function loadFeed(reset) {
       if (loading || (!more && !reset)) return;
       loading = true;
-      if (reset) { offset = 0; more = true; sugIds = []; feed.innerHTML = '<div class="spinner"></div>'; }
+      if (reset) { offset = 0; more = true; sugIds = []; feedSeed = 0; feedSnap = 0; feed.innerHTML = '<div class="spinner"></div>'; }
       try {
-        const data = await api(`/api/social/feed?offset=${offset}&sug=${sugIds.slice(-400).join(',')}`);
+        const data = await api(`/api/social/feed?offset=${offset}&seed=${feedSeed}&snap=${feedSnap}&sug=${sugIds.slice(-400).join(',')}`);
+        feedSeed = data.seed || 0; feedSnap = data.snap || 0; // mesma mistura enquanto rola esta lista
         if (reset) feed.innerHTML = '';
         if (!data.items.length && offset === 0) {
           feed.innerHTML = `<div class="empty">${ic('home', 48)}<p>${data.following

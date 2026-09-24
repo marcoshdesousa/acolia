@@ -7,6 +7,14 @@ const { DATA_DIR, DB_FILE } = require('./paths');
 fs.mkdirSync(path.join(DATA_DIR, 'uploads'), { recursive: true });
 
 const db = new DatabaseSync(DB_FILE);
+// Embaralha a ordem do feed de forma estável: o mesmo (id, semente) dá sempre o mesmo número,
+// mas semente diferente dá uma ordem totalmente nova
+db.function('feed_mix', { deterministic: true }, (id, seed) => {
+  let h = (Number(id) * 2654435761 ^ Number(seed) * 1597334677) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 2246822507) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0;
+  return (h ^ (h >>> 16)) >>> 0;
+});
 db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
 
 db.exec(`
@@ -217,6 +225,7 @@ addColumn('posts', 'video', 'TEXT');
 addColumn('posts', 'duration', 'REAL');
 addColumn('posts', 'aspect', 'TEXT');
 addColumn('posts', 'font', 'TEXT'); // publicação de texto: padrao | classica | manuscrita | destaque
+addColumn('post_views', 'seen_at', 'INTEGER');                 // quando viu (ms) — para o feed não pular itens ao misturar
 // Chat: "apagar para mim" — cada lado esconde a mensagem só para si; quando os dois apagaram,
 // a mensagem sai do banco de vez
 addColumn('messages', 'hidden_for_patient', 'INTEGER NOT NULL DEFAULT 0');
