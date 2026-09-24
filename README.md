@@ -20,8 +20,8 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 3. O profissional (logado) entra pelo botão **Entrar na chamada** de cada atendimento no painel; o paciente, com o **código dele** em `/atendimento`.
 4. Vídeo e voz. Os dois podem ligar/desligar a câmera e o microfone.
 5. O profissional pode ter **até 2 atendimentos abertos ao mesmo tempo**. Ao clicar em **Finalizar atendimento**, o código do paciente deixa de funcionar.
-6. A chamada continua se a pessoa sair da tela para usar outro app: onde o navegador permite, vai para uma **janelinha flutuante** com a outra pessoa grande e você pequeno no canto (botão ao lado da câmera; no Chrome e no Safari ela também abre sozinha ao trocar de app).
-7. Câmera desligada não fica preta nem congelada: aparece a foto de perfil (ou as iniciais) num fundo da marca, na tela e na janelinha.
+6. **Sem janelinha flutuante**: a pessoa fica na tela da chamada. Embaixo da logo aparece um aviso pequeno, "Não saia desta tela nem atualize a página", e ao tentar atualizar ou fechar a página o navegador pergunta antes. Se mesmo assim sair do site, a câmera desliga (a outra pessoa vê a foto) e o áudio continua; ao voltar, a câmera religa sozinha.
+7. Câmera desligada não fica preta nem congelada: aparece a foto de perfil (ou as iniciais) num fundo da marca.
 
 No chat, paciente e profissional podem mandar **mensagens de voz** no estilo WhatsApp (barrinhas da voz ao vivo, parar e ouvir antes de enviar; até 5 minutos). O áudio é gravado em WAV, que toca em qualquer celular, fica numa pasta privada e só quem participa da conversa ouve. Fotos e vídeos não são aceitos.
 

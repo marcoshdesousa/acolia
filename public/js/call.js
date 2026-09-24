@@ -90,174 +90,15 @@
   }
   const myCamLive = () => S.camOn && S.local?.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
 
-  // ---------- Janelinha flutuante (picture-in-picture) com os DOIS vídeos ----------
-  // O navegador só põe UM vídeo na janelinha. Então desenhamos numa tela (canvas) a outra
-  // pessoa grande e você pequeno no canto — com o avatar de quem estiver com a câmera
-  // desligada — e é essa imagem que vai para a janelinha. O som continua normal.
   const remoteEl = () => $('#remoteVideo');
-  const pipEl = () => $('#pipVideo');
-  const PIP = { canvas: null, ctx: null, tick: null, fast: false, images: {} };
-  const pipSupported = () => !!(document.pictureInPictureEnabled || pipEl().webkitSupportsPresentationMode);
-  const inPip = () => !!document.pictureInPictureElement
-    || pipEl().webkitPresentationMode === 'picture-in-picture' || remoteEl().webkitPresentationMode === 'picture-in-picture';
-
-  function photoImage(url) {
-    if (!url) return null;
-    if (!PIP.images[url]) { const img = new Image(); img.src = url; PIP.images[url] = img; }
-    const img = PIP.images[url];
-    return img.complete && img.naturalWidth ? img : null;
-  }
-
-  // Fundo da marca + foto de perfil (ou as iniciais), igual ao WhatsApp com a câmera desligada
-  function drawAvatar(ctx, x, y, w, h, who) {
-    const g = ctx.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, '#3f5550');
-    g.addColorStop(1, '#6f8a83');
-    ctx.fillStyle = g;
-    ctx.fillRect(x, y, w, h);
-    const r = Math.min(w, h) * 0.24;
-    const cx = x + w / 2;
-    const cy = y + h / 2;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.closePath();
-    const img = photoImage(who.photo);
-    if (img) {
-      ctx.clip();
-      const s = Math.max((2 * r) / img.naturalWidth, (2 * r) / img.naturalHeight);
-      ctx.drawImage(img, cx - (img.naturalWidth * s) / 2, cy - (img.naturalHeight * s) / 2, img.naturalWidth * s, img.naturalHeight * s);
-    } else {
-      ctx.fillStyle = '#e5ebe8';
-      ctx.fill();
-      ctx.fillStyle = '#3f5550';
-      ctx.font = `800 ${Math.round(r * 0.9)}px Nunito, system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(Acolia.initials ? Acolia.initials(who.name) : (who.name || '?').slice(0, 2).toUpperCase(), cx, cy + r * 0.05);
-    }
-    ctx.restore();
-  }
-
-  function drawVideo(ctx, v, x, y, w, h, mirror) {
-    const vw = v.videoWidth;
-    const vh = v.videoHeight;
-    const s = Math.max(w / vw, h / vh); // preenche o quadro (corta as sobras)
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip();
-    if (mirror) { ctx.translate(x + w, y); ctx.scale(-1, 1); x = 0; y = 0; }
-    ctx.drawImage(v, x + (w - vw * s) / 2, y + (h - vh * s) / 2, vw * s, vh * s);
-    ctx.restore();
-  }
-
-  function drawPip() {
-    const { canvas, ctx } = PIP;
-    const remote = remoteEl();
-    const peerVideo = !S.peerCamOff && remote.videoWidth > 0 && S.pc?.connectionState === 'connected';
-    // A janelinha acompanha o formato do vídeo da outra pessoa (em pé ou deitado)
-    const portrait = peerVideo && remote.videoHeight > remote.videoWidth;
-    const W = portrait ? 360 : 640;
-    const H = portrait ? 640 : 360;
-    if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
-    if (peerVideo) drawVideo(ctx, remote, 0, 0, W, H, false);
-    else drawAvatar(ctx, 0, 0, W, H, peerIdentity());
-    // Você, pequeno no canto
-    const tw = Math.round(Math.min(W, H) * 0.34);
-    const th = Math.round(tw * 4 / 3);
-    const tx = W - tw - 10;
-    const ty = H - th - 10;
-    const local = $('#localVideo');
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,.9)';
-    ctx.fillRect(tx - 2, ty - 2, tw + 4, th + 4);
-    ctx.restore();
-    if (myCamLive() && local.videoWidth > 0) drawVideo(ctx, local, tx, ty, tw, th, true);
-    else drawAvatar(ctx, tx, ty, tw, th, myIdentity());
-  }
-
-  // Relógio num "worker": continua batendo mesmo com a aba em segundo plano
-  function startPipClock(fps) {
-    stopPipClock();
-    const ms = Math.round(1000 / fps);
-    try {
-      const src = `let t=setInterval(()=>postMessage(0),${ms});onmessage=()=>{clearInterval(t)}`;
-      PIP.tick = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
-      PIP.tick.onmessage = drawPip;
-    } catch {
-      PIP.tick = { interval: setInterval(drawPip, ms) };
-    }
-  }
-  function stopPipClock() {
-    if (!PIP.tick) return;
-    if (PIP.tick.interval) clearInterval(PIP.tick.interval);
-    else PIP.tick.terminate();
-    PIP.tick = null;
-  }
-
-  // Prepara a imagem da janelinha desde o início (devagar), para ela abrir na hora
-  function setupPipSource() {
-    PIP.canvas = document.createElement('canvas');
-    PIP.canvas.width = 640;
-    PIP.canvas.height = 360;
-    PIP.ctx = PIP.canvas.getContext('2d');
-    drawPip();
-    if (!PIP.canvas.captureStream) return false;
-    const v = pipEl();
-    v.srcObject = PIP.canvas.captureStream(24);
-    v.play().catch(() => {});
-    startPipClock(4);
-    v.addEventListener('enterpictureinpicture', () => startPipClock(24));
-    v.addEventListener('leavepictureinpicture', () => startPipClock(4));
-    v.addEventListener('webkitpresentationmodechanged', () => startPipClock(inPip() ? 24 : 4));
-    return true;
-  }
-
-  // A janelinha precisa ser pedida NA HORA do toque: nada de esperar outra coisa antes, senão o
-  // Safari (iPhone) e alguns Android recusam. Se a imagem montada (os dois vídeos) não puder ir
-  // para a janelinha, tenta o vídeo da outra pessoa direto (plano B).
-  function enterPip({ fromTap = false } = {}) {
-    if (S.ended || !PIP.canvas || inPip()) return;
-    const v = pipEl();
-    startPipClock(24);
-    drawPip();
-    if (v.paused) v.play().catch(() => {});
-    const planB = () => {
-      const r = remoteEl();
-      try {
-        if (r.requestPictureInPicture && r.readyState >= 1 && r.videoWidth) return r.requestPictureInPicture();
-        if (r.webkitSupportsPresentationMode?.('picture-in-picture')) { r.webkitSetPresentationMode('picture-in-picture'); return Promise.resolve(); }
-      } catch (e) { return Promise.reject(e); }
-      return Promise.reject(new Error('sem janelinha'));
-    };
-    let p;
-    try {
-      if (v.webkitSupportsPresentationMode?.('picture-in-picture') && !document.pictureInPictureEnabled) {
-        v.webkitSetPresentationMode('picture-in-picture'); // Safari antigo: é síncrono
-        p = Promise.resolve();
-      } else if (v.requestPictureInPicture && v.readyState >= 1) p = v.requestPictureInPicture();
-      else p = planB();
-    } catch { p = planB(); }
-    p.catch(() => planB()).catch(() => {
-      if (fromTap) toast('Seu navegador não abriu a janelinha. Se sair do site, a chamada continua só com áudio.', 'error');
-    });
-  }
-  async function exitPip() {
-    try {
-      if (document.pictureInPictureElement) await document.exitPictureInPicture();
-      else if (pipEl().webkitPresentationMode === 'picture-in-picture') pipEl().webkitSetPresentationMode('inline');
-      else if (remoteEl().webkitPresentationMode === 'picture-in-picture') remoteEl().webkitSetPresentationMode('inline');
-    } catch { /* ignora */ }
-  }
 
   // ---------- Saiu do site ----------
-  // Sem a janelinha: a câmera desliga (a outra pessoa vê a sua foto), mas o áudio continua —
-  // você fala e escuta normalmente. Com a janelinha: tudo continua (câmera e vídeos).
-  // Ao voltar, a câmera religa sozinha (se estava ligada antes).
+  // Não existe mais janelinha flutuante: a pessoa fica na tela da chamada (aviso no topo).
+  // Se mesmo assim sair do site, a câmera desliga (a outra pessoa vê a sua foto), mas o áudio
+  // continua. Ao voltar, a câmera religa sozinha (se estava ligada antes).
   let bgTimer = null;
   function pauseCameraForBackground() {
-    if (S.ended || !S.camOn || inPip() || document.visibilityState !== 'hidden') return;
+    if (S.ended || !S.camOn || document.visibilityState !== 'hidden') return;
     S.bgCamPaused = true;
     setCamera(false);
     renderControls();
@@ -289,35 +130,26 @@
   }
 
   function setupBackground() {
-    const ok = setupPipSource();
-    const v = pipEl();
-    v.autoPictureInPicture = true; // Safari: entra sozinho na janelinha ao sair
     const ms = navigator.mediaSession;
     if (ms) {
       try { ms.metadata = new MediaMetadata({ title: 'Atendimento Acolia', artist: peerIdentity().name, artwork: [{ src: '/img/app-icon-512.png', sizes: '512x512', type: 'image/png' }] }); } catch { /* ignora */ }
       const on = (action, fn) => { try { ms.setActionHandler(action, fn); } catch { /* não suportado */ } };
-      on('enterpictureinpicture', enterPip); // Chrome: janelinha automática ao trocar de app/aba
       on('togglemicrophone', () => $('[data-mic]').click());
       on('togglecamera', () => $('[data-cam]').click());
       on('hangup', () => $('[data-end]').click());
     }
-    // Tentativa extra ao sair da tela (funciona em alguns navegadores)
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
-        enterPip(); // alguns navegadores abrem a janelinha sozinhos ao sair
         clearTimeout(bgTimer);
-        bgTimer = setTimeout(pauseCameraForBackground, 1200); // não abriu? desliga só a câmera
+        bgTimer = setTimeout(pauseCameraForBackground, 1200);
       } else backToForeground();
     });
-    // Fechou a janelinha estando fora do site: aí a câmera desliga (o áudio continua)
-    for (const el of [pipEl(), remoteEl()]) {
-      el.addEventListener('leavepictureinpicture', () => { clearTimeout(bgTimer); bgTimer = setTimeout(pauseCameraForBackground, 300); });
-      el.addEventListener('webkitpresentationmodechanged', () => { if (!inPip()) { clearTimeout(bgTimer); bgTimer = setTimeout(pauseCameraForBackground, 300); } });
-    }
-    const btn = $('[data-pip]');
-    btn.classList.toggle('hidden', !ok || !pipSupported());
-    btn.innerHTML = ICONS.pip;
-    btn.addEventListener('click', () => (inPip() ? exitPip() : enterPip({ fromTap: true })));
+    // Atualizar ou fechar a página durante a chamada: o navegador pergunta antes (a chamada cairia)
+    window.addEventListener('beforeunload', (e) => {
+      if (S.ended || S.leaving) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
   }
 
   // ---------- 3. Sala ----------
@@ -595,8 +427,6 @@
   function finish(message, isError = false, canRejoin = false) {
     if (S.ended) return;
     S.ended = true;
-    exitPip();
-    stopPipClock();
     stopTimer();
     closePc();
     S.local?.getTracks().forEach((t) => t.stop());
