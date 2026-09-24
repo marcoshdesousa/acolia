@@ -412,7 +412,7 @@ router.post('/limits', (req, res) => {
     const media = await UP.handleReel(req, res);
     const secs = Number(req.body.duration) || 0;
     if (!media?.video) throw new U.HttpError(400, 'Escolha um vídeo.');
-    if (secs > S.REEL_MAX_SECS + 1) {
+    if (secs > S.OFFICIAL_REEL_MAX_SECS + 1) {
       UP.removePhoto(media.video); UP.removePhoto(media.poster);
       throw new U.HttpError(400, 'O vídeo pode ter no máximo 2 minutos.');
     }

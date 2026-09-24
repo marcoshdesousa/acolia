@@ -406,14 +406,14 @@
   }
   $('[data-official-more]').addEventListener('click', () => loadOfficial(false).catch((e) => toast(e.message, 'error')));
   $('[data-official-new]').addEventListener('click', () => AcoliaSocial.openNewPost(() => loadOfficial(), { base: '/api/admin/official/posts', title: 'Nova publicação da Acolia Brasil' }));
-  // Vídeo (reel) da Acolia Brasil: até 2 minutos e 70 MB; a capa é tirada do próprio vídeo
+  // Vídeo (reel) da Acolia Brasil: até 2 minutos, qualquer tamanho; a capa é tirada do próprio vídeo
   $('[data-official-reel]').addEventListener('click', () => {
     let file = null; let meta = null;
     modal({
       title: 'Novo vídeo da Acolia Brasil',
       html: `<div class="form-error hidden" data-err></div>
         <label class="btn secondary block" style="margin-bottom:10px">Escolher vídeo<input type="file" accept="video/mp4,video/quicktime,video/webm" data-file hidden></label>
-        <div class="small muted" data-info>Até 2 minutos e 70 MB · ideal em pé (1080 × 1920)</div>
+        <div class="small muted" data-info>Até 2 minutos · ideal em pé (1080 × 1920)</div>
         <video data-prev playsinline muted controls class="hidden" style="width:100%;max-height:360px;border-radius:12px;margin-top:10px;background:#000"></video>
         <div class="field" style="margin-top:12px"><label>Descrição</label><textarea data-cap rows="3" maxlength="2200"></textarea></div>`,
       actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
@@ -423,7 +423,6 @@
           const fail = (m) => { err.textContent = m; err.classList.remove('hidden'); return false; };
           if (!file || !meta) return fail('Escolha um vídeo.');
           if (meta.secs > 121) return fail('O vídeo pode ter no máximo 2 minutos.');
-          if (file.size > 70 * 1024 * 1024) return fail('Vídeo muito grande (máximo 70 MB).');
           const fd = new FormData();
           fd.append('video', file); fd.append('poster', meta.poster, 'capa.jpg');
           fd.append('caption', $('[data-cap]', dlg).value); fd.append('duration', String(meta.secs));

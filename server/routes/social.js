@@ -9,7 +9,8 @@ const A = require('../auth');
 const rt = require('../realtime');
 const { VISIBLE_SQL, freeGalleryCount, PROFILE_POSTS } = require('../serialize');
 const { handlePhoto, handlePhotos, handleMedia, handleReel, removePhoto } = require('../upload');
-const REEL_MAX_SECS = 2 * 60; // Reels: vídeos de até 2 minutos (e 70 MB)
+const REEL_MAX_SECS = 90; // Reels dos profissionais: até 1 minuto e 30 segundos (sem limite de tamanho)
+const OFFICIAL_REEL_MAX_SECS = 2 * 60; // Acolia Brasil (admin): até 2 minutos
 const O = require('../official');
 
 const router = express.Router();
@@ -253,7 +254,7 @@ function createPost(proId, urls, caption, aspect) {
   return db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
 }
 
-// ---------- Reels (vídeos de até 2 minutos e 70 MB) ----------
+// ---------- Reels (profissional: até 1 min 30 s · Acolia Brasil: até 2 min; sem limite de tamanho) ----------
 // O vídeo vai junto com a capa (um quadro tirado no aparelho) e a duração
 function createReel(proId, media, caption, duration) {
   const info = db.prepare("INSERT INTO posts (professional_id, image, caption, kind, video, duration) VALUES (?, ?, ?, 'reel', ?, ?)")
@@ -269,7 +270,7 @@ router.post('/reels', async (req, res) => {
   if (secs > REEL_MAX_SECS + 1) {
     removePhoto(media.video);
     removePhoto(media.poster);
-    throw new U.HttpError(400, 'O vídeo pode ter no máximo 2 minutos.');
+    throw new U.HttpError(400, 'O vídeo pode ter no máximo 1 minuto e 30 segundos.');
   }
   res.status(201).json(postOut(createReel(req.auth.user.id, media, req.body.caption, secs || null), who(req)));
 });
@@ -290,7 +291,7 @@ router.post('/uploads', (req, res) => {
   const mime = String(req.body.mime || '').split(';')[0];
   const size = Number(req.body.size);
   if (!UP.VIDEO_EXT[mime]) throw new U.HttpError(400, 'Envie um vídeo MP4, MOV ou WEBM.');
-  if (!(size > 0) || size > UP.REEL_MAX_MB * 1024 * 1024) throw new U.HttpError(400, `Vídeo muito grande (máximo ${UP.REEL_MAX_MB} MB).`);
+  if (!(size > 0)) throw new U.HttpError(400, 'Vídeo inválido.');
   const id = require('node:crypto').randomBytes(16).toString('hex');
   require('node:fs').writeFileSync(UP.partPath(id), Buffer.alloc(0));
   db.prepare("INSERT INTO upload_sessions (id, professional_id, kind, mime, size) VALUES (?, ?, 'reel', ?, ?)").run(id, req.auth.user.id, mime, size);
@@ -322,7 +323,7 @@ router.post('/uploads/:id/finish', async (req, res) => {
   if (secs > REEL_MAX_SECS + 1) {
     removePhoto(poster);
     discardUpload(u.id);
-    throw new U.HttpError(400, 'O vídeo pode ter no máximo 2 minutos.');
+    throw new U.HttpError(400, 'O vídeo pode ter no máximo 1 minuto e 30 segundos.');
   }
   const video = UP.finishPart(u.id, u.mime);
   db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(u.id);
@@ -649,4 +650,4 @@ function purgeUserSocial(role, id) {
   db.prepare('DELETE FROM notifications WHERE (recipient_role = ? AND recipient_id = ?) OR (actor_role = ? AND actor_id = ?)').run(role, id, role, id);
 }
 
-module.exports = { createReel, REEL_MAX_SECS, getLimits, setLimits, overLimit, enforceLimits, purgeUserSocial, fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };
+module.exports = { createReel, REEL_MAX_SECS, OFFICIAL_REEL_MAX_SECS, getLimits, setLimits, overLimit, enforceLimits, purgeUserSocial, fixOldAspects, router, followInfo, cleanupStories, actor, visiblePro, socialPro, imageCount, postImages, postOut, commentOut, createPost, deletePostFully };

@@ -1143,7 +1143,7 @@ test('Acolia Brasil: o admin publica, todos seguem (sem deixar de seguir) e o pe
   assert.ok(!(await pt.get('/api/social/feed')).data.items.some((p) => p.id === op.id));
 });
 
-test('Reels: profissional publica vídeo de até 2 min; aparece no feed, na aba Reels e no perfil separado das fotos', async () => {
+test('Reels: profissional publica vídeo de até 1 min 30 s; aparece no feed, na aba Reels e no perfil separado das fotos', async () => {
   const c = await admin.post('/api/admin/professionals', { name: 'Rafa Reels', profession: 'Psicólogo(a)', registry: 'CRP 06/20021', email: 'rafareels@example.com', phone: '11944440000', state: 'SP', city: 'Campinas' });
   const pro = client();
   await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
@@ -1159,8 +1159,8 @@ test('Reels: profissional publica vídeo de até 2 min; aparece no feed, na aba 
   const pt = client();
   await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
   assert.equal((await sendReel(pt, 10)).status, 403, 'paciente não publica');
-  assert.equal((await sendReel(pro, 126)).status, 400, 'no máximo 2 minutos');
-  const r = await sendReel(pro, 118);
+  assert.equal((await sendReel(pro, 95)).status, 400, 'profissional: no máximo 1 min 30 s');
+  const r = await sendReel(pro, 88);
   assert.equal(r.status, 201, JSON.stringify(r.data));
   assert.equal(r.data.kind, 'reel');
   assert.ok(r.data.video.startsWith('/uploads/') && r.data.video.endsWith('.mp4'));
@@ -1398,13 +1398,10 @@ test('limite de publicações: ao passar, a mais antiga sai; o admin muda o limi
   assert.equal((await admin.post('/api/admin/limits', { photo: 15, reel: 10 })).status, 200);
 });
 
-test('reel: mais de 70 MB é recusado (inteiro ou em pedaços)', async () => {
+test('reel: sem limite de tamanho (só a duração conta)', async () => {
   const pro = client();
   await pro.post('/api/auth/professional/login', { login: '123456789', password: '123456789' });
-  const r = await pro.post('/api/social/uploads', { mime: 'video/mp4', size: 70 * 1024 * 1024 + 1 });
-  assert.equal(r.status, 400);
-  assert.match(r.data.error, /70 MB/);
-  assert.equal((await pro.post('/api/social/uploads', { mime: 'video/mp4', size: 69 * 1024 * 1024 })).status, 201, 'até 70 MB tudo bem');
+  assert.equal((await pro.post('/api/social/uploads', { mime: 'video/mp4', size: 900 * 1024 * 1024 })).status, 201, 'vídeo grande também pode');
 });
 
 test('chat: apagar para mim, limpar conversa, bloquear (só mensagens) e conta apagada some com tudo', async () => {
@@ -1714,6 +1711,12 @@ test('Acolia Brasil publica vídeo (reel) pelo admin e ele aparece nos Reels', a
   long.append('duration', '300');
   r = await fetch(`${base}/api/admin/official/reels`, { method: 'POST', body: long, headers: { Cookie: admin.cookie } });
   assert.equal(r.status, 400, 'mais de 2 minutos não');
+  const mid = new FormData();
+  mid.append('video', new Blob([Buffer.from('x')], { type: 'video/mp4' }), 'v.mp4');
+  mid.append('poster', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'c.png');
+  mid.append('duration', '110');
+  r = await fetch(`${base}/api/admin/official/reels`, { method: 'POST', body: mid, headers: { Cookie: admin.cookie } });
+  assert.equal(r.status, 201, 'admin: até 2 minutos (1 min 50 s pode)');
   const pt = client();
   await pt.post('/api/auth/patient/register', { name: 'Vera Reels', cpf: '100.023.747-81', birth_date: '1990-01-01', state: 'SP', city: 'Campinas', password: '123456' });
   const reels = (await pt.get('/api/social/reels')).data.items;
