@@ -183,7 +183,6 @@
         <div class="messages-wrap">
           <div class="messages" data-messages></div>
         </div>
-        <div class="attach-bar hidden" data-attach></div>
         <form class="composer" data-composer>
           <textarea rows="1" placeholder="${!c.peer.active ? 'Esta conta não está mais ativa' : c.blocked_by_me || c.blocked_me ? 'Mensagens bloqueadas' : 'Digite uma mensagem'}" aria-label="Mensagem" ${canWrite(c) ? '' : 'disabled'} maxlength="4000"></textarea>
           <button class="icon-btn rec-cancel" type="button" data-rec-cancel aria-label="Apagar áudio" title="Apagar áudio">${ICONS.trash}</button>
@@ -211,32 +210,7 @@
       const form = $('[data-composer]', threadWrap);
       const ta = $('textarea', form);
       // Igual ao WhatsApp: campo vazio mostra o microfone; com texto, o botão de enviar
-      const syncButtons = () => form.classList.toggle('has-text', ta.value.trim().length > 0 || !!attach);
-      // Veio de um post (botão "Mensagem"): a publicação fica anexada e vai junto com a mensagem
-      let attach = null;
-      const bar = $('[data-attach]', threadWrap);
-      const showAttach = (p) => {
-        attach = p;
-        bar.classList.toggle('hidden', !p);
-        bar.innerHTML = p ? `${p.image ? `<img src="${esc(p.image)}" alt="">` : `<span class="ab-text">${ICONS.text || ''}</span>`}
-          <div class="grow" style="min-width:0"><b class="small">Publicação de ${esc(p.author?.name || '')}</b><div class="small muted ab-cap">${esc((p.caption || '').slice(0, 90)) || (p.kind === 'reel' ? 'Vídeo' : 'Foto')}</div></div>
-          <button type="button" class="icon-btn" data-attach-x aria-label="Tirar publicação">✕</button>` : '';
-        if (p) $('[data-attach-x]', bar).onclick = () => { showAttach(null); syncButtons(); };
-        syncButtons();
-      };
-      if (role === 'patient' && canWrite(c)) {
-        let pend = null;
-        try { pend = JSON.parse(sessionStorage.getItem('acolia-attach') || 'null'); } catch { /* ignora */ }
-        if (pend && pend.conv === c.id) {
-          try { sessionStorage.removeItem('acolia-attach'); } catch { /* ignora */ }
-          api(`/api/social/posts/${pend.post}`).then((p) => {
-            if (state.current?.id !== c.id || p.author?.id !== c.peer.id) return;
-            showAttach({ id: p.id, kind: p.kind, image: p.kind === 'text' ? null : (p.thumb || p.image), caption: p.caption, author: p.author });
-            ta.placeholder = 'Escreva algo sobre esta publicação (opcional)';
-            ta.focus();
-          }).catch(() => {});
-        }
-      }
+      const syncButtons = () => form.classList.toggle('has-text', ta.value.trim().length > 0);
       syncButtons();
       $('[data-mic]', form).addEventListener('click', () => startRecording(form));
       $('[data-rec-cancel]', form).addEventListener('click', () => stopRecording(form, 'cancel'));
@@ -258,14 +232,6 @@
         if (form.classList.contains('recording')) { stopRecording(form, 'send'); return; }
         if (form.classList.contains('previewing')) { sendRecording(form); return; }
         const body = ta.value.trim();
-        if (attach) {
-          const sendingPost = attach;
-          showAttach(null);
-          try {
-            addMessage(await api(`/api/chat/conversations/${c.id}/messages`, { method: 'POST', body: { kind: 'post', post_id: sendingPost.id } }));
-          } catch (ex) { showAttach(sendingPost); toast(ex.message, 'error'); return; }
-          ta.placeholder = 'Digite uma mensagem';
-        }
         if (!body) return;
         ta.value = '';
         ta.style.height = 'auto';

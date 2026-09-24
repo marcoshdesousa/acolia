@@ -1030,8 +1030,11 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 .chat-post .cp-open { font-weight: 800; color: var(--primary); }
 .chat-post.off { display: flex; align-items: center; gap: 8px; color: var(--muted); cursor: default; }
 .chat-post.off svg { width: 18px; height: 18px; }
-.attach-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--primary-soft); border-top: 1px solid var(--line); }
-.attach-bar img, .attach-bar .ab-text { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex: none; display: grid; place-items: center; background: var(--surface); color: var(--primary); }
-.attach-bar .ab-text svg { width: 22px; height: 22px; }
-.attach-bar .ab-cap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .msg-card.chat-post:not(.off) { background: transparent; padding: 2px 0 0; }
+/* Aviso no topo da tela (fica por cima dos Reels também) */
+.toasts.top { top: calc(14px + env(safe-area-inset-top)); bottom: auto; z-index: 1000; }
+.toasts.top .toast { background: var(--primary); color: var(--on-primary); animation: drop .25s ease-out; }
+@keyframes drop { from { transform: translateY(-12px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* Story de uma publicação de texto */
+.sv-post-textbg { background: linear-gradient(160deg, #3f5550, #2e403c); }
+.sv-post-text { display: block; margin-top: 10px; padding: 18px; border-radius: 12px; text-align: left; font-size: 1.05rem; line-height: 1.45; white-space: pre-line; max-height: 60vh; overflow: hidden; }

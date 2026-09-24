@@ -172,6 +172,9 @@ router.post('/conversations/:id/messages', (req, res) => {
     const p = postInfo(req.body.post_id);
     if (!p) throw new U.HttpError(404, 'Esta publicação não está mais disponível.');
     if (p.professional_id !== c.professional_id) throw new U.HttpError(403, 'Você só pode enviar uma publicação para o profissional que a publicou.');
+    // Tocou de novo em "Mensagem" no mesmo post: não repete a mesma publicação na conversa
+    const again = db.prepare("SELECT id FROM messages WHERE conversation_id = ? AND kind = 'post' AND body = ? AND sender_role = 'patient'").get(c.id, String(p.id));
+    if (again) return res.json({ ...withPost(db.prepare(`SELECT ${MSG_COLS} FROM messages WHERE id = ?`).get(again.id)), already: true });
     return res.status(201).json(postMessage(req, c, 'post', String(p.id)));
   }
   if (req.body.kind === 'pix') {

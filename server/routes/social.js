@@ -8,7 +8,7 @@ const U = require('../util');
 const A = require('../auth');
 const rt = require('../realtime');
 const { VISIBLE_SQL, freeGalleryCount, PROFILE_POSTS } = require('../serialize');
-const { handlePhoto, handlePhotos, handleMedia, handleReel, removePhoto } = require('../upload');
+const { handlePhoto, handlePhotos, handleReel, removePhoto } = require('../upload');
 // Legendas e publicações de texto: sem limite prático (no feed aparecem resumidas, com "Ler mais")
 const CAPTION_MAX = 1700; // legenda de foto e vídeo (no feed aparece o começo, com "Ler mais")
 const TEXT_MAX = 3000; // publicação de texto
@@ -533,7 +533,7 @@ function storyOut(s, me) {
   let post = null;
   if (s.kind === 'post' && s.post_id) {
     const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(s.post_id);
-    if (p) post = { id: p.id, image: p.image, caption: p.caption, count: p.kind === 'reel' ? 1 : imageCount(p.id), kind: p.kind };
+    if (p) post = { id: p.id, image: p.kind === 'text' ? null : p.image, caption: p.caption, count: p.kind === 'reel' || p.kind === 'text' ? 1 : imageCount(p.id), kind: p.kind || 'photo', font: p.font || null };
   }
   return {
     id: s.id, media: s.media, kind: s.kind, created_at: s.created_at, post,
@@ -557,16 +557,11 @@ router.get('/stories', (req, res) => {
   res.json({ groups, can_post: me.role === 'professional' });
 });
 
-router.post('/stories', async (req, res) => {
+// Stories saem só das publicações do próprio profissional (⭐+ na publicação): foto, reel ou texto.
+// Não existe mais story enviado direto da galeria.
+router.post('/stories', (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais postam stories.');
-  const m = await handleMedia(req, res);
-  const secs = Number(req.body.duration) || 0;
-  if (m.kind === 'video' && secs > 20.9) {
-    removePhoto(m.url);
-    throw new U.HttpError(400, 'O vídeo do story pode ter no máximo 20 segundos.');
-  }
-  const info = db.prepare('INSERT INTO stories (professional_id, media, kind) VALUES (?, ?, ?)').run(req.auth.user.id, m.url, m.kind);
-  res.status(201).json(storyOut(db.prepare('SELECT * FROM stories WHERE id = ?').get(Number(info.lastInsertRowid)), who(req)));
+  throw new U.HttpError(403, 'Os stories saem das suas publicações: toque na estrela ⭐+ numa publicação sua.');
 });
 
 router.delete('/stories/:id', (req, res) => {
@@ -583,8 +578,7 @@ router.post('/posts/:id/story', (req, res) => {
   const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Publicação não encontrada.');
   if (!isPro(req) || p.professional_id !== req.auth.user.id) throw new U.HttpError(403, 'Só quem publicou pode colocar esta publicação no story.');
-  if (p.kind === 'text') throw new U.HttpError(400, 'Publicação de texto não vai para o story.');
-  const info = db.prepare("INSERT INTO stories (professional_id, media, kind, post_id) VALUES (?, ?, 'post', ?)").run(p.professional_id, p.image, p.id);
+  const info = db.prepare("INSERT INTO stories (professional_id, media, kind, post_id) VALUES (?, ?, 'post', ?)").run(p.professional_id, p.image || '', p.id);
   res.status(201).json(storyOut(db.prepare('SELECT * FROM stories WHERE id = ?').get(Number(info.lastInsertRowid)), who(req)));
 });
 

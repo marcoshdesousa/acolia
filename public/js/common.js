@@ -264,9 +264,11 @@
     return new Date(String(s).replace(' ', 'T') + (String(s).includes('Z') ? '' : 'Z'));
   }
 
-  function toast(msg, type = '') {
-    let box = $('.toasts');
-    if (!box) { box = document.createElement('div'); box.className = 'toasts'; box.setAttribute('role', 'status'); document.body.appendChild(box); }
+  // { top: true } = aviso bem em cima da tela (ex.: "Mensagem enviada para este profissional")
+  function toast(msg, type = '', { top = false } = {}) {
+    const sel = top ? '.toasts.top' : '.toasts:not(.top)';
+    let box = $(sel);
+    if (!box) { box = document.createElement('div'); box.className = top ? 'toasts top' : 'toasts'; box.setAttribute('role', 'status'); document.body.appendChild(box); }
     const t = document.createElement('div');
     t.className = `toast ${type}`;
     t.textContent = msg;

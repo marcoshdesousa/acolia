@@ -928,19 +928,24 @@ test('v1.2 — seguir, feed (não vistas primeiro), curtir, comentar, stories e 
   assert.equal((await pt.del(`/api/social/comments/${cPat.id}`)).status, 200, 'cada um apaga o seu');
   assert.equal((await pt.get(`/api/social/posts/${p1.id}`)).data.comments, 0);
 
-  // Stories: só profissional posta; vídeo com mais de 20 s é recusado; quem segue vê e curte
-  const story = async (who, type, duration) => {
+  // Stories: não dá mais para enviar da galeria; o story sai de uma publicação do próprio profissional
+  // (foto, reel ou texto). Quem segue vê e curte.
+  const story = async (who, type) => {
     const fd = new FormData();
-    fd.append('duration', String(duration));
     fd.append('media', new Blob([Buffer.from('fake')], { type }), type.startsWith('video') ? 'v.mp4' : 'f.png');
     const res = await fetch(`${base}/api/social/stories`, { method: 'POST', body: fd, headers: { Cookie: who.cookie } });
     return { status: res.status, data: await res.json() };
   };
-  assert.equal((await story(pt, 'image/png', 0)).status, 403);
-  assert.equal((await story(A.cl, 'video/mp4', 25)).status, 400, 'no máximo 20 s');
-  const s1 = await story(A.cl, 'video/mp4', 15);
-  assert.equal(s1.status, 201);
-  assert.equal(s1.data.kind, 'video');
+  assert.equal((await story(pt, 'image/png')).status, 403);
+  const gal = await story(A.cl, 'video/mp4');
+  assert.equal(gal.status, 403, 'da galeria não');
+  assert.match(gal.data.error, /publica/);
+  const txt = (await A.cl.post('/api/social/texts', { text: 'Texto para o story', font: 'manuscrita' })).data;
+  const s1 = await A.cl.post(`/api/social/posts/${txt.id}/story`);
+  assert.equal(s1.status, 201, 'texto vai para o story');
+  assert.equal(s1.data.post.kind, 'text');
+  assert.equal(s1.data.post.font, 'manuscrita');
+  assert.equal(s1.data.post.image, null);
   const groups = (await pt.get('/api/social/stories')).data.groups;
   assert.equal(groups.length, 1);
   assert.equal(groups[0].professional.id, A.id);
@@ -1767,8 +1772,8 @@ test('publicação de texto: profissional e Acolia Brasil, 4 fontes, até 3.000 
   assert.equal(list.items.length, 2);
   assert.ok(list.items.every((x) => x.kind === 'text'));
   assert.ok(list.items[0].caption.length <= 300, 'na grade vai só o começo');
-  // não vai para o story
-  assert.equal((await pro.post(`/api/social/posts/${r.data.id}/story`)).status, 400);
+  // texto também vai para o story (pela estrela)
+  assert.equal((await pro.post(`/api/social/posts/${r.data.id}/story`)).status, 201);
   // paciente não publica texto
   const pt = client();
   await pt.post('/api/auth/patient/register', { name: 'Iara Texto', cpf: '100.031.656-47', birth_date: '1990-01-01', state: 'SP', city: 'Campinas', password: '123456' });
@@ -1877,6 +1882,10 @@ test('mensagem a partir de um post: o paciente envia a publicação só para que
   assert.equal(r.status, 403);
   // publicação que não existe
   assert.equal((await pt.post(`/api/chat/conversations/${conv.id}/messages`, { kind: 'post', post_id: 999999 })).status, 404);
+  // tocar de novo no mesmo post não repete
+  r = await pt.post(`/api/chat/conversations/${conv.id}/messages`, { kind: 'post', post_id: pa.id });
+  assert.equal(r.data.already, true);
+  assert.equal((await pt.get(`/api/chat/conversations/${conv.id}/messages`)).data.items.filter((m) => m.kind === 'post').length, 1);
   // a Ana vê o cartão da publicação e não pode mandar post
   const msgs = (await A.cl.get(`/api/chat/conversations/${conv.id}/messages`)).data.items;
   assert.equal(msgs.find((m) => m.kind === 'post').post.id, pa.id);

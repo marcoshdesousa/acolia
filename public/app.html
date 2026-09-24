@@ -157,18 +157,16 @@
     // Início estilo Instagram (versão 1.2)
     let home = null;
     const openPro = (id) => { location.hash = 'perfil/' + id; };
-    AcoliaSocial.setContext({ role: 'patient', me, onOpenProfile: openPro, onMessage: (id, post) => { location.hash = 'conversar/' + id + (post ? '/' + post : ''); },
+    AcoliaSocial.setContext({ role: 'patient', me, onOpenProfile: openPro, onMessage: (id) => { location.hash = 'conversar/' + id; },
       onAllPosts: (id, kind) => { location.hash = 'posts/' + id + '/' + (kind || 'photo'); } });
 
     let catalogMounted = false;
     let backTo = '#buscar';
     async function route() {
-      const [view, arg, arg2] = (location.hash.slice(1) || 'inicio').split('/');
+      const [view, arg] = (location.hash.slice(1) || 'inicio').split('/');
       if (view === 'conversar' && arg) {
         try {
           const c = await api('/api/chat/conversations', { method: 'POST', body: { professional_id: Number(arg) } });
-          // Veio de um post: a conversa abre com a publicação anexada, pronta para enviar
-          if (Number(arg2) > 0) { try { sessionStorage.setItem('acolia-attach', JSON.stringify({ conv: c.id, post: Number(arg2) })); } catch { /* ignora */ } }
           location.replace('#chat/' + c.id);
         } catch (e) { toast(e.message, 'error'); location.replace('#buscar'); }
         return;
@@ -182,7 +180,7 @@
       if (v === 'inicio' && !home) {
         home = AcoliaSocial.mountHome($('[data-home]'), {
           role: 'patient', me, socket, onOpenProfile: openPro,
-          onMessage: (id, post) => { location.hash = 'conversar/' + id + (post ? '/' + post : ''); },
+          onMessage: (id) => { location.hash = 'conversar/' + id; },
           onFindPros: () => { location.hash = 'buscar'; },
           onUnread: (n) => { $('[data-home-badge]').textContent = n ? String(n) : ''; },
         });
@@ -192,7 +190,7 @@
         AcoliaCatalog.mount($('[data-catalog]'), {
           loggedIn: true, me,
           profileHref: (p) => '#perfil/' + p.id,
-          onMessage: (id, post) => { location.hash = 'conversar/' + id + (post ? '/' + post : ''); },
+          onMessage: (id) => { location.hash = 'conversar/' + id; },
         });
       }
       if (v === 'perfil') {

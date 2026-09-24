@@ -120,9 +120,22 @@
   // Só paciente (ou visitante, que é levado a criar conta) manda mensagem; profissional não manda para profissional
   const canMsg = (p) => !p.mine && !p.author.official && ctx.role !== 'professional';
   // A partir de um post: a conversa abre com aquela publicação anexada para enviar junto
-  function sendMessage(proId, postId) {
-    if (ctx.onMessage) ctx.onMessage(proId, postId);
-    else location.href = `/app#conversar/${proId}${postId ? `/${postId}` : ''}`;
+  // Botão "Mensagem" num post (paciente): a publicação já vai para o profissional que publicou,
+  // aparece o aviso no topo e a pessoa continua vendo o feed/vídeo. A resposta chega no chat (numerozinho).
+  const sentPosts = new Set();
+  async function sendMessage(proId, postId) {
+    if (!postId || ctx.role !== 'patient') {
+      if (ctx.onMessage) ctx.onMessage(proId);
+      else location.href = `/app#conversar/${proId}`;
+      return;
+    }
+    if (sentPosts.has(postId)) { toast('Mensagem já enviada para este profissional ✓', '', { top: true }); return; }
+    sentPosts.add(postId);
+    try {
+      const c = await api('/api/chat/conversations', { method: 'POST', body: { professional_id: proId } });
+      const m = await api(`/api/chat/conversations/${c.id}/messages`, { method: 'POST', body: { kind: 'post', post_id: postId } });
+      toast(m.already ? 'Mensagem já enviada para este profissional ✓' : 'Mensagem enviada para este profissional ✓', '', { top: true });
+    } catch (e) { sentPosts.delete(postId); toast(e.message, 'error', { top: true }); }
   }
 
   // Seguir / Seguindo no canto da publicação (não aparece na própria publicação — lá fica o ⋮)
@@ -142,7 +155,7 @@
         ${likeBtn(p.liked, `data-like="${p.id}"`)}
         <button type="button" class="icon-btn" data-comments="${p.id}" aria-label="Comentários">${ic('comment')}<span class="cnt" data-ccount="${p.id}">${p.comments || ''}</span></button>
         <button type="button" class="icon-btn" data-share="${p.id}" aria-label="Compartilhar">${ic('plane')}</button>
-        ${p.mine && p.kind !== 'text' ? `<button type="button" class="icon-btn to-story" data-to-story="${p.id}" aria-label="Colocar no meu story" title="Colocar no meu story">${ic('storyAdd')}</button>` : ''}
+        ${p.mine ? `<button type="button" class="icon-btn to-story" data-to-story="${p.id}" aria-label="Colocar no meu story" title="Colocar no meu story">${ic('storyAdd')}</button>` : ''}
         ${canMsg(p) ? `<button type="button" class="msg-pill" data-msg-pro="${p.author.id}" data-msg-post="${p.id}" title="Enviar mensagem sobre esta publicação">${ic('send', 16)} Mensagem</button>` : ''}
       </div>
       ${p.likes ? `<div class="post-likes" data-lcount="${p.id}">${p.likes} ${p.likes === 1 ? 'curtida' : 'curtidas'}</div>` : `<div class="post-likes" data-lcount="${p.id}"></div>`}
@@ -572,22 +585,23 @@
   }
 
 
-  // Cruz do Início: escolher entre publicar fotos ou story
-  function createMenu(onPost, onStory, onReel, onText) {
+  // Cruz do Início: publicar fotos, reel ou texto (story sai das publicações, pela estrela ⭐+)
+  function createMenu(onPost, onReel, onText) {
     modal({
       title: 'Criar',
       html: `<div class="create-menu">
         <button type="button" data-v="post">${ic('image', 30)}<b>Publicar fotos</b><small>No feed e no seu perfil (até ${MAX_PHOTOS} fotos)</small></button>
         <button type="button" data-v="reel">${ic('reel', 30)}<b>Publicar reel</b><small>Vídeo de até 1 min e 30 s, no feed, nos Reels e no seu perfil</small></button>
         <button type="button" data-v="text">${ic('text', 30)}<b>Publicar texto</b><small>Reflexões, dicas e avisos — escolha entre 4 fontes</small></button>
-        <button type="button" data-v="story">${ic('video', 30)}<b>Publicar story</b><small>Foto ou vídeo de até ${MAX_STORY_SECS} s, some em 24 h</small></button></div>`,
+        </div>
+        <p class="small muted" style="margin:12px 4px 0">Para colocar no seu story, toque na estrela ${ic('storyAdd', 16)} em uma publicação sua (foto, reel ou texto). O story some em 24 h.</p>`,
       actions: [],
       onOpen: (dlg) => {
         dlg.classList.add('sheet');
         $$('[data-v]', dlg).forEach((b) => b.addEventListener('click', () => {
           dlg.close();
           dlg.remove();
-          if (b.dataset.v === 'post') onPost(); else if (b.dataset.v === 'reel') onReel?.(); else if (b.dataset.v === 'text') onText?.(); else onStory();
+          if (b.dataset.v === 'post') onPost(); else if (b.dataset.v === 'reel') onReel?.(); else if (b.dataset.v === 'text') onText?.();
         }));
       },
     });
@@ -598,29 +612,6 @@
   const seenSet = () => { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); } catch { return new Set(); } };
   function markSeen(id) {
     try { const s = seenSet(); s.add(id); localStorage.setItem(SEEN_KEY, JSON.stringify([...s].slice(-500))); } catch { /* ignora */ }
-  }
-
-  async function newStory(onDone) {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*,video/*';
-    input.addEventListener('change', async () => {
-      const f = input.files[0];
-      if (!f) return;
-      let duration = 0;
-      if (f.type.startsWith('video/')) {
-        duration = await new Promise((ok) => {
-          const v = document.createElement('video');
-          v.preload = 'metadata';
-          v.onloadedmetadata = () => ok(v.duration || 0);
-          v.onerror = () => ok(0);
-          v.src = URL.createObjectURL(f);
-        });
-        if (duration > MAX_STORY_SECS + 0.9) { toast(`O vídeo do story pode ter no máximo ${MAX_STORY_SECS} segundos. Este tem ${Math.round(duration)} s.`, 'error'); return; }
-      }
-      Uploads.add({ type: 'story', label: 'Story', file: f, duration, onDone });
-    });
-    input.click();
   }
 
   // Visualizador em tela cheia: barrinhas de progresso, toque à direita/esquerda para avançar/voltar
@@ -650,7 +641,14 @@
         <div class="sv-bars">${grp.items.map((_, k) => `<i class="${k < i ? 'done' : ''}"><b></b></i>`).join('')}</div>
         <div class="sv-head">${avatar(pro.name, pro.photo, 'sm')}<b>${esc(pro.name)}</b><small>${esc(timeAgo(s.created_at))}</small>
           <button type="button" class="sv-close" aria-label="Fechar">${ic('close', 26)}</button></div>
-        <div class="sv-media">${s.kind === 'post' && s.post
+        <div class="sv-media">${s.kind === 'post' && s.post && s.post.kind === 'text'
+          ? `<div class="sv-post sv-post-textbg">
+              <button type="button" class="sv-post-card" data-sv-open-post="${s.post.id}" aria-label="Abrir publicação">
+                <span class="sv-post-head">${avatar(pro.name, pro.photo, 'sm')}<b>${esc(pro.name)}</b></span>
+                <span class="sv-post-text text-post font-${esc(s.post.font || 'padrao')}">${esc(s.post.caption.slice(0, 420))}${s.post.caption.length > 420 ? '…' : ''}</span>
+              </button>
+              <span class="sv-post-hint">Toque no texto para ler inteiro</span></div>`
+          : s.kind === 'post' && s.post
           ? `<div class="sv-post" style="--bg:url('${esc(s.post.image)}')">
               <button type="button" class="sv-post-card" data-sv-open-post="${s.post.id}" aria-label="Abrir publicação">
                 <span class="sv-post-head">${avatar(pro.name, pro.photo, 'sm')}<b>${esc(pro.name)}</b></span>
@@ -1359,7 +1357,7 @@
     root.addEventListener('click', (e) => {
       const sb = e.target.closest('[data-story-group]');
       if (sb) return openStories(groups, Number(sb.dataset.storyGroup), loadStories);
-      if (e.target.closest('[data-create]')) return createMenu(() => newPost(() => loadFeed(true)), () => newStory(loadStories), () => newReel(() => loadFeed(true)), () => newText(() => loadFeed(true)));
+      if (e.target.closest('[data-create]')) return createMenu(() => newPost(() => loadFeed(true)), () => newReel(() => loadFeed(true)), () => newText(() => loadFeed(true)));
       if (e.target.closest('[data-home-tab="reels"]')) return openReels();
       if (e.target.closest('[data-bell]')) return openNotifications(refreshBell);
       if (e.target.closest('[data-home-top]') || e.target.closest('[data-home-tab="feed"]')) return toTop();
