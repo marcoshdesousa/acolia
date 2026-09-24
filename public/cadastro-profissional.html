@@ -37,21 +37,43 @@
         <div class="field"><label>Estado e município (o estado precisa ser o mesmo do seu conselho regional)</label>
           <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
         <p class="small notice info" style="margin:0 0 14px">Você não precisa criar senha agora: assim que o cadastro for aprovado, a equipe Acolia manda a sua senha pelo WhatsApp. Depois de entrar, você pode trocá-la em <b>Conta</b>.</p>
-        <button class="btn block" type="submit">Enviar cadastro</button>
+        <button class="btn block" type="submit">Próximo</button>
         <p class="center small" style="margin:16px 0 0">Já tem cadastro? <a href="/entrar#profissional">Entrar</a></p>
       </form>
     </div>
+    <div data-plan-step class="hidden">
+      <h1 class="center">Escolha o seu plano</h1>
+      <p class="center muted">Um plano simples, sem comissão sobre as suas consultas.</p>
+      <div class="card">
+        <label class="plan-card" data-plan-card>
+          <input type="radio" name="plan" value="mensal-30" data-plan>
+          <span class="plan-check" aria-hidden="true"></span>
+          <span class="plan-body">
+            <span class="plan-name">Plano Mensal</span>
+            <span class="plan-price"><b>R$ 30,00</b> <small>a cada 30 dias</small></span>
+            <ul class="plan-list">
+              <li>Você fica com <b>100% do valor das consultas</b></li>
+              <li>Publique <b>fotos, vídeos, textos e stories</b></li>
+              <li><b>Pacientes ilimitados</b></li>
+            </ul>
+          </span>
+        </label>
+        <div class="form-error hidden" data-plan-err style="margin-top:12px"></div>
+        <div class="row" style="gap:10px;margin-top:16px">
+          <button class="btn secondary" type="button" data-plan-back>Voltar</button>
+          <button class="btn grow" type="button" data-plan-go>Avançar</button>
+        </div>
+      </div>
+    </div>
     <div data-step2 class="hidden card stack center">
-      <h1>Cadastro enviado!</h1>
-      <p>Este é o seu <b>código único de profissional</b>. Você vai usá-lo para <b>entrar no sistema</b> e para <b>iniciar seus atendimentos</b>.</p>
+      <h1>Sua conta está quase pronta!</h1>
+      <p>Segue abaixo o seu <b>código</b>. É com ele que você <b>entra na plataforma</b> e <b>inicia seus atendimentos</b>.</p>
       <div class="code-box" data-code></div>
-      <div class="notice">Tire um print ou anote este código agora. Se você perdê-lo, terá que pedir à administração, o que pode demorar.</div>
+      <div class="notice">Tire um print ou anote este código agora.</div>
       <div class="row" style="justify-content:center"><button class="btn secondary" data-copy>Copiar código</button><button class="btn secondary" onclick="print()">Imprimir</button></div>
       <div data-pending-box></div>
-      <p class="muted">Assim que a administração aprovar seu cadastro, você recebe sua senha pelo WhatsApp e já pode entrar para completar o seu perfil (foto, valores, pacotes e endereço).</p>
-      <a class="btn" href="/">Ir para a página inicial</a>
+      <a class="btn secondary" href="/">Ir para a página inicial</a>
     </div>
-
     <div class="card flat get-app" data-install-card style="margin-top:16px">
       <img src="/img/app-icon-192.png" alt="">
       <div class="grow"><b>Baixe o app da Acolia</b><div class="small muted">Grátis, pelo próprio site. Receba as mensagens como notificação.</div></div>
@@ -89,21 +111,54 @@
       $('[data-reg-hint]').textContent = HINTS[form.profession.value] || 'Número do seu registro na entidade de classe.';
       form.registry.placeholder = form.profession.value === 'Psiquiatra' ? 'Ex.: CRM-PA 12345' : HINTS[form.profession.value] ? 'Ex.: CRP 10/12345' : 'Número do registro';
     });
-    handleForm(form, async (d) => {
+    // Passo 1 (dados) → Próximo → passo 2 (plano) → Avançar → cria a conta → passo 3 (código)
+    const show = (step) => {
+      $('[data-step1]').classList.toggle('hidden', step !== 1);
+      $('[data-plan-step]').classList.toggle('hidden', step !== 2);
+      $('[data-step2]').classList.toggle('hidden', step !== 3);
+      scrollTo(0, 0);
+    };
+    const LABELS = { name: 'Informe seu nome completo.', email: 'Informe seu e-mail.', phone: 'Informe seu WhatsApp com DDD.', state: 'Selecione o estado.', city: 'Informe o município.' };
+    handleForm(form, async () => {
+      if ($('#name').value.trim().split(/\s+/).length < 2) throw new Error('Informe nome e sobrenome.');
+      const bad = [...form.elements].find((el) => el.required && !el.closest('.hidden') && !String(el.value).trim());
+      if (bad && LABELS[bad.name]) { bad.focus(); throw new Error(LABELS[bad.name]); }
+      if (!/^\S+@\S+\.\S+$/.test(form.email.value.trim())) throw new Error('Confira o seu e-mail.');
+      if (form.phone.value.replace(/\D/g, '').length < 10) throw new Error('Confira o seu WhatsApp com DDD.');
       if (!form.profession.value) throw new Error('Selecione sua profissão.');
       if (needsCard() && !form.registry.value.trim()) throw new Error(form.profession.value === 'Psiquiatra' ? 'Informe o número do seu CRM.' : 'Informe o número do seu CRP.');
       if (needsCard() && !form.document.files.length) throw new Error('Envie a foto da sua carteirinha profissional.');
-      const fd = new FormData(form);
-      const r = await api('/api/auth/professional/register', { method: 'POST', form: fd });
-      $('[data-code]').textContent = r.code;
-      $('[data-pending-box]').innerHTML = r.blocked
-        ? `<div class="notice danger" style="text-align:left"><b>Este cadastro está bloqueado.</b><br>Os dados informados pertencem a uma conta bloqueada pela administração. Para liberar, fale com o nosso atendimento.</div>
-           <a class="btn block" href="${esc(Acolia.supportLink(r.support, 'Olá! Meu cadastro de profissional na Acolia (código ' + r.code + ') está bloqueado. Gostaria de falar sobre a liberação.'))}" target="_blank" rel="noopener" style="margin-top:12px">Falar com o atendimento no WhatsApp</a>`
-        : Acolia.pendingProBox({ support: r.support, name: d.name, code: r.code });
-      $('[data-copy]').onclick = () => copyText(r.code);
-      $('[data-step1]').classList.add('hidden');
-      $('[data-step2]').classList.remove('hidden');
-      scrollTo(0, 0);
+      show(2);
+    });
+    const planErr = $('[data-plan-err]');
+    $('[data-plan]').addEventListener('change', () => { planErr.classList.add('hidden'); $('[data-plan-card]').classList.add('on'); });
+    $('[data-plan-back]').addEventListener('click', () => show(1));
+    const go = $('[data-plan-go]');
+    go.addEventListener('click', async () => {
+      const plan = $('[data-plan]:checked');
+      if (!plan) { planErr.textContent = 'Selecione o plano para continuar.'; planErr.classList.remove('hidden'); return; }
+      go.disabled = true; go.textContent = 'Criando sua conta…';
+      try {
+        const fd = new FormData(form);
+        fd.append('plan', plan.value);
+        const r = await api('/api/auth/professional/register', { method: 'POST', form: fd });
+        $('[data-code]').textContent = r.code;
+        const msg = 'Olá, sou profissional, acabei de criar minha conta.';
+        $('[data-pending-box]').innerHTML = r.blocked
+          ? `<div class="notice danger" style="text-align:left"><b>Este cadastro está bloqueado.</b><br>Os dados informados pertencem a uma conta bloqueada pela administração. Para liberar, fale com o nosso atendimento.</div>
+             <a class="btn block" href="${esc(Acolia.supportLink(r.support, 'Olá! Meu cadastro de profissional na Acolia (código ' + r.code + ') está bloqueado. Gostaria de falar sobre a liberação.'))}" target="_blank" rel="noopener" style="margin-top:12px">Falar com o atendimento no WhatsApp</a>`
+          : `<p style="margin:4px 0 0">Em breve alguém da nossa equipe irá entrar em contato com você pelo <b>WhatsApp</b> para enviar a sua senha.</p>
+             <div class="notice info" style="text-align:left">Para que o seu atendimento seja mais rápido, mande uma mensagem para a nossa equipe.</div>
+             <a class="btn block" href="${esc(Acolia.supportLink(r.support, msg))}" target="_blank" rel="noopener">${ICONS.send} Mandar mensagem para a equipe</a>`;
+        $('[data-copy]').onclick = () => copyText(r.code);
+        show(3);
+      } catch (e) {
+        // erro nos dados (ex.: e-mail ou registro já usado): volta para o formulário mostrando o aviso
+        show(1);
+        Acolia.toast(e.message, 'error');
+        const fe = form.querySelector('.form-error');
+        if (fe) { fe.textContent = e.message; fe.classList.remove('hidden'); }
+      } finally { go.disabled = false; go.textContent = 'Avançar'; }
     });
   })();
   </script>

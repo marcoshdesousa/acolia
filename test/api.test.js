@@ -1831,6 +1831,26 @@ test('feed: novidade primeiro (a mais nova no topo); as já vistas vêm misturad
   assert.equal(seq.length, 31, 'todas as 31 apareceram');
 });
 
+test('cadastro do profissional: escolhe o plano mensal de R$ 30 (plano inválido não passa) e o admin vê o plano', async () => {
+  const mk = (plan, email, phone) => {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries({ name: 'Paulo Plano Silva', profession: 'Psicanalista', email, phone, state: 'SP', city: 'Campinas' })) fd.append(k, v);
+    if (plan) fd.append('plan', plan);
+    return fetch(`${base}/api/auth/professional/register`, { method: 'POST', body: fd });
+  };
+  let r = await mk('ouro-999', 'plano.x@example.com', '11918181818');
+  assert.equal(r.status, 400, 'plano que não existe');
+  assert.match((await r.json()).error, /plano/i);
+  r = await mk('mensal-30', 'plano.ok@example.com', '11918181819');
+  assert.equal(r.status, 201);
+  const { code } = await r.json();
+  const list = (await admin.get('/api/admin/professionals?status=pendente')).data;
+  const it = (list.items || list).find((x) => x.code === code);
+  const det = (await admin.get(`/api/admin/professionals/${it.id}`)).data;
+  assert.match(det.plan, /R\$ 30/);
+  await admin.post(`/api/admin/professionals/${it.id}/delete`);
+});
+
 // Por último: apaga tudo (é o que acontece uma vez só no início oficial da plataforma)
 test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {
   const { db } = require('../server/db');

@@ -130,10 +130,15 @@ function insertProfessional(d, passwordHash, status, subscriptionUntil = null) {
 // Autocadastro: para psicólogo, neuropsicólogo (CRP) e psiquiatra (CRM) o registro precisa ser
 // válido e do mesmo estado, e a foto da carteirinha é obrigatória. Psicanalista, psicoterapeuta e
 // terapeuta não têm conselho: não precisam de carteirinha. (Cadastro feito pelo admin não passa por aqui.)
+// Planos que o profissional escolhe no cadastro (por enquanto, um só)
+const PLANS = { 'mensal-30': 'Mensal — R$ 30,00 a cada 30 dias' };
+
 router.post('/professional/register', async (req, res) => {
   const documentFile = await handleDocument(req, res);
   try {
     const d = validateProfessionalInput(req.body);
+    const plan = String(req.body.plan || 'mensal-30');
+    if (!PLANS[plan]) throw new HttpError(400, 'Selecione um plano.');
     // O profissional não cria senha no cadastro: a administração gera a primeira senha ao aprovar
     // e manda pelo WhatsApp. Depois de entrar, ele pode trocar em Conta.
     const needsCard = !!require('../registry').councilFor(d.profession);
@@ -152,8 +157,9 @@ router.post('/professional/register', async (req, res) => {
     if (!needsCard && documentFile) removeDocument(documentFile); // quem não tem conselho não precisa (nem guarda) carteirinha
     // Bloqueado pela administração antes (mesmo e-mail, registro ou WhatsApp): a conta nasce bloqueada
     const blocked = require('../blocklist').isBlocked('professional', { email: d.email, registry: reg.registry, phone: d.phone });
-    const { code } = insertProfessional({ ...d, registry: reg.registry, document_file: needsCard ? documentFile : null, registry_verified: verified },
+    const { id, code } = insertProfessional({ ...d, registry: reg.registry, document_file: needsCard ? documentFile : null, registry_verified: verified },
       NO_PASSWORD, blocked ? 'bloqueado' : 'pendente');
+    db.prepare('UPDATE professionals SET plan = ? WHERE id = ?').run(plan, id);
     res.status(201).json({ ok: true, code, blocked, support: require('../accountState').SUPPORT_WHATSAPP });
   } catch (e) {
     removeDocument(documentFile);
@@ -217,4 +223,4 @@ router.get('/me', (req, res) => {
   return res.json({ role, user: ownPatient(user), account });
 });
 
-module.exports = { NO_PASSWORD, router, PROFESSIONS, validateProfessionalInput, insertProfessional, requirePassword, validateLocation };
+module.exports = { PLANS, NO_PASSWORD, router, PROFESSIONS, validateProfessionalInput, insertProfessional, requirePassword, validateLocation };

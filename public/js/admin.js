@@ -248,6 +248,7 @@
           <tr><th>Código único</th><td><code style="font-size:1.05rem;font-weight:800">${esc(p.code)}</code> <button type="button" class="btn ghost sm" data-copy-code>Copiar</button></td></tr>
           <tr><th>Link</th><td>${p.slug ? `<a href="/${esc(p.slug)}" target="_blank" rel="noopener">${esc(location.host)}/${esc(p.slug)}</a>` : '—'}</td></tr>
           <tr><th>Nome na carteirinha</th><td>${esc(p.legal_name)}</td></tr>
+          ${p.plan ? `<tr><th>Plano escolhido</th><td>${esc(p.plan)}</td></tr>` : ''}
           <tr><th>Registro</th><td><div class="row" style="gap:6px"><input data-registry value="${esc(p.registry)}" maxlength="40" style="width:auto;min-height:34px;padding:4px 8px">
             <button type="button" class="btn ghost sm" data-save-registry>Salvar</button></div>
             ${p.registry_verified ? '<span class="badge ok">Conferido no conselho</span>' : '<span class="badge warn">Conferir pela carteirinha</span>'}</td></tr>
