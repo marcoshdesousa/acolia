@@ -1105,9 +1105,17 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 @media (max-width: 899px) {
   /* o vídeo do profissional continua inteiro; o jogo fica por cima, meio transparente e desfocado */
   .call-stage.game-open #localVideo, .call-stage.game-open .local-off { width: 22vw; }
-  .call-stage.game-open .peer-flags { bottom: auto; top: calc(34dvh - 34px); }
-  .dm-panel { --dm-top: 52px; left: 0; right: 0; top: 34dvh; bottom: 0; padding: 10px 12px calc(96px + env(safe-area-inset-bottom));
-    background: rgba(28,40,38,.42); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-radius: 20px 20px 0 0; }
-  .dm-board { background: rgba(28,40,38,.45); }
+  .call-stage.game-open .peer-flags { bottom: auto; top: calc(57dvh - 34px); }
+  /* sem fundo e sem desfoque: o profissional aparece nítido; só as peças e os textos ficam por cima */
+  .dm-panel { --dm-top: 46px; left: 0; right: 0; top: 57dvh; bottom: 0; padding: 8px 10px calc(96px + env(safe-area-inset-bottom)); background: none; gap: 6px; }
+  .dm-board { background: none; padding: 2px; }
+  .dm-head, .dm-row, .dm-status { align-self: flex-start; background: rgba(0,0,0,.32); border-radius: 999px; padding: 4px 10px; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+  .dm-head { gap: 8px; padding-right: 4px; }
+  .dm-head .dm-score { flex: none; }
+  .dm-x { width: 28px; height: 28px; font-size: .85rem; }
+  .dm-status:empty { display: none; }
+  .dm-board .dm-tile { box-shadow: 0 1px 4px rgba(0,0,0,.55); }
+  .dm-empty { background: rgba(0,0,0,.42); padding: 4px 10px; border-radius: 999px; margin: 0; }
+  .dm-over { background: rgba(28,40,38,.9); }
   .dm-tile.big { --s: 22px; }
 }
