@@ -42,10 +42,16 @@ router.put('/profile', async (req, res) => {
   if (!U.norm(name).split(' ').every((w) => legal.has(w))) {
     throw new U.HttpError(400, `Use apenas partes do seu nome registrado (${req.auth.user.legal_name || req.auth.user.name}).`);
   }
-  // Profissão e registro (carteirinha) só a administração altera
+  // Profissão, registro (carteirinha) e código só a administração altera. WhatsApp e e-mail ele muda.
   const { profession, registry } = req.auth.user;
   const phone = U.onlyDigits(b.phone);
   if (phone.length < 10 || phone.length > 13) throw new U.HttpError(400, 'Informe o WhatsApp com DDD.');
+  let email = req.auth.user.email;
+  if (b.email !== undefined) {
+    email = U.cleanText(b.email, 160).toLowerCase();
+    if (!U.isValidEmail(email)) throw new U.HttpError(400, 'E-mail inválido.');
+    if (db.prepare('SELECT 1 FROM professionals WHERE email = ? AND id <> ?').get(email, req.auth.user.id)) throw new U.HttpError(409, 'Este e-mail já está em uso em outra conta.');
+  }
   const { state, city } = validateLocation(b.state, b.city);
   const price = toCents(b.price);
 
@@ -78,6 +84,7 @@ router.put('/profile', async (req, res) => {
       state=?, city=?, city_norm=?, has_clinic=?, clinic_name=?, clinic_address=?, pix_key=?, session_minutes=?, instagram=?, maps_url=?, maps_query=? WHERE id=?`)
     .run(name, profession, registry, phone, U.cleanText(b.bio, 2000), U.cleanText(b.specialties, 300), price, JSON.stringify(packages),
       state, city, U.norm(city), hasClinic, clinicName, clinicAddress, U.cleanText(b.pix_key, 140), minutes, instagram, mapsUrl, mapsQuery, req.auth.user.id);
+  db.prepare('UPDATE professionals SET email = ? WHERE id = ?').run(email, req.auth.user.id);
   res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
 });
 

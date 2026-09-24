@@ -159,6 +159,12 @@ router.post('/professionals/:id/status', (req, res) => {
   // Na primeira aprovação, libera o primeiro período de mensalidade
   if (status === 'aprovado' && !until) until = U.addDaysISO(U.todayISO(), 30);
   db.prepare('UPDATE professionals SET status = ?, subscription_until = ? WHERE id = ?').run(status, until, p.id);
+  // Aprovado e ainda sem senha (se cadastrou pelo site): gera a primeira senha para o admin mandar pelo WhatsApp
+  let newPassword = null;
+  if (status === 'aprovado' && p.password_hash === require('./auth').NO_PASSWORD) {
+    newPassword = U.randomPassword(10);
+    db.prepare('UPDATE professionals SET password_hash = ? WHERE id = ?').run(U.hashPassword(newPassword), p.id);
+  }
   // Bloqueado fica na lista (mesmo que apague a conta e crie outra); qualquer outro status libera
   if (status === 'bloqueado') require('../blocklist').block('professional', p);
   else if (p.status === 'bloqueado') require('../blocklist').unblock('professional', p);
@@ -169,7 +175,7 @@ router.post('/professionals/:id/status', (req, res) => {
     const active = db.prepare("SELECT * FROM calls WHERE professional_id = ? AND status = 'ativo'").get(p.id);
     if (active) endCall(active);
   }
-  res.json(adminPro(db.prepare('SELECT * FROM professionals WHERE id = ?').get(p.id)));
+  res.json({ ...adminPro(db.prepare('SELECT * FROM professionals WHERE id = ?').get(p.id)), new_password: newPassword });
 });
 
 // Mensalidade: define a data até quando está pago, ou soma dias

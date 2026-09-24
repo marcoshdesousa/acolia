@@ -13,6 +13,8 @@ const { HttpError } = U;
 
 const PROFESSIONS = ['Psicólogo(a)', 'Psicanalista', 'Psiquiatra', 'Psicoterapeuta', 'Neuropsicólogo(a)', 'Terapeuta'];
 
+const NO_PASSWORD = '!sem-senha'; // profissional que ainda não recebeu a primeira senha
+
 function requirePassword(pw) {
   if (typeof pw !== 'string' || pw.length < 6) throw new HttpError(400, 'A senha precisa ter pelo menos 6 caracteres.');
   if (pw.length > 200) throw new HttpError(400, 'Senha muito longa.');
@@ -75,15 +77,18 @@ router.post('/patient/recover', (req, res) => {
   const key = `rec:${req.ip}`;
   A.checkLoginRate(key);
   const p = db.prepare('SELECT * FROM patients WHERE cpf = ?').get(cpf);
-  if (!p || U.norm(p.name) !== U.norm(req.body.name)) {
+  const birth = String(req.body.birth_date || '');
+  if (!p || U.norm(p.name) !== U.norm(req.body.name) || (p.birth_date && p.birth_date !== birth)) {
     A.registerLoginFailure(key);
-    throw new HttpError(400, 'Os dados não conferem. Verifique o CPF e o nome completo.');
+    throw new HttpError(400, 'Os dados não conferem. Verifique o nome completo, o CPF e a data de nascimento.');
   }
+  if (!p.birth_date) throw new HttpError(400, 'Sua conta ainda não tem data de nascimento. Fale com o nosso atendimento para recuperar a senha.');
   if (p.status !== 'ativo') throw new HttpError(403, 'Sua conta está bloqueada. Fale com a administração.');
-  const password = U.randomPassword(10);
-  db.prepare('UPDATE patients SET password_hash = ? WHERE id = ?').run(U.hashPassword(password), p.id);
+  requirePassword(req.body.password); // a pessoa escolhe a senha nova
+  A.clearLoginFailures(key);
+  db.prepare('UPDATE patients SET password_hash = ? WHERE id = ?').run(U.hashPassword(req.body.password), p.id);
   A.destroyUserSessions('patient', p.id);
-  res.json({ ok: true, password });
+  res.json({ ok: true });
 });
 
 // ---------- Profissional ----------
@@ -129,9 +134,10 @@ router.post('/professional/register', async (req, res) => {
   const documentFile = await handleDocument(req, res);
   try {
     const d = validateProfessionalInput(req.body);
+    // O profissional não cria senha no cadastro: a administração gera a primeira senha ao aprovar
+    // e manda pelo WhatsApp. Depois de entrar, ele pode trocar em Conta.
     const needsCard = !!require('../registry').councilFor(d.profession);
     if (needsCard && !documentFile) throw new HttpError(400, 'Envie a foto da sua carteirinha profissional (frente, com nome e número legíveis).');
-    requirePassword(req.body.password);
     const reg = validateRegistry(d.profession, req.body.registry, d.state);
     if (reg.registry && db.prepare('SELECT 1 FROM professionals WHERE registry = ?').get(reg.registry)) {
       throw new HttpError(409, `Já existe um cadastro com o ${reg.registry}. Se é você, entre na sua conta ou fale com a administração.`);
@@ -147,7 +153,7 @@ router.post('/professional/register', async (req, res) => {
     // Bloqueado pela administração antes (mesmo e-mail, registro ou WhatsApp): a conta nasce bloqueada
     const blocked = require('../blocklist').isBlocked('professional', { email: d.email, registry: reg.registry, phone: d.phone });
     const { code } = insertProfessional({ ...d, registry: reg.registry, document_file: needsCard ? documentFile : null, registry_verified: verified },
-      U.hashPassword(req.body.password), blocked ? 'bloqueado' : 'pendente');
+      NO_PASSWORD, blocked ? 'bloqueado' : 'pendente');
     res.status(201).json({ ok: true, code, blocked, support: require('../accountState').SUPPORT_WHATSAPP });
   } catch (e) {
     removeDocument(documentFile);
@@ -160,15 +166,20 @@ router.post('/professional/login', (req, res) => {
   const key = `pro:${req.ip}:${login.toLowerCase()}`;
   A.checkLoginRate(key);
   const p = db.prepare("SELECT * FROM professionals WHERE (code = ? OR email = ?) AND status <> 'oficial'").get(login.toUpperCase(), login.toLowerCase());
+  // Cadastro em análise: ainda não tem senha — mostra o aviso com o WhatsApp de atendimento
+  if (p && p.status === 'pendente') {
+    return res.status(403).json({ error: 'Seus dados estão sendo analisados pela nossa equipe. Você recebe sua senha pelo WhatsApp assim que o cadastro for aprovado.',
+      pending: true, support: require('../accountState').SUPPORT_WHATSAPP, name: p.name, code: p.code });
+  }
+  if (p && p.password_hash === NO_PASSWORD) {
+    A.registerLoginFailure(key);
+    throw new HttpError(401, 'Você ainda não tem senha. Fale com o nosso atendimento no WhatsApp para receber a sua.');
+  }
   if (!p || !U.verifyPassword(req.body.password || '', p.password_hash)) {
     A.registerLoginFailure(key);
     throw new HttpError(401, 'Código/e-mail ou senha incorretos.');
   }
   A.clearLoginFailures(key);
-  if (p.status === 'pendente') {
-    return res.status(403).json({ error: 'Seus dados estão sendo analisados pela nossa equipe. Você poderá entrar assim que o cadastro for aprovado.',
-      pending: true, support: require('../accountState').SUPPORT_WHATSAPP, name: p.name, code: p.code });
-  }
   if (p.status === 'recusado') throw new HttpError(403, 'Seu cadastro não foi aprovado. Fale com a administração.');
   if (p.status === 'excluido') throw new HttpError(401, 'Código/e-mail ou senha incorretos.');
   A.createSession(res, 'professional', p.id);
@@ -206,4 +217,4 @@ router.get('/me', (req, res) => {
   return res.json({ role, user: ownPatient(user), account });
 });
 
-module.exports = { router, PROFESSIONS, validateProfessionalInput, insertProfessional, requirePassword, validateLocation };
+module.exports = { NO_PASSWORD, router, PROFESSIONS, validateProfessionalInput, insertProfessional, requirePassword, validateLocation };

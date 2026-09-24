@@ -77,6 +77,7 @@
     form.profession.value = me.profession;
     form.registry.value = me.registry;
     form.phone.value = fmtPhone(me.phone);
+    form.email.value = me.email || '';
     form.specialties.value = me.specialties;
     form.bio.value = me.bio;
     form.session_minutes.value = me.session_minutes ? String(me.session_minutes) : '';

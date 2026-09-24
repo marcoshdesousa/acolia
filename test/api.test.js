@@ -135,8 +135,9 @@ test('profissional: cadastro fica pendente e não entra até aprovação', async
   assert.match(proCode, /[0-9]/);
   r = await anon.form('/api/auth/professional/register', { ...PRO, email: 'outro@example.com' }, DOC);
   assert.equal(r.status, 409, 'mesmo CRP duas vezes');
-  r = await pro.post('/api/auth/professional/login', { login: proCode, password: 'segredo1' });
+  r = await pro.post('/api/auth/professional/login', { login: proCode, password: 'qualquer' });
   assert.equal(r.status, 403);
+  assert.equal(r.data.pending, true, 'em análise: avisa (ainda não tem senha)');
   // Não aparece na vitrine
   r = await anon.get('/api/professionals');
   assert.equal(r.data.items.length, 0);
@@ -159,6 +160,13 @@ test('admin: login, lista pendentes e aprova', async () => {
   r = await admin.post(`/api/admin/professionals/${proId}/status`, { status: 'aprovado' });
   assert.equal(r.data.status, 'aprovado');
   assert.equal(r.data.visible, true);
+  // A primeira senha é gerada na aprovação (o admin manda pelo WhatsApp); ele entra e troca
+  assert.equal(r.data.new_password.length, 10);
+  const first = client();
+  assert.equal((await first.post('/api/auth/professional/login', { login: proCode, password: r.data.new_password })).status, 200);
+  assert.equal((await first.post('/api/professional/password', { current: r.data.new_password, password: 'segredo1' })).status, 200);
+  r = await admin.post(`/api/admin/professionals/${proId}/status`, { status: 'aprovado' });
+  assert.equal(r.data.new_password, null, 'reaprovar não troca a senha');
   // Paciente/profissional não acessam a área do admin
   assert.equal((await pat.get('/api/admin/stats')).status, 401);
 });
@@ -398,13 +406,14 @@ test('mensalidade: vence no dia, funciona mais 1 dia e depois bloqueia; aviso 2 
   assert.equal((await pro.get('/api/professional/me')).status, 200, 'desbloqueado volta ao normal');
 });
 
-test('paciente: recuperar senha com CPF + nome gera senha aleatória', async () => {
-  let r = await anon.post('/api/auth/patient/recover', { cpf: CPF_A, name: 'Maria Errada' });
+test('paciente: recuperar senha com nome + CPF + nascimento e escolher a nova', async () => {
+  let r = await anon.post('/api/auth/patient/recover', { cpf: CPF_A, name: 'Maria Errada', birth_date: '1990-05-10', password: 'nova123' });
   assert.equal(r.status, 400);
-  r = await anon.post('/api/auth/patient/recover', { cpf: CPF_A, name: 'maria souza' });
+  r = await anon.post('/api/auth/patient/recover', { cpf: CPF_A, name: 'maria souza', birth_date: '1991-01-01', password: 'nova123' });
+  assert.equal(r.status, 400, 'nascimento errado');
+  r = await anon.post('/api/auth/patient/recover', { cpf: CPF_A, name: 'maria souza', birth_date: '1990-05-10', password: 'nova123' });
   assert.equal(r.status, 200);
-  const newPw = r.data.password;
-  assert.equal(newPw.length, 10);
+  const newPw = 'nova123';
   r = await client().post('/api/auth/patient/login', { cpf: CPF_A, password: '123456' });
   assert.equal(r.status, 401);
   r = await client().post('/api/auth/patient/login', { cpf: CPF_A.replace(/\D/g, ''), password: newPw });
@@ -1587,14 +1596,15 @@ test('bloqueio fica na lista: apagar a própria conta não libera; admin apagar 
   assert.ok(r.data.support, 'cadastro devolve o WhatsApp de atendimento');
   const code = r.data.code;
   let pro = client();
-  r = await pro.post('/api/auth/professional/login', { login: code, password: 'segredo1' });
+  r = await pro.post('/api/auth/professional/login', { login: code, password: 'x' });
   assert.equal(r.status, 403);
   assert.equal(r.data.pending, true);
   assert.ok(r.data.support);
   const pid = db.prepare('SELECT id FROM professionals WHERE code = ?').get(code).id;
   // admin bloqueia; ele entra, apaga a conta e se cadastra de novo → nasce bloqueado
   await admin.post(`/api/admin/professionals/${pid}/status`, { status: 'bloqueado' });
-  assert.equal((await pro.post('/api/auth/professional/login', { login: code, password: 'segredo1' })).status, 200);
+  const pw = (await admin.post(`/api/admin/professionals/${pid}/reset-password`)).data.password;
+  assert.equal((await pro.post('/api/auth/professional/login', { login: code, password: pw })).status, 200);
   assert.equal((await pro.post('/api/professional/delete', { code })).status, 200);
   r = await anon.form('/api/auth/professional/register', { ...PRO2, email: 'outro.email@example.com' });
   assert.equal(r.status, 201);
@@ -1607,4 +1617,21 @@ test('bloqueio fica na lista: apagar a própria conta não libera; admin apagar 
   assert.equal(r.data.blocked, false);
   assert.equal(db.prepare('SELECT status FROM professionals WHERE code = ?').get(r.data.code).status, 'pendente', 'volta para a aprovação');
   for (const e of ['terceiro@example.com']) db.prepare("DELETE FROM professionals WHERE email = ?").run(e);
+});
+
+test('profissional muda WhatsApp e e-mail; profissão, registro e código não', async () => {
+  const c = await admin.post('/api/admin/professionals', { name: 'Lia Contato', profession: 'Psicólogo(a)', registry: 'CRP 06/77777', email: 'lia.contato@example.com', phone: '11911110000', state: 'SP', city: 'Campinas' });
+  const p = client();
+  await p.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+  const me = (await p.get('/api/professional/me')).data;
+  const body = { name: 'Lia Contato', phone: '11922223333', email: 'NOVO.lia@example.com', state: 'SP', city: 'Campinas', profession: 'Psiquiatra', registry: 'CRM-SP 1', code: 'ABC' };
+  const r = await p.put('/api/professional/profile', body);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const after = (await p.get('/api/professional/me')).data;
+  assert.equal(after.phone, '11922223333');
+  assert.equal(after.email, 'novo.lia@example.com');
+  assert.equal(after.profession, 'Psicólogo(a)', 'profissão não muda');
+  assert.equal(after.registry, me.registry, 'registro não muda');
+  assert.equal(after.code, c.data.code, 'código não muda');
+  assert.equal((await p.put('/api/professional/profile', { ...body, email: 'joao@example.com' })).status, 409, 'e-mail de outra conta');
 });

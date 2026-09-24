@@ -254,7 +254,7 @@
           <tr><th>Carteirinha</th><td>${p.has_document
             ? (p.document_is_pdf ? `<a href="/api/admin/professionals/${p.id}/document" target="_blank" rel="noopener">Abrir PDF da carteirinha</a>`
               : `<a href="/api/admin/professionals/${p.id}/document" target="_blank" rel="noopener"><img src="/api/admin/professionals/${p.id}/document" alt="Carteirinha de ${esc(p.name)}" style="max-height:220px;border-radius:8px;border:1px solid var(--line)"></a>`)
-            : '<span class="muted">Não enviada (cadastrado pela administração)</span>'}
+            : `<span class="muted">${['Psicólogo(a)', 'Neuropsicólogo(a)', 'Psiquiatra'].includes(p.profession) ? 'Não enviada (cadastrado pela administração)' : 'Não precisa (profissão sem conselho: sem CRP/CRM)'}</span>`}
             <div class="small muted">Confira se nome, número e estado batem com os dados acima antes de aprovar.</div></td></tr>
           <tr><th>E-mail</th><td>${esc(p.email)}</td></tr>
           <tr><th>WhatsApp</th><td><a href="https://wa.me/55${esc(p.phone)}" target="_blank" rel="noopener">${esc(fmtPhone(p.phone))}</a></td></tr>
@@ -295,8 +295,13 @@
           const s = b.dataset.set;
           const msgs = { aprovado: 'Aprovar/reativar este profissional?', recusado: 'Recusar este cadastro?', restrito: 'Restringir? Ele sai da vitrine mas continua respondendo conversas.', bloqueado: 'Bloquear? Ele entra, mas só vê a tela "Perfil bloqueado" (com o botão para falar com vocês). Sai da vitrine e os dados ficam guardados.' };
           if (!await confirmDialog(msgs[s], { danger: s !== 'aprovado' })) return;
-          await api(`/api/admin/professionals/${id}/status`, { method: 'POST', body: { status: s } });
+          const r = await api(`/api/admin/professionals/${id}/status`, { method: 'POST', body: { status: s } });
           toast('Situação atualizada');
+          // Primeira aprovação de quem se cadastrou pelo site: a senha aparece uma vez para mandar no WhatsApp
+          if (r.new_password) {
+            dlg.close(); dlg.remove();
+            await showSecret('Senha do profissional', r.new_password, `Cadastro aprovado! Mande esta senha para o profissional pelo WhatsApp (${fmtPhone(p.phone)}). Login: código ${p.code} ou e-mail ${p.email}. Ela não fica guardada: se ele esquecer, gere uma nova.`);
+          }
           refresh();
         }));
         $$('[data-add]', dlg).forEach((b) => b.addEventListener('click', async () => {

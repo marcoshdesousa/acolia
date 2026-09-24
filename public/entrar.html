@@ -50,7 +50,7 @@
   <script src="/js/common.js"></script>
   <script>
   (function () {
-    const { $, $$, api, ICONS, handleForm, maskCpf, modal, esc, copyText } = Acolia;
+    const { $, $$, api, ICONS, handleForm, maskCpf, modal, esc, copyText, toast } = Acolia;
     $('[data-logo]').innerHTML = ICONS.logo;
     const show = (t) => {
       $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
@@ -87,26 +87,31 @@
       e.preventDefault();
       const r = await modal({
         title: 'Recuperar senha',
-        html: '<p class="muted">Informe seu CPF e seu nome completo exatamente como no cadastro. Se os dados conferirem, uma nova senha aleatória será gerada.</p>'
+        html: '<p class="muted">Informe seus dados exatamente como no cadastro. Se conferirem, você cria uma senha nova na hora.</p>'
           + '<div class="form-error hidden" data-err></div>'
+          + '<div class="field"><label for="rname">Nome completo</label><input id="rname" autocomplete="name"></div>'
           + '<div class="field"><label for="rcpf">CPF</label><input id="rcpf" inputmode="numeric"></div>'
-          + '<div class="field"><label for="rname">Nome completo</label><input id="rname" autocomplete="name"></div>',
+          + '<div class="field"><label for="rbirth">Data de nascimento</label><input id="rbirth" type="date"></div>'
+          + '<div class="field"><label for="rpw">Nova senha</label><input id="rpw" type="password" autocomplete="new-password" minlength="6"><div class="hint">Mínimo de 6 caracteres.</div></div>'
+          + '<div class="field"><label for="rpw2">Repita a nova senha</label><input id="rpw2" type="password" autocomplete="new-password"></div>',
         onOpen: (dlg) => maskCpf($('#rcpf', dlg)),
         actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
-          label: 'Gerar nova senha', handler: async (dlg) => {
+          label: 'Salvar nova senha', handler: async (dlg) => {
+            const err = $('[data-err]', dlg);
+            const fail = (m) => { err.textContent = m; err.classList.remove('hidden'); return false; };
+            if (!$('#rbirth', dlg).value) return fail('Informe sua data de nascimento.');
+            if ($('#rpw', dlg).value !== $('#rpw2', dlg).value) return fail('As senhas não são iguais.');
             try {
-              const res = await api('/api/auth/patient/recover', { method: 'POST', body: { cpf: $('#rcpf', dlg).value, name: $('#rname', dlg).value } });
-              return res.password;
-            } catch (ex) { const el = $('[data-err]', dlg); el.textContent = ex.message; el.classList.remove('hidden'); return false; }
+              await api('/api/auth/patient/recover', { method: 'POST', body: { cpf: $('#rcpf', dlg).value, name: $('#rname', dlg).value, birth_date: $('#rbirth', dlg).value, password: $('#rpw', dlg).value } });
+              $('#cpf').value = $('#rcpf', dlg).value;
+              return true;
+            } catch (ex) { return fail(ex.message); }
           },
         }],
       });
       if (!r) return;
-      await modal({
-        title: 'Sua nova senha',
-        html: '<p>Anote ou tire um print. Use-a para entrar com seu CPF. Depois você pode trocá-la em Configurações.</p><div class="code-box">' + esc(r) + '</div>',
-        actions: [{ label: 'Copiar', handler: () => { copyText(r); return false; }, class: 'secondary' }, { label: 'Pronto', value: true }],
-      });
+      toast('Senha alterada! Agora é só entrar com seu CPF e a nova senha.');
+      $('#pw1')?.focus();
     });
   })();
   </script>
