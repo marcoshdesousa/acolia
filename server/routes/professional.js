@@ -180,4 +180,55 @@ router.post('/password', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Meus pacientes: quem já fez consulta (chamada iniciada) com este profissional ----------
+// Filtro por nome completo ou CPF; dá para baixar em PDF ou planilha (Excel). Só os pacientes dele.
+function attendedPatients(proId, q) {
+  const rows = db.prepare(`
+    WITH att AS (
+      SELECT COALESCE(ca.conversation_id,
+        (SELECT m.conversation_id FROM messages m WHERE m.kind = 'call' AND m.body = ca.patient_code LIMIT 1)) AS conv,
+        ca.started_at AS at
+      FROM calls ca WHERE ca.professional_id = ? AND ca.started_at IS NOT NULL)
+    SELECT pa.id, pa.name, pa.cpf, pa.birth_date, pa.city, pa.state, COUNT(*) AS consultas, MIN(att.at) AS primeira, MAX(att.at) AS ultima
+    FROM att JOIN conversations c ON c.id = att.conv AND c.professional_id = ?
+    JOIN patients pa ON pa.id = c.patient_id AND pa.status <> 'excluido'
+    GROUP BY pa.id ORDER BY ultima DESC`).all(proId, proId);
+  const text = U.norm(q || '').trim();
+  const digits = U.onlyDigits(q || '');
+  const list = !text ? rows : rows.filter((r) => U.norm(r.name).includes(text) || (digits.length >= 3 && r.cpf.includes(digits)));
+  const br = (d) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '');
+  return list.map((r) => ({
+    id: r.id, name: r.name, cpf: U.formatCpf(r.cpf), birth_date: br(r.birth_date), place: `${r.city} - ${r.state}`,
+    consultas: r.consultas, primeira: br(r.primeira), ultima: br(r.ultima),
+  }));
+}
+const PATIENT_COLS = [['Nome completo', 'name', 30], ['CPF', 'cpf', 13], ['Nascimento', 'birth_date', 10], ['Município', 'place', 20], ['Consultas', 'consultas', 8], ['Primeira', 'primeira', 10], ['Última', 'ultima', 10]];
+
+router.get('/patients', (req, res) => {
+  res.json({ items: attendedPatients(req.auth.user.id, req.query.q) });
+});
+router.get('/patients.csv', (req, res) => {
+  const rows = attendedPatients(req.auth.user.id, req.query.q);
+  const e = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const body = '﻿' + [PATIENT_COLS.map((c) => e(c[0])).join(';'), ...rows.map((r) => PATIENT_COLS.map((c) => e(r[c[1]])).join(';'))].join('\r\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="meus-pacientes.csv"');
+  res.send(body);
+});
+router.get('/patients.pdf', (req, res) => {
+  const me = req.auth.user;
+  const rows = attendedPatients(me.id, req.query.q);
+  const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
+  const pdf = require('../pdfTable').makeTablePdf({
+    title: 'Meus pacientes',
+    subtitle: `${me.legal_name || me.name} · ${me.profession}${me.registry ? ` · ${me.registry}` : ''} · ${rows.length} paciente${rows.length === 1 ? '' : 's'}${req.query.q ? ` · filtro: "${String(req.query.q).slice(0, 40)}"` : ''}`,
+    columns: PATIENT_COLS.map(([label, key, width]) => ({ label, key, width })),
+    rows,
+    footer: `Gerado pela plataforma Acolia em ${now}. Documento confidencial: contém dados pessoais de pacientes (LGPD).`,
+  });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="meus-pacientes.pdf"');
+  res.send(pdf);
+});
+
 module.exports = { router, wipeProfessional, cleanInstagram };

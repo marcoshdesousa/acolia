@@ -189,6 +189,24 @@
       <td>${h.status === 'ativo' ? '<span class="badge ok">Ativo</span>' : '<span class="badge">Finalizado</span>'}</td></tr>`).join('')
       : '<tr><td colspan="4" class="muted center">Nenhum atendimento ainda.</td></tr>';
   }
+  // Meus pacientes: quem já fez consulta; filtro por nome ou CPF; baixar em PDF ou planilha
+  let patTimer = null;
+  async function loadMyPatients() {
+    const q = $('[data-pat-q]').value.trim();
+    const { items } = await api(`/api/professional/patients?q=${encodeURIComponent(q)}`);
+    $('[data-pat-list]').innerHTML = items.length ? items.map((p) => `<tr>
+      <td><b>${esc(p.name)}</b></td><td style="white-space:nowrap">${esc(p.cpf)}</td><td>${esc(p.birth_date)}</td>
+      <td>${esc(p.place)}</td><td class="center">${p.consultas}</td><td>${esc(p.ultima)}</td></tr>`).join('')
+      : `<tr><td colspan="6" class="muted center">${q ? 'Nenhum paciente encontrado com esse nome ou CPF.' : 'Quando você fizer consultas pela Acolia, seus pacientes aparecem aqui.'}</td></tr>`;
+    $('[data-pat-count]').textContent = items.length ? `${items.length} paciente${items.length === 1 ? '' : 's'}${q ? ' encontrado' + (items.length === 1 ? '' : 's') : ''}` : '';
+  }
+  $('[data-pat-q]').addEventListener('input', () => { clearTimeout(patTimer); patTimer = setTimeout(() => loadMyPatients().catch((e) => toast(e.message, 'error')), 250); });
+  $$('[data-pat-export]').forEach((a) => a.addEventListener('click', (e) => {
+    e.preventDefault();
+    const q = $('[data-pat-q]').value.trim();
+    location.href = `/api/professional/patients.${a.dataset.patExport}${q ? `?q=${encodeURIComponent(q)}` : ''}`;
+  }));
+
   handleForm($('[data-new-call]'), async (d, f) => {
     await api('/api/calls', { method: 'POST', body: d });
     f.reset();
@@ -242,7 +260,7 @@
     }
     if (v === 'verpro' && arg) showPro(Number(arg));
     if (v === 'perfil') loadMyPosts(); // sempre atualizada (inclusive depois de publicar no Início)
-    if (v === 'atendimento') loadCalls().catch((e) => toast(e.message, 'error'));
+    if (v === 'atendimento') { loadCalls().catch((e) => toast(e.message, 'error')); loadMyPatients().catch((e) => toast(e.message, 'error')); }
     if (v === 'conversas') {
       if (arg && chat.current?.id !== Number(arg)) chat.open(Number(arg));
       if (!arg && chat.current) chat.close();

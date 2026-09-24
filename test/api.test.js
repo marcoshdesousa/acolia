@@ -1898,6 +1898,64 @@ test('mensagem a partir de um post: o paciente envia a publicação só para que
   assert.equal(after.post, null);
 });
 
+test('meus pacientes: só quem fez consulta com o profissional; filtro por nome ou CPF; PDF e planilha', async () => {
+  const { db } = require('../server/db');
+  const mkPro = async (name, email, phone) => {
+    const c = await admin.post('/api/admin/professionals', { name, profession: 'Psicanalista', registry: '', email, phone, state: 'SP', city: 'Campinas' });
+    const cl = client(); await cl.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
+    return { id: c.data.id, cl };
+  };
+  const cpfOf = (d) => { const dv = (a) => { const s = a.reduce((x, n, i) => x + n * (a.length + 1 - i), 0); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; d.push(dv(d)); d.push(dv(d)); return d.join(''); };
+  const mkPat = async (name, digits) => {
+    const cl = client(); const cpf = cpfOf(digits);
+    const r = await cl.post('/api/auth/patient/register', { name, cpf, birth_date: '1990-04-15', state: 'SP', city: 'Campinas', password: '123456' });
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    return { cl, cpf };
+  };
+  const A = await mkPro('Olga Lista Prado', 'olga.lista@example.com', '11920202021');
+  const B = await mkPro('Caio Lista Melo', 'caio.lista@example.com', '11920202022');
+  const P1 = await mkPat('Renata Consulta Dias', [6, 0, 2, 1, 7, 3, 9, 4, 1]);
+  const P2 = await mkPat('Tiago Semconsulta Lopes', [7, 1, 3, 2, 8, 4, 0, 5, 2]);
+  const conv = async (P, pro) => {
+    const c = (await P.cl.post('/api/chat/conversations', { professional_id: pro.id })).data;
+    await P.cl.post(`/api/chat/conversations/${c.id}/messages`, { body: 'Olá' });
+    return c.id;
+  };
+  const call = async (pro, convId, label, started) => {
+    const r = await pro.cl.post('/api/calls', { conversation_id: convId, patient_label: label });
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    if (started) db.prepare("UPDATE calls SET started_at = datetime('now') WHERE id = ?").run(r.data.id);
+    await pro.cl.post(`/api/calls/${r.data.id}/end`);
+  };
+  await call(A, await conv(P1, A), 'Renata', true);
+  await call(A, await conv(P2, A), 'Tiago', false); // código gerado, mas a consulta não aconteceu
+  await call(B, await conv(P2, B), 'Tiago', true);   // consulta com outro profissional
+  let list = (await A.cl.get('/api/professional/patients')).data.items;
+  assert.deepEqual(list.map((p) => p.name), ['Renata Consulta Dias'], 'só quem fez consulta com ela');
+  assert.equal(list[0].consultas, 1);
+  assert.equal(list[0].birth_date, '15/04/1990');
+  assert.match(list[0].cpf, /^\d{3}\.\d{3}\.\d{3}-\d{2}$/);
+  assert.equal((await B.cl.get('/api/professional/patients')).data.items[0].name, 'Tiago Semconsulta Lopes', 'cada um vê só os seus');
+  // filtro por nome (sem acento/maiúscula) e por CPF (com ou sem pontos)
+  assert.equal((await A.cl.get('/api/professional/patients?q=renata dias')).data.items.length, 0, 'nome precisa estar na ordem');
+  assert.equal((await A.cl.get('/api/professional/patients?q=RENATA CONSULTA')).data.items.length, 1);
+  assert.equal((await A.cl.get(`/api/professional/patients?q=${P1.cpf.slice(0, 6)}`)).data.items.length, 1);
+  assert.equal((await A.cl.get(`/api/professional/patients?q=${encodeURIComponent(list[0].cpf)}`)).data.items.length, 1);
+  assert.equal((await A.cl.get('/api/professional/patients?q=fulano')).data.items.length, 0);
+  // planilha e PDF
+  let r = await fetch(`${base}/api/professional/patients.csv`, { headers: { Cookie: A.cl.cookie } });
+  const csvText = await r.text();
+  assert.match(r.headers.get('content-type'), /text\/csv/);
+  assert.ok(csvText.includes('Renata Consulta Dias') && !csvText.includes('Tiago'));
+  r = await fetch(`${base}/api/professional/patients.pdf?q=renata`, { headers: { Cookie: A.cl.cookie } });
+  assert.equal(r.headers.get('content-type'), 'application/pdf');
+  const pdf = Buffer.from(await r.arrayBuffer());
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+  assert.ok(pdf.toString('latin1').includes('Renata Consulta Dias'));
+  // paciente não acessa
+  assert.ok((await P1.cl.get('/api/professional/patients')).status >= 401, 'paciente não acessa');
+});
+
 // Por último: apaga tudo (é o que acontece uma vez só no início oficial da plataforma)
 test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {
   const { db } = require('../server/db');

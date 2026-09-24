@@ -65,6 +65,19 @@
           <div class="field"><label for="plabel">Nome do paciente (pode ser fictício)</label><input id="plabel" name="patient_label" maxlength="80" required></div>
           <button class="btn" type="submit">Gerar código do paciente</button>
         </form>
+        <div class="card" data-my-patients style="margin-top:24px">
+          <div class="row between" style="flex-wrap:wrap;gap:10px">
+            <h2 style="margin:0">Meus pacientes</h2>
+            <div class="row" style="gap:8px;flex-wrap:wrap">
+              <a class="btn secondary sm" href="#" data-pat-export="pdf">Baixar PDF</a>
+              <a class="btn secondary sm" href="#" data-pat-export="csv">Baixar planilha (Excel)</a>
+            </div>
+          </div>
+          <p class="small muted" style="margin:6px 0 12px">Pacientes com quem você já fez consulta pela Acolia. Filtre pelo nome completo ou pelo CPF.</p>
+          <input type="search" data-pat-q placeholder="Buscar por nome ou CPF" aria-label="Buscar paciente por nome ou CPF" autocomplete="off">
+          <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Nome completo</th><th>CPF</th><th>Nascimento</th><th>Município</th><th>Consultas</th><th>Última</th></tr></thead><tbody data-pat-list></tbody></table></div>
+          <p class="small muted" data-pat-count style="margin:8px 0 0"></p>
+        </div>
         <h2 style="margin-top:24px">Histórico</h2>
         <div class="table-wrap"><table><thead><tr><th>Paciente</th><th>Código</th><th>Criado</th><th>Situação</th></tr></thead><tbody data-history></tbody></table></div>
       </section>
