@@ -1038,3 +1038,12 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 /* Story de uma publicação de texto */
 .sv-post-textbg { background: linear-gradient(160deg, #3f5550, #2e403c); }
 .sv-post-text { display: block; margin-top: 10px; padding: 18px; border-radius: 12px; text-align: left; font-size: 1.05rem; line-height: 1.45; white-space: pre-line; max-height: 60vh; overflow: hidden; }
+/* Meus pacientes: período e resumo */
+.pat-period { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; }
+.pat-period input { width: 100%; min-width: 0; box-sizing: border-box; }
+.pat-period .field { margin: 0; }
+.chip-btn { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: .85rem; font-weight: 700; cursor: pointer; }
+.chip-btn.on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.pat-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 12px; padding: 10px 14px; border-radius: var(--radius); background: var(--primary-soft); }
+.pat-summary .pat-num { font-size: .95rem; }
+.pat-summary .pat-num b { font-size: 1.25rem; color: var(--primary); }

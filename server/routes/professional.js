@@ -182,17 +182,24 @@ router.post('/password', (req, res) => {
 
 // ---------- Meus pacientes: quem já fez consulta (chamada iniciada) com este profissional ----------
 // Filtro por nome completo ou CPF; dá para baixar em PDF ou planilha (Excel). Só os pacientes dele.
-function attendedPatients(proId, q) {
+// Período (datas do Brasil, AAAA-MM-DD): conta só as consultas feitas entre "de" e "até".
+// As consultas ficam gravadas em UTC; o Brasil (Brasília) está 3 h atrás.
+const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
+function attendedPatients(proId, { q = '', from = '', to = '' } = {}) {
+  const f = isDate(from) ? from : null;
+  const t = isDate(to) ? to : null;
   const rows = db.prepare(`
     WITH att AS (
       SELECT COALESCE(ca.conversation_id,
         (SELECT m.conversation_id FROM messages m WHERE m.kind = 'call' AND m.body = ca.patient_code LIMIT 1)) AS conv,
-        ca.started_at AS at
-      FROM calls ca WHERE ca.professional_id = ? AND ca.started_at IS NOT NULL)
+        datetime(ca.started_at, '-3 hours') AS at
+      FROM calls ca WHERE ca.professional_id = ? AND ca.started_at IS NOT NULL
+        AND (? IS NULL OR ca.started_at >= datetime(? || ' 00:00:00', '+3 hours'))
+        AND (? IS NULL OR ca.started_at <= datetime(? || ' 23:59:59', '+3 hours')))
     SELECT pa.id, pa.name, pa.cpf, pa.birth_date, pa.city, pa.state, COUNT(*) AS consultas, MIN(att.at) AS primeira, MAX(att.at) AS ultima
     FROM att JOIN conversations c ON c.id = att.conv AND c.professional_id = ?
     JOIN patients pa ON pa.id = c.patient_id AND pa.status <> 'excluido'
-    GROUP BY pa.id ORDER BY ultima DESC`).all(proId, proId);
+    GROUP BY pa.id ORDER BY ultima DESC`).all(proId, f, f, t, t, proId);
   const text = U.norm(q || '').trim();
   const digits = U.onlyDigits(q || '');
   const list = !text ? rows : rows.filter((r) => U.norm(r.name).includes(text) || (digits.length >= 3 && r.cpf.includes(digits)));
@@ -202,26 +209,42 @@ function attendedPatients(proId, q) {
     consultas: r.consultas, primeira: br(r.primeira), ultima: br(r.ultima),
   }));
 }
+const filtersOf = (query) => ({ q: query.q, from: query.from, to: query.to });
+function periodText({ from, to }) {
+  const br = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+  if (isDate(from) && isDate(to)) return `de ${br(from)} a ${br(to)}`;
+  if (isDate(from)) return `a partir de ${br(from)}`;
+  if (isDate(to)) return `até ${br(to)}`;
+  return 'todo o período';
+}
+const totalsOf = (rows) => ({ patients: rows.length, consultations: rows.reduce((a, r) => a + r.consultas, 0) });
+
 const PATIENT_COLS = [['Nome completo', 'name', 30], ['CPF', 'cpf', 13], ['Nascimento', 'birth_date', 10], ['Município', 'place', 20], ['Consultas', 'consultas', 8], ['Primeira', 'primeira', 10], ['Última', 'ultima', 10]];
 
 router.get('/patients', (req, res) => {
-  res.json({ items: attendedPatients(req.auth.user.id, req.query.q) });
+  const items = attendedPatients(req.auth.user.id, filtersOf(req.query));
+  res.json({ items, totals: totalsOf(items), period: periodText(req.query) });
 });
 router.get('/patients.csv', (req, res) => {
-  const rows = attendedPatients(req.auth.user.id, req.query.q);
+  const rows = attendedPatients(req.auth.user.id, filtersOf(req.query));
+  const tot = totalsOf(rows);
   const e = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const body = '﻿' + [PATIENT_COLS.map((c) => e(c[0])).join(';'), ...rows.map((r) => PATIENT_COLS.map((c) => e(r[c[1]])).join(';'))].join('\r\n');
+  const lines = [PATIENT_COLS.map((c) => e(c[0])).join(';'), ...rows.map((r) => PATIENT_COLS.map((c) => e(r[c[1]])).join(';')),
+    '', e(`Período: ${periodText(req.query)}`),
+    `${e('Total de pacientes')};${e(tot.patients)}`, `${e('Total de consultas')};${e(tot.consultations)}`];
+  const body = '﻿' + lines.join('\r\n');
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="meus-pacientes.csv"');
   res.send(body);
 });
 router.get('/patients.pdf', (req, res) => {
   const me = req.auth.user;
-  const rows = attendedPatients(me.id, req.query.q);
+  const rows = attendedPatients(me.id, filtersOf(req.query));
+  const tot = totalsOf(rows);
   const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
   const pdf = require('../pdfTable').makeTablePdf({
     title: 'Meus pacientes',
-    subtitle: `${me.legal_name || me.name} · ${me.profession}${me.registry ? ` · ${me.registry}` : ''} · ${rows.length} paciente${rows.length === 1 ? '' : 's'}${req.query.q ? ` · filtro: "${String(req.query.q).slice(0, 40)}"` : ''}`,
+    subtitle: `${me.legal_name || me.name} · ${me.profession}${me.registry ? ` · ${me.registry}` : ''} · Período: ${periodText(req.query)} · ${tot.patients} paciente${tot.patients === 1 ? '' : 's'} · ${tot.consultations} consulta${tot.consultations === 1 ? '' : 's'}${req.query.q ? ` · busca: "${String(req.query.q).slice(0, 40)}"` : ''}`,
     columns: PATIENT_COLS.map(([label, key, width]) => ({ label, key, width })),
     rows,
     footer: `Gerado pela plataforma Acolia em ${now}. Documento confidencial: contém dados pessoais de pacientes (LGPD).`,

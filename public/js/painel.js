@@ -189,22 +189,49 @@
       <td>${h.status === 'ativo' ? '<span class="badge ok">Ativo</span>' : '<span class="badge">Finalizado</span>'}</td></tr>`).join('')
       : '<tr><td colspan="4" class="muted center">Nenhum atendimento ainda.</td></tr>';
   }
-  // Meus pacientes: quem já fez consulta; filtro por nome ou CPF; baixar em PDF ou planilha
+  // Meus pacientes: quem já fez consulta; filtro por nome/CPF e por período; baixar em PDF ou planilha
   let patTimer = null;
-  async function loadMyPatients() {
+  const patQuery = () => {
+    const qs = new URLSearchParams();
     const q = $('[data-pat-q]').value.trim();
-    const { items } = await api(`/api/professional/patients?q=${encodeURIComponent(q)}`);
+    if (q) qs.set('q', q);
+    if ($('[data-pat-from]').value) qs.set('from', $('[data-pat-from]').value);
+    if ($('[data-pat-to]').value) qs.set('to', $('[data-pat-to]').value);
+    return qs.toString();
+  };
+  async function loadMyPatients() {
+    const filtered = !!patQuery();
+    const { items, totals, period } = await api(`/api/professional/patients?${patQuery()}`);
     $('[data-pat-list]').innerHTML = items.length ? items.map((p) => `<tr>
       <td><b>${esc(p.name)}</b></td><td style="white-space:nowrap">${esc(p.cpf)}</td><td>${esc(p.birth_date)}</td>
       <td>${esc(p.place)}</td><td class="center">${p.consultas}</td><td>${esc(p.ultima)}</td></tr>`).join('')
-      : `<tr><td colspan="6" class="muted center">${q ? 'Nenhum paciente encontrado com esse nome ou CPF.' : 'Quando você fizer consultas pela Acolia, seus pacientes aparecem aqui.'}</td></tr>`;
-    $('[data-pat-count]').textContent = items.length ? `${items.length} paciente${items.length === 1 ? '' : 's'}${q ? ' encontrado' + (items.length === 1 ? '' : 's') : ''}` : '';
+      : `<tr><td colspan="6" class="muted center">${filtered ? 'Nenhum paciente encontrado com esse filtro.' : 'Quando você fizer consultas pela Acolia, seus pacientes aparecem aqui.'}</td></tr>`;
+    $('[data-pat-summary]').innerHTML = `<span class="small muted">Período: <b>${esc(period)}</b></span>
+      <span class="pat-num"><b>${totals.patients}</b> paciente${totals.patients === 1 ? '' : 's'}</span>
+      <span class="pat-num"><b>${totals.consultations}</b> consulta${totals.consultations === 1 ? '' : 's'}</span>`;
   }
-  $('[data-pat-q]').addEventListener('input', () => { clearTimeout(patTimer); patTimer = setTimeout(() => loadMyPatients().catch((e) => toast(e.message, 'error')), 250); });
+  const reloadPatients = () => { clearTimeout(patTimer); patTimer = setTimeout(() => loadMyPatients().catch((e) => toast(e.message, 'error')), 250); };
+  $('[data-pat-q]').addEventListener('input', reloadPatients);
+  $('[data-pat-from]').addEventListener('change', reloadPatients);
+  $('[data-pat-to]').addEventListener('change', reloadPatients);
+  // Atalhos de período (datas do aparelho)
+  const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  $$('[data-pat-range]').forEach((b) => b.addEventListener('click', () => {
+    const now = new Date();
+    let from = '';
+    let to = '';
+    if (b.dataset.patRange === 'month') { from = ymd(new Date(now.getFullYear(), now.getMonth(), 1)); to = ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0)); }
+    if (b.dataset.patRange === 'last') { from = ymd(new Date(now.getFullYear(), now.getMonth() - 1, 1)); to = ymd(new Date(now.getFullYear(), now.getMonth(), 0)); }
+    if (b.dataset.patRange === 'year') { from = `${now.getFullYear()}-01-01`; to = `${now.getFullYear()}-12-31`; }
+    $('[data-pat-from]').value = from;
+    $('[data-pat-to]').value = to;
+    $$('[data-pat-range]').forEach((x) => x.classList.toggle('on', x === b));
+    reloadPatients();
+  }));
   $$('[data-pat-export]').forEach((a) => a.addEventListener('click', (e) => {
     e.preventDefault();
-    const q = $('[data-pat-q]').value.trim();
-    location.href = `/api/professional/patients.${a.dataset.patExport}${q ? `?q=${encodeURIComponent(q)}` : ''}`;
+    const qs = patQuery();
+    location.href = `/api/professional/patients.${a.dataset.patExport}${qs ? `?${qs}` : ''}`;
   }));
 
   handleForm($('[data-new-call]'), async (d, f) => {

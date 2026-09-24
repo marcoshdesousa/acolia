@@ -1952,6 +1952,28 @@ test('meus pacientes: só quem fez consulta com o profissional; filtro por nome 
   const pdf = Buffer.from(await r.arrayBuffer());
   assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
   assert.ok(pdf.toString('latin1').includes('Renata Consulta Dias'));
+  // período: consultas em datas diferentes (gravadas em UTC; o filtro usa o horário de Brasília)
+  const c1 = (await P1.cl.get('/api/chat/conversations')).data.items.find((x) => x.peer.id === A.id).id;
+  const mkAt = async (utc) => {
+    const r = await A.cl.post('/api/calls', { conversation_id: c1, patient_label: 'Renata' });
+    db.prepare('UPDATE calls SET started_at = ? WHERE id = ?').run(utc, r.data.id);
+    await A.cl.post(`/api/calls/${r.data.id}/end`);
+  };
+  await mkAt('2026-01-10 15:00:00');
+  await mkAt('2026-02-01 02:30:00'); // 31/01 às 23:30 em Brasília
+  let d = (await A.cl.get('/api/professional/patients?from=2026-01-01&to=2026-01-31')).data;
+  assert.equal(d.items.length, 1);
+  assert.equal(d.items[0].consultas, 2, 'as duas de janeiro (uma é 31/01 à noite em Brasília)');
+  assert.equal(d.items[0].ultima, '31/01/2026');
+  assert.deepEqual(d.totals, { patients: 1, consultations: 2 });
+  assert.equal(d.period, 'de 01/01/2026 a 31/01/2026');
+  d = (await A.cl.get('/api/professional/patients?from=2026-02-01&to=2026-02-28')).data;
+  assert.equal(d.items.length, 0, 'fevereiro sem consultas');
+  d = (await A.cl.get('/api/professional/patients')).data;
+  assert.equal(d.totals.consultations, 3, 'tudo: 3 consultas');
+  r = await fetch(`${base}/api/professional/patients.csv?from=2026-01-01&to=2026-01-31`, { headers: { Cookie: A.cl.cookie } });
+  const csvJan = await r.text();
+  assert.ok(csvJan.includes('"Total de consultas";"2"') && csvJan.includes('de 01/01/2026 a 31/01/2026'));
   // paciente não acessa
   assert.ok((await P1.cl.get('/api/professional/patients')).status >= 401, 'paciente não acessa');
 });
