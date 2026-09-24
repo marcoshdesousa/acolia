@@ -1,6 +1,7 @@
 'use strict';
 // PDF simples (sem biblioteca): uma tabela em A4 deitado, com a logo da Acolia no topo,
-// título, subtítulo e numeração de páginas. Fonte Helvetica (acentos do português via WinAnsi).
+// título, subtítulo, numeração de páginas e o total no fim. Fonte Helvetica (acentos via WinAnsi).
+// Sem limite de páginas. O PDF é montado na memória e enviado direto: nada é gravado no servidor.
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -18,12 +19,14 @@ function fit(s, width, size) {
   return t.length > max ? `${t.slice(0, max - 1)}...` : t;
 }
 
-function makeTablePdf({ title, subtitle = '', columns, rows, footer = '' }) {
+function makeTablePdf({ title, subtitle = '', columns, rows, footer = '', summary = '' }) {
   const size = 9, rowH = 18, headH = 22;
   const top = PAGE_H - M - 50; // abaixo da logo
   const perPage = Math.max(1, Math.floor((top - 40 - M - headH) / rowH));
   const pages = [];
   for (let i = 0; i < Math.max(1, rows.length); i += perPage) pages.push(rows.slice(i, i + perPage));
+  // o total vai logo depois da última linha; se a última página estiver cheia, ganha uma página só para ele
+  if (summary && pages[pages.length - 1].length > perPage - 2) pages.push([]);
   const tableW = PAGE_W - 2 * M;
   const total = columns.reduce((a, c) => a + c.width, 0);
   const cols = columns.map((c) => ({ ...c, w: (c.width / total) * tableW }));
@@ -48,7 +51,11 @@ function makeTablePdf({ title, subtitle = '', columns, rows, footer = '' }) {
       for (const c of cols) { text(cx + 6, y - 7, fit(r[c.key], c.w - 10, size)); cx += c.w; }
       y -= rowH;
     });
-    if (!rows.length) text(M + 6, y - 10, latin1('Nenhum paciente encontrado.'), 10, 'F1', '0.38 0.43 0.41');
+    if (!rows.length) { text(M + 6, y - 10, latin1('Nenhum paciente encontrado.'), 10, 'F1', '0.38 0.43 0.41'); y -= rowH; }
+    if (summary && pi === pages.length - 1) {
+      out.push(`0.898 0.922 0.91 rg ${M} ${y - 26} ${tableW} 26 re f`);
+      text(M + 8, y - 17, latin1(summary), 11, 'F2', '0.18 0.25 0.235');
+    }
     // rodapé
     out.push(`0.89 0.886 0.863 RG 0.5 w ${M} ${M + 10} m ${PAGE_W - M} ${M + 10} l S`);
     if (footer) text(M, M - 2, latin1(footer), 8, 'F1', '0.38 0.43 0.41');

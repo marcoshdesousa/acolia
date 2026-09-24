@@ -237,6 +237,7 @@ router.get('/patients.csv', (req, res) => {
   res.setHeader('Content-Disposition', 'attachment; filename="meus-pacientes.csv"');
   res.send(body);
 });
+// PDF montado na hora e enviado direto (não fica salvo no servidor); sem limite de páginas
 router.get('/patients.pdf', (req, res) => {
   const me = req.auth.user;
   const rows = attendedPatients(me.id, filtersOf(req.query));
@@ -248,6 +249,7 @@ router.get('/patients.pdf', (req, res) => {
     columns: PATIENT_COLS.map(([label, key, width]) => ({ label, key, width })),
     rows,
     footer: `Gerado pela plataforma Acolia em ${now}. Documento confidencial: contém dados pessoais de pacientes (LGPD).`,
+    summary: `Total: ${tot.patients} paciente${tot.patients === 1 ? '' : 's'} · ${tot.consultations} consulta${tot.consultations === 1 ? '' : 's'} · Período: ${periodText(req.query)}`,
   });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'attachment; filename="meus-pacientes.pdf"');

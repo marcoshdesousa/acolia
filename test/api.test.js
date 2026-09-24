@@ -1947,11 +1947,17 @@ test('meus pacientes: só quem fez consulta com o profissional; filtro por nome 
   const csvText = await r.text();
   assert.match(r.headers.get('content-type'), /text\/csv/);
   assert.ok(csvText.includes('Renata Consulta Dias') && !csvText.includes('Tiago'));
+  // o PDF é montado na hora e enviado: nenhum arquivo novo fica gravado no servidor
+  const listFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true }).sort() : []);
+  const dataDir = require('../server/paths').DATA_DIR;
+  const before = listFiles(dataDir).filter((f) => !/acolia\.db/.test(f));
   r = await fetch(`${base}/api/professional/patients.pdf?q=renata`, { headers: { Cookie: A.cl.cookie } });
   assert.equal(r.headers.get('content-type'), 'application/pdf');
   const pdf = Buffer.from(await r.arrayBuffer());
   assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
   assert.ok(pdf.toString('latin1').includes('Renata Consulta Dias'));
+  assert.ok(pdf.toString('latin1').includes('Total: 1 paciente'), 'total no fim do PDF');
+  assert.deepEqual(listFiles(dataDir).filter((f) => !/acolia\.db/.test(f)), before, 'PDF não fica salvo no servidor');
   // período: consultas em datas diferentes (gravadas em UTC; o filtro usa o horário de Brasília)
   const c1 = (await P1.cl.get('/api/chat/conversations')).data.items.find((x) => x.peer.id === A.id).id;
   const mkAt = async (utc) => {
