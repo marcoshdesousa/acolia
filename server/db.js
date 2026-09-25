@@ -142,6 +142,8 @@ addColumn('professionals', 'instagram', "TEXT NOT NULL DEFAULT ''");  // @ do In
 addColumn('professionals', 'tiktok', "TEXT NOT NULL DEFAULT ''");
 addColumn('professionals', 'x_handle', "TEXT NOT NULL DEFAULT ''");
 addColumn('professionals', 'youtube', "TEXT NOT NULL DEFAULT ''");
+// Mensagens prontas do profissional (até 10), para mandar no chat com um toque — JSON: ["texto", …]
+addColumn('professionals', 'quick_replies', "TEXT NOT NULL DEFAULT '[]'");
 addColumn('professionals', 'gallery', "TEXT NOT NULL DEFAULT '[]'");  // até 6 fotos: [url|null, ...] (posições 1 a 6)
 addColumn('professionals', 'maps_url', "TEXT NOT NULL DEFAULT ''");   // link do Google Maps da clínica
 addColumn('professionals', 'maps_query', "TEXT NOT NULL DEFAULT ''"); // o que o mini mapa mostra (coordenadas/local)

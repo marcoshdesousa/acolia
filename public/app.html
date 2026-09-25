@@ -204,19 +204,9 @@
         try {
           const p = await api('/api/professionals/' + Number(arg));
           $('[data-profile]').innerHTML = AcoliaProfile.render(p, {
-            actions: '<button class="btn secondary" data-fav>' + ICONS.heart.replace('<svg', '<svg style="width:18px;height:18px"') + ' <span>' + (p.favorite ? 'Favorito' : 'Favoritar') + '</span></button>'
-              + '<a class="btn" href="#conversar/' + p.id + '">' + ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"') + ' Enviar mensagem</a>',
+            actions: '<a class="btn" href="#conversar/' + p.id + '">' + ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"') + ' Enviar mensagem</a>',
           });
           AcoliaSocial.bindProfile($('[data-profile]'), p);
-          const fb = $('[data-fav]');
-          if (!fb) return; // perfil oficial: sem favoritar nem mensagem
-          let fav = p.favorite;
-          fb.addEventListener('click', async () => {
-            await api('/api/patient/favorites/' + p.id, { method: fav ? 'DELETE' : 'POST' });
-            fav = !fav;
-            $('span', fb).textContent = fav ? 'Favorito' : 'Favoritar';
-            toast(fav ? 'Adicionado aos favoritos' : 'Removido dos favoritos');
-          });
         } catch (e) { $('[data-profile]').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
       }
       if (v === 'chat') {

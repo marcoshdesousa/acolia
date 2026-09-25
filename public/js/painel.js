@@ -80,6 +80,8 @@
     form.maps_url.value = me.maps_url || '';
   }
   fillProfile();
+  // Mensagens prontas (até 10), usadas no chat pelo "+"
+  window.AcoliaQuick?.editor($('[data-quick-card]'));
   bindUfCity(form.state, form.city);
   form.city.value = me.city;
 

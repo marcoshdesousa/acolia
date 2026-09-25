@@ -25,6 +25,22 @@ function toCents(v) {
 
 router.get('/me', (req, res) => res.json(ownProfessional(req.auth.user)));
 
+// ---------- Mensagens prontas (até 10): no chat, o "+" ao lado do campo de digitar coloca a mensagem inteira ----------
+const QUICK_MAX = 10;
+const QUICK_LEN = 1000;
+function quickOf(pro) {
+  try { const l = JSON.parse(pro.quick_replies || '[]'); return Array.isArray(l) ? l.filter((x) => typeof x === 'string') : []; } catch { return []; }
+}
+router.get('/quick-replies', (req, res) => res.json({ items: quickOf(req.auth.user), max: QUICK_MAX }));
+router.put('/quick-replies', (req, res) => {
+  if (!Array.isArray(req.body.items)) throw new U.HttpError(400, 'Envie a lista de mensagens.');
+  const items = req.body.items.map((t) => String(t ?? '').replace(/\r\n/g, '\n').trim()).filter(Boolean);
+  if (items.length > QUICK_MAX) throw new U.HttpError(400, `Você pode deixar até ${QUICK_MAX} mensagens prontas.`);
+  if (items.some((t) => t.length > QUICK_LEN)) throw new U.HttpError(400, `Cada mensagem pronta pode ter até ${QUICK_LEN} letras.`);
+  db.prepare('UPDATE professionals SET quick_replies = ? WHERE id = ?').run(JSON.stringify(items), req.auth.user.id);
+  res.json({ items, max: QUICK_MAX });
+});
+
 router.put('/profile', async (req, res) => {
   const b = req.body;
   const name = U.cleanText(b.name, 120);
@@ -150,7 +166,7 @@ function wipeProfessional(me) {
   require('./chat').eraseMessagesOf('professional', me.id);
   db.prepare(`UPDATE professionals SET status = 'excluido', name = 'Profissional removido', legal_name = NULL, registry = ?, email = ?,
     phone = '', bio = '', specialties = '', photo = NULL, document_file = NULL, pix_key = '', clinic_name = '', clinic_address = '',
-    has_clinic = 0, instagram = '', tiktok = '', x_handle = '', youtube = '', gallery = '[]', maps_url = '', maps_query = '', password_hash = '!', code = ?, slug = NULL,
+    has_clinic = 0, instagram = '', tiktok = '', x_handle = '', youtube = '', quick_replies = '[]', gallery = '[]', maps_url = '', maps_query = '', password_hash = '!', code = ?, slug = NULL,
     packages = '[]', price_cents = NULL, session_minutes = NULL, admin_note = '', city = '', city_norm = '', state = '' WHERE id = ?`)
     .run(`excluido-${me.id}`, `excluido-${me.id}@removido.acolia`, `excluido-${me.id}`, me.id);
   db.prepare('DELETE FROM favorites WHERE professional_id = ?').run(me.id);

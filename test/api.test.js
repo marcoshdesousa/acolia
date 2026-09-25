@@ -708,6 +708,13 @@ test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitan
   assert.deepEqual(r.data.social.map((x) => x.url), ['https://www.instagram.com/lia.psi/', 'https://www.tiktok.com/@lia.psi', 'https://x.com/liapsi', 'https://www.youtube.com/@liapsi']);
   r = await lp.put('/api/professional/profile', { ...pf, session_minutes: 50 });
   assert.equal(r.data.social.length, 4, 'sem os campos, as redes ficam como estão');
+  // Mensagens prontas: até 10, vazias saem
+  r = await lp.put('/api/professional/quick-replies', { items: ['Olá! Tudo bem?', '  ', 'Minha agenda está no perfil.'] });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.data.items, ['Olá! Tudo bem?', 'Minha agenda está no perfil.']);
+  assert.deepEqual((await lp.get('/api/professional/quick-replies')).data.items, r.data.items);
+  r = await lp.put('/api/professional/quick-replies', { items: Array.from({ length: 11 }, (_, i) => `m${i}`) });
+  assert.equal(r.status, 400, 'no máximo 10');
 
   // A galeria do perfil agora são as publicações (versão 1.2)
   const upload = async (caption = '') => {

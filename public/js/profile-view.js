@@ -209,9 +209,9 @@
       </div>`;
     }
 
-    // Seguidores / seguindo (só os números) e botão Seguir
+    // Publicações e seguidores (só os números; "seguindo" não aparece) e botão Seguir
     const counts = `<div class="pro-counts"><span><b>${total}</b> ${total === 1 ? 'publicação' : 'publicações'}</span>
-      <span><b data-followers>${p.followers_count || 0}</b> seguidores</span><span><b>${p.following_count || 0}</b> seguindo</span></div>`;
+      <span><b data-followers>${p.followers_count || 0}</b> ${p.followers_count === 1 ? 'seguidor' : 'seguidores'}</span></div>`;
     const followBtn = p.is_self ? '' : `<button type="button" class="btn ${p.following ? 'following' : ''}" data-follow>${p.following ? 'Seguindo' : 'Seguir'}</button>`;
 
     return `

@@ -43,7 +43,7 @@
     function needAccount() {
       modal({
         title: 'Crie sua conta grátis',
-        html: '<p>Para seguir, mandar mensagem, favoritar e ver os valores, o endereço, o "Sobre" e todas as fotos, crie sua conta grátis. Depois você volta direto para este perfil.</p>',
+        html: '<p>Para seguir, mandar mensagem e ver os valores, o endereço, o "Sobre" e todas as fotos, crie sua conta grátis. Depois você volta direto para este perfil.</p>',
         actions: [{ label: 'Já tenho conta', value: 'entrar', class: 'secondary' }, { label: 'Criar conta', value: 'criar' }],
       }).then((v) => {
         if (v === 'criar') location.href = '/cadastro-paciente?next=' + encodeURIComponent(here);
@@ -54,25 +54,15 @@
     try {
       const p = await api('/api/professionals/' + encodeURIComponent(key));
       document.title = p.official ? p.name + ' | Acolia' : p.name + ' — ' + p.profession + ' | Acolia';
-      const heart = ICONS.heart.replace('<svg', '<svg style="width:18px;height:18px"');
       const chat = ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"');
       $('[data-profile]').innerHTML = AcoliaProfile.render(p, {
         next: here,
-        // Profissional vendo outro profissional: só segue (não favorita nem manda mensagem)
-        actions: pro ? '' : '<button class="btn secondary" data-fav>' + heart + ' <span>' + (p.favorite ? 'Favorito' : 'Favoritar') + '</span></button>'
-          + '<button class="btn" data-msg>' + chat + ' Enviar mensagem</button>',
+        // Profissional vendo outro profissional: só segue (não manda mensagem)
+        actions: pro ? '' : '<button class="btn" data-msg>' + chat + ' Enviar mensagem</button>',
       });
       AcoliaSocial.setContext({ role: me.role, me: me.user, onOpenProfile: (id) => { location.href = '/profissional.html?id=' + id; }, onMessage: (id) => { location.href = '/app#conversar/' + id; } });
       AcoliaSocial.bindProfile($('[data-profile]'), p, { onNeedAccount: needAccount });
       if (pro || p.official) return;
-      let fav = !!p.favorite;
-      $('[data-fav]').addEventListener('click', async () => {
-        if (!patient) return needAccount();
-        await api('/api/patient/favorites/' + p.id, { method: fav ? 'DELETE' : 'POST' });
-        fav = !fav;
-        $('[data-fav] span').textContent = fav ? 'Favorito' : 'Favoritar';
-        toast(fav ? 'Adicionado aos favoritos' : 'Removido dos favoritos');
-      });
       $('[data-msg]').addEventListener('click', () => {
         if (!patient) return needAccount();
         location.href = '/app#conversar/' + p.id;

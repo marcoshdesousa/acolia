@@ -449,6 +449,19 @@ dialog .dlg-body h2 { padding-right: 28px; }
 .composer.has-text .mic, .composer.recording .mic, .composer.previewing .mic { display: none; }
 .composer .rec-bar, .composer .rec-cancel, .composer .rec-preview { display: none; }
 .composer.recording textarea, .composer.previewing textarea { display: none; }
+/* Mensagens prontas: "+" ao lado do campo de digitar e a lista que abre em cima */
+.composer { position: relative; }
+.composer .quick-btn { flex: none; width: 44px; height: 44px; border-radius: 50%; color: var(--primary); }
+.composer .quick-btn svg { width: 26px; height: 26px; }
+.composer.recording .quick-btn, .composer.previewing .quick-btn { display: none; }
+.composer:has(.qr-pop) { overflow: visible; }
+.qr-pop { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px); z-index: 30; max-height: min(55vh, 420px); overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.qr-pop-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; }
+.qr-pop button { text-align: left; font: inherit; color: var(--text); background: var(--surface-2); border: 0; border-radius: 12px; padding: 10px 12px; cursor: pointer; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.qr-pop button:hover, .qr-pop button:focus-visible { background: var(--primary-soft); }
+.qr-list { display: flex; flex-direction: column; gap: 10px; }
+.qr-item { display: flex; gap: 8px; align-items: flex-start; }
+.qr-item textarea { flex: 1; min-height: 90px; resize: none; overflow: hidden; }
 .composer.recording .rec-bar { display: flex; align-items: center; gap: 10px; flex: 1 1 0; width: 0; min-width: 0; overflow: hidden; min-height: 44px; padding: 0 4px 0 10px; border-radius: 22px; background: var(--surface-2, var(--primary-soft)); font-weight: 700; color: var(--text); }
 .composer.recording .rec-cancel, .composer.previewing .rec-cancel { display: inline-flex; color: #c0392b; align-self: center; }
 .composer.previewing .rec-preview { display: flex; flex: 1 1 0; width: 0; min-width: 0; overflow: hidden; align-items: center; min-height: 44px; padding: 0 10px; border-radius: 22px; background: var(--surface-2, var(--primary-soft)); }

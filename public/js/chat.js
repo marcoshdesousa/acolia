@@ -189,6 +189,7 @@
           <div class="messages" data-messages></div>
         </div>
         <form class="composer" data-composer>
+          ${role === 'professional' && window.AcoliaQuick ? `<button class="icon-btn quick-btn" type="button" data-quick aria-label="Mensagens prontas" title="Mensagens prontas" ${canWrite(c) ? '' : 'disabled'}>${ICONS.plus}</button>` : ''}
           <textarea rows="1" placeholder="${!c.peer.active ? 'Esta conta não está mais ativa' : c.blocked_by_me || c.blocked_me ? 'Mensagens bloqueadas' : c.refund_lock ? 'Faça o reembolso para voltar a conversar' : 'Digite uma mensagem'}" aria-label="Mensagem" ${canWrite(c) ? '' : 'disabled'} maxlength="4000"></textarea>
           <button class="icon-btn rec-cancel" type="button" data-rec-cancel aria-label="Apagar áudio" title="Apagar áudio">${ICONS.trash}</button>
           <div class="rec-bar" aria-live="polite"><span class="rec-dot"></span><b data-rec-time>0:00</b><div class="rec-live" data-rec-live></div>
@@ -222,6 +223,8 @@
       const syncButtons = () => form.classList.toggle('has-text', ta.value.trim().length > 0);
       syncButtons();
       $('[data-mic]', form).addEventListener('click', () => startRecording(form));
+      // Mensagens prontas do profissional: escolhe uma e ela vai inteira para o campo de digitar
+      $('[data-quick]', form)?.addEventListener('click', () => window.AcoliaQuick.openPicker(form, ta));
       $('[data-rec-cancel]', form).addEventListener('click', () => stopRecording(form, 'cancel'));
       $('[data-rec-stop]', form).addEventListener('click', () => stopRecording(form, 'preview'));
       ta.addEventListener('input', syncButtons);

@@ -17,10 +17,8 @@
   }
 
   function card(p, { profileHref, viewerRole }) {
-    const pro = viewerRole === 'professional'; // profissional vê a vitrine, mas não favorita nem manda mensagem
+    const pro = viewerRole === 'professional'; // profissional vê a vitrine, mas não manda mensagem
     return `<article class="card pro-card" data-id="${p.id}">
-      ${pro ? '' : p.locked ? `<button class="icon-btn fav" data-need-account aria-label="Favoritar (precisa de conta)">${ICONS.heart}</button>`
-        : `<button class="icon-btn fav ${p.favorite ? 'on' : ''}" data-fav aria-pressed="${p.favorite}" aria-label="${p.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}">${ICONS.heart}</button>`}
       <div class="head">${avatar(p.name, p.photo, 'lg')}
         <div style="min-width:0;padding-right:28px"><div class="name">${esc(p.name)}</div><div class="muted small">${esc(p.profession)}</div>
         ${p.registry ? `<div class="small">${ICONS.badge.replace('<svg', '<svg style="width:15px;height:15px;vertical-align:-3px"')} ${esc(p.registry)}</div>` : ''}</div>
@@ -74,7 +72,6 @@
           </div>
           ${full ? '' : '<p class="small muted" style="margin:0 0 10px">🔒 Filtrar por localização e por valor: <a href="/cadastro-paciente">crie sua conta grátis</a>.</p>'}
           <div class="field sp-filter"><label>Especialidades <span class="muted small" style="font-weight:600">(mostra quem tem todas as que você escolher)</span></label><div data-sp-filter></div></div>
-          ${logged ? `<label class="check" style="margin-bottom:12px"><input type="checkbox" name="favorites" value="1"> ${ic('heart')} Só meus favoritos</label>` : ''}
           <div class="row"><button class="btn" type="submit">Aplicar filtros</button><button class="btn ghost" type="button" data-clear>Limpar filtros</button></div>
         </div>
       </form>
@@ -174,7 +171,7 @@
     function needAccount() {
       modal({
         title: 'Crie sua conta grátis',
-        html: '<p>Para favoritar, mandar mensagem e ver os valores dos profissionais, é preciso ter uma conta grátis. É rápido.</p>',
+        html: '<p>Para mandar mensagem e ver os valores dos profissionais, é preciso ter uma conta grátis. É rápido.</p>',
         actions: [{ label: 'Já tenho conta', value: 'entrar', class: 'secondary' }, { label: 'Criar conta', value: 'criar' }],
       }).then((v) => {
         if (v === 'criar') location.href = '/cadastro-paciente';
@@ -188,17 +185,6 @@
       const id = Number(art.dataset.id);
       if (e.target.closest('[data-need-account]')) return needAccount();
       if (e.target.closest('[data-msg]')) return opts.onMessage?.(id);
-      const fav = e.target.closest('[data-fav]');
-      if (fav) {
-        const on = fav.classList.contains('on');
-        try {
-          await api(`/api/patient/favorites/${id}`, { method: on ? 'DELETE' : 'POST' });
-          fav.classList.toggle('on', !on);
-          fav.setAttribute('aria-pressed', String(!on));
-          fav.setAttribute('aria-label', on ? 'Adicionar aos favoritos' : 'Remover dos favoritos');
-          toast(on ? 'Removido dos favoritos' : 'Adicionado aos favoritos');
-        } catch (ex) { toast(ex.message, 'error'); }
-      }
     });
     form.addEventListener('submit', (e) => { e.preventDefault(); load(); });
     $$('select, input[type=checkbox]', panel).forEach((el) => el.addEventListener('change', () => load()));
