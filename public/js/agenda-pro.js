@@ -37,13 +37,17 @@
     const list = await G.loadUpcoming();
     const pres = list.filter((a) => a.modality === 'presencial' && HOLD_OR_ON.includes(a.status));
     const pending = pres.filter((a) => a.can.presence_check).length;
+    // A aba "Presenciais" só existe para quem tem consultório (Meu perfil → "Tenho consultório/clínica
+    // presencial"). Se ainda sobrou alguma presencial para responder, ela continua aparecendo.
+    const showPres = !!settings?.has_clinic || pres.length > 0;
+    if (!showPres) tab = 'next';
     const shown = tab === 'pres' ? pres : list;
     const empty = tab === 'pres' ? 'Você não tem nenhuma consulta presencial agendada.'
       : 'Nenhuma consulta marcada ainda. Quando um paciente marcar pela sua agenda (ou você marcar pelo chat), ela aparece aqui.';
-    box.innerHTML = `<div class="card stack"><div class="row between"><h2 style="margin:0">Consultas</h2><button type="button" class="btn sm ghost" data-hist>Histórico</button></div>
-      <div class="tabs-2" role="tablist">
+    box.innerHTML = `<div class="card stack"><div class="row between"><h2 style="margin:0">${showPres ? 'Consultas' : 'Próximas consultas'}</h2><button type="button" class="btn sm ghost" data-hist>Histórico</button></div>
+      ${showPres ? `<div class="tabs-2" role="tablist">
         <button type="button" role="tab" class="${tab === 'next' ? 'on' : ''}" data-tab="next">${ic('calendar', 16)} Próximas</button>
-        <button type="button" role="tab" class="${tab === 'pres' ? 'on' : ''}" data-tab="pres">${ic('home', 16)} Presenciais${pending ? ` <span class="nav-badge static">${pending}</span>` : ''}</button></div>
+        <button type="button" role="tab" class="${tab === 'pres' ? 'on' : ''}" data-tab="pres">${ic('home', 16)} Presenciais${pending ? ` <span class="nav-badge static">${pending}</span>` : ''}</button></div>` : ''}
       ${tab === 'pres' && pres.length ? '<p class="small muted" style="margin:0">Do horário em diante, cada consulta pergunta se aconteceu. <b>Sim</b>: o paciente entra em Meus pacientes. <b>Não</b>: ela sai da lista.</p>' : ''}
       ${shown.length ? `<div class="appt-list">${shown.map(apptCard).join('')}</div>` : `<p class="muted" style="margin:0">${empty}</p>`}</div>`;
     $('[data-hist]', box).addEventListener('click', openHistory);
