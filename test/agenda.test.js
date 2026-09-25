@@ -318,11 +318,15 @@ test('prazo de 30 minutos e "não vou poder atender" do profissional (até 24 ho
   assert.equal((await bia.post(`/api/agenda/appointments/${b.id}/reschedule`, { start: at('2030-01-10', '08:00') })).status, 403);
 });
 
-test('chamada automática: abre 10 min antes; profissional não entrou em 3 min → reembolso e chamada fechada', async () => {
+test('chamada automática: abre 5 min antes (com aviso na conversa); profissional não entrou em 3 min → reembolso e chamada fechada', async () => {
   const b = (await bia.get('/api/agenda/appointments')).data.items.find((x) => x.status === 'confirmada'); // 07/01 14:00
-  clock = Date.parse(at('2030-01-07', '13:50'));
+  clock = Date.parse(at('2030-01-07', '13:54'));
   await G.sweep();
   let r = await bia.get(`/api/agenda/appointments/${b.id}`);
+  assert.equal(r.data.call_code, null, '6 minutos antes ainda não abriu');
+  clock = Date.parse(at('2030-01-07', '13:55'));
+  await G.sweep();
+  r = await bia.get(`/api/agenda/appointments/${b.id}`);
   assert.ok(r.data.call_code, 'chamada criada com o código');
   assert.equal(r.data.can.enter_call, true);
   let m = await msgs(bia, b.conversation_id);
@@ -413,10 +417,22 @@ test('profissional entra na chamada: sem reembolso e a consulta fica concluída 
   const a = r.data;
   await P.cl.post(`/api/agenda/appointments/${a.id}/send-pix`);
   await P.cl.post(`/api/agenda/appointments/${a.id}/manual-result`, { approved: true });
-  clock = Date.parse(at('2030-01-16', '13:51'));
+  clock = Date.parse(at('2030-01-16', '13:56'));
   await G.sweep();
   const code = (await bia.get(`/api/agenda/appointments/${a.id}`)).data.call_code;
   assert.ok(code);
+  // Secretária (versão 1.1.3): vê a consulta, mas sem código e sem entrar na chamada
+  const creds = (await P.cl.post('/api/professional/secretary')).data;
+  const sec = client();
+  assert.equal((await sec.post('/api/auth/professional/login', { login: creds.login, password: creds.password })).status, 200);
+  const sv = (await sec.get(`/api/agenda/appointments/${a.id}`)).data;
+  assert.equal(sv.call_code, null);
+  assert.equal(sv.can.enter_call, false);
+  const ss = ioClient(base, { extraHeaders: { Cookie: sec.cookie }, transports: ['websocket'] });
+  const sack = await new Promise((ok) => ss.emit('call:join', { code }, ok));
+  assert.match(sack.error || '', /secretária não entra/, 'nem com o código a secretária entra');
+  ss.close();
+  await P.cl.del('/api/professional/secretary');
   // O profissional entra pela conversa (código da consulta, logado como ele)
   const sock = ioClient(base, { extraHeaders: { Cookie: P.cl.cookie }, transports: ['websocket'] });
   const ack = await new Promise((ok) => sock.emit('call:join', { code }, ok));

@@ -70,14 +70,14 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 - **Reembolso:**
   - **Automático** pelo Asaas do profissional. Se falhar, por exemplo por falta de saldo, vira pedido manual.
   - **Manual:** o chat do profissional **com esse paciente** fica travado até o paciente confirmar "Sim, recebi". Se ele disser que não recebeu, continua travado.
-- **Chamada automática:** é criada **10 minutos antes** e o botão "Entrar na chamada" aparece na conversa, na lista e no aviso. Não existe mais "criar atendimento"; o código de login do profissional continua.
+- **Chamada automática:** é criada **5 minutos antes** (e o paciente recebe o aviso na conversa) e o botão "Entrar na chamada" aparece na conversa, na lista e no aviso. Não existe mais "criar atendimento"; o código de login do profissional continua.
 - **Profissional ausente:** se não entrar até **3 minutos** depois do horário, a chamada é fechada, o paciente vê "O profissional não compareceu" e recebe **100% de volta**.
 - 30 minutos depois do fim, a consulta fica **concluída** e a chamada é encerrada.
 - Uma varredura a cada 20 segundos cuida dos prazos. Conta apagada cancela as consultas futuras, com estorno automático quando é pelo Asaas.
 
 ## Atendimento (chamada)
 
-1. A chamada de cada consulta é criada sozinha 10 minutos antes (ver acima). O código do paciente começa com os **2 primeiros caracteres do código do profissional** + 6 caracteres aleatórios.
+1. A chamada de cada consulta é criada sozinha 5 minutos antes (ver acima). O código do paciente começa com os **2 primeiros caracteres do código do profissional** + 6 caracteres aleatórios.
 2. Os dois entram pelo botão **Entrar na chamada**: na conversa, em Consultas ou no aviso fixo.
 3. Ao clicar em **Finalizar atendimento**, o código deixa de funcionar.
 4. Vídeo e voz. Os dois podem ligar/desligar a câmera e o microfone.
@@ -104,7 +104,7 @@ O profissional só vê uma conversa depois que o paciente manda a primeira mensa
   - mexer no pagamento automático (Asaas) ou na chave Pix;
   - ver o código único.
   Na engrenagem ela só instala o app, ativa as notificações e sai.
-- **Chamadas (câmera, só o profissional):** nova aba com a **próxima chamada** em destaque ("Entrar na chamada" aparece 10 minutos antes) e as outras, menores, embaixo.
+- **Chamadas (câmera, só o profissional):** nova aba com a **próxima chamada** em destaque ("Entrar na chamada" aparece 5 minutos antes; o profissional tem até 3 minutos depois do horário para entrar, senão o paciente é reembolsado) e as outras, menores, embaixo, só com o nome e o horário (sem botão de entrar). O profissional também entra pela conversa com o paciente.
 
 **Versão 1.1.2 — tocar em quem comentou:**
 - O **profissional dono da publicação** (foto, vídeo ou texto) toca no **paciente** que comentou (no nome, na foto ou no botão "Mensagem") e vai direto para a conversa com ele. O paciente só vê a conversa quando chega a primeira mensagem.

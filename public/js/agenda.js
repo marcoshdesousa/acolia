@@ -449,7 +449,7 @@
   const EVENT = {
     pedido: ['📅 Pedido de consulta', (a, r) => (r === 'professional' ? 'O paciente quer marcar esta consulta e fazer o pagamento. Mande a sua chave Pix em até 5 minutos.' : 'Pedido enviado. O profissional manda a chave Pix aqui em até 5 minutos.')],
     proposta: ['📅 Proposta de consulta', (a, r) => (r === 'patient' ? `Toque em "Aceitar e pagar" para confirmar. Você tem 10 minutos para pagar o Pix.` : 'Enviada ao paciente. Ele tem 10 minutos para pagar.')],
-    agendada: ['✅ Consulta agendada', () => 'Pagamento aprovado. O link da chamada aparece aqui 10 minutos antes.'],
+    agendada: ['✅ Consulta agendada', () => 'Pagamento aprovado. O link da chamada aparece aqui 5 minutos antes.'],
     remarcada: ['🔁 Consulta remarcada', (a, r, m) => (m.extra ? `Novo horário (antes era ${fmtIso(m.extra)}).` : 'Novo horário.')],
     cancelada: ['Consulta cancelada', () => 'O horário foi liberado.'],
     reembolso_pedido: ['↩️ Pedido de reembolso', (a, r, m) => `${a.cancel_reason_label ? `Motivo: ${a.cancel_reason_label}${a.cancel_detail && a.cancel_reason === 'outros' ? ` — “${a.cancel_detail}”` : ''}. ` : ''}${a.mode === 'auto' && m.extra !== 'erro_auto' ? 'O reembolso automático foi pedido ao Pix.' : (r === 'professional' ? 'Devolva o valor pelo Pix e toque em "Fiz o reembolso". Até o paciente confirmar, você não consegue mandar mensagens para ele.' : 'O profissional vai devolver o valor pelo Pix.')}`],

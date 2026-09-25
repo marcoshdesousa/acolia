@@ -288,7 +288,7 @@
   const STEPS = [
     ['Como funciona', `<ul class="policy-list">
       <li>O paciente escolhe o dia e o horário na sua agenda e paga o <b>Pix dentro da Acolia</b> (QR Code ou "copia e cola").</li>
-      <li>Quando o Pix cai na sua conta Asaas, a <b>consulta é confirmada sozinha</b>: você não precisa conferir nada. A chamada também é criada sozinha (o link aparece na conversa 10 minutos antes).</li>
+      <li>Quando o Pix cai na sua conta Asaas, a <b>consulta é confirmada sozinha</b>: você não precisa conferir nada. A chamada também é criada sozinha (o link aparece na conversa 5 minutos antes).</li>
       <li>O dinheiro vai <b>direto para a sua conta no Asaas</b>. A Acolia <b>não recebe</b> o dinheiro e <b>não cobra taxa</b> sobre a consulta. A tarifa do Pix é a do próprio Asaas.</li>
       <li>Se o paciente cancelar no prazo (até 30 minutos antes), o <b>reembolso sai automático</b> da sua conta Asaas. Deixe saldo para isso.</li>
       <li>Só <b>Pix</b> (cai na hora). Não há cartão nem boleto.</li>

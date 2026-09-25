@@ -25,7 +25,7 @@ const RULES = {
   MIN_ADVANCE_MIN: 30,    // horário marcado precisa começar daqui a pelo menos 30 minutos
   PRO_CANCEL_H: 24,       // profissional avisa que não pode atender até 24 horas antes
   PRO_GRACE_MIN: 3,       // profissional tem até 3 minutos depois do horário para entrar
-  CALL_BEFORE_MIN: 10,    // a chamada é aberta 10 minutos antes
+  CALL_BEFORE_MIN: 5,     // a chamada é aberta (e o paciente avisado) 5 minutos antes
   DONE_AFTER_MIN: 30,     // 30 minutos depois do fim, a consulta vira "concluída"
   MAX_RESCHEDULES: 1,
   HORIZON_DAYS: 90,       // dá para marcar até 90 dias à frente
@@ -403,7 +403,7 @@ async function sweep() {
     for (const a of db.prepare("SELECT * FROM appointments WHERE mode = 'auto' AND status = 'aguardando_pagamento'").all()) {
       await checkPayment(a);
     }
-    // Chamada: abre 10 minutos antes
+    // Chamada: abre 5 minutos antes (manda o aviso na conversa)
     for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'confirmada' AND call_id IS NULL AND start_at <= ?").all(iso(t + RULES.CALL_BEFORE_MIN * MIN))) {
       openCall(a);
     }

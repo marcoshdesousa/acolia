@@ -107,6 +107,9 @@
       return;
     }
     const [first, ...rest] = calls;
+    // Limite para o profissional entrar (horário + tolerância); depois disso o paciente é reembolsado
+    const deadline = (a) => new Date(Date.parse(a.start_at) + (G.rules?.PRO_GRACE_MIN || 3) * 60e3)
+      .toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
     const left = (a) => Date.parse(a.start_at) - Date.now();
     const status = (a) => (a.can.enter_call ? '<span class="badge ok">🎥 Chamada aberta</span>'
       : left(a) > 0 ? `<span class="badge">Faltam <b data-cd="${esc(a.start_at)}">${G.countdown(left(a))}</b></span>` : '<span class="badge warn">Acontecendo agora</span>');
@@ -117,13 +120,13 @@
             <div class="muted">${esc(first.when)} · ${first.minutes} min</div><div style="margin-top:6px">${status(first)}</div></div></div>
         ${first.can.enter_call
           ? `<button type="button" class="btn block call-enter" data-call-enter="${first.id}">${ic('video', 22)} Entrar na chamada</button>`
-          : '<p class="small muted" style="margin:0">O botão <b>Entrar na chamada</b> aparece aqui 10 minutos antes do horário.</p>'}
+          : '<p class="small muted" style="margin:0">O botão <b>Entrar na chamada</b> aparece aqui 5 minutos antes do horário.</p>'}
+        <p class="small" style="margin:0">⏱️ Entre até as <b>${esc(deadline(first))}</b> (${G.rules?.PRO_GRACE_MIN || 3} minutos depois do horário). Depois disso a chamada fecha e o paciente é reembolsado.</p>
         <button type="button" class="btn ghost sm" data-call-chat="${first.id}">${ic('chat', 16)} Abrir a conversa</button>
       </div>
       ${rest.length ? `<h2 style="margin:20px 0 8px;font-size:1.05rem">Depois (${rest.length})</h2>
       <div class="call-rest">${rest.map((a) => `<button type="button" class="call-row" data-call-chat="${a.id}">
-          ${avatar(a.patient.name, a.patient.photo, 'sm')}<span class="grow"><b>${esc(a.patient.name)}</b><span class="small muted">${esc(a.when)} · ${a.minutes} min</span></span>
-          ${a.can.enter_call ? `<span class="badge ok" data-call-enter="${a.id}">🎥 Entrar</span>` : ''}</button>`).join('')}</div>` : ''}`;
+          ${avatar(a.patient.name, a.patient.photo, 'sm')}<span class="grow"><b>${esc(a.patient.name)}</b><span class="small muted">${esc(a.when)}</span></span></button>`).join('')}</div>` : ''}`;
   }
   function mountCalls(root) {
     root.addEventListener('click', (e) => {
