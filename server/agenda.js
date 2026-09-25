@@ -83,7 +83,7 @@ function autoPayment(proId) {
   const row = db.prepare('SELECT * FROM pro_payment WHERE professional_id = ? AND enabled = 1').get(proId);
   if (!row) return null;
   // Chave de teste (Sandbox) ou Asaas simulado: só vale para o Profissional Teste (não recebe dinheiro)
-  if (row.env !== 'producao' && process.env.ALLOW_ASAAS_SANDBOX !== '1' && !getPro(proId)?.is_test) return null;
+  if (row.env !== 'producao' && process.env.ALLOW_ASAAS_SANDBOX !== '1' && !(row.env === 'simulado' && getPro(proId)?.is_test)) return null;
   const key = require('./secretBox').open(row.key_enc);
   return key ? { env: row.env, key, name: row.account_name } : null;
 }

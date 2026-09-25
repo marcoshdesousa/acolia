@@ -43,15 +43,11 @@ async function call(env, key, method, path, body) {
 const sandboxAllowed = () => process.env.ALLOW_ASAAS_SANDBOX === '1';
 const SANDBOX_MSG = 'Essa é uma chave de TESTE do Asaas (Sandbox), que não recebe dinheiro de verdade. Use a chave de API da sua conta real do Asaas.';
 
-// testAccount: é o Profissional Teste (conta de teste da plataforma). Só ele pode usar a chave de
-// teste do Asaas (Sandbox) ou o Asaas simulado da Acolia (digitando SIMULADO no lugar da chave).
-async function check(key, { testAccount = false } = {}) {
+// Pela tela só entra chave de conta real. (O Asaas simulado das contas de teste é montado só pelo
+// servidor, em server/testAgenda.js — não dá para conectar digitando nada.)
+async function check(key) {
   key = String(key || '').trim();
-  const testOk = testAccount || sandboxAllowed();
-  if (/^simulado$/i.test(key)) {
-    if (!testAccount) throw new U.HttpError(400, 'O Asaas simulado é só para a conta de teste. Cole a chave de API da sua conta real do Asaas.');
-    return { env: 'simulado', name: 'Asaas simulado (conta de teste)', key: 'SIMULADO' };
-  }
+  const testOk = sandboxAllowed();
   if (key.length < 20) throw new U.HttpError(400, 'Cole a chave de API completa do Asaas (começa com $aact_).');
   if (/_hmlg_/.test(key) && !testOk) throw new U.HttpError(400, SANDBOX_MSG);
   const envs = /_hmlg_/.test(key) ? ['teste'] : /_prod_/.test(key) ? ['producao'] : testOk ? ['producao', 'teste'] : ['producao'];

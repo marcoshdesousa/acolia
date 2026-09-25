@@ -399,7 +399,7 @@ router.delete('/blocks/:id', (req, res) => {
 // ---------- Pagamento automático (Asaas) ----------
 router.post('/asaas', async (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só para profissionais.');
-  const r = await require('../asaas').check(req.body.key, { testAccount: !!req.auth.user.is_test });
+  const r = await require('../asaas').check(req.body.key);
   db.prepare(`INSERT INTO pro_payment (professional_id, provider, key_enc, env, account_name, enabled, connected_at) VALUES (?, 'asaas', ?, ?, ?, 1, datetime('now'))
     ON CONFLICT(professional_id) DO UPDATE SET key_enc = excluded.key_enc, env = excluded.env, account_name = excluded.account_name, enabled = 1, connected_at = excluded.connected_at`)
     .run(req.auth.user.id, require('../secretBox').seal(r.key), r.env, U.cleanText(r.name, 120));

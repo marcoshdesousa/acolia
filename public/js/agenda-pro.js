@@ -209,7 +209,6 @@
           wz.innerHTML = `<div class="wz-step">Tela ${STEPS.length + 1} de ${STEPS.length + 1}</div><h3 style="margin:4px 0 10px">Passo 4 — Cole a chave e confirme</h3>
             <div class="form-error hidden" data-err></div>
             <div class="field"><label for="wz-key">Chave de API do Asaas</label><input id="wz-key" data-key autocomplete="off" spellcheck="false" placeholder="$aact_prod_..."></div>
-            ${settings.is_test ? '<p class="notice info small">🧪 <b>Conta de teste:</b> digite <b>SIMULADO</b> para usar o Asaas simulado da Acolia (sem dinheiro de verdade; o Paciente Teste paga tocando em "Simular pagamento"). Também aceita uma chave do Asaas Sandbox.</p>' : ''}
             <button type="button" class="btn block" data-save>Conectar e confirmar</button>
             <p class="small muted">A Acolia confere a chave com o Asaas na hora. Depois de conectar, deixe marcado <b>"Usar o pagamento automático"</b>: a partir daí as consultas pagas pelo Pix são <b>confirmadas sozinhas</b>. Confira também se a sua <b>agenda</b> está aberta (horários e valor da consulta).</p>`;
           $('[data-save]', wz).addEventListener('click', async (e) => {

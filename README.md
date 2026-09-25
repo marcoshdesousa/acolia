@@ -31,11 +31,13 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
   - **Pix automático pelo Asaas:** o profissional cria a conta no Asaas (CPF ou CNPJ), cadastra uma chave Pix lá e cola a **chave de API** na Acolia, com um passo a passo em telas; cada tela pede um print e só avança com "Sim".
   - **Pix manual:** a chave Pix do perfil vai pelo chat.
 - A chave do Asaas fica **criptografada** com a senha do administrador que já está no Render (`ADMIN_PASSWORD`; dá para usar `PAYMENT_SECRET` no lugar). Se essa senha mudar, cada profissional precisa conectar o Asaas de novo.
-- **Contas de teste (Profissional Teste e Paciente Teste):**
-  - o Profissional Teste pode conectar o **Asaas simulado** da Acolia, digitando `SIMULADO` no lugar da chave, ou uma chave do Asaas Sandbox;
-  - o Paciente Teste marca e toca em **"Simular pagamento"**: a consulta é confirmada sozinha, e o cancelamento faz o reembolso simulado;
-  - conta de teste só marca com conta de teste. Paciente de verdade não vê a agenda do Profissional Teste, e o Paciente Teste não marca com profissional de verdade.
-  - **Para desligar depois:** apagar `server/asaasSim.js`, a linha `if (env === 'simulado')` em `server/asaas.js`, o bloco `/^simulado$/` do `check`, a rota `simulate-pay` em `server/routes/agenda.js` e o botão `data-simulate` em `public/js/agenda.js`.
+- **Teste do dono (Profissional Teste e Paciente Teste):** na subida do servidor, **uma vez só** (`server/testAgenda.js`), o site:
+  - deixa o Profissional Teste **ativo**, com a agenda aberta todos os dias, o dia inteiro, e o **Asaas simulado** já conectado;
+  - deixa o Paciente Teste ativo.
+  - O Paciente Teste marca e toca em **"Simular pagamento"**: a consulta é confirmada sozinha, e o cancelamento faz o reembolso simulado.
+  - **Ninguém conecta o simulado nem chave de teste pela tela**, nem a conta de teste, e o tutorial não fala disso.
+  - Conta de teste só marca com conta de teste.
+  - **Apagou a conta de teste, o simulado some junto.** Para montar de novo, troque `KEY` em `server/testAgenda.js`.
 - Só vale a chave da **conta real** do Asaas. A de teste (Sandbox) é recusada, porque não recebe dinheiro de verdade. `ALLOW_ASAAS_SANDBOX=1` libera a de teste só para os testes automáticos.
 - **Próximas consultas:** lista com contagem regressiva, "Não vou poder atender", "Fiz o reembolso" e histórico.
 - **Pelo chat** (ícone 📅 da conversa), o profissional **propõe uma consulta** ao paciente. O paciente aceita a política e paga.

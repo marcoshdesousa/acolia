@@ -412,12 +412,16 @@ test('contas de teste: Asaas simulado só para o Profissional Teste; teste só m
     assert.equal(r.status, 400);
     r = await P.cl.post('/api/agenda/asaas', { key: '$aact_hmlg_chave_de_teste_valida_123456' });
     assert.equal(r.status, 400);
-    // Profissional Teste: conecta o simulado e abre a agenda
-    r = await tp.post('/api/agenda/asaas', { key: 'simulado' });
-    assert.equal(r.status, 200, JSON.stringify(r.data));
+    // Nem o Profissional Teste consegue conectar o simulado (ou chave de teste) pela tela
+    assert.equal((await tp.post('/api/agenda/asaas', { key: 'SIMULADO' })).status, 400);
+    assert.equal((await tp.post('/api/agenda/asaas', { key: '$aact_hmlg_chave_de_teste_valida_123456' })).status, 400);
+    // O servidor deixa o Profissional Teste pronto (ativo, agenda aberta e Asaas simulado)
+    const { db } = require('../server/db');
+    db.prepare("UPDATE professionals SET status = 'bloqueado' WHERE code = '123456789'").run(); // estava "desativado"
+    assert.equal(require('../server/testAgenda').provision(), true);
+    r = await tp.get('/api/agenda/settings');
+    assert.equal(r.status, 200, 'conta reativada');
     assert.equal(r.data.payment.env, 'simulado');
-    assert.equal(r.data.is_test, true);
-    r = await tp.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50 });
     assert.equal(r.data.ready, true, JSON.stringify(r.data.missing));
     assert.equal(r.data.mode, 'auto');
     const tpId = (await tp.get('/api/professional/me')).data.id;
@@ -428,7 +432,8 @@ test('contas de teste: Asaas simulado só para o Profissional Teste; teste só m
     assert.equal((await tpt.post('/api/agenda/book', { professional_id: P.id, start: at('2030-01-22', '08:00'), accept: true })).status, 403);
     assert.ok((await tpt.get(`/api/professionals/${tpId}`)).data.next_available, 'o paciente de teste vê');
     // Paciente Teste marca, "paga" pelo simulado e a consulta é confirmada sozinha
-    r = await tpt.post('/api/agenda/book', { professional_id: tpId, start: at('2030-01-22', '08:00'), accept: true });
+    const first = (await tpt.get(`/api/agenda/pro/${tpId}/day?date=2030-01-22`)).data.slots[0].start;
+    r = await tpt.post('/api/agenda/book', { professional_id: tpId, start: first, accept: true });
     assert.equal(r.status, 201, JSON.stringify(r.data));
     const a = r.data;
     assert.equal(a.simulated, true);
@@ -441,6 +446,10 @@ test('contas de teste: Asaas simulado só para o Profissional Teste; teste só m
     // Cancela e o reembolso simulado sai sozinho
     r = await tpt.post(`/api/agenda/appointments/${a.id}/cancel`, { reason: 'nao_preciso' });
     assert.equal(r.data.status, 'reembolsada');
+    // Apagou a conta de teste: o Asaas simulado some junto
+    const tpRow = db.prepare("SELECT id FROM professionals WHERE code = '123456789'").get();
+    assert.equal((await admin.post(`/api/admin/professionals/${tpRow.id}/delete-test`)).status, 200);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM pro_payment WHERE professional_id = ?').get(tpRow.id).n, 0);
   } finally { process.env.ALLOW_ASAAS_SANDBOX = '1'; }
 });
 

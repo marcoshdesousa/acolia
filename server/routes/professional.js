@@ -147,6 +147,10 @@ function wipeProfessional(me) {
   // mensagens que ele mandou. E-mail, registro, código e link ficam livres para um cadastro novo.
   require('./social').purgeUserSocial('professional', me.id);
   require('../agenda').onAccountGone('professional', me.id);
+  // Agenda e pagamento automático saem junto (inclusive o Asaas simulado da conta de teste)
+  db.prepare('DELETE FROM pro_payment WHERE professional_id = ?').run(me.id);
+  db.prepare('DELETE FROM agenda_hours WHERE professional_id = ?').run(me.id);
+  db.prepare('DELETE FROM agenda_blocks WHERE professional_id = ?').run(me.id);
   require('./chat').eraseMessagesOf('professional', me.id);
   db.prepare(`UPDATE professionals SET status = 'excluido', name = 'Profissional removido', legal_name = NULL, registry = ?, email = ?,
     phone = '', bio = '', specialties = '', photo = NULL, document_file = NULL, pix_key = '', clinic_name = '', clinic_address = '',
