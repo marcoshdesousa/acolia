@@ -793,7 +793,8 @@ test('Minha agenda: "Disponível para atendimento presencial" e online, cada um 
   r = await W.cl.put('/api/agenda/settings', { presencial: false });
   assert.equal(r.data.presencial_on, false);
   m = await month();
-  assert.equal(m.presencial, null);
+  assert.ok(m.presencial, 'a opção continua aparecendo (apagada, "Sem agenda")');
+  assert.equal(m.presencial_open, false);
   const sl = (await ana.get(`/api/agenda/pro/${W.id}/day?date=2030-03-05`)).data.slots;
   r = await ana.post('/api/agenda/book', { professional_id: W.id, start: sl[0].start, accept: true, modality: 'presencial', confirm_place: true });
   assert.equal(r.status, 400);
@@ -802,7 +803,7 @@ test('Minha agenda: "Disponível para atendimento presencial" e online, cada um 
   m = await month();
   assert.equal(m.online, false);
   assert.equal(m.ready, true, 'a agenda continua aberta pelo presencial');
-  assert.ok(m.presencial);
+  assert.equal(m.presencial_open, true);
   r = await ana.post('/api/agenda/book', { professional_id: W.id, start: sl[0].start, accept: true, modality: 'online' });
   assert.equal(r.status, 400);
   // Os dois desligados: sem agenda

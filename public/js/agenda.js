@@ -60,7 +60,7 @@
   }
 
   // Cartão de escolha (online/presencial, Pix/convênio): ícone, nome em cima e o valor embaixo
-  const optCard = ({ attr, on, icon, title, sub }) => `<button type="button" class="opt ${on ? 'on' : ''}" ${attr} role="radio" aria-checked="${on}">
+  const optCard = ({ attr, on, icon, title, sub, off = false }) => `<button type="button" class="opt ${on && !off ? 'on' : ''} ${off ? 'off' : ''}" ${off ? 'disabled aria-disabled="true"' : attr} role="radio" aria-checked="${on && !off}">
       <span class="opt-ic">${ic(icon, 22)}</span><span class="opt-txt"><b>${esc(title)}</b><small>${esc(sub)}</small></span>
       <span class="opt-check">${ic('check', 14)}</span></button>`;
 
@@ -125,12 +125,11 @@
         info = await api(`/api/agenda/pro/${proId}/month?${ym ? `ym=${ym}&` : ''}${extra}`);
       } catch (e) { page.body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
       ym = info.ym;
-      // Só as modalidades abertas (online e/ou presencial)
-      if (info.online === false && info.presencial) modality = 'presencial';
-      if (!info.presencial && mode !== 'reschedule') modality = 'online';
-      if (!(mode === 'propose' ? info.agenda_ok : info.ready)) {
-        page.body.innerHTML = `<div class="empty-agenda">${ic('calendar', 28)}<b>Sem agenda disponível</b><p class="muted">${mode === 'propose' ? 'Abra a sua agenda primeiro: em <b>Consultas → Minha agenda</b>, ligue o atendimento online ou presencial e cadastre os horários (e confira o valor e a forma de receber).' : 'Este profissional não está com a agenda aberta no momento. Mande uma mensagem para combinar.'}</p></div>`;
-        return;
+      // As duas opções aparecem (a presencial só para quem tem endereço); a que está desligada fica
+      // apagada com "Sem agenda". Começa na que estiver aberta.
+      if (mode !== 'reschedule') {
+        if (info.online === false && info.presencial_open) modality = 'presencial';
+        if (!info.presencial_open) modality = 'online';
       }
       renderMonth();
     }
@@ -148,12 +147,11 @@
       const loc = info.presencial;
       const choices = mode === 'reschedule' ? '' : `
         ${loc ? `<div class="opt-label">Tipo de consulta</div>
-          <div class="opt-grid ${info.online === false ? 'one' : ''}" role="radiogroup" aria-label="Tipo de consulta">
-            ${info.online === false ? '' : optCard({ attr: 'data-mod="online"', on: modality === 'online', icon: 'video', title: 'Online', sub: info.price_cents != null ? money(info.price_cents) : 'Videochamada' })}
-            ${optCard({ attr: 'data-mod="presencial"', on: modality === 'presencial', icon: 'home', title: 'Presencial', sub: info.price_presencial_cents != null ? money(info.price_presencial_cents) : 'No consultório' })}
+          <div class="opt-grid" role="radiogroup" aria-label="Tipo de consulta">
+            ${optCard({ attr: 'data-mod="online"', on: modality === 'online', off: info.online === false, icon: 'video', title: 'Online', sub: info.online === false ? 'Sem agenda' : info.price_cents != null ? money(info.price_cents) : 'Videochamada' })}
+            ${optCard({ attr: 'data-mod="presencial"', on: modality === 'presencial', off: !info.presencial_open, icon: 'home', title: 'Presencial', sub: !info.presencial_open ? 'Sem agenda' : info.price_presencial_cents != null ? money(info.price_presencial_cents) : 'No consultório' })}
           </div>
-          ${info.online === false ? '<p class="small muted opt-note">No momento, só consulta presencial.</p>' : ''}
-          ${modality === 'presencial' ? `<div class="opt-place">${ic('pin', 18)}<span>${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>` : ''}` : ''}
+          ${modality === 'presencial' && info.presencial_open ? `<div class="opt-place">${ic('pin', 18)}<span>${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>` : ''}` : ''}
         ${mode === 'propose' && info.insurance ? `<div class="opt-label">Pagamento</div>
           <div class="opt-grid" role="radiogroup" aria-label="Pagamento">
             ${optCard({ attr: 'data-bill="pix"', on: billing === 'pix', icon: 'pix', title: 'Pix', sub: 'O paciente paga aqui' })}
@@ -163,6 +161,14 @@
         ${mode === 'book' && info.insurance ? `<div class="ins-card"><span class="ins-ic">${ic('shield', 20)}</span>
             <div><b>Vai usar plano de saúde?</b><p class="small">Não marque por aqui: converse antes com ${esc(proName.split(' ')[0])} pelo chat. Se o seu plano for aceito, ele(a) marca a consulta pelo convênio para você.</p>
             <button type="button" class="btn sm secondary" data-ins-chat>${ic('chat', 16)} Mandar mensagem</button></div></div>` : ''}`;
+      // Agenda fechada (online e presencial desligados): as opções aparecem apagadas e o aviso
+      if (!(mode === 'propose' ? info.agenda_ok : info.ready)) {
+        page.body.innerHTML = `${head}${choices}<div class="empty-agenda">${ic('calendar', 28)}<b>Sem agenda disponível</b><p class="muted">${mode === 'propose' ? 'Abra a sua agenda primeiro: em <b>Consultas → Minha agenda</b>, ligue o atendimento online ou presencial e cadastre os horários (e confira o valor e a forma de receber).' : 'Este profissional não está com a agenda aberta no momento. Mande uma mensagem para combinar.'}</p>${mode === 'book' ? `<button type="button" class="btn secondary sm" data-ins-chat>${ic('chat', 16)} Mandar mensagem</button>` : ''}</div>`;
+        $$('[data-ins-chat]', page.body).forEach((b) => b.addEventListener('click', async () => {
+          try { const c = await api('/api/chat/conversations', { method: 'POST', body: { professional_id: proId } }); await page.close(); goChat(c.id); } catch (ex) { toast(ex.message, 'error'); }
+        }));
+        return;
+      }
       page.body.innerHTML = `${head}${choices}
         <div class="cal">
           <div class="cal-head"><button type="button" class="icon-btn" data-prev aria-label="Mês anterior" ${ym <= minYm ? 'disabled' : ''}>‹</button>

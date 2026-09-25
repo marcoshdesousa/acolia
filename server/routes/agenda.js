@@ -57,7 +57,7 @@ router.get('/pro/:id/month', (req, res) => {
   res.json({
     ym, today: G.localDate(G.now()), max_date: G.addDays(G.localDate(G.now()), G.RULES.HORIZON_DAYS),
     ready: ready.ok, agenda_ok: agendaOk, mode: ready.mode, price_cents: pro.price_cents, price_presencial_cents: G.clinicOf(pro) ? G.priceFor(pro, 'presencial') : null, minutes: G.duration(pro),
-    presencial: G.presencialOpen(pro) ? G.clinicOf(pro) : null, online: !!pro.agenda_on, insurance: !!pro.accepts_insurance, patient,
+    presencial: G.clinicOf(pro), presencial_open: G.presencialOpen(pro), online: !!pro.agenda_on, insurance: !!pro.accepts_insurance, patient,
     days: agendaOk ? G.monthDays(pro, ym, { patientId }) : [],
   });
 });

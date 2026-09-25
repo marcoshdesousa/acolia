@@ -1382,3 +1382,6 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .empty-agenda { display: grid; justify-items: center; gap: 6px; text-align: center; padding: 30px 16px; }
 .empty-agenda svg { color: var(--muted); }
 .empty-agenda p { margin: 0; max-width: 340px; }
+.opt.off { opacity: .55; cursor: not-allowed; border-style: dashed; }
+.opt.off:hover { border-color: var(--line); }
+.opt.off .opt-txt small { color: var(--muted); font-weight: 700; }
