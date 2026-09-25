@@ -97,7 +97,7 @@
       $('[data-storage]').insertAdjacentHTML('beforeend', `<div class="card usage-card" style="margin-top:10px">
           <div class="row between"><b>Espaço usado no disco</b><span>${total ? `<b>${gb(usedDisk)} GB</b> de ${gb(total)} GB (${pct}%)` : `<b>${mb(u.used)}</b>`}</span></div>
           ${total ? `<div class="usage-track ${pct >= 80 ? 'warn' : ''}"><i style="width:${Math.max(1, pct)}%"></i></div>` : ''}
-          <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px">${chip('Fotos', P.fotos)}${chip('Vídeos', P.videos)}${chip('Áudios do chat', P.audios)}${chip('Documentos', P.documentos)}${chip('Banco de dados', P.banco)}${P.envios.bytes ? chip('Envios em andamento', P.envios) : ''}</div>
+          <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px">${chip('Fotos', P.fotos)}${chip('Vídeos', P.videos)}${chip('Áudios do chat', P.audios)}${P.fotos_chat ? chip('Fotos do chat', P.fotos_chat) : ''}${chip('Documentos', P.documentos)}${chip('Banco de dados', P.banco)}${P.envios.bytes ? chip('Envios em andamento', P.envios) : ''}</div>
           ${pct >= 80 ? '<p class="small" style="margin:8px 0 0;color:var(--danger)"><b>Disco quase cheio.</b> No Render: serviço → Disks → aumente o tamanho (os dados continuam).</p>' : ''}
         </div>`);
     }
@@ -281,7 +281,7 @@
           <div><b>${esc(p.profession)}</b>${p.registry ? ` · ${esc(p.registry)}` : ''}</div>
           <div class="small">${STATUS_BADGE[p.status]}${p.is_test ? ' <span class="badge warn">Teste</span>' : ''} ${p.visible ? '<span class="badge primary">Na vitrine</span>' : '<span class="badge">Fora da vitrine</span>'}</div>
         </div></div>
-        <table style="font-size:.9rem"><tbody>
+        <table class="kv-table" style="font-size:.9rem"><tbody>
           <tr><th>Código único</th><td><code style="font-size:1.05rem;font-weight:800">${esc(p.code)}</code> <button type="button" class="btn ghost sm" data-copy-code>Copiar</button></td></tr>
           <tr><th>Link</th><td>${p.slug ? `<a href="/${esc(p.slug)}" target="_blank" rel="noopener">${esc(location.host)}/${esc(p.slug)}</a>` : '—'}</td></tr>
           <tr><th>Nome na carteirinha</th><td>${esc(p.legal_name)}</td></tr>

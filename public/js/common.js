@@ -289,7 +289,11 @@
         <div class="dlg-actions">${actions.map((a, i) => `<button type="button" class="btn ${a.class || ''}" data-i="${i}">${esc(a.label)}</button>`).join('')}</div>`;
       document.body.appendChild(dlg);
       let done = false;
-      const close = (v) => { done = true; dlg.close(); dlg.remove(); resolve(v); };
+      const opened = Date.now();
+      const close = (v) => { done = true; window.removeEventListener('hashchange', onHash); dlg.close(); dlg.remove(); resolve(v); };
+      // Mudou de tela (menu, voltar do navegador/Android): a janela não fica aberta por cima da tela nova
+      function onHash() { if (!locked && !done && Date.now() - opened > 400) close(undefined); }
+      window.addEventListener('hashchange', onHash);
       dlg.addEventListener('cancel', (e) => { e.preventDefault(); if (!locked) close(undefined); });
       // O navegador pode fechar mesmo assim (Esc duas vezes, botão voltar do Android): se é obrigatória, abre de novo
       dlg.addEventListener('close', () => { if (locked && !done) setTimeout(() => { if (!done && dlg.isConnected) dlg.showModal(); }, 0); });

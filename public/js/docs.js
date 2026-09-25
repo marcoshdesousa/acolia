@@ -6,7 +6,7 @@
      da Acolia provando que foi gerado pela plataforma. */
 (function () {
   'use strict';
-  const { $, $$, esc, api, toast, modal } = window.Acolia;
+  const { $, $$, esc, api, toast, modal, ICONS } = window.Acolia;
 
   const W = 1240;
   const H = 1754;
@@ -319,7 +319,7 @@
     await modal({
       title: 'Documentos',
       html: `<p class="small muted" style="margin-top:0">Escolha o que emitir para este paciente. Vai com o seu nome e registro (${esc(opt.professional.registry)}) e um código de verificação.</p>
-        <div class="create-menu">${opt.kinds.map((k) => `<button type="button" data-v="${k.kind}"><b>${esc(k.title)}</b><small>${k.kind === 'atestado' ? '1 dia de afastamento pelo atendimento' : k.kind === 'receita' ? 'Medicamentos e como tomar' : 'Para outro profissional (presencial ou online)'}</small></button>`).join('')}</div>
+        <div class="create-menu">${opt.kinds.map((k) => `<button type="button" data-v="${k.kind}">${k.kind === 'atestado' ? ICONS.doc : k.kind === 'receita' ? ICONS.text : ICONS.send}<b>${esc(k.title)}</b><small>${k.kind === 'atestado' ? '1 dia de afastamento pelo atendimento' : k.kind === 'receita' ? 'Medicamentos e como tomar' : 'Para outro profissional (presencial ou online)'}</small></button>`).join('')}</div>
         ${opt.kinds.length === 1 ? `<p class="small muted">Pela sua profissão (${esc(opt.professional.profession)}), você pode emitir encaminhamentos. Atestado é de médico (CRM) ou psicólogo (CRP) e receita, só de médico. Laudos não são feitos pela plataforma.</p>` : '<p class="small muted">Laudos não são feitos pela plataforma (só presencialmente, em clínica).</p>'}`,
       actions: [],
       onOpen: (dlg) => {

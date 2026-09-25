@@ -283,8 +283,9 @@
         } catch (ex) { toast(ex.message, 'error'); }
       });
       // Funções do profissional (quatro pontinhos): mensagens prontas, agendar consulta e enviar foto
-      const closeFn = () => { $('.fn-pop', form)?.remove(); document.removeEventListener('click', outsideFn, true); };
+      const closeFn = () => { $('.fn-pop', form)?.remove(); document.removeEventListener('click', outsideFn, true); document.removeEventListener('keydown', escFn); };
       function outsideFn(e) { if (!e.target.closest('.fn-pop, [data-fn]')) closeFn(); }
+      function escFn(e) { if (e.key === 'Escape') { closeFn(); $('[data-fn]', form)?.focus(); } }
       $('[data-fn]', form)?.addEventListener('click', () => {
         if ($('.fn-pop', form)) { closeFn(); return; }
         window.AcoliaQuick?.closePicker();
@@ -296,7 +297,7 @@
           <button type="button" role="menuitem" data-fn-photo>${ICONS.camera}<span><b>Enviar foto</b><small>Ex.: o comprovante do reembolso</small></span></button>
           ${getMe()?.has_clinic && getMe()?.clinic_address ? `<button type="button" role="menuitem" data-fn-loc>${ICONS.pin}<span><b>Enviar localização</b><small>Endereço e mapa do seu consultório</small></span></button>` : ''}`;
         form.appendChild(pop);
-        setTimeout(() => document.addEventListener('click', outsideFn, true));
+        setTimeout(() => { document.addEventListener('click', outsideFn, true); document.addEventListener('keydown', escFn); });
         pop.addEventListener('click', (e) => {
           const b = e.target.closest('button');
           if (!b) return;

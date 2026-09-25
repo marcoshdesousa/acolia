@@ -85,6 +85,7 @@ function diskUsage() {
     fotos: sizeOf(up, (n) => !isVideo(n)),
     videos: sizeOf(up, isVideo),
     audios: sizeOf(path.join(DATA_DIR, 'audio')),
+    fotos_chat: sizeOf(path.join(DATA_DIR, 'chat-photos')),
     documentos: sizeOf(path.join(DATA_DIR, 'documents')),
     envios: sizeOf(path.join(DATA_DIR, 'uploads-parts')),
     banco: sizeOf(DATA_DIR, (n) => /\.db(-wal|-shm)?$/.test(n)),

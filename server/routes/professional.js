@@ -23,12 +23,13 @@ function toCents(v) {
   return Math.round(n * 100);
 }
 
-router.get('/me', (req, res) => {
-  const me = ownProfessional(req.auth.user);
-  // Secretária: sem o código único e sem a chave Pix
+// Perfil do próprio profissional. Secretária: sem o código único e sem a chave Pix (em toda resposta)
+function ownFor(req, row) {
+  const me = ownProfessional(row);
   if (req.auth.secretary) { delete me.code; delete me.pix_key; me.secretary = { login: req.auth.secretary.login }; }
-  res.json(me);
-});
+  return me;
+}
+router.get('/me', (req, res) => res.json(ownFor(req, req.auth.user)));
 
 // ---------- Secretária (versão 1.1.3): uma por profissional; login e senha gerados pelo sistema ----------
 const SEC = require('../secretary');
@@ -65,7 +66,8 @@ router.put('/profile', async (req, res) => {
   // Nome, WhatsApp, e-mail, especialidades, "Sobre você" e valor continuam os do profissional.
   if (req.auth.secretary) {
     const u = req.auth.user;
-    b = { ...b, name: u.name, phone: u.phone, email: u.email, bio: u.bio, specialties: u.specialties,
+    // A chave Pix também é só do profissional (nem a tela da secretária manda, mas o servidor garante)
+    b = { ...b, pix_key: undefined, name: u.name, phone: u.phone, email: u.email, bio: u.bio, specialties: u.specialties,
       price: u.price_cents != null ? (u.price_cents / 100).toFixed(2).replace('.', ',') : '',
       presencial_price: u.price_presencial_cents != null ? 'diff' : 'same',
       price_presencial: u.price_presencial_cents != null ? (u.price_presencial_cents / 100).toFixed(2).replace('.', ',') : '' };
@@ -127,7 +129,7 @@ router.put('/profile', async (req, res) => {
   db.prepare('UPDATE professionals SET tiktok = ?, x_handle = ?, youtube = ?, price_presencial_cents = ? WHERE id = ?').run(social.tiktok, social.x_handle, social.youtube, pricePres, req.auth.user.id);
   // Plano de saúde: o profissional escolhe (vale para online e presencial; detalhes ele combina pelo chat)
   db.prepare('UPDATE professionals SET email = ?, accepts_insurance = ? WHERE id = ?').run(email, b.accepts_insurance ? 1 : 0, req.auth.user.id);
-  res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
+  res.json(ownFor(req, db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
 });
 
 router.post('/photo', async (req, res) => {
@@ -137,7 +139,7 @@ router.post('/photo', async (req, res) => {
   for (const c of db.prepare('SELECT id, patient_id FROM conversations WHERE professional_id = ?').all(req.auth.user.id)) {
     rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });
   }
-  res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
+  res.json(ownFor(req, db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
 });
 
 // Galeria: Foto 1 a Foto 6 (cada posição pode ser trocada ou removida)
@@ -155,7 +157,7 @@ router.post('/gallery/:slot', async (req, res) => {
   removePhoto(g[i]);
   g[i] = url;
   db.prepare('UPDATE professionals SET gallery = ? WHERE id = ?').run(JSON.stringify(g), me.id);
-  res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(me.id)));
+  res.json(ownFor(req, db.prepare('SELECT * FROM professionals WHERE id = ?').get(me.id)));
 });
 
 router.delete('/gallery/:slot', (req, res) => {
@@ -165,7 +167,7 @@ router.delete('/gallery/:slot', (req, res) => {
   removePhoto(g[i]);
   g[i] = null;
   db.prepare('UPDATE professionals SET gallery = ? WHERE id = ?').run(JSON.stringify(g), me.id);
-  res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(me.id)));
+  res.json(ownFor(req, db.prepare('SELECT * FROM professionals WHERE id = ?').get(me.id)));
 });
 
 // O profissional exclui a própria conta: sai da vitrine, os dados pessoais são apagados
@@ -220,7 +222,7 @@ router.post('/slug', (req, res) => {
   const taken = db.prepare('SELECT 1 FROM professionals WHERE slug = ? AND id <> ?').get(slug, req.auth.user.id);
   if (taken) throw new U.HttpError(409, 'Este link já está em uso por outro profissional. Tente outro.');
   db.prepare('UPDATE professionals SET slug = ? WHERE id = ?').run(slug, req.auth.user.id);
-  res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
+  res.json(ownFor(req, db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
 });
 
 router.post('/password', (req, res) => {
