@@ -539,8 +539,28 @@
     const need = list.find((a) => Object.entries(a.can || {}).some(([k, v]) => v && !['reschedule', 'cancel', 'pro_cancel', 'enter_call', 'give_up'].includes(k)));
     return need || list.find((a) => a.status === 'confirmada') || null;
   }
+  // Secretária (versão 1.1.3): o aviso fica sempre embaixo, no lugar do aviso de consulta:
+  // "Você está usando o painel como secretária de …" e, em cima, pequeno, a próxima consulta do profissional
+  function renderSecretaryBar() {
+    const a = barAppt;
+    const pro = ctx.secretary.proName;
+    let next = '';
+    if (a) {
+      const left = Date.parse(a.start_at) - now();
+      const line2 = a.status === 'confirmada' ? (left > 0 ? `faltam ${countdown(left)}` : 'acontecendo agora') : (STATUS[a.status] || [''])[0];
+      next = `<div class="ab-next"><span class="ab-ic">${ic('calendar', 16)}</span>
+        <span class="ab-txt"><b>Próxima consulta de ${esc(pro)}</b><small>${esc(a.patient.name.split(' ')[0])} · ${esc(a.date === localToday() ? `hoje às ${a.time}` : shortWhen(a))} · ${esc(line2)}</small></span>
+        <button type="button" class="btn sm secondary" data-bar-see>Ver</button></div>`;
+    }
+    bar.innerHTML = `${next}<div class="ab-sec">${ic('user', 15)}<span>Você está usando o painel como <b>secretária de ${esc(pro)}</b></span></div>`;
+    bar.classList.add('sec-mode');
+    bar.classList.remove('hidden');
+    document.body.classList.add('has-appt-bar');
+    place();
+  }
   function renderBar() {
     if (!bar) return;
+    if (ctx.secretary) return renderSecretaryBar();
     const a = barAppt;
     if (!a) { bar.classList.add('hidden'); document.body.classList.remove('has-appt-bar'); return; }
     const other = ctx.role === 'patient' ? a.professional.name : a.patient.name;
@@ -579,11 +599,13 @@
   }
   async function refreshBar() {
     if (!bar) return;
-    barAppt = pickForBar(await loadUpcoming());
+    const list = await loadUpcoming();
+    barAppt = ctx.secretary ? (list.find((a) => a.status === 'confirmada') || list[0] || null) : pickForBar(list);
     renderBar();
   }
-  function mountBar({ role, socket, onSee }) {
+  function mountBar({ role, socket, onSee, secretary = null }) {
     ctx.role = role;
+    ctx.secretary = secretary;
     bar = document.createElement('div');
     bar.className = 'appt-bar hidden';
     bar.setAttribute('role', 'status');

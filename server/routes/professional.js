@@ -60,7 +60,14 @@ router.put('/quick-replies', (req, res) => {
 });
 
 router.put('/profile', async (req, res) => {
-  const b = req.body;
+  let b = req.body;
+  // Secretária (versão 1.1.3): muda só redes sociais, plano de saúde, localização e clínica.
+  // Nome, WhatsApp, e-mail, especialidades, "Sobre você" e valor continuam os do profissional.
+  if (req.auth.secretary) {
+    const u = req.auth.user;
+    b = { ...b, name: u.name, phone: u.phone, email: u.email, bio: u.bio, specialties: u.specialties,
+      price: u.price_cents != null ? (u.price_cents / 100).toFixed(2).replace('.', ',') : '' };
+  }
   const name = U.cleanText(b.name, 120);
   if (!U.isFullName(name)) throw new U.HttpError(400, 'Informe nome e sobrenome.');
   // Pode encurtar o nome (ex.: só nome e sobrenome), mas só com palavras do nome da carteirinha

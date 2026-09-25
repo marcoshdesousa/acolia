@@ -68,15 +68,14 @@
   // ---------- Painel da secretária: tira o que ela não pode ----------
   function lockPanel(me) {
     $$('[data-pro-only]').forEach((el) => el.remove());
-    // Aviso fixo no topo
-    const main = $('.panel-main');
-    main?.insertAdjacentHTML('afterbegin', `<div class="sec-banner">${ic('user', 18)} <span>Você está no painel como <b>secretária de ${esc(me.name)}</b>.</span></div>`);
-    // Meu perfil: só olhar (quem muda é o profissional). Mensagens prontas continuam liberadas.
+    // (o aviso "Você está no painel como secretária" fica fixo embaixo, no lugar do aviso de consulta: js/agenda.js)
+    // Meu perfil: ela muda redes sociais, plano de saúde, localização e clínica. Nome, WhatsApp,
+    // e-mail, especialidades, "Sobre você" e valor só o profissional (o servidor também confere).
     const form = $('[data-profile-form]');
     if (form) {
-      $$('input, select, textarea, button', form).forEach((el) => { el.disabled = true; });
-      $('button[type=submit]', form)?.remove();
-      form.insertAdjacentHTML('afterbegin', '<div class="notice small" style="margin-bottom:12px">🔒 Só o profissional muda os dados do perfil.</div>');
+      ['name', 'phone', 'email', 'bio', 'price'].forEach((n) => { if (form[n]) { form[n].disabled = true; form[n].closest('.field')?.classList.add('sec-locked'); } });
+      $('[data-sp-picker]', form)?.closest('.field')?.classList.add('sec-locked', 'sec-locked-box');
+      form.insertAdjacentHTML('afterbegin', '<div class="notice small" style="margin-bottom:12px">🔒 Nome, WhatsApp, e-mail, especialidades, "Sobre você" e valor só o profissional muda. Você pode mudar as <b>redes sociais</b>, o <b>plano de saúde</b>, a <b>localização</b> e a <b>clínica</b>.</div>');
     }
     $('[data-slug-form]')?.remove();
     $('[data-photo-input]')?.closest('label')?.remove();

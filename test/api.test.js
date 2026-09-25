@@ -2181,7 +2181,20 @@ test('versão 1.1.3: secretária do profissional — login gerado, responde no l
   assert.equal(r.data.pix_key, '');
   // Não pode: perfil, senha, conta, secretária, Asaas, chave Pix, chamadas
   const pf = { name: 'Outro Nome Qualquer', phone: '11913131313', state: 'SP', city: 'Campinas', bio: '', specialties: ['Adultos'], price: '120' };
-  for (const [m, url, body] of [['put', '/api/professional/profile', pf], ['post', '/api/professional/password', { current: 'x', password: 'nova123' }],
+  // Perfil: muda redes sociais, plano de saúde, localização e clínica; nome, contato, especialidades, "Sobre" e valor ficam
+  r = await sec.put('/api/professional/profile', { ...pf, bio: 'Texto novo', specialties: ['Adultos', 'Casais'], price: '999', email: 'outro@example.com',
+    instagram: '@sara.consultorio', accepts_insurance: true, state: 'RJ', city: 'Niterói', has_clinic: true, clinic_name: 'Clínica Sara', clinic_address: 'Rua das Flores, 10' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const after = (await pro.get('/api/professional/me')).data;
+  assert.equal(after.name, 'Sara Secretaria Lima');
+  assert.equal(after.email, 'sara.sec@example.com');
+  assert.equal(after.bio, '');
+  assert.equal(after.price_cents, null);
+  assert.equal(after.instagram, 'sara.consultorio');
+  assert.equal(after.accepts_insurance, true);
+  assert.equal(after.state, 'RJ');
+  assert.equal(after.clinic_name, 'Clínica Sara');
+  for (const [m, url, body] of [['post', '/api/professional/photo', {}], ['post', '/api/professional/password', { current: 'x', password: 'nova123' }],
     ['post', '/api/professional/delete', {}], ['post', '/api/professional/secretary', {}], ['del', '/api/professional/secretary'],
     ['put', '/api/agenda/asaas', { enabled: false }], ['post', '/api/agenda/asaas', { key: 'x' }], ['put', '/api/agenda/settings', { pix_key: 'minha@pix' }],
     ['post', '/api/calls', { patient_label: 'Teste' }]]) {

@@ -20,8 +20,8 @@
     const url = `${location.origin}/${me.slug}`;
     $('[data-my-link]').textContent = url;
     $('[data-open-link]').href = `/${me.slug}`;
-    $('[data-origin]').textContent = `${location.host}/`;
-    $('[data-slug-form]').slug.value = me.slug || '';
+    if ($('[data-origin]')) $('[data-origin]').textContent = `${location.host}/`;
+    if ($('[data-slug-form]')) $('[data-slug-form]').slug.value = me.slug || ''; // (a secretária não tem)
   }
   $('[data-copy-link]').addEventListener('click', () => copyText(`${location.origin}/${me.slug}`));
   $('[data-share-link]').addEventListener('click', async () => {
@@ -42,8 +42,9 @@
     $('[data-photo]').innerHTML = avatar(me.name, me.photo, 'lg');
     if ($('[data-my-code]')) $('[data-my-code]').textContent = me.code || '';
     if ($('[data-my-code2]')) $('[data-my-code2]').textContent = me.code || '';
-    $('[data-sub]').textContent = fmtDate(me.subscription_until);
-    $('[data-visibility]').innerHTML = me.visible ? '<span class="badge ok">Visível para pacientes</span>'
+    // (a engrenagem da secretária não tem esses campos)
+    if ($('[data-sub]')) $('[data-sub]').textContent = fmtDate(me.subscription_until);
+    if ($('[data-visibility]')) $('[data-visibility]').innerHTML = me.visible ? '<span class="badge ok">Visível para pacientes</span>'
       : me.status === 'restrito' ? '<span class="badge danger">Restrito pela administração</span>'
         : '<span class="badge warn">Oculto — mensalidade vencida</span>';
     const n = $('[data-status-notice]');
@@ -221,7 +222,7 @@
   const setUnread = (n) => $$('[data-unread]').forEach((el) => { el.textContent = n ? String(n) : ''; });
   // Consultas: aviso fixo da próxima consulta ("Ver" abre a página Consultas) e a agenda
   AcoliaAgenda.setContext({ role: 'professional', onGoChat: (id) => { location.hash = `conversas/${id}`; } });
-  AcoliaAgenda.mountBar({ role: 'professional', socket, onSee: () => { location.hash = 'atendimento'; } });
+  AcoliaAgenda.mountBar({ role: 'professional', socket, onSee: () => { location.hash = 'atendimento'; }, secretary: isSec ? { proName: me.name } : null });
   const agendaPro = AcoliaAgendaPro.mount({ appts: $('[data-appts]'), agenda: $('[data-agenda-card]'), asaas: $('[data-asaas-card]'), secretary: isSec });
   // Chamadas (câmera): só o profissional
   const callsPage = isSec ? null : AcoliaSecretary.mountCalls($('[data-calls-list]'));

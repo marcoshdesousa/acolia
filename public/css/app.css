@@ -1240,5 +1240,11 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .call-row .grow { display: flex; flex-direction: column; min-width: 0; }
 .call-row:hover { background: var(--surface-2); }
 .empty-calls { text-align: center; padding: 28px 16px; color: var(--muted); }
-/* Na conversa o aviso da secretária sai (a conversa usa a tela toda) */
-.panel-main:has([data-view="conversas"]:not(.hidden)) .sec-banner { display: none; }
+/* Secretária: campos do perfil que só o profissional muda */
+.sec-locked label::after { content: " 🔒"; }
+.sec-locked-box [data-sp-picker] { pointer-events: none; opacity: .6; }
+/* Aviso fixo da secretária (no lugar do aviso de consulta) */
+.appt-bar.sec-mode { flex-direction: column; align-items: stretch; gap: 6px; padding: 6px; }
+.appt-bar.sec-mode .ab-next { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 8px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.appt-bar.sec-mode .ab-sec { display: flex; align-items: center; gap: 8px; font-size: .8rem; padding: 6px 10px; border-radius: 10px; background: var(--accent-soft); color: var(--text); }
+.appt-bar.sec-mode .ab-sec svg { color: var(--accent); flex: none; }

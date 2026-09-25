@@ -61,8 +61,7 @@ function remove(proId) {
 
 // ---------- O que a secretária NÃO pode (conferido no servidor) ----------
 const DENY = [
-  // perfil, foto, galeria, link, senha, apagar conta e a própria secretária
-  ['PUT', /^\/api\/professional\/profile$/, 'mudar o perfil'],
+  // foto, galeria, link, senha, apagar conta e a própria secretária (o perfil ela muda só em parte: ver routes/professional.js)
   ['POST', /^\/api\/professional\/(photo|gallery\/[^/]+|slug|password|delete)$/, 'mudar o perfil, a senha ou a conta'],
   ['DELETE', /^\/api\/professional\/gallery\/[^/]+$/, 'mudar o perfil'],
   [null, /^\/api\/professional\/secretary(\/.*)?$/, 'mexer na secretária'],

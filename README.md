@@ -91,7 +91,7 @@ O profissional só vê uma conversa depois que o paciente manda a primeira mensa
 
 **Versão 1.1.3 — secretária e chamadas** (`server/secretary.js`, `public/js/secretary.js`):
 - **Criar:** em **Meu perfil**, logo depois da Localização, o profissional cria **uma** secretária. O sistema gera o **login** (`secretaria.xxxxxx`) e a **senha**, que só aparece nessa hora. Há os botões "Copiar login e senha", "Gerar nova senha" e "Apagar secretária". Gerar nova senha ou apagar derruba a secretária do painel na hora.
-- **Entrar:** a secretária entra no mesmo lugar do profissional (Entrar → Sou profissional) e usa o painel dele, com o aviso "Você está no painel como secretária de …".
+- **Entrar:** a secretária entra no mesmo lugar do profissional (Entrar → Sou profissional) e usa o painel dele. Embaixo, no lugar do aviso de consulta, fica sempre o aviso "Você está usando o painel como secretária de …" e, em cima dele, pequeno, a próxima consulta do profissional (paciente, horário, quanto falta e "Ver", que abre Consultas).
 - **Pode:**
   - responder as conversas no lugar do profissional (a mensagem sai como do profissional; o profissional e ela veem o selo **Secretária**, o paciente não);
   - usar as mensagens prontas;
@@ -100,7 +100,8 @@ O profissional só vê uma conversa depois que o paciente manda a primeira mensa
   - ver os pacientes e o histórico de chamadas (sem os códigos).
 - **Não pode** (conferido no servidor):
   - entrar nas chamadas de vídeo;
-  - mudar o perfil, a foto, o link, a senha ou a conta, nem criar ou apagar a secretária;
+  - mudar a foto, o link, a senha ou a conta, nem criar ou apagar a secretária;
+  - no Meu perfil, mudar nome, WhatsApp, e-mail, especialidades, "Sobre você" e valor (ela muda **redes sociais, plano de saúde, localização e clínica**);
   - mexer no pagamento automático (Asaas) ou na chave Pix;
   - ver o código único.
   Na engrenagem ela só instala o app, ativa as notificações e sai.
