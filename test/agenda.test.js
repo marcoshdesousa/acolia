@@ -438,6 +438,11 @@ test('profissional entra na chamada: sem reembolso e a consulta fica concluída 
   const ack = await new Promise((ok) => sock.emit('call:join', { code }, ok));
   assert.equal(ack.role, 'host', JSON.stringify(ack));
   sock.close();
+  // A paciente também entra (senão, depois de 3 minutos, a chamada acaba sem reembolso)
+  const psock = ioClient(base, { extraHeaders: { Cookie: bia.cookie }, transports: ['websocket'] });
+  const pack = await new Promise((ok) => psock.emit('call:join', { code }, ok));
+  assert.equal(pack.role, 'guest', JSON.stringify(pack));
+  psock.close();
   clock = Date.parse(at('2030-01-16', '14:05'));
   await G.sweep();
   assert.equal((await bia.get(`/api/agenda/appointments/${a.id}`)).data.status, 'confirmada', 'entrou a tempo: nada de reembolso');
@@ -446,6 +451,33 @@ test('profissional entra na chamada: sem reembolso e a consulta fica concluída 
   r = await bia.get(`/api/agenda/appointments/${a.id}`);
   assert.equal(r.data.status, 'concluida');
   assert.equal(r.data.call_code, null, 'chamada fechada');
+});
+
+test('regra dos 3 minutos vale para o paciente: não entrou → chamada encerrada, sem reembolso', async () => {
+  const { io: ioClient } = require('socket.io-client');
+  let r = await bia.post('/api/agenda/book', { professional_id: P.id, start: at('2030-01-23', '14:00'), accept: true });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const a = r.data;
+  await P.cl.post(`/api/agenda/appointments/${a.id}/send-pix`);
+  await P.cl.post(`/api/agenda/appointments/${a.id}/manual-result`, { approved: true });
+  clock = Date.parse(at('2030-01-23', '13:56'));
+  await G.sweep();
+  const code = (await bia.get(`/api/agenda/appointments/${a.id}`)).data.call_code;
+  assert.ok(code);
+  const sock = ioClient(base, { extraHeaders: { Cookie: P.cl.cookie }, transports: ['websocket'] });
+  assert.equal((await new Promise((ok) => sock.emit('call:join', { code }, ok))).role, 'host');
+  sock.close();
+  clock = Date.parse(at('2030-01-23', '14:02'));
+  await G.sweep();
+  assert.equal((await bia.get(`/api/agenda/appointments/${a.id}`)).data.status, 'confirmada', 'ainda dentro dos 3 minutos');
+  clock = Date.parse(at('2030-01-23', '14:03'));
+  await G.sweep();
+  r = await bia.get(`/api/agenda/appointments/${a.id}`);
+  assert.equal(r.data.status, 'paciente_ausente');
+  assert.equal(r.data.refund_status, null, 'sem reembolso');
+  assert.equal(r.data.call_code, null, 'chamada encerrada');
+  const m = await msgs(bia, a.conversation_id);
+  assert.equal(m.at(-1).event, 'paciente_ausente');
 });
 
 test('no site de verdade só vale chave de conta real do Asaas (a de teste não recebe dinheiro)', async () => {

@@ -39,6 +39,7 @@
     cancelada: ['Cancelada', ''],
     expirada: ['Tempo esgotado', ''],
     concluida: ['Concluída', ''],
+    paciente_ausente: ['Paciente não entrou', 'danger'],
   };
   const badge = (a) => { const [t, c] = STATUS[a.status] || [a.status, '']; return `<span class="badge ${c}">${esc(t)}</span>`; };
 
@@ -48,7 +49,7 @@
     return `<ul class="policy-list">
       <li>O pagamento é <b>só por Pix</b> e confirma a consulta. Você tem <b>${r.PAY_MIN} minutos</b> para pagar; depois disso o horário é liberado.</li>
       <li>Você pode <b>remarcar uma vez</b> ou <b>cancelar com reembolso</b> até <b>${r.CUTOFF_MIN} minutos antes</b>. Com ${r.CUTOFF_MIN} minutos ou menos, não dá mais para remarcar nem pedir reembolso.</li>
-      <li>Se você <b>não comparecer</b>, o valor não é devolvido.</li>
+      <li>Se você <b>não entrar na chamada</b> até ${r.PRO_GRACE_MIN} minutos depois do horário, a chamada é encerrada e o valor <b>não é devolvido</b>.</li>
       <li>Se o profissional não puder atender, ele avisa até ${r.PRO_CANCEL_H} horas antes e <b>você escolhe</b>: reembolso ou remarcar.</li>
       <li>Se o profissional <b>não entrar na chamada</b> até ${r.PRO_GRACE_MIN} minutos depois do horário, você recebe <b>100% de volta</b>.</li>
       <li>O dinheiro vai direto para a conta do profissional. A Acolia não recebe nem cobra taxa sobre a consulta.</li>
@@ -459,8 +460,11 @@
     recusado: ['⚠️ Pagamento não aprovado', (a, r) => (r === 'patient' ? 'Quer realmente fazer esta consulta? Se sim, o profissional manda a chave Pix de novo.' : 'O paciente vai responder se quer tentar de novo.')],
     tentar: ['🔁 Nova tentativa de pagamento', (a, r) => (r === 'professional' ? 'Mande a chave Pix de novo em até 5 minutos.' : 'O profissional vai mandar a chave Pix de novo.')],
     pro_cancelou: ['⚠️ O profissional não poderá atender', (a, r) => `${a.cancel_detail ? `“${a.cancel_detail}” · ` : ''}${r === 'patient' ? 'Escolha entre o reembolso e remarcar para outro horário.' : 'O paciente vai escolher entre o reembolso e remarcar.'}`],
+    paciente_ausente: ['⚠️ O paciente não entrou na chamada', (a, r) => (r === 'patient'
+      ? 'Você não entrou até 3 minutos depois do horário. A chamada foi encerrada e o valor não é devolvido.'
+      : 'O paciente não entrou até 3 minutos depois do horário. A chamada foi encerrada e o valor não é devolvido.')],
     ausente: ['⚠️ O profissional não compareceu', (a) => `A chamada foi fechada. ${a.mode === 'auto' ? 'O dinheiro será reembolsado automaticamente (100%).' : 'O dinheiro será reembolsado (100%) pelo profissional.'}`],
-    chamada: ['🎥 Sua consulta vai começar', (a) => (a.can?.enter_call ? 'Toque em "Entrar na chamada". Não saia da tela durante a consulta.'
+    chamada: ['🎥 Sua consulta vai começar', (a, r) => (a.can?.enter_call ? `Toque em "Entrar na chamada" e entre até 3 minutos depois do horário: ${r === 'patient' ? 'depois disso a chamada é encerrada e o valor não é devolvido' : 'depois disso a chamada fecha e o paciente é reembolsado'}. Não saia da tela durante a consulta.`
       : a.secretary ? 'A chamada desta consulta foi aberta. Só o profissional entra nela.' : 'A chamada desta consulta foi encerrada.')],
     expirada: ['⏱️ Tempo para pagar acabou', () => 'O horário foi liberado.'],
     sem_resposta: ['⏱️ A chave Pix não chegou a tempo', (a, r) => (r === 'patient' ? 'O profissional não mandou a chave Pix em 5 minutos e o horário foi liberado. Escolha outro horário ou mande uma mensagem.' : 'Você não mandou a chave Pix em 5 minutos e o horário foi liberado.')],

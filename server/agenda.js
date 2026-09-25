@@ -241,6 +241,7 @@ const PUSH = {
   tentar: 'Quer tentar pagar de novo',
   pro_cancelou: 'O profissional não poderá atender. Escolha: reembolso ou remarcar',
   ausente: 'O profissional não compareceu. Seu dinheiro será reembolsado',
+  paciente_ausente: 'Você não entrou na chamada a tempo. A consulta foi encerrada, sem reembolso',
   chamada: '🎥 Sua consulta vai começar: toque para entrar',
   expirada: 'O tempo para pagar acabou',
   sem_resposta: 'O profissional não mandou a chave Pix a tempo',
@@ -407,13 +408,22 @@ async function sweep() {
     for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'confirmada' AND call_id IS NULL AND start_at <= ?").all(iso(t + RULES.CALL_BEFORE_MIN * MIN))) {
       openCall(a);
     }
-    // Profissional não entrou até 3 minutos depois do horário: reembolso de 100% e fecha a chamada
+    // Regra dos 3 minutos (vale para os dois), contada a partir do horário da consulta:
+    // - profissional não entrou → reembolso de 100% e fecha a chamada (vale mesmo se o paciente também faltou)
+    // - paciente não entrou → a chamada acaba e o valor NÃO é devolvido
     for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'confirmada' AND start_at <= ?").all(iso(t - RULES.PRO_GRACE_MIN * MIN))) {
-      const call = a.call_id ? db.prepare('SELECT host_joined_at FROM calls WHERE id = ?').get(a.call_id) : null;
-      if (call?.host_joined_at) continue;
+      const call = a.call_id ? db.prepare('SELECT host_joined_at, guest_joined_at FROM calls WHERE id = ?').get(a.call_id) : null;
+      if (!call?.host_joined_at) {
+        closeCall(a);
+        post(a, 'professional', 'ausente');
+        await refund(getAppt(a.id), 'profissional_ausente');
+        continue;
+      }
+      if (call.guest_joined_at) continue;
       closeCall(a);
-      post(a, 'professional', 'ausente');
-      await refund(getAppt(a.id), 'profissional_ausente');
+      const upd = setStatus(a.id, { status: 'paciente_ausente' });
+      post(upd, 'professional', 'paciente_ausente'); // aviso vai para o paciente (e aparece para o profissional)
+      notifyBoth(upd);
     }
     // Profissional pediu para cancelar e o paciente não escolheu até o horário: reembolso
     for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'aguardando_paciente' AND start_at <= ?").all(T)) {

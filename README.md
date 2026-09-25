@@ -70,7 +70,7 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 - **Reembolso:**
   - **Automático** pelo Asaas do profissional. Se falhar, por exemplo por falta de saldo, vira pedido manual.
   - **Manual:** o chat do profissional **com esse paciente** fica travado até o paciente confirmar "Sim, recebi". Se ele disser que não recebeu, continua travado.
-- **Chamada automática:** é criada **5 minutos antes** (e o paciente recebe o aviso na conversa) e o botão "Entrar na chamada" aparece na conversa, na lista e no aviso. Não existe mais "criar atendimento"; o código de login do profissional continua.
+- **Chamada automática:** é criada **5 minutos antes** (e o paciente recebe o aviso na conversa). **Regra dos 3 minutos (vale para os dois):** o profissional que não entrar até 3 minutos depois do horário perde a consulta e o paciente recebe 100% de volta; o paciente que não entrar até 3 minutos depois do horário perde a consulta, a chamada é encerrada e o valor **não** é devolvido (situação "Paciente não entrou") e o botão "Entrar na chamada" aparece na conversa, na lista e no aviso. Não existe mais "criar atendimento"; o código de login do profissional continua.
 - **Profissional ausente:** se não entrar até **3 minutos** depois do horário, a chamada é fechada, o paciente vê "O profissional não compareceu" e recebe **100% de volta**.
 - 30 minutos depois do fim, a consulta fica **concluída** e a chamada é encerrada.
 - Uma varredura a cada 20 segundos cuida dos prazos. Conta apagada cancela as consultas futuras, com estorno automático quando é pelo Asaas.

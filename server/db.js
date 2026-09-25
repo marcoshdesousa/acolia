@@ -322,6 +322,7 @@ if (!db.prepare('PRAGMA table_info(professionals)').all().some((c) => c.name ===
 // Cada linha da agenda agora é o INÍCIO de uma consulta (single = 1); as antigas eram faixas de horário
 addColumn('agenda_hours', 'single', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('calls', 'appointment_id', 'INTEGER');   // chamada criada sozinha para a consulta marcada
+addColumn('calls', 'guest_joined_at', 'TEXT');     // quando o paciente entrou (não entrou em 3 min → encerrada, sem reembolso)
 addColumn('calls', 'host_joined_at', 'TEXT');      // quando o profissional entrou (ausência → reembolso)
 db.exec(`UPDATE conversations SET patient_wrote = 1 WHERE patient_wrote = 0
   AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = conversations.id AND m.sender_role = 'patient')`);
