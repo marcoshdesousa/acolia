@@ -249,8 +249,8 @@ function post(a, role, event, extra = '') {
   const c = db.prepare('SELECT * FROM conversations WHERE id = ?').get(a.conversation_id);
   if (!c) return;
   const pro = getPro(a.professional_id);
-  const pat = db.prepare('SELECT name, display_name FROM patients WHERE id = ?').get(a.patient_id);
-  const from = role === 'patient' ? (pat.display_name || pat.name) : pro.name;
+  const pat = db.prepare('SELECT name FROM patients WHERE id = ?').get(a.patient_id);
+  const from = role === 'patient' ? pat.name : pro.name;
   require('./routes/chat').sendMessage(c, role, from, 'booking', `${a.id}|${event}|${extra}`);
 }
 
@@ -539,13 +539,13 @@ function view(a, role) {
     return { ...v, call_code: null, can: { ...v.can, enter_call: false }, secretary: true };
   }
   const pro = getPro(a.professional_id);
-  const pat = db.prepare('SELECT id, name, display_name, photo FROM patients WHERE id = ?').get(a.patient_id);
+  const pat = db.prepare('SELECT id, name, handle, photo FROM patients WHERE id = ?').get(a.patient_id);
   const call = a.call_id ? db.prepare('SELECT patient_code, status FROM calls WHERE id = ?').get(a.call_id) : null;
   const t0 = ms(a.start_at);
   return {
     id: a.id,
     professional: { id: pro.id, name: pro.name, photo: pro.photo, profession: pro.profession },
-    patient: { id: pat.id, name: role === 'professional' ? pat.name : (pat.display_name || pat.name), photo: pat.photo },
+    patient: { id: pat.id, name: pat.name, handle: pat.handle || '', photo: pat.photo },
     conversation_id: a.conversation_id,
     start_at: a.start_at,
     end_at: a.end_at,

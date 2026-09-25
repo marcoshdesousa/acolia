@@ -79,8 +79,8 @@ function peerOf(role, c) {
     const p = db.prepare('SELECT id, name, photo, profession, status FROM professionals WHERE id = ?').get(c.professional_id);
     return { id: p.id, name: p.name, photo: p.photo, subtitle: p.profession, active: ['aprovado', 'restrito'].includes(p.status) };
   }
-  const p = db.prepare('SELECT id, name, display_name, photo, city, state, status FROM patients WHERE id = ?').get(c.patient_id);
-  return { id: p.id, name: p.display_name || p.name, full_name: p.name, photo: p.photo, subtitle: `${p.city} - ${p.state}`, active: p.status === 'ativo' };
+  const p = db.prepare('SELECT id, name, handle, photo, city, state, status FROM patients WHERE id = ?').get(c.patient_id);
+  return { id: p.id, name: p.name, full_name: p.name, handle: p.handle || '', photo: p.photo, subtitle: p.handle ? `@${p.handle}` : `${p.city} - ${p.state}`, active: p.status === 'ativo' };
 }
 
 function summarize(role, c) {
@@ -181,7 +181,7 @@ function withPost(m) {
 function postMessage(req, c, kind, body) {
   assertCanSend(req.auth.role, c);
   const sender = req.auth.user;
-  return sendMessage(c, req.auth.role, req.auth.role === 'patient' ? (sender.display_name || sender.name) : sender.name, kind, body);
+  return sendMessage(c, req.auth.role, req.auth.role === 'patient' ? sender.name : sender.name, kind, body);
 }
 
 // Mensagem da conversa sem a checagem de bloqueio (usada também pelos avisos automáticos das

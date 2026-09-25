@@ -151,6 +151,14 @@ O site pode ser instalado como app (Android, iPhone e computador) pelo próprio 
 - Mensagem **apagada para todos não conta como nova** (nem no número da conversa nem no ícone do chat).
 - **Seguir / deixar de seguir** alguém pelo perfil: os stories do Início atualizam na hora e o feed recarrega quando você volta para o Início.
 
+## @ dos pacientes
+- Cada paciente tem um **@ único** (ex.: `@maria.silva`). Ele escolhe no cadastro (opcional) ou em **Configurações → Seu @**; o botão **Gerar @** sugere um aleatório. Se não escolher, o sistema cria um a partir do nome. Dá para trocar quando quiser, se o @ estiver livre.
+- O **nome não é editável**: é o nome do cadastro (conferido com CPF e data de nascimento).
+- **Comentários, curtidas e seguidores** mostram só o @ (o nome não aparece para outras pessoas).
+- **Na conversa** o profissional vê o nome completo, o @ pequeno embaixo e a foto.
+- O dono da publicação toca no @ de quem comentou para abrir a conversa (regras da 1.1.2). Quem curtiu aparece como "@x curtiu", sem busca pelo paciente.
+- Profissionais não têm @. O Paciente Teste é `@pacienteteste`.
+
 ## Colocar no ar com um clique
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/marcoshdesousa/acolia)

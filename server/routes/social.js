@@ -35,10 +35,10 @@ function actor(role, id) {
     if (!p) return { role, id, name: 'Profissional', subtitle: '', photo: null };
     return { role, id: p.id, name: p.name, subtitle: p.profession, photo: p.photo, slug: p.slug };
   }
-  const p = db.prepare('SELECT id, name, display_name, photo, city, state, status FROM patients WHERE id = ?').get(id);
+  const p = db.prepare('SELECT id, name, handle, photo, city, state, status FROM patients WHERE id = ?').get(id);
   if (!p || p.status === 'excluido') return { role, id, name: 'Conta excluída', subtitle: '', photo: null };
-  const words = String(p.display_name || p.name).trim().split(/\s+/).slice(0, 2).join(' ');
-  return { role, id: p.id, name: words, subtitle: p.city && p.state ? `${p.city} - ${p.state}` : '', photo: p.photo };
+  // Paciente aparece pelo @ (o nome não aparece para outras pessoas nos comentários e curtidas)
+  return { role, id: p.id, name: p.handle ? `@${p.handle}` : 'Paciente', handle: p.handle || '', subtitle: '', photo: p.photo };
 }
 
 function notify(toRole, toId, type, from, extra = {}) {
@@ -636,8 +636,10 @@ function notifOut(n) {
     const nt = require('./notices').get(n.notice_id);
     return { id: n.id, type: 'aviso', text: nt ? nt.text : 'Aviso da Acolia', notice: nt, created_at: n.created_at, read: !!n.read_at, actor: null, post: null };
   }
-  if (n.type === 'follow') text = `${kindOf} começou a seguir você.`;
-  else if (n.type === 'like_post') text = 'Sua publicação recebeu uma curtida.';
+  // Paciente aparece pelo @ ("@fulano curtiu"): dá para ver quem foi, mas não dá para procurar a pessoa
+  const byHandle = n.actor_role === 'patient' && a?.handle;
+  if (n.type === 'follow') { text = byHandle ? `${a.name} começou a seguir você.` : `${kindOf} começou a seguir você.`; showActor = !!byHandle; }
+  else if (n.type === 'like_post') { text = byHandle ? `${a.name} curtiu sua publicação.` : 'Sua publicação recebeu uma curtida.'; showActor = !!byHandle; }
   else if (n.type === 'like_story') { text = `${a.name} curtiu seu story.`; showActor = true; }
   else if (n.type === 'comment') {
     const c = n.comment_id ? db.prepare('SELECT body FROM post_comments WHERE id = ?').get(n.comment_id) : null;

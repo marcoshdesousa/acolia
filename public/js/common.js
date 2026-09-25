@@ -224,7 +224,7 @@
   };
 
   function initials(name) {
-    const parts = String(name || '?').trim().split(/\s+/);
+    const parts = String(name || '?').trim().replace(/^@/, '').split(/[\s._]+/).filter(Boolean);
     return ((parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
   }
 

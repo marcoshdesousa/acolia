@@ -128,6 +128,7 @@
           ${avatar(c.peer.name, c.peer.photo)}
           <div class="grow">
             <div class="top"><span class="nm">${esc(c.peer.name)}</span><span class="tm">${c.last_message ? fmtShort(c.last_message.created_at) : ''}</span></div>
+            ${c.peer.handle ? `<div class="hd-line">@${esc(c.peer.handle)}</div>` : ''}
             <div class="row" style="gap:8px;flex-wrap:nowrap"><span class="pv grow">${esc(previewOf(c.last_message))}</span>${c.unread ? `<span class="unread">${c.unread}</span>` : ''}</div>
           </div>
         </li>`).join('');

@@ -146,6 +146,9 @@ addColumn('professionals', 'youtube', "TEXT NOT NULL DEFAULT ''");
 // Versão 1.1.3: sessão da secretária (sessão de profissional marcada) e mensagens mandadas por ela
 addColumn('sessions', 'secretary_id', 'INTEGER');
 addColumn('messages', 'secretary_id', 'INTEGER');
+// @ dos pacientes (único; server/handles.js)
+addColumn('patients', 'handle', 'TEXT');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_patients_handle ON patients(handle) WHERE handle IS NOT NULL');
 addColumn('professionals', 'quick_replies', "TEXT NOT NULL DEFAULT '[]'");
 addColumn('professionals', 'gallery', "TEXT NOT NULL DEFAULT '[]'");  // até 6 fotos: [url|null, ...] (posições 1 a 6)
 addColumn('professionals', 'maps_url', "TEXT NOT NULL DEFAULT ''");   // link do Google Maps da clínica

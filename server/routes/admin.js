@@ -40,7 +40,7 @@ function adminPro(p) {
 
 function adminPatient(p) {
   return {
-    id: p.id, name: p.name, display_name: p.display_name, cpf: U.formatCpf(p.cpf), cpf_name_verified: !!p.cpf_name_verified,
+    id: p.id, name: p.name, display_name: p.display_name, handle: p.handle || '', cpf: U.formatCpf(p.cpf), cpf_name_verified: !!p.cpf_name_verified,
     state: p.state, city: p.city, photo: p.photo, status: p.status, created_at: p.created_at, is_test: !!p.is_test,
   };
 }

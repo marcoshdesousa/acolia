@@ -1294,3 +1294,6 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .sup-list .conv { border-radius: 12px; }
 .sup-thread { display: flex; flex-direction: column; min-height: 300px; }
 .sup-msgs { max-height: 55vh; min-height: 200px; overflow-y: auto; background: var(--chat-bg); border-radius: 14px 14px 0 0; padding: 12px; }
+/* @ do paciente */
+.hd-line { font-size: .74rem; color: var(--muted); margin-top: -2px; }
+.handle-line { color: var(--primary); font-weight: 700; }

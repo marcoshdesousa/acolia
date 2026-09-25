@@ -55,8 +55,8 @@ const forAdmin = (t) => (m) => ({ ...m, sender_role: m.sender === 'admin' ? 'adm
 
 function userOf(t) {
   if (t.user_role === 'patient') {
-    const p = db.prepare('SELECT id, name, display_name, photo, status, is_test FROM patients WHERE id = ?').get(t.user_id);
-    return p ? { id: p.id, role: 'patient', name: p.display_name || p.name, full_name: p.name, photo: p.photo, active: p.status === 'ativo', is_test: !!p.is_test } : null;
+    const p = db.prepare('SELECT id, name, handle, photo, status, is_test FROM patients WHERE id = ?').get(t.user_id);
+    return p ? { id: p.id, role: 'patient', name: p.name, handle: p.handle || '', full_name: p.name, photo: p.photo, active: p.status === 'ativo', is_test: !!p.is_test } : null;
   }
   const p = db.prepare('SELECT id, name, photo, status, profession, is_test FROM professionals WHERE id = ?').get(t.user_id);
   return p ? { id: p.id, role: 'professional', name: p.name, photo: p.photo, profession: p.profession, active: ['aprovado', 'restrito', 'bloqueado'].includes(p.status), is_test: !!p.is_test } : null;

@@ -36,6 +36,7 @@ function ensureTestAccounts() {
       .run(PATIENT.cpf, U.norm('São Paulo'), U.hashPassword(PATIENT.password));
     created.patient = true;
   }
+  require('./handles').backfill(); // Paciente Teste = @pacienteteste
   return created;
 }
 

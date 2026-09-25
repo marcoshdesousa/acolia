@@ -179,7 +179,8 @@ function ownPatient(p) {
   return {
     id: p.id,
     name: p.name,
-    display_name: p.display_name || '',
+    display_name: '', // não existe mais "nome exibido": aparece o nome registrado
+    handle: p.handle || '',
     cpf_masked: `***.${p.cpf.slice(3, 6)}.${p.cpf.slice(6, 9)}-**`,
     birth_date: p.birth_date || '',
     state: p.state,

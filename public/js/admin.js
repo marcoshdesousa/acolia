@@ -186,7 +186,7 @@
     if (kind === 'professionals') body.innerHTML = items.length ? items.map(proRow).join('') : '<tr><td colspan="6" class="center muted">Nenhum profissional encontrado.</td></tr>';
     else {
       body.innerHTML = items.length ? items.map((p) => `<tr>
-        <td><div class="row" style="flex-wrap:nowrap">${avatar(p.name, p.photo, 'sm')}<div><b>${esc(p.name)}</b>${p.is_test ? ' <span class="badge warn">Teste</span>' : ''}${p.display_name ? `<div class="small muted">Exibe: ${esc(p.display_name)}</div>` : ''}</div></div></td>
+        <td><div class="row" style="flex-wrap:nowrap">${avatar(p.name, p.photo, 'sm')}<div><b>${esc(p.name)}</b>${p.handle ? `<div class="small muted">@${esc(p.handle)}</div>` : ''}${p.is_test ? ' <span class="badge warn">Teste</span>' : ''}${p.display_name ? `<div class="small muted">Exibe: ${esc(p.display_name)}</div>` : ''}</div></div></td>
         <td style="white-space:nowrap">${esc(p.cpf)} ${p.cpf_name_verified ? '<span class="badge ok" title="Nome conferido com a Receita">conferido</span>' : ''}</td>
         <td>${esc(p.city)} - ${esc(p.state)}</td>
         <td>${fmtDT(p.created_at)}</td>

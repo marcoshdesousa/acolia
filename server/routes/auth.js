@@ -38,6 +38,9 @@ router.post('/patient/register', async (req, res) => {
   const { state, city } = validateLocation(req.body.state, req.body.city);
   requirePassword(req.body.password);
   if (db.prepare('SELECT 1 FROM patients WHERE cpf = ?').get(cpf)) throw new HttpError(409, 'Já existe uma conta com este CPF. Faça login ou recupere sua senha.');
+  // @ do paciente: o que ele escolheu (se estiver livre) ou um gerado pelo nome
+  const H = require('../handles');
+  const handle = String(req.body.handle || '').trim() ? H.assertFree(H.validate(req.body.handle)) : H.generate(name);
 
   let verified = 0;
   if (cpfApiConfigured()) {
@@ -49,8 +52,8 @@ router.post('/patient/register', async (req, res) => {
 
   // CPF bloqueado pela administração (mesmo que tenha apagado a conta antiga): a conta nasce bloqueada
   const status = require('../blocklist').isBlocked('patient', { cpf }) ? 'bloqueado' : 'ativo';
-  const info = db.prepare(`INSERT INTO patients (name, cpf, cpf_name_verified, birth_date, state, city, city_norm, password_hash, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name, cpf, verified, birth, state, city, U.norm(city), U.hashPassword(req.body.password), status);
+  const info = db.prepare(`INSERT INTO patients (name, cpf, cpf_name_verified, birth_date, state, city, city_norm, password_hash, status, handle)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name, cpf, verified, birth, state, city, U.norm(city), U.hashPassword(req.body.password), status, handle);
   A.createSession(res, 'patient', Number(info.lastInsertRowid));
   res.status(201).json({ ok: true });
 });

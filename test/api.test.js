@@ -954,8 +954,8 @@ test('v1.2 — seguir, feed (não vistas primeiro), curtir, comentar, stories e 
   assert.equal(r.data.likes, 1);
   assert.equal(r.data.liked, true);
   const cPat = (await pt.post(`/api/social/posts/${p1.id}/comments`, { body: 'Muito bom!' })).data;
-  assert.equal(cPat.author.name, 'Rita Souza', 'paciente aparece com 1º e 2º nome');
-  assert.equal(cPat.author.subtitle, 'Campinas - SP');
+  assert.equal(cPat.author.name, '@rita.souza', 'paciente aparece pelo @ (gerado pelo nome no cadastro), não pelo nome');
+  assert.equal(cPat.author.subtitle, '');
   const cPro = (await B.cl.post(`/api/social/posts/${p1.id}/comments`, { body: 'Parabéns' })).data;
   assert.equal((await pt.del(`/api/social/comments/${cPro.id}`)).status, 403, 'não apaga comentário dos outros');
   assert.equal((await A.cl.del(`/api/social/comments/${cPro.id}`)).status, 200, 'o dono da publicação apaga qualquer comentário');
@@ -991,9 +991,9 @@ test('v1.2 — seguir, feed (não vistas primeiro), curtir, comentar, stories e 
   // Notificações do profissional A
   const n = (await A.cl.get('/api/social/notifications')).data;
   const texts = n.items.map((x) => x.text);
-  assert.ok(texts.includes('Um paciente começou a seguir você.'), 'seguidor sem nome');
+  assert.ok(texts.includes('@rita.souza começou a seguir você.'), 'paciente aparece pelo @ (nunca pelo nome)');
   assert.ok(texts.includes('Um profissional começou a seguir você.'));
-  assert.ok(texts.includes('Sua publicação recebeu uma curtida.'), 'curtida sem nome');
+  assert.ok(texts.includes('@rita.souza curtiu sua publicação.'), 'curtida mostra o @ do paciente');
   assert.ok(texts.includes('Bruno Feed curtiu seu story.'));
   assert.ok(n.unread >= 4);
   await A.cl.post('/api/social/notifications/read');
@@ -2333,4 +2333,47 @@ test('contas de teste recriadas uma vez com agenda e Asaas simulado', async () =
   assert.ok(db.prepare('SELECT COUNT(*) n FROM agenda_hours WHERE professional_id = ?').get(pro.id).n > 0);
   assert.equal(db.prepare("SELECT status FROM patients WHERE cpf = '00000000000'").get().status, 'ativo');
   assert.equal(TA.recreateOnce(), false, 'não roda de novo');
+});
+
+test('@ dos pacientes: único, escolhido no cadastro ou gerado, trocável; aparece nos comentários e para o profissional com o nome completo', async () => {
+  const a = client();
+  let r = await a.post('/api/auth/patient/register', { name: 'Marcos Henrique Alves', cpf: '100.023.757-53', state: 'SP', city: 'Campinas', birth_date: '1990-01-02', password: '123456', handle: '@Marcos.Henrique' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  let me = (await a.get('/api/auth/me')).data.user;
+  assert.equal(me.handle, 'marcos.henrique', 'guarda em minúsculas');
+  // Outro paciente não consegue o mesmo @
+  const b = client();
+  r = await b.post('/api/auth/patient/register', { name: 'Marcos Henrique Souza', cpf: '100.031.676-90', state: 'SP', city: 'Campinas', birth_date: '1991-01-02', password: '123456', handle: 'marcos.henrique' });
+  assert.equal(r.status, 409);
+  assert.match(r.data.error, /já está em uso/);
+  // Sem @: gera pelo nome (com números, porque marcos.henrique já existe)
+  r = await b.post('/api/auth/patient/register', { name: 'Marcos Henrique Souza', cpf: '100.031.676-90', state: 'SP', city: 'Campinas', birth_date: '1991-01-02', password: '123456' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const hb = (await b.get('/api/auth/me')).data.user.handle;
+  assert.match(hb, /^marcos\.henrique\d+$/);
+  // Trocar: inválido, ocupado e livre
+  assert.equal((await b.put('/api/patient/profile', { handle: 'a b' })).status, 400);
+  assert.equal((await b.put('/api/patient/profile', { handle: 'marcos.henrique' })).status, 409);
+  const sug = (await b.get('/api/patient/handle/suggest')).data.handle;
+  assert.ok(sug && sug !== 'marcos.henrique');
+  r = await b.put('/api/patient/profile', { handle: 'marcao_2024' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.handle, 'marcao_2024');
+  // O nome exibido não existe mais: para o profissional aparece o nome completo e o @
+  const r0 = await admin.post('/api/admin/professionals', { name: 'Paula Arroba Lima', profession: 'Psicólogo(a)', registry: 'CRP 06/40666', email: 'paula.arroba@example.com', phone: '11913134444', state: 'SP', city: 'Campinas' });
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: r0.data.code, password: r0.data.password });
+  const conv = (await b.post('/api/chat/conversations', { professional_id: r0.data.id })).data;
+  await b.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Oi!' });
+  const peer = (await pro.get('/api/chat/conversations')).data.items.find((c) => c.id === conv.id).peer;
+  assert.equal(peer.name, 'Marcos Henrique Souza');
+  assert.equal(peer.handle, 'marcao_2024');
+  // Comentário mostra o @
+  const post = (await pro.post('/api/social/texts', { text: 'Bom dia!', font: 'padrao' })).data;
+  const c = (await b.post(`/api/social/posts/${post.id}/comments`, { body: 'Bom dia!' })).data;
+  assert.equal(c.author.name, '@marcao_2024');
+  // Curtida: o profissional vê o @ de quem curtiu
+  await b.post(`/api/social/posts/${post.id}/like`);
+  const n = (await pro.get('/api/social/notifications')).data.items.find((x) => x.type === 'like_post');
+  assert.match(n.text, /@marcao_2024 curtiu/);
 });

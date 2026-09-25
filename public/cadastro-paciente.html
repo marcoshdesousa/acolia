@@ -22,6 +22,10 @@
     <form class="card" data-form novalidate>
       <div class="field"><label for="name">Nome completo</label><input id="name" name="name" autocomplete="name" required maxlength="120">
         <div class="hint">Igual ao que consta no seu CPF.</div></div>
+      <div class="field"><label for="handle">Seu @ <span class="muted small" style="font-weight:600">(opcional)</span></label>
+        <div class="row" style="gap:8px;flex-wrap:nowrap"><div class="slug-input grow"><span>@</span><input id="handle" name="handle" maxlength="31" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="seu.arroba"></div>
+          <button type="button" class="btn secondary sm" data-gen-handle>Gerar @</button></div>
+        <div class="hint">É como você aparece nos comentários e curtidas (seu nome não aparece para outras pessoas). Se deixar em branco, criamos um para você. Dá para trocar depois.</div></div>
       <div class="field"><label for="cpf">CPF</label><input id="cpf" name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" required>
         <div class="hint" data-cpf-hint>Precisa ser um CPF válido. Você vai usá-lo para entrar. Não dá para mudar depois.</div></div>
       <div class="field"><label for="birth">Data de nascimento</label><input id="birth" name="birth_date" type="date" required max="">
@@ -48,6 +52,11 @@
     const { $, api, ICONS, handleForm, maskCpf, isValidCpf, ufOptions, bindUfCity } = Acolia;
     $('[data-logo]').innerHTML = ICONS.logo;
     const form = $('[data-form]');
+    // "Gerar @" a partir do nome (o servidor confere se está livre; em branco, ele cria um)
+    $('[data-gen-handle]').addEventListener('click', () => {
+      const w = form.name.value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(Boolean);
+      form.handle.value = `${(w.slice(0, 2).join('.') || 'paciente').slice(0, 22)}${Math.floor(10 + Math.random() * 9989)}`;
+    });
     const next = new URLSearchParams(location.search).get('next');
     const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
     if (safeNext) $('a[href="/entrar"]').href = '/entrar?next=' + encodeURIComponent(safeNext);

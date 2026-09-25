@@ -43,12 +43,14 @@
         <div class="card stack">
           <div class="row">
             <span data-photo></span>
-            <div class="grow"><div style="font-weight:800" data-name></div><div class="muted small" data-cpf></div><div class="muted small" data-birth></div><div class="muted small" data-loc></div></div>
+            <div class="grow"><div style="font-weight:800" data-name></div><div class="small handle-line" data-handle></div><div class="muted small" data-cpf></div><div class="muted small" data-birth></div><div class="muted small" data-loc></div></div>
           </div>
           <label class="btn secondary sm" style="width:max-content;margin:0">Trocar foto<input type="file" accept="image/jpeg,image/png,image/webp" data-photo-input hidden></label>
           <form data-profile-form>
-            <div class="field"><label for="dn">Nome exibido no chat</label><input id="dn" name="display_name" maxlength="60" placeholder="Como quer ser chamado(a)">
-              <div class="hint">Seu nome completo (do CPF) continua registrado e é ele que vai nos documentos (atestado, receita, encaminhamento).</div></div>
+            <div class="field"><label for="hd">Seu @</label>
+              <div class="row" style="gap:8px;flex-wrap:nowrap"><div class="slug-input grow"><span>@</span><input id="hd" name="handle" maxlength="31" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="seu.arroba"></div>
+                <button type="button" class="btn secondary sm" data-gen-handle>Gerar @</button></div>
+              <div class="hint">É assim que você aparece nos comentários e curtidas (o seu nome não aparece para outras pessoas). Cada @ é único. Para os profissionais com quem você conversa aparece o seu nome completo, com o @ embaixo.</div></div>
             <div class="field"><label>Onde você mora</label>
               <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
             <p class="small muted" style="margin:0 0 12px">Nome completo, CPF e data de nascimento não podem ser alterados.</p>
@@ -116,17 +118,22 @@
     $$('[data-i]').forEach((el) => { el.outerHTML = ICONS[el.dataset.i]; });
 
     function renderMe() {
-      $('[data-me-avatar]').innerHTML = '<a href="#config" aria-label="Configurações">' + avatar(me.display_name || me.name, me.photo, 'sm') + '</a>';
+      $('[data-me-avatar]').innerHTML = '<a href="#config" aria-label="Configurações">' + avatar(me.name, me.photo, 'sm') + '</a>';
       $('[data-photo]').innerHTML = avatar(me.name, me.photo, 'lg');
       $('[data-name]').textContent = me.name;
+      $('[data-handle]').textContent = me.handle ? '@' + me.handle : '';
       $('[data-cpf]').textContent = 'CPF ' + me.cpf_masked;
       $('[data-birth]').textContent = me.birth_date ? 'Nascimento ' + me.birth_date.split('-').reverse().join('/') : '';
       $('[data-loc]').textContent = me.city + ' - ' + me.state;
       const pf = $('[data-profile-form]');
-      pf.display_name.value = me.display_name;
+      pf.handle.value = me.handle || '';
       pf.state.value = me.state; pf.city.value = me.city;
     }
     const pf0 = $('[data-profile-form]');
+    // "Gerar @": sugere um @ livre (pelo nome); salva ao tocar em Salvar
+    $('[data-gen-handle]').addEventListener('click', async () => {
+      try { pf0.handle.value = (await api('/api/patient/handle/suggest')).handle; pf0.handle.focus(); } catch (e) { toast(e.message, 'error'); }
+    });
     pf0.state.innerHTML = Acolia.ufOptions(me.state, 'UF');
     Acolia.bindUfCity(pf0.state, pf0.city);
     renderMe();
