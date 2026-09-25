@@ -1131,7 +1131,8 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 .cal-day.on { opacity: 1; background: var(--primary-soft); color: var(--primary-strong); font-weight: 800; cursor: pointer; }
 .cal-day.today { box-shadow: inset 0 0 0 2px var(--line); }
 .cal-day.sel { background: var(--primary); color: var(--on-primary, #fff); }
-.cal-legend { margin: 10px 0 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cal-legend { margin: 10px 0 0; }
+.cal-legend .cal-dot { display: inline-block; vertical-align: -1px; margin-right: 4px; }
 .cal-dot { width: 12px; height: 12px; border-radius: 4px; background: var(--primary-soft); box-shadow: inset 0 0 0 1px var(--primary); }
 .slots-title { margin: 18px 0 8px; }
 .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: 8px; }
