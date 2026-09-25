@@ -1072,3 +1072,7 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 .sp-all { display: flex; flex-wrap: wrap; gap: 8px; }
 .sp-all .badge { font-size: .88rem; padding: 5px 12px; white-space: normal; }
 .meta .badge { max-width: 100%; white-space: normal; }
+/* Versão 1.1.2: "Mensagem" no comentário do paciente (só para o profissional dono da publicação) */
+.comment .c-head a { color: inherit; text-decoration: none; }
+.comment .c-msg { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-strong) !important; font-size: .74rem; font-weight: 800; }
+.comment .c-msg svg { width: 14px; height: 14px; }

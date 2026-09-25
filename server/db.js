@@ -235,6 +235,8 @@ addColumn('messages', 'hidden_for_professional', 'INTEGER NOT NULL DEFAULT 0');
 // mesmo se as mensagens forem apagadas depois
 addColumn('calls', 'conversation_id', 'INTEGER'); // atendimento criado pela conversa (horário do último atendimento nos documentos)
 addColumn('conversations', 'patient_wrote', 'INTEGER NOT NULL DEFAULT 0');
+// Versão 1.1.2: o profissional abre conversa com o paciente que comentou numa publicação dele
+addColumn('conversations', 'pro_started', 'INTEGER NOT NULL DEFAULT 0');
 db.exec(`UPDATE conversations SET patient_wrote = 1 WHERE patient_wrote = 0
   AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = conversations.id AND m.sender_role = 'patient')`);
 // Chat: bloquear alguém (só as mensagens: quem foi bloqueado não consegue mais mandar mensagem)

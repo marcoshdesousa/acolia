@@ -2064,6 +2064,57 @@ test('especialidades: pelo menos uma no cadastro e no perfil, sem máximo, filtr
   assert.equal(shared.video, '/uploads/v.mp4', 'link compartilhado toca o vídeo para qualquer pessoa');
 });
 
+test('versão 1.1.2: dono da publicação manda mensagem para o paciente que comentou; perfis de profissionais nos comentários', async () => {
+  const mkPro = async (name, email, phone, crp) => {
+    const r = await admin.post('/api/admin/professionals', { name, profession: 'Psicólogo(a)', registry: crp, email, phone, state: 'SP', city: 'Campinas' });
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    const cl = client();
+    await cl.post('/api/auth/professional/login', { login: r.data.code, password: r.data.password });
+    return { cl, id: r.data.id };
+  };
+  const A = await mkPro('Alice Dono Prado', 'alice.dono@example.com', '11915151515', 'CRP 06/40111');
+  const B = await mkPro('Bruno Outro Prado', 'bruno.outro@example.com', '11914141414', 'CRP 06/40222');
+  const pt = client();
+  const reg = await pt.post('/api/auth/patient/register', { name: 'Clara Comenta Dias', cpf: '274.658.193-00', state: 'SP', city: 'Campinas', birth_date: '1992-03-04', password: '123456' });
+  assert.equal(reg.status, 201, JSON.stringify(reg.data));
+  const post = (await A.cl.post('/api/social/texts', { text: 'Cuidar de si é importante.', font: 'padrao' })).data;
+  const cPat = (await pt.post(`/api/social/posts/${post.id}/comments`, { body: 'Preciso de ajuda com ansiedade' })).data;
+  const cB = (await B.cl.post(`/api/social/posts/${post.id}/comments`, { body: 'Ótimo texto!' })).data;
+  const cA = (await A.cl.post(`/api/social/posts/${post.id}/comments`, { body: 'Obrigada!' })).data;
+  const view = async (cl) => Object.fromEntries((await cl.get(`/api/social/posts/${post.id}/comments`)).data.items.map((c) => [c.id, c]));
+  // Dono (A): pode mandar mensagem para o paciente e abrir o perfil de B
+  let v = await view(A.cl);
+  assert.equal(v[cPat.id].can_message, true);
+  assert.equal(v[cB.id].can_open_profile, true);
+  assert.equal(v[cB.id].can_message, false, 'profissional não manda mensagem para profissional');
+  // Outro profissional (B): não toca no paciente, mas abre o perfil do dono
+  v = await view(B.cl);
+  assert.equal(v[cPat.id].can_message, false);
+  assert.equal(v[cPat.id].can_open_profile, false);
+  assert.equal(v[cA.id].can_open_profile, true);
+  // Paciente: só toca no profissional que postou
+  v = await view(pt);
+  assert.equal(v[cA.id].can_open_profile, true, 'dono da publicação');
+  assert.equal(v[cB.id].can_open_profile, false, 'outro profissional que comentou: não');
+  // Abrir a conversa: só o dono, só com paciente que comentou
+  assert.equal((await B.cl.post('/api/chat/conversations', { comment_id: cPat.id })).status, 403, 'outro profissional não');
+  assert.equal((await A.cl.post('/api/chat/conversations', { comment_id: cB.id })).status, 403, 'comentário de profissional não');
+  assert.equal((await A.cl.post('/api/chat/conversations', { professional_id: B.id })).status, 403);
+  const conv = (await A.cl.post('/api/chat/conversations', { comment_id: cPat.id })).data;
+  assert.ok(conv.id);
+  assert.ok((await A.cl.get('/api/chat/conversations')).data.items.some((c) => c.id === conv.id), 'aparece para o profissional');
+  assert.ok(!(await pt.get('/api/chat/conversations')).data.items.some((c) => c.id === conv.id), 'paciente ainda não vê (sem mensagem)');
+  assert.equal((await pt.get(`/api/chat/conversations/${conv.id}`)).status, 404);
+  let r = await A.cl.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Olá, Clara! Vi seu comentário. Posso te ajudar.' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const list = (await pt.get('/api/chat/conversations')).data.items;
+  assert.ok(list.some((c) => c.id === conv.id && c.unread === 1), 'depois da mensagem o paciente vê, com 1 nova');
+  r = await pt.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Oi! Obrigada.' });
+  assert.equal(r.status, 201);
+  // Abrir de novo pelo comentário volta para a mesma conversa
+  assert.equal((await A.cl.post('/api/chat/conversations', { comment_id: cPat.id })).data.id, conv.id);
+});
+
 test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {
   const { db } = require('../server/db');
   const R = require('../server/launchReset');

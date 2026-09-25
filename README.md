@@ -32,7 +32,13 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 
 No chat, paciente e profissional podem mandar **mensagens de voz** no estilo WhatsApp (barrinhas da voz ao vivo, parar e ouvir antes de enviar; até 5 minutos). O áudio é gravado em WAV, que toca em qualquer celular, fica numa pasta privada e só quem participa da conversa ouve. Fotos e vídeos não são aceitos.
 
-O profissional só vê uma conversa depois que o paciente manda a primeira mensagem — o profissional nunca inicia conversa.
+O profissional só vê uma conversa depois que o paciente manda a primeira mensagem. A única exceção é a da versão 1.1.2, abaixo.
+
+**Versão 1.1.2 — tocar em quem comentou:**
+- O **profissional dono da publicação** (foto, vídeo ou texto) toca no **paciente** que comentou (no nome, na foto ou no botão "Mensagem") e vai direto para a conversa com ele. O paciente só vê a conversa quando chega a primeira mensagem.
+- **Outro profissional** que vê o mesmo comentário **não** consegue tocar no paciente.
+- Profissional toca em **outro profissional** que comentou e abre o **perfil** dele. Ele segue, curte e comenta, mas **não manda mensagem** para profissional.
+- **Paciente** só toca no **profissional que postou**, e não nos outros profissionais que comentaram.
 
 A chamada é ponto a ponto (WebRTC): o áudio e o vídeo não passam pelo servidor nem ficam gravados.
 

@@ -192,12 +192,17 @@
     window.open(`https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`, '_blank', 'noopener');
   }
 
+  // Versão 1.1.2: o servidor diz em quem dá para tocar — perfil de profissional (can_open_profile) ou,
+  // para o dono da publicação, a conversa com o paciente que comentou (can_message)
   function commentHtml(c) {
+    const link = c.can_open_profile ? `data-open-pro="${c.author.id}"` : c.can_message ? `data-msg-patient="${c.id}" title="Mandar mensagem para ${esc(c.author.name)}"` : '';
+    const wrap = (inner) => (link ? `<a href="#" ${link}>${inner}</a>` : inner);
     return `<li class="comment" data-comment="${c.id}">
-      ${c.author.role === 'professional' ? `<a href="#" data-open-pro="${c.author.id}">${avatar(c.author.name, c.author.photo, 'sm')}</a>` : avatar(c.author.name, c.author.photo, 'sm')}
+      ${wrap(avatar(c.author.name, c.author.photo, 'sm'))}
       <div class="grow">
-        <div class="c-head">${c.author.role === 'professional' ? `<a href="#" data-open-pro="${c.author.id}"><b>${esc(c.author.name)}</b></a>` : `<b>${esc(c.author.name)}</b>`}
-          ${c.author.subtitle ? `<small class="muted">${esc(c.author.subtitle)}</small>` : ''}</div>
+        <div class="c-head">${wrap(`<b>${esc(c.author.name)}</b>`)}
+          ${c.author.subtitle ? `<small class="muted">${esc(c.author.subtitle)}</small>` : ''}
+          ${c.can_message ? `<a href="#" class="c-msg" data-msg-patient="${c.id}">${ic('chat', 14)} Mensagem</a>` : ''}</div>
         <div class="c-body">${esc(c.body)}</div>
         <small class="muted">${esc(timeAgo(c.created_at))}</small>
       </div>
@@ -246,10 +251,32 @@
             return;
           }
           const pro = e.target.closest('[data-open-pro]');
-          if (pro) { e.preventDefault(); dlg.close(); dlg.remove(); openProfile(Number(pro.dataset.openPro)); }
+          if (pro) { e.preventDefault(); dlg.close(); dlg.remove(); openProfile(Number(pro.dataset.openPro)); return; }
+          const mp = e.target.closest('[data-msg-patient]');
+          if (mp) {
+            e.preventDefault();
+            try {
+              const conv = await api('/api/chat/conversations', { method: 'POST', body: { comment_id: Number(mp.dataset.msgPatient) } });
+              dlg.close(); dlg.remove();
+              await closeOverlays();
+              if (location.pathname === '/painel') location.hash = `conversas/${conv.id}`;
+              else location.href = `/painel#conversas/${conv.id}`;
+            } catch (ex) { toast(ex.message, 'error'); }
+          }
         });
       },
     });
+  }
+
+  // Fecha publicação aberta e Reels antes de ir para a conversa
+  async function closeOverlays() {
+    $$('dialog[open]').forEach((d) => { try { d.close(); } catch { /* já fechado */ } d.remove(); });
+    const rv = $('.reels-view');
+    if (rv) {
+      $$('video', rv).forEach((v) => v.pause());
+      $('[data-rv-close]', rv)?.click();
+      await new Promise((ok) => setTimeout(ok, 350));
+    }
   }
 
   function openProfile(id) {

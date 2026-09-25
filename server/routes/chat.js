@@ -13,7 +13,11 @@ const MSG_COLS = 'id, conversation_id, sender_role, kind, body, read_at, created
 
 // O profissional só enxerga a conversa depois que o paciente manda a primeira mensagem
 // (o profissional nunca inicia conversa nem vê quem só abriu o chat).
-const PATIENT_WROTE = 'c.patient_wrote = 1';
+// O profissional só vê a conversa depois que o paciente escreve — ou quando foi ele que abriu
+// (versão 1.1.2: pelo comentário do paciente numa publicação dele)
+const PATIENT_WROTE = '(c.patient_wrote = 1 OR c.pro_started = 1)';
+// Conversa aberta pelo profissional só aparece para o paciente quando chega a primeira mensagem
+const PATIENT_SEES = 'NOT (c.pro_started = 1 AND c.patient_wrote = 0 AND c.last_message_at IS NULL)';
 
 // ---------- Apagar e bloquear ----------
 // Apagar mensagem (uma a uma, só as suas): é para todos — o conteúdo sai do banco e os DOIS lados
@@ -56,7 +60,7 @@ function side(req) {
 
 function loadConversation(req, id) {
   const s = side(req);
-  const onlyWritten = req.auth.role === 'professional' ? ` AND ${PATIENT_WROTE}` : '';
+  const onlyWritten = req.auth.role === 'professional' ? ` AND ${PATIENT_WROTE}` : ` AND ${PATIENT_SEES}`;
   const c = db.prepare(`SELECT * FROM conversations c WHERE id = ? AND ${s.col} = ?${onlyWritten}`).get(Number(id), req.auth.user.id);
   if (!c) throw new U.HttpError(404, 'Conversa não encontrada.');
   return c;
@@ -85,7 +89,7 @@ function summarize(role, c) {
 router.get('/conversations', (req, res) => {
   const s = side(req);
   const archived = req.query.archived === '1' ? 1 : 0;
-  const onlyWritten = req.auth.role === 'professional' ? ` AND ${PATIENT_WROTE}` : '';
+  const onlyWritten = req.auth.role === 'professional' ? ` AND ${PATIENT_WROTE}` : ` AND ${PATIENT_SEES}`;
   const notBlocked = 'AND NOT EXISTS (SELECT 1 FROM chat_blocks b WHERE b.conversation_id = c.id AND b.blocker_role = ?)';
   const rows = db.prepare(`SELECT * FROM conversations c WHERE ${s.col} = ? AND ${s.archivedCol} = ?${onlyWritten} ${notBlocked}
     ORDER BY COALESCE(last_message_at, created_at) DESC`).all(req.auth.user.id, archived, req.auth.role);
@@ -101,8 +105,26 @@ router.get('/conversations/:id', (req, res) => {
   res.json(summarize(req.auth.role, loadConversation(req, req.params.id)));
 });
 
-// Paciente abre (ou retoma) conversa com um profissional
+// Paciente abre (ou retoma) conversa com um profissional.
+// Profissional (versão 1.1.2): só com o paciente que comentou numa publicação DELE (manda o comment_id).
 router.post('/conversations', (req, res) => {
+  if (req.auth.role === 'professional') {
+    const cm = db.prepare(`SELECT c.role, c.user_id, p.professional_id FROM post_comments c JOIN posts p ON p.id = c.post_id WHERE c.id = ?`).get(Number(req.body.comment_id));
+    if (!cm || cm.role !== 'patient' || cm.professional_id !== req.auth.user.id) {
+      throw new U.HttpError(403, 'Você só pode mandar mensagem para pacientes que comentaram nas suas publicações.');
+    }
+    const pt = db.prepare('SELECT id, status FROM patients WHERE id = ?').get(cm.user_id);
+    if (!pt || pt.status !== 'ativo') throw new U.HttpError(403, 'Esta conta não está mais ativa na plataforma.');
+    let c = db.prepare('SELECT * FROM conversations WHERE patient_id = ? AND professional_id = ?').get(pt.id, req.auth.user.id);
+    if (!c) {
+      const info = db.prepare('INSERT INTO conversations (patient_id, professional_id, pro_started) VALUES (?, ?, 1)').run(pt.id, req.auth.user.id);
+      c = db.prepare('SELECT * FROM conversations WHERE id = ?').get(Number(info.lastInsertRowid));
+    } else {
+      db.prepare('UPDATE conversations SET pro_started = 1, archived_by_professional = 0 WHERE id = ?').run(c.id);
+      c = db.prepare('SELECT * FROM conversations WHERE id = ?').get(c.id);
+    }
+    return res.json(summarize('professional', c));
+  }
   if (req.auth.role !== 'patient') throw new U.HttpError(403, 'Somente pacientes iniciam conversas.');
   const proId = Number(req.body.professional_id);
   let c = db.prepare('SELECT * FROM conversations WHERE patient_id = ? AND professional_id = ?').get(req.auth.user.id, proId);

@@ -462,10 +462,17 @@ router.delete('/posts/:id/like', (req, res) => {
 });
 
 // ---------- Comentários (só texto) ----------
+// Versão 1.1.2 — tocar em quem comentou:
+// - profissional toca em outro profissional → abre o perfil (paciente só no profissional que postou)
+// - o profissional dono da publicação toca num paciente → abre a conversa com ele (outros profissionais não)
 function commentOut(c, me, postOwner) {
+  const mine = c.role === me.role && c.user_id === me.id;
+  const author = actor(c.role, c.user_id);
   return {
-    id: c.id, body: c.body, created_at: c.created_at, author: actor(c.role, c.user_id),
-    can_delete: (c.role === me.role && c.user_id === me.id) || (me.role === 'professional' && me.id === postOwner),
+    id: c.id, body: c.body, created_at: c.created_at, author,
+    can_delete: mine || (me.role === 'professional' && me.id === postOwner),
+    can_open_profile: !mine && c.role === 'professional' && (me.role === 'professional' || c.user_id === postOwner),
+    can_message: me.role === 'professional' && me.id === postOwner && c.role === 'patient' && author.name !== 'Conta excluída',
   };
 }
 
