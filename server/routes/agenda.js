@@ -175,14 +175,17 @@ router.get('/appointments', (req, res) => {
   const scope = req.query.scope || 'upcoming';
   let rows;
   if (scope === 'all') {
-    rows = db.prepare(`SELECT * FROM appointments WHERE ${col} = ? AND status NOT IN ('expirada', 'cancelada') ORDER BY start_at DESC LIMIT 200`).all(req.auth.user.id);
+    rows = db.prepare(`SELECT * FROM appointments WHERE ${col} = ? AND status NOT IN ('expirada', 'cancelada', 'nao_realizada') ORDER BY start_at DESC LIMIT 200`).all(req.auth.user.id);
   } else {
     // Próximas: as que ainda valem (e a que está acontecendo agora)
     rows = db.prepare(`SELECT * FROM appointments WHERE ${col} = ? AND status IN (${G.ACTIVE.map(() => '?').join(', ')}) AND end_at > ? ORDER BY start_at`)
       .all(req.auth.user.id, ...G.ACTIVE, G.iso(G.now() - 30 * MIN));
     // Reembolso pendente fica aparecendo mesmo depois do horário
     const pend = db.prepare(`SELECT * FROM appointments WHERE ${col} = ? AND status = 'reembolso_pendente' AND end_at <= ?`).all(req.auth.user.id, G.iso(G.now() - 30 * MIN));
-    rows = [...rows, ...pend];
+    // Presencial que já passou do horário e o profissional ainda não disse se aconteceu (só ele vê)
+    const toCheck = isPatient(req) ? [] : db.prepare(`SELECT * FROM appointments WHERE professional_id = ? AND modality = 'presencial' AND status = 'confirmada' AND end_at <= ? ORDER BY start_at`)
+      .all(req.auth.user.id, G.iso(G.now() - 30 * MIN));
+    rows = [...rows, ...pend, ...toCheck];
   }
   res.json({ items: rows.map((a) => G.view(a, role(req))), rules: G.RULES, reasons: G.CANCEL_REASONS });
 });
@@ -364,6 +367,17 @@ router.post('/appointments/:id/pro-cancel', (req, res) => {
   if (!G.canDo(a, 'professional').pro_cancel) throw new U.HttpError(403, `Só dá para avisar que não vai atender até ${G.RULES.PRO_CANCEL_H} horas antes da consulta.`);
   const upd = G.setStatus(a.id, { status: 'aguardando_paciente', cancel_detail: U.cleanText(req.body.detail, 500) || null });
   G.post(upd, 'professional', 'pro_cancelou');
+  G.notifyBoth(upd);
+  res.json(G.view(upd, role(req)));
+});
+
+// Presencial: a consulta aconteceu? Sim → concluída (entra em Meus pacientes). Não → some (sem justificativa)
+router.post('/appointments/:id/presencial-result', (req, res) => {
+  if (!isPro(req)) throw new U.HttpError(403, 'Só o profissional confirma.');
+  const a = loadMine(req, req.params.id);
+  if (!G.canDo(a, 'professional').presence_check) throw new U.HttpError(409, 'Esta consulta presencial ainda não chegou no horário (ou já foi respondida).');
+  const upd = req.body.done ? G.setStatus(a.id, { status: 'concluida' }) : G.setStatus(a.id, { status: 'nao_realizada' });
+  if (req.body.done) G.post(upd, 'professional', 'concluida');
   G.notifyBoth(upd);
   res.json(G.view(upd, role(req)));
 });

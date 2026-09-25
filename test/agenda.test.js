@@ -675,9 +675,17 @@ test('versão 1.2.1: consulta presencial (confirma a cidade, localização com m
   assert.equal(G.getAppt(a.id).call_id, null, 'presencial não tem chamada');
   clock = Date.parse(cur.end_at) + 31 * 60e3;
   await G.sweep();
-  assert.equal(G.getAppt(a.id).status, 'concluida');
+  assert.equal(G.getAppt(a.id).status, 'confirmada', 'presencial não conclui sozinha: o profissional confirma');
+  // Aparece na lista do profissional pedindo "aconteceu?" (o paciente não vê mais)
+  let up = (await K.cl.get('/api/agenda/appointments')).data.items.find((x) => x.id === a.id);
+  assert.equal(up.can.presence_check, true);
+  assert.ok(!(await carla.get('/api/agenda/appointments')).data.items.some((x) => x.id === a.id));
+  assert.equal((await carla.post(`/api/agenda/appointments/${a.id}/presencial-result`, { done: true })).status, 403);
+  r = await K.cl.post(`/api/agenda/appointments/${a.id}/presencial-result`, { done: true });
+  assert.equal(r.data.status, 'concluida');
   m = await msgs(carla, a.conversation_id);
   assert.equal(m.at(-1).event, 'concluida');
+  assert.equal((await K.cl.post(`/api/agenda/appointments/${a.id}/presencial-result`, { done: false })).status, 409, 'já respondida');
   clock = back;
   // Profissional marca pelo chat: convênio (sem Pix) já fica agendada; presencial manda a localização
   const conv = a.conversation_id;
@@ -693,6 +701,16 @@ test('versão 1.2.1: consulta presencial (confirma a cidade, localização com m
   const s3 = (await K.cl.get(`/api/agenda/pro/${K.id}/day?date=2030-02-07&patient_id=${G.getAppt(a.id).patient_id}`)).data.slots;
   r = await K.cl.post('/api/agenda/propose', { conversation_id: conv, start: s3[0].start, billing: 'convenio', modality: 'presencial' });
   assert.equal(r.data.status, 'confirmada');
+  // Antes do horário não dá para responder; depois, "Não aconteceu" some (e não entra em Meus pacientes)
+  const naoId = r.data.id;
+  assert.equal((await K.cl.post(`/api/agenda/appointments/${naoId}/presencial-result`, { done: false })).status, 409);
+  const keep0 = clock;
+  clock = Date.parse(G.getAppt(naoId).start_at) + 5 * 60e3;
+  r = await K.cl.post(`/api/agenda/appointments/${naoId}/presencial-result`, { done: false });
+  assert.equal(r.data.status, 'nao_realizada');
+  assert.ok(!(await K.cl.get('/api/agenda/appointments')).data.items.some((x) => x.id === naoId));
+  assert.ok(!(await K.cl.get('/api/agenda/appointments?scope=all')).data.items.some((x) => x.id === naoId));
+  clock = keep0;
   m = await msgs(carla, conv);
   assert.equal(m.at(-1).kind, 'location');
   // Presencial pelo Pix: fica esperando o pagamento, como a online

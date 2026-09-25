@@ -517,7 +517,8 @@ async function sweep() {
       await refund(a, 'profissional_cancelou');
     }
     // Fim: 30 minutos depois do horário de término, a consulta está concluída
-    for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'confirmada' AND end_at <= ?").all(iso(t - RULES.DONE_AFTER_MIN * MIN))) {
+    // (presencial não: o profissional confirma se a consulta aconteceu — "Sim" vai para Meus pacientes, "Não" some)
+    for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'confirmada' AND modality = 'online' AND end_at <= ?").all(iso(t - RULES.DONE_AFTER_MIN * MIN))) {
       closeCall(a);
       const upd = setStatus(a.id, { status: 'concluida' });
       post(upd, 'professional', a.modality === 'presencial' ? 'concluida' : 'finalizada');
@@ -568,6 +569,8 @@ function canDo(a, role) {
     c.refund_done = a.status === 'reembolso_pendente' && a.refund_status === 'pedido';
     // "Cancelar agendamento" antes do pagamento (profissional ou secretária)
     c.withdraw = HOLDING.includes(a.status);
+    // Presencial: a partir do horário, o profissional (ou a secretária) diz se aconteceu
+    c.presence_check = a.modality === 'presencial' && a.status === 'confirmada' && t >= start;
   }
   c.enter_call = a.status === 'confirmada' && !!a.call_id && a.modality !== 'presencial';
   return c;

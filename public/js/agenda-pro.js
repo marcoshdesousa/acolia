@@ -17,19 +17,37 @@
   let els = null;
   let settings = null;
 
-  // ---------- Próximas consultas ----------
+  // ---------- Próximas consultas e Presenciais ----------
+  // Aba "Presenciais": as consultas no consultório. Do horário em diante, pergunta se aconteceu:
+  // "Sim" → vai para Meus pacientes; "Não" → some (sem justificativa)
+  let tab = 'next';
+  const HOLD_OR_ON = ['confirmada', 'aguardando_pagamento', 'aguardando_pix', 'pagamento_recusado', 'aguardando_paciente'];
+  function apptCard(a) {
+    const check = a.can.presence_check;
+    return `<div class="appt-item ${check ? 'needs-check' : ''}">
+        <div class="row" style="gap:10px;align-items:flex-start;flex-wrap:nowrap">${avatar(a.patient.name, a.patient.photo, 'sm')}<div class="grow" style="min-width:0"><b>${esc(a.patient.name)}</b>
+          <div class="small muted appt-meta">${ic(a.modality === 'presencial' ? 'home' : 'video', 14)} ${a.modality === 'presencial' ? 'Presencial' : 'Online'} · ${esc(a.when)} · ${a.minutes} min · ${a.billing === 'convenio' ? 'convênio' : `${a.price_cents != null ? money(a.price_cents) : ''} · ${a.mode === 'auto' ? 'Pix automático' : 'Pix manual'}`}</div><div style="margin-top:4px">${G.badge(a)}</div></div></div>
+        ${check ? `<div class="presence-q">${ic('home', 16)}<b>Esta consulta presencial aconteceu?</b></div>`
+          : a.status === 'confirmada' ? `<div class="small appt-left">Faltam <b data-cd="${esc(a.start_at)}">${G.countdown(Date.parse(a.start_at) - Date.now())}</b>${a.can.pro_cancel ? '' : ' · <span class="muted">com menos de 24 h você não pode mais desmarcar</span>'}</div>` : ''}
+        <div class="bk-actions">${G.buttons(a, 'professional')}<button type="button" class="btn sm ghost" data-ag-act="chat" data-ag-id="${a.id}">${ic('chat', 16)} Conversa</button></div>
+      </div>`;
+  }
   async function renderAppts() {
     const box = els.appts;
     const list = await G.loadUpcoming();
-    const cards = list.map((a) => `<div class="appt-item">
-        <div class="row" style="gap:10px;align-items:flex-start;flex-wrap:nowrap">${avatar(a.patient.name, a.patient.photo, 'sm')}<div class="grow" style="min-width:0"><b>${esc(a.patient.name)}</b>
-          <div class="small muted">${esc(a.when)} · ${a.minutes} min · ${a.price_cents != null ? money(a.price_cents) : ''} · ${a.mode === 'auto' ? 'Pix automático' : 'Pix manual'}</div><div style="margin-top:4px">${G.badge(a)}</div></div></div>
-        ${a.status === 'confirmada' ? `<div class="small appt-left">Faltam <b data-cd="${esc(a.start_at)}">${G.countdown(Date.parse(a.start_at) - Date.now())}</b>${a.can.pro_cancel ? '' : ' · <span class="muted">com menos de 24 h você não pode mais desmarcar</span>'}</div>` : ''}
-        <div class="bk-actions">${G.buttons(a, 'professional')}<button type="button" class="btn sm ghost" data-ag-act="chat" data-ag-id="${a.id}">${ic('chat', 16)} Conversa</button></div>
-      </div>`).join('');
-    box.innerHTML = `<div class="card stack"><div class="row between"><h2 style="margin:0">Próximas consultas</h2><button type="button" class="btn sm ghost" data-hist>Histórico</button></div>
-      ${list.length ? `<div class="appt-list">${cards}</div>` : '<p class="muted" style="margin:0">Nenhuma consulta marcada ainda. Quando um paciente marcar pela sua agenda (ou você marcar pelo chat), ela aparece aqui.</p>'}</div>`;
+    const pres = list.filter((a) => a.modality === 'presencial' && HOLD_OR_ON.includes(a.status));
+    const pending = pres.filter((a) => a.can.presence_check).length;
+    const shown = tab === 'pres' ? pres : list;
+    const empty = tab === 'pres' ? 'Você não tem nenhuma consulta presencial agendada.'
+      : 'Nenhuma consulta marcada ainda. Quando um paciente marcar pela sua agenda (ou você marcar pelo chat), ela aparece aqui.';
+    box.innerHTML = `<div class="card stack"><div class="row between"><h2 style="margin:0">Consultas</h2><button type="button" class="btn sm ghost" data-hist>Histórico</button></div>
+      <div class="tabs-2" role="tablist">
+        <button type="button" role="tab" class="${tab === 'next' ? 'on' : ''}" data-tab="next">${ic('calendar', 16)} Próximas</button>
+        <button type="button" role="tab" class="${tab === 'pres' ? 'on' : ''}" data-tab="pres">${ic('home', 16)} Presenciais${pending ? ` <span class="nav-badge static">${pending}</span>` : ''}</button></div>
+      ${tab === 'pres' && pres.length ? '<p class="small muted" style="margin:0">Do horário em diante, cada consulta pergunta se aconteceu. <b>Sim</b>: o paciente entra em Meus pacientes. <b>Não</b>: ela sai da lista.</p>' : ''}
+      ${shown.length ? `<div class="appt-list">${shown.map(apptCard).join('')}</div>` : `<p class="muted" style="margin:0">${empty}</p>`}</div>`;
     $('[data-hist]', box).addEventListener('click', openHistory);
+    $$('[data-tab]', box).forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; renderAppts(); }));
   }
 
   async function openHistory() {

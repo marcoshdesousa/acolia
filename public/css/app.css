@@ -1370,3 +1370,11 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .opt { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; }
 .opt-txt small { white-space: normal; overflow: visible; }
 .opt-check { top: 10px; right: 10px; }
+.tabs-2 { display: flex; gap: 6px; background: var(--surface-2, #f1f0eb); border-radius: 999px; padding: 4px; }
+.tabs-2 button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; background: none; font: inherit; font-weight: 700; color: var(--muted); padding: 9px 10px; border-radius: 999px; cursor: pointer; }
+.tabs-2 button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.nav-badge.static { position: static; display: inline-grid; margin-left: 2px; }
+.appt-meta svg { vertical-align: -2px; }
+.appt-item.needs-check { border-color: var(--accent, #8a7362); }
+.presence-q { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft, #eee8e2); }
+.presence-q svg { color: var(--accent, #8a7362); flex: none; }

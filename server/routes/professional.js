@@ -293,7 +293,7 @@ function myPatients(proId, { q = '', from = '', to = '', modality = '' } = {}) {
         MIN(date(datetime(a.start_at), '-3 hours')) AS primeira, MAX(date(datetime(a.start_at), '-3 hours')) AS ultima
       FROM appointments a JOIN patients pa ON pa.id = a.patient_id AND pa.status <> 'excluido'
       LEFT JOIN pro_patient_hidden h ON h.professional_id = a.professional_id AND h.patient_id = pa.id
-      WHERE a.professional_id = ? AND a.modality = 'presencial' AND a.status IN ('concluida', 'confirmada') AND datetime(a.start_at) <= datetime(?)
+      WHERE a.professional_id = ? AND a.modality = 'presencial' AND a.status = 'concluida' AND datetime(a.start_at) <= datetime(?)
         AND (h.patient_id IS NULL OR datetime(a.start_at) > h.hidden_at)
         AND (? IS NULL OR datetime(a.start_at) >= datetime(? || ' 00:00:00', '+3 hours'))
         AND (? IS NULL OR datetime(a.start_at) <= datetime(? || ' 23:59:59', '+3 hours'))

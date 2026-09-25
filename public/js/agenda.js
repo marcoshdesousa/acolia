@@ -40,6 +40,7 @@
     expirada: ['Tempo esgotado', ''],
     concluida: ['Concluída', ''],
     paciente_ausente: ['Paciente não entrou', 'danger'],
+    nao_realizada: ['Não aconteceu', ''],
   };
   const badge = (a) => { const [t, c] = STATUS[a.status] || [a.status, '']; return `<span class="badge ${c}">${esc(t)}</span>`; };
 
@@ -514,6 +515,15 @@
           toast('Pronto! Agora mande a foto do comprovante na conversa.');
           break;
         case 'see': openDetail(a); return;
+        case 'presence_yes':
+          await api(`/api/agenda/appointments/${a.id}/presencial-result`, { method: 'POST', body: { done: true } });
+          toast('Consulta registrada ✓ O paciente entrou em Meus pacientes.', '', { top: true });
+          break;
+        case 'presence_no':
+          if (!await confirmDialog(`A consulta presencial com ${a.patient.name} (${a.when}) não aconteceu? Ela sai da lista e não entra em Meus pacientes.`, { okLabel: 'Não aconteceu', cancelLabel: 'Voltar' })) return;
+          await api(`/api/agenda/appointments/${a.id}/presencial-result`, { method: 'POST', body: { done: false } });
+          toast('Pronto. A consulta saiu da lista.');
+          break;
         case 'enter': window.open(`/atendimento?codigo=${encodeURIComponent(a.call_code)}`, '_blank', 'noopener'); return;
         case 'chat': goChat(a.conversation_id); return;
         default: return;
@@ -543,6 +553,7 @@
       if (c.refund_done) out.push(b('refund_done', 'Fiz o reembolso', ''));
       if (c.pro_cancel) out.push(b('pro_cancel', 'Não vou poder atender', 'ghost danger-text'));
       if (c.withdraw) out.push(b('withdraw', 'Cancelar agendamento', 'ghost tiny-link'));
+      if (c.presence_check) { out.push(b('presence_yes', `${ic('check', 16)} Sim, aconteceu`, '')); out.push(b('presence_no', 'Não aconteceu')); }
     }
     return out.join('');
   }
@@ -733,7 +744,8 @@
     const other = ctx.role === 'patient' ? a.professional.name : a.patient.name;
     const left = Date.parse(a.start_at) - now();
     let line2;
-    if (a.status === 'confirmada') line2 = a.can.enter_call ? 'A chamada está aberta' : left > 0 ? `${a.modality === 'presencial' ? 'Presencial' : 'Consulta'} · faltam ${countdown(left)}` : 'Consulta acontecendo agora';
+    if (a.can.presence_check) line2 = 'Presencial · a consulta aconteceu? Toque em Ver';
+    else if (a.status === 'confirmada') line2 = a.can.enter_call ? 'A chamada está aberta' : left > 0 ? `${a.modality === 'presencial' ? 'Presencial' : 'Consulta'} · faltam ${countdown(left)}` : 'Consulta acontecendo agora';
     else line2 = (STATUS[a.status] || [''])[0];
     const main = a.can.enter_call ? `<button type="button" class="btn sm" data-ag-act="enter" data-ag-id="${a.id}">Entrar</button>` : '';
     bar.innerHTML = `<span class="ab-ic">${ic('calendar', 18)}</span>

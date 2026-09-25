@@ -205,6 +205,7 @@
       <span class="pat-num"><b>${totals.patients}</b> paciente${totals.patients === 1 ? '' : 's'}</span>
       <span class="pat-num"><b>${totals.consultations}</b> consulta${totals.consultations === 1 ? '' : 's'}</span>`;
   }
+  window.AcoliaAgenda?.onChange(() => { loadMyPatients().catch(() => {}); }); // presencial confirmada entra na lista
   const reloadPatients = () => { clearTimeout(patTimer); patTimer = setTimeout(() => loadMyPatients().catch((e) => toast(e.message, 'error')), 250); };
   $('[data-pat-q]').addEventListener('input', reloadPatients);
   $('[data-pat-from]').addEventListener('change', reloadPatients);
