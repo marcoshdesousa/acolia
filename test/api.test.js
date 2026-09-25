@@ -2039,6 +2039,30 @@ test('especialidades: pelo menos uma no cadastro e no perfil, sem máximo, filtr
   assert.ok(!(await ids(`specialties=${encodeURIComponent('Crianças|Idosos')}`)).includes(ottoId), 'precisa ter todas');
   assert.ok((await ids('q=autista')).includes(ottoId), 'busca pelo texto acha');
   assert.ok((await ids('q=casais')).includes(ottoId));
+  // Visitante: só as 2 primeiras + o total (o "+N" pede conta); "Sobre" longo vem resumido
+  const longBio = 'Atendo crianças e famílias. '.repeat(30);
+  await otto.put('/api/professional/profile', { ...prof, bio: longBio, specialties: ['TEA (transtorno do espectro autista)', 'Crianças', 'Casais', 'Luto'] });
+  const vis = (await client().get(`/api/professionals/${ottoId}`)).data;
+  assert.equal(vis.specialties, 'TEA (transtorno do espectro autista), Crianças');
+  assert.equal(vis.specialties_total, 4);
+  assert.equal(vis.bio_more, true);
+  assert.ok(vis.bio.length < 280 && vis.bio.endsWith('…'), 'texto inteiro não sai para o visitante');
+  const logged = (await otto.get(`/api/professionals/${ottoId}`)).data; // com conta vê tudo
+  assert.equal(logged.specialties.split(', ').length, 4);
+  assert.equal(logged.bio, longBio.trim());
+  // Reels: o visitante não vê nenhum (nem pelo link compartilhado, que vem sem o vídeo)
+  const { db } = require('../server/db');
+  const reelId = Number(db.prepare("INSERT INTO posts (professional_id, image, caption, kind, video) VALUES (?, '/uploads/capa.jpg', 'v', 'reel', '/uploads/v.mp4')").run(ottoId).lastInsertRowid);
+  db.prepare("INSERT INTO posts (professional_id, image, caption, kind, video) VALUES (?, '/uploads/capa.jpg', 'v', 'reel', '/uploads/v2.mp4')").run(ottoId);
+  const vis2 = (await client().get(`/api/professionals/${ottoId}`)).data;
+  assert.deepEqual(vis2.reels, []);
+  assert.equal(vis2.reels_hidden, 2);
+  const vr = (await client().get(`/api/social/professionals/${ottoId}/posts?kind=reel`)).data;
+  assert.equal(vr.items.length, 0);
+  const shared = (await client().get(`/api/social/posts/${reelId}`)).data;
+  assert.equal(shared.locked, true);
+  assert.equal(shared.video, undefined, 'link compartilhado sem o vídeo para quem não tem conta');
+  assert.equal((await otto.get(`/api/social/posts/${reelId}`)).data.video, '/uploads/v.mp4');
 });
 
 test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {

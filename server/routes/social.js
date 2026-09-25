@@ -104,7 +104,8 @@ router.get('/professionals/:id/posts', (req, res) => {
   const kindSql = kind === 'reel' ? "AND kind = 'reel'" : kind === 'photo' ? "AND kind <> 'reel'" : '';
   const total = db.prepare(`SELECT COUNT(*) n FROM posts WHERE professional_id = ? ${kindSql}`).get(proId).n;
   if (!req.auth || !['patient', 'professional'].includes(req.auth.role)) {
-    const first = db.prepare(`SELECT image, kind, caption, font FROM posts WHERE professional_id = ? ${kindSql} ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(proId);
+    // Visitante: nenhum vídeo (Reels) e 1 ou 2 publicações de foto/texto
+    const first = kind === 'reel' ? [] : db.prepare(`SELECT image, kind, caption, font FROM posts WHERE professional_id = ? AND kind <> 'reel' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(proId);
     const free = freeGalleryCount(first.length);
     return res.json({ locked: true, total, items: first.slice(0, free).map((r) => (r.kind === 'text' ? { kind: 'text', caption: r.caption.slice(0, 300), font: r.font } : { image: r.image, kind: r.kind })), hidden: total - free });
   }
@@ -123,6 +124,8 @@ router.get('/posts/:id', (req, res) => {
   const p = loadPost(logged ? req : {}, req.params.id);
   if (logged) return res.json(postOut(p, who(req)));
   const out = postOut(p, null);
+  // Vídeo (Reels) só com conta: o visitante recebe só a capa
+  if (out.kind === 'reel') { delete out.video; delete out.duration; }
   res.json({ ...out, locked: true });
 });
 

@@ -66,6 +66,11 @@
     el.addEventListener('click', (e) => { if (e.target.closest('[data-bio-back]')) history.back(); });
   }
   document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-bio-locked]')) {
+      if (window.AcoliaSpecialties) AcoliaSpecialties.needAccount('ler o texto completo');
+      else location.href = '/cadastro-paciente?next=' + encodeURIComponent(location.pathname + location.hash);
+      return;
+    }
     const more = e.target.closest('[data-bio-more]');
     if (!more) return;
     const id = Number(more.closest('[data-pro-id]')?.dataset.proId);
@@ -122,7 +127,11 @@
 
     // ---------- Sobre ----------
     let about = '';
-    if (p.bio) {
+    if (p.bio && p.locked) {
+      // Visitante: vem só o começo do texto; o "Ler mais" pede conta
+      about = `<div><h3>Sobre</h3><p class="bio-short">${esc(p.bio)}</p>
+        ${p.bio_more ? `<button type="button" class="link-btn" data-bio-locked>Ler mais</button>` : ''}</div>`;
+    } else if (p.bio) {
       const long = p.bio.length > BIO_SHORT || p.bio.split('\n').length > 4;
       about = `<div><h3>Sobre</h3><p class="bio-short${long ? ' clamp' : ''}">${esc(p.bio)}</p>
         ${long ? `<button type="button" class="link-btn" data-bio-more>Ler mais</button>` : ''}</div>`;

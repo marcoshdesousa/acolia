@@ -38,6 +38,11 @@
       return `<div class="text-post font-${esc(p.font || 'padrao')}" data-dbl-like="${p.id}"><div class="tp-body${long ? ' clamp' : ''}" data-clamp>${esc(p.caption || '')}</div>${long ? moreBtn : ''}</div>`;
     }
     // Reel no feed: toca sozinho sem som quando aparece na tela; tocar no vídeo liga/desliga o som
+    // Visitante sem conta (link compartilhado): o vídeo não vem; mostra a capa com o cadeado
+    if (p.kind === 'reel' && !p.video) {
+      return `<div class="post-img reel-media reel-locked"><img src="${esc(p.image)}" alt="">
+        <button type="button" class="reel-lock" data-reel-lock>${ic('lock', 22)}<span>Crie sua conta grátis para ver o vídeo</span></button></div>`;
+    }
     if (p.kind === 'reel') {
       return `<div class="post-img reel-media" data-dbl-like="${p.id}">
         <video src="${esc(p.video)}" poster="${esc(p.image)}" playsinline muted loop preload="none" data-autoplay data-feed-video></video>
@@ -300,6 +305,7 @@
     watchVideos(root);
     if ('MutationObserver' in window) new MutationObserver(() => watchVideos(root)).observe(root, { childList: true, subtree: true });
     root.addEventListener('click', (e) => {
+      if (e.target.closest('[data-reel-lock]')) { ctx.onNeedAccount?.(); return; }
       const like = e.target.closest('[data-like]');
       const com = e.target.closest('[data-comments]');
       // Sem conta: vê a publicação e compartilha, mas curtir e comentar pedem conta

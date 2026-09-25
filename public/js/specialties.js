@@ -88,15 +88,29 @@
     el.addEventListener('click', (e) => { if (e.target.closest('[data-sp-back]')) history.back(); });
   }
 
-  // As 2 primeiras + botão "+N" (abre a página com todas)
+  // Visitante sem conta: "ver mais" pede para criar a conta (e volta para esta página depois)
+  function needAccount(what = 'ver tudo') {
+    const here = location.pathname + location.search + location.hash;
+    return window.Acolia.modal({
+      title: 'Crie sua conta grátis',
+      html: `<p>Para ${esc(what)}, crie sua conta grátis. É rápido, e depois você volta direto para cá.</p>`,
+      actions: [{ label: 'Já tenho conta', value: 'entrar', class: 'secondary' }, { label: 'Criar conta', value: 'criar' }],
+    }).then((v) => {
+      if (v === 'criar') location.href = '/cadastro-paciente?next=' + encodeURIComponent(here);
+      if (v === 'entrar') location.href = '/entrar?next=' + encodeURIComponent(here);
+    });
+  }
+
+  // As 2 primeiras + botão "+N" (abre a página com todas; visitante: pede conta)
   const CACHE = new Map();
   function badges(pro, max = 2) {
     const items = list(pro.specialties);
     if (!items.length) return '';
     CACHE.set(String(pro.id), pro);
-    const extra = items.length - max;
+    const total = Math.max(items.length, pro.specialties_total || 0); // visitante recebe só as 2 primeiras + o total
+    const extra = total - max;
     return `${items.slice(0, max).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}${extra > 0
-      ? `<button type="button" class="badge sp-more" data-sp-more="${pro.id}" aria-label="Ver todas as ${items.length} especialidades">+${extra}</button>` : ''}`;
+      ? `<button type="button" class="badge sp-more" data-sp-more="${pro.id}" aria-label="Ver todas as ${total} especialidades">+${extra}</button>` : ''}`;
   }
 
   document.addEventListener('click', (e) => {
@@ -105,8 +119,9 @@
     e.preventDefault();
     e.stopPropagation();
     const pro = CACHE.get(b.dataset.spMore);
-    if (pro) openAll(pro);
+    if (pro?.locked) needAccount('ver todas as especialidades');
+    else if (pro) openAll(pro);
   });
 
-  window.AcoliaSpecialties = { picker, openAll, badges, list, norm, groups };
+  window.AcoliaSpecialties = { picker, openAll, badges, list, norm, groups, needAccount };
 })();

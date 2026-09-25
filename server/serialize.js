@@ -40,11 +40,20 @@ function parseGallery(json) {
 // plano de saúde, se atende presencial, seguidores e até 2 fotos da galeria (sem ampliar).
 // Valores, sessões (duração e pacotes), localização (cidade, estado, endereço e mapa) e o resto da
 // galeria ficam para quem cria a conta grátis.
-// Fotos abertas para o visitante: 1 foto → 0, 2 ou 3 fotos → 1, 4 ou mais → 2
+// Fotos abertas para o visitante: 1 foto → 0, 2 ou 3 fotos → 1, 4 ou mais → 2 (vídeos/Reels: nenhum)
 function freeGalleryCount(n) {
   if (n <= 1) return 0;
   if (n <= 3) return 1;
   return 2;
+}
+// Visitante: "Sobre" resumido (o "Ler mais" pede conta) — o texto inteiro nem sai do servidor
+const BIO_FREE = 260;
+function shortBio(bio) {
+  const text = String(bio || '');
+  const lines = text.split('\n');
+  let cut = lines.length > 4 ? lines.slice(0, 4).join('\n') : text;
+  if (cut.length > BIO_FREE) cut = cut.slice(0, BIO_FREE).replace(/\s+\S*$/, '');
+  return cut.length < text.length ? { bio: `${cut.trimEnd()}…`, bio_more: true } : { bio: text, bio_more: false };
 }
 
 function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
@@ -88,8 +97,13 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     const packages = parsePackages(p.packages);
     const { state, city, ...visible } = common; // localização só com conta
     const free = freeGalleryCount(gallery.length);
+    // Especialidades: só as 2 primeiras (o "+N" pede conta)
+    const sp = require('./specialties').toList(p.specialties);
     return {
       ...base,
+      ...shortBio(p.bio),
+      specialties: sp.slice(0, 2).join(', '),
+      specialties_total: sp.length,
       ...visible,
       ...social,
       locked: true,
@@ -98,8 +112,8 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
       has_session_minutes: !!p.session_minutes,
       gallery: gallery.slice(0, free),
       gallery_hidden: photosCount - free,
-      reels: recentReels.slice(0, freeGalleryCount(recentReels.length)).map((r) => r.image),
-      reels_hidden: reelsCount - freeGalleryCount(recentReels.length),
+      reels: [],
+      reels_hidden: reelsCount,
     };
   }
   return {
