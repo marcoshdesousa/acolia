@@ -58,6 +58,11 @@
     </ul><a href="/politica-agendamento" target="_blank" rel="noopener" class="small">Ler a política completa</a>`;
   }
 
+  // Cartão de escolha (online/presencial, Pix/convênio): ícone, nome em cima e o valor embaixo
+  const optCard = ({ attr, on, icon, title, sub }) => `<button type="button" class="opt ${on ? 'on' : ''}" ${attr} role="radio" aria-checked="${on}">
+      <span class="opt-ic">${ic(icon, 22)}</span><span class="opt-txt"><b>${esc(title)}</b><small>${esc(sub)}</small></span>
+      <span class="opt-check">${ic('check', 14)}</span></button>`;
+
   // ---------- Página cheia (calendário, pagamento) com Voltar ----------
   function fullPage(title) {
     const el = document.createElement('div');
@@ -138,16 +143,21 @@
           : `<div class="row" style="gap:12px;margin-bottom:12px">${avatar(proName, opts.pro.photo, 'md')}<div><b>${esc(proName)}</b><div class="muted small">${esc(opts.pro.profession || '')}</div></div></div>`;
       const loc = info.presencial;
       const choices = mode === 'reschedule' ? '' : `
-        ${loc ? `<div class="seg" role="group" aria-label="Tipo de consulta">
-            <button type="button" class="${modality === 'online' ? 'on' : ''}" data-mod="online">${ic('video', 18)} Online${info.price_cents != null && info.price_presencial_cents !== info.price_cents ? ` <small>${money(info.price_cents)}</small>` : ''}</button>
-            <button type="button" class="${modality === 'presencial' ? 'on' : ''}" data-mod="presencial">📍 Presencial${info.price_presencial_cents != null && info.price_presencial_cents !== info.price_cents ? ` <small>${money(info.price_presencial_cents)}</small>` : ''}</button></div>
-          ${modality === 'presencial' ? `<p class="small muted seg-note">Consultório${loc.name ? ` ${esc(loc.name)}` : ''}: ${esc(loc.address)} · <b>${esc(loc.place)}</b></p>` : ''}` : ''}
-        ${mode === 'propose' && info.insurance ? `<div class="seg" role="group" aria-label="Pagamento">
-            <button type="button" class="${billing === 'pix' ? 'on' : ''}" data-bill="pix">${ic('pix', 18)} Pix</button>
-            <button type="button" class="${billing === 'convenio' ? 'on' : ''}" data-bill="convenio">🩺 Convênio (plano)</button></div>
-          ${billing === 'convenio' ? '<p class="small muted seg-note">Pelo convênio nada é cobrado pela Acolia: a consulta já fica agendada e o paciente acerta com o plano de saúde.</p>' : ''}` : ''}
-        ${mode === 'book' && info.insurance ? `<div class="notice small ins-note">🩺 <b>Vai usar plano de saúde?</b> Não marque por aqui: converse antes com ${esc(proName.split(' ')[0])} pelo chat. Se o seu plano for aceito, ele(a) marca a consulta pelo convênio para você.
-            <button type="button" class="btn sm secondary" data-ins-chat style="margin-top:8px">${ic('chat', 16)} Mandar mensagem</button></div>` : ''}`;
+        ${loc ? `<div class="opt-label">Tipo de consulta</div>
+          <div class="opt-grid" role="radiogroup" aria-label="Tipo de consulta">
+            ${optCard({ attr: 'data-mod="online"', on: modality === 'online', icon: 'video', title: 'Online', sub: info.price_cents != null ? money(info.price_cents) : 'Videochamada' })}
+            ${optCard({ attr: 'data-mod="presencial"', on: modality === 'presencial', icon: 'home', title: 'Presencial', sub: info.price_presencial_cents != null ? money(info.price_presencial_cents) : 'No consultório' })}
+          </div>
+          ${modality === 'presencial' ? `<div class="opt-place">${ic('pin', 18)}<span>${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>` : ''}` : ''}
+        ${mode === 'propose' && info.insurance ? `<div class="opt-label">Pagamento</div>
+          <div class="opt-grid" role="radiogroup" aria-label="Pagamento">
+            ${optCard({ attr: 'data-bill="pix"', on: billing === 'pix', icon: 'pix', title: 'Pix', sub: 'O paciente paga aqui' })}
+            ${optCard({ attr: 'data-bill="convenio"', on: billing === 'convenio', icon: 'shield', title: 'Convênio', sub: 'Plano de saúde' })}
+          </div>
+          ${billing === 'convenio' ? '<p class="small muted opt-note">Pelo convênio nada é cobrado pela Acolia: a consulta já fica agendada e o paciente acerta com o plano de saúde.</p>' : ''}` : ''}
+        ${mode === 'book' && info.insurance ? `<div class="ins-card"><span class="ins-ic">${ic('shield', 20)}</span>
+            <div><b>Vai usar plano de saúde?</b><p class="small">Não marque por aqui: converse antes com ${esc(proName.split(' ')[0])} pelo chat. Se o seu plano for aceito, ele(a) marca a consulta pelo convênio para você.</p>
+            <button type="button" class="btn sm secondary" data-ins-chat>${ic('chat', 16)} Mandar mensagem</button></div></div>` : ''}`;
       page.body.innerHTML = `${head}${choices}
         <div class="cal">
           <div class="cal-head"><button type="button" class="icon-btn" data-prev aria-label="Mês anterior" ${ym <= minYm ? 'disabled' : ''}>‹</button>
@@ -181,7 +191,7 @@
         const d = info.days.find((x) => x.date === b.dataset.taken);
         sel = null;
         $$('[data-day], [data-taken]', page.body).forEach((x) => x.classList.toggle('sel', x === b));
-        $('[data-slots]', page.body).innerHTML = `<div class="notice warn small">📅 ${mode === 'propose' ? 'Este paciente já tem' : 'Você já tem'} uma consulta marcada para <b>${esc(d.taken.when)}</b>${d.taken.with ? ` com ${esc(d.taken.with)}` : ''}. Cada paciente marca uma consulta por dia: ${mode === 'propose' ? 'escolha outro dia' : 'marque para outro dia'}.</div>`;
+        $('[data-slots]', page.body).innerHTML = `<div class="notice warn small">${mode === 'propose' ? 'Este paciente já tem' : 'Você já tem'} uma consulta marcada para <b>${esc(d.taken.when)}</b>${d.taken.with ? ` com ${esc(d.taken.with)}` : ''}. Cada paciente marca uma consulta por dia: ${mode === 'propose' ? 'escolha outro dia' : 'marque para outro dia'}.</div>`;
         renderFoot();
       }));
       if (!info.days.some((d) => d.free > 0)) $('[data-slots]', page.body).innerHTML = '<p class="muted center">Nenhum horário livre neste mês. Toque em › para ver o próximo.</p>';
@@ -223,8 +233,8 @@
       const when = `${sel.dayLabel} às ${sel.label}`;
       const loc = modality === 'presencial' ? (info.presencial || opts.appt?.location) : null;
       page.body.innerHTML = `<div class="card stack">
-          <div class="row" style="gap:12px">${ic('calendar', 26)}<div><b style="font-size:1.1rem">${esc(when)}</b><div class="muted small">${esc(proName)} · ${info.minutes} min · consulta ${modality === 'presencial' ? 'presencial' : 'online'}</div></div></div>
-          ${loc ? `<div class="small">📍 ${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)} · ${esc(loc.place)}</div>` : ''}
+          <div class="row" style="gap:12px">${ic(modality === 'presencial' ? 'home' : 'video', 26)}<div><b style="font-size:1.1rem">${esc(when)}</b><div class="muted small">${esc(proName)} · ${info.minutes} min · consulta ${modality === 'presencial' ? 'presencial' : 'online'}</div></div></div>
+          ${loc ? `<div class="opt-place">${ic('pin', 18)}<span>${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>` : ''}
           ${mode === 'reschedule' ? `<p class="small" style="margin:0">${opts.appt.billing === 'convenio' ? 'A consulta continua pelo convênio.' : 'O valor que você já pagou continua valendo para o novo horário.'}</p>`
             : billing === 'convenio' ? '<div class="row between"><span>Pagamento</span><b>Convênio (plano de saúde)</b></div>' : `<div class="row between"><span>Valor da consulta ${modality}</span><b>${money(priceNow())}</b></div>`}
         </div>
@@ -263,7 +273,7 @@
             const loc2 = info.presencial;
             const v = await modal({
               title: 'Consulta presencial',
-              html: `<p>A consulta presencial é no consultório em <b>${esc(loc2.place)}</b>:</p><p class="small">📍 ${loc2.name ? `<b>${esc(loc2.name)}</b> · ` : ''}${esc(loc2.address)}</p>
+              html: `<p>A consulta presencial é no consultório em <b>${esc(loc2.place)}</b>:</p><div class="opt-place">${ic('pin', 18)}<span>${loc2.name ? `<b>${esc(loc2.name)}</b> · ` : ''}${esc(loc2.address)}</span></div>
                 <p style="margin-bottom:0"><b>Você consegue ir até ${esc(loc2.place)} no dia da consulta?</b></p>`,
               actions: [{ label: 'Não, marcar online', value: 'online', class: 'secondary' }, { label: `Sim, marcar presencial`, value: 'presencial' }],
             });
@@ -296,7 +306,7 @@
   function manualSent(page, a) {
     page.setTitle('Pedido enviado');
     page.body.innerHTML = `<div class="card stack center">
-        <div style="font-size:2.4rem">📨</div>
+        <div class="big-ic">${ic('send', 30)}</div>
         <h2 style="margin:0">Pedido enviado ao profissional</h2>
         <p>${esc(a.when)}</p>
         <p class="muted">O profissional tem <b>5 minutos</b> para mandar a chave Pix na conversa. Depois que ela chegar, você tem <b>10 minutos</b> para pagar. O horário fica guardado para você enquanto isso.</p>
@@ -353,13 +363,13 @@
       if (cur.status === 'confirmada') {
         stop();
         page.setTitle('Consulta marcada');
-        page.body.innerHTML = `<div class="card stack center"><div style="font-size:2.6rem">✅</div><h2 style="margin:0">Pagamento aprovado!</h2>
+        page.body.innerHTML = `<div class="card stack center"><div class="big-ic ok">${ic('check', 32)}</div><h2 style="margin:0">Pagamento aprovado!</h2>
           <p><b>Consulta marcada</b> para ${esc(cur.when)}.</p><p class="muted small">Levando você para a conversa com ${esc(cur.professional.name)}…</p></div>`;
         refreshAll();
         setTimeout(async () => { await page.close(); goChat(cur.conversation_id); }, 1800);
       } else if (!['aguardando_pagamento'].includes(cur.status)) {
         stop();
-        page.body.innerHTML = `<div class="card stack center"><div style="font-size:2.4rem">⏱️</div><h2 style="margin:0">${cur.status === 'expirada' ? 'O tempo para pagar acabou' : 'Esta cobrança não vale mais'}</h2>
+        page.body.innerHTML = `<div class="card stack center"><div class="big-ic warn">${ic('clock', 30)}</div><h2 style="margin:0">${cur.status === 'expirada' ? 'O tempo para pagar acabou' : 'Esta cobrança não vale mais'}</h2>
           <p class="muted">O horário foi liberado. Se você já pagou, fale com o profissional pela conversa.</p><button type="button" class="btn" data-chat>Ir para a conversa</button></div>`;
         $('[data-chat]', page.body).addEventListener('click', async () => { await page.close(); goChat(cur.conversation_id); });
         refreshAll();
@@ -407,7 +417,7 @@
       html: `<div class="pix-manual-box"><span class="small muted">Valor</span><b class="pix-value">${money(a.price_cents)}</b>
           <span class="small muted">Chave Pix do profissional</span><div class="code-box" style="font-size:1rem;word-break:break-all">${esc(a.pix_payload || '')}</div></div>
         <p class="small muted">Abra o app do seu banco, escolha <b>Pix → Pagar com chave</b>, cole a chave e pague <b>${money(a.price_cents)}</b> em até 10 minutos. O profissional confirma aqui na conversa quando o dinheiro cair.</p>
-        <div class="notice small proof-tip">📸 <b>Depois de pagar, tire um print do comprovante</b> e mande aqui na conversa pela foto (botão 📷 ao lado de "Digite uma mensagem").</div>`,
+        <div class="notice small proof-tip">${ic('camera', 16)} <b>Depois de pagar, tire um print do comprovante</b> e mande aqui na conversa pela foto (botão da câmera ao lado de "Digite uma mensagem").</div>`,
       actions: [{ label: 'Copiar de novo', class: 'secondary', handler: () => { copyText(a.pix_payload); return false; } }, { label: 'Ok' }],
     });
     refreshAll();
@@ -582,6 +592,18 @@
     const d = new Date(Date.parse(s) - 3 * 3600e3);
     return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')} às ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
   }
+  // Ícone de cada cartão (desenhado, no lugar de emoji) e a cor dele
+  const noEmoji = (t) => String(t).replace(/^(\p{Extended_Pictographic}|\uFE0F|\s)+/u, '');
+  function cardIcon(ev, a) {
+    if (['agendada', 'concluida'].includes(ev) && a?.modality === 'presencial') return 'home';
+    if (['chamada', 'finalizada', 'paciente_ausente', 'ausente'].includes(ev)) return 'video';
+    if (['reembolso_pedido', 'reembolso_feito', 'reembolso_nao', 'reembolsada', 'recusado', 'tentar'].includes(ev)) return 'pix';
+    if (['expirada', 'sem_resposta'].includes(ev)) return 'clock';
+    if (['agendada', 'concluida'].includes(ev)) return 'check';
+    return 'calendar';
+  }
+  const cardTone = (ev) => (['recusado', 'pro_cancelou', 'ausente', 'paciente_ausente', 'expirada', 'sem_resposta', 'cancelada'].includes(ev) ? 'warn'
+    : ['agendada', 'concluida', 'finalizada', 'reembolsada', 'reembolso_feito'].includes(ev) ? 'ok' : '');
   // latest = este é o cartão mais recente desta consulta (só ele mostra os botões)
   function chatCardHtml(m, role, latest) {
     const a = m.booking;
@@ -589,39 +611,39 @@
     let [title, text] = EVENT[m.event] || ['📅 Consulta', () => ''];
     // Versão 1.2.1: presencial e convênio
     if (m.event === 'agendada' && a.modality === 'presencial') {
-      title = '📍 Consulta presencial agendada';
+      title = '✅ Consulta presencial agendada';
       text = (x, r) => `${x.billing === 'convenio' ? 'Pelo convênio (plano de saúde). ' : 'Pagamento aprovado. '}${r === 'patient' ? 'Vá ao consultório no dia e horário marcados: o endereço e o mapa estão logo abaixo e em "Ver".' : 'O paciente recebeu o endereço e o mapa do consultório.'}`;
     } else if (m.event === 'agendada' && a.billing === 'convenio') {
       text = () => 'Pelo convênio (plano de saúde): nada é cobrado aqui. O link da chamada aparece aqui 5 minutos antes.';
     } else if (m.event === 'cancelada' && m.extra === 'convenio') {
       text = () => 'Consulta pelo convênio cancelada. O horário foi liberado.';
     } else if (m.event === 'proposta' && a.modality === 'presencial') {
-      title = '📍 Consulta presencial quase pronta: falta o pagamento';
+      title = '📅 Consulta presencial quase pronta: falta o pagamento';
     }
     // Cartões antigos da mesma consulta: só o registro (título e horário); a situação atual e os
     // botões ficam no cartão mais recente
     if (!latest) {
       const when = m.event === 'remarcada' && m.extra ? `Remarcada (antes: ${fmtIso(m.extra)})` : m.event === 'remarcada' ? a.when : '';
-      return `<div class="msg-card booking-card old" data-booking="${a.id}"><strong>${title}</strong>${when ? `<span class="small muted">${esc(when)}</span>` : ''}</div>`;
+      return `<div class="msg-card booking-card old" data-booking="${a.id}"><strong class="bk-title"><span class="bk-ic ${cardTone(m.event)}">${ic(cardIcon(m.event, a), 16)}</span>${esc(noEmoji(title))}</strong>${when ? `<span class="small muted">${esc(when)}</span>` : ''}</div>`;
     }
     return `<div class="msg-card booking-card" data-booking="${a.id}">
-      <strong>${title}</strong>
+      <strong class="bk-title"><span class="bk-ic ${cardTone(m.event)}">${ic(cardIcon(m.event, a), 16)}</span>${esc(noEmoji(title))}</strong>
       <span class="bk-when">${ic('calendar', 16)} ${esc(a.when)}</span>
       <span class="small muted">${a.minutes} min · ${a.price_cents != null ? money(a.price_cents) : ''} · ${badge(a)}</span>
       <span class="small">${esc(text(a, role, m))}</span>
-      ${role === 'patient' && a.can?.copy_pix ? `<span class="small proof-tip">📸 <b>Depois de pagar, tire um print do comprovante</b> e mande aqui na conversa pela foto (botão 📷 ao lado de "Digite uma mensagem").</span>` : ''}
+      ${role === 'patient' && a.can?.copy_pix ? `<span class="small proof-tip">${ic('camera', 16)} <b>Depois de pagar, tire um print do comprovante</b> e mande aqui na conversa pela foto (botão da câmera ao lado de "Digite uma mensagem").</span>` : ''}
       <div class="bk-actions">${buttons(a, role)}${['confirmada', 'aguardando_paciente'].includes(a.status) ? `<button type="button" class="btn sm secondary" data-ag-act="see" data-ag-id="${a.id}">Ver</button>` : ''}</div>
     </div>`;
   }
-  const previewText = (m) => (EVENT[String(m.body).split('|')[1]] || ['📅 Consulta'])[0];
+  const previewText = (m) => noEmoji((EVENT[String(m.body).split('|')[1]] || ['Consulta'])[0]);
 
   // Local da consulta presencial: nome, endereço, cidade e o mapa (toque abre no Google Maps)
   function locationHtml(loc, { map = true } = {}) {
     if (!loc) return '';
     return `<div class="loc-box">
-      <div class="loc-head">📍 <span>${loc.name ? `<b>${esc(loc.name)}</b><br>` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>
+      <div class="loc-head"><span class="loc-ic">${ic('pin', 18)}</span><span>${loc.name ? `<b>${esc(loc.name)}</b><br>` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>
       ${map && loc.map_embed ? `<div class="loc-map"><iframe src="${esc(loc.map_embed)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Mapa do consultório" tabindex="-1"></iframe>${loc.maps_url ? `<a class="loc-map-link" href="${esc(loc.maps_url)}" target="_blank" rel="noopener" aria-label="Abrir no mapa"></a>` : ''}</div>` : ''}
-      ${loc.maps_url ? `<a class="btn sm secondary" href="${esc(loc.maps_url)}" target="_blank" rel="noopener">🗺️ Abrir no mapa</a>` : ''}
+      ${loc.maps_url ? `<a class="btn sm secondary" href="${esc(loc.maps_url)}" target="_blank" rel="noopener">${ic('pin', 16)} Abrir no mapa</a>` : ''}
     </div>`;
   }
   // "Ver": detalhes da consulta (presencial com endereço e mapa), com remarcar/cancelar
@@ -657,7 +679,7 @@
     const html = cache.length ? cache.map((a) => {
       const other = role === 'patient' ? a.professional : a.patient;
       return `<div class="appt-item" data-appt="${a.id}">
-        <div class="row" style="gap:10px;align-items:flex-start;flex-wrap:nowrap">${avatar(other.name, other.photo, 'sm')}<div class="grow" style="min-width:0"><b>${esc(other.name)}</b><div class="small muted">${esc(a.when)} · ${a.minutes} min · ${a.modality === 'presencial' ? '📍 presencial' : 'online'}${a.billing === 'convenio' ? ' · convênio' : ''}</div><div style="margin-top:4px">${badge(a)}</div></div></div>
+        <div class="row" style="gap:10px;align-items:flex-start;flex-wrap:nowrap">${avatar(other.name, other.photo, 'sm')}<div class="grow" style="min-width:0"><b>${esc(other.name)}</b><div class="small muted">${esc(a.when)} · ${a.minutes} min · ${a.modality === 'presencial' ? 'presencial' : 'online'}${a.billing === 'convenio' ? ' · convênio' : ''}</div><div style="margin-top:4px">${badge(a)}</div></div></div>
         ${a.modality === 'presencial' && ['confirmada', 'aguardando_paciente'].includes(a.status) ? locationHtml(a.location, { map: false }) : ''}
         ${a.status === 'confirmada' ? `<div class="small appt-left">Faltam <b data-cd="${esc(a.start_at)}">${countdown(Date.parse(a.start_at) - now())}</b></div>` : ''}
         ${a.status === 'confirmada' && role === 'patient' && !a.can.reschedule && !a.can.cancel ? `<div class="small muted">${a.reschedules >= a.max_reschedules ? 'Você já remarcou uma vez.' : ''} ${Date.parse(a.start_at) - now() <= 30 * 60000 ? 'Faltam 30 minutos ou menos: não dá mais para remarcar nem pedir reembolso.' : ''}</div>` : ''}
@@ -711,7 +733,7 @@
     const other = ctx.role === 'patient' ? a.professional.name : a.patient.name;
     const left = Date.parse(a.start_at) - now();
     let line2;
-    if (a.status === 'confirmada') line2 = a.can.enter_call ? '🎥 A chamada está aberta' : left > 0 ? `${a.modality === 'presencial' ? '📍 Presencial' : 'Consulta'} · faltam ${countdown(left)}` : 'Consulta acontecendo agora';
+    if (a.status === 'confirmada') line2 = a.can.enter_call ? 'A chamada está aberta' : left > 0 ? `${a.modality === 'presencial' ? 'Presencial' : 'Consulta'} · faltam ${countdown(left)}` : 'Consulta acontecendo agora';
     else line2 = (STATUS[a.status] || [''])[0];
     const main = a.can.enter_call ? `<button type="button" class="btn sm" data-ag-act="enter" data-ag-id="${a.id}">Entrar</button>` : '';
     bar.innerHTML = `<span class="ab-ic">${ic('calendar', 18)}</span>

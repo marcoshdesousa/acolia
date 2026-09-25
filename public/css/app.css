@@ -1332,3 +1332,41 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .seg button small { font-weight: 600; opacity: .85; }
 .chip-radio input { width: auto; height: auto; margin: 0; padding: 0; flex: none; }
 .pro-card { cursor: pointer; }
+/* Escolhas do agendamento (online/presencial, Pix/convênio): cartões com ícone, nome em cima e valor embaixo */
+.opt-label { font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 6px 0 8px; }
+.opt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.opt { position: relative; display: flex; align-items: center; gap: 12px; text-align: left; font: inherit; color: var(--text); background: var(--surface); border: 1.5px solid var(--line); border-radius: 18px; padding: 14px 14px; cursor: pointer; min-width: 0; transition: border-color .15s, background .15s; }
+.opt:hover { border-color: var(--primary); }
+.opt-ic { flex: none; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); }
+.opt-txt { display: flex; flex-direction: column; min-width: 0; }
+.opt-txt b { font-size: 1rem; line-height: 1.2; }
+.opt-txt small { color: var(--muted); font-size: .86rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opt-check { position: absolute; top: 8px; right: 8px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: var(--on-primary, #fff); opacity: 0; transform: scale(.6); transition: .15s; }
+.opt.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 55%, var(--surface)); }
+.opt.on .opt-ic { background: var(--primary); color: var(--on-primary, #fff); }
+.opt.on .opt-check { opacity: 1; transform: none; }
+.opt.on .opt-txt small { color: var(--text); font-weight: 700; }
+.opt-place { display: flex; gap: 10px; align-items: flex-start; font-size: .9rem; line-height: 1.4; background: var(--surface-2, #f1f0eb); border-radius: 14px; padding: 10px 12px; margin: 0 0 12px; }
+.opt-place svg { flex: none; color: var(--primary); margin-top: 1px; }
+.opt-note { margin: -2px 0 12px; }
+.ins-card { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; margin: 4px 0 14px; }
+.ins-card p { margin: 4px 0 10px; color: var(--muted); }
+.ins-ic { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft, #eee8e2); color: var(--accent, #8a7362); }
+.loc-ic { color: var(--primary); display: inline-flex; }
+.loc-title { display: flex; align-items: center; gap: 6px; }
+.loc-box .btn svg { width: 16px; height: 16px; }
+.price-rows svg { vertical-align: -3px; margin-right: 4px; }
+.bk-title { display: flex; align-items: center; gap: 8px; }
+.bk-ic { flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); }
+.bk-ic.ok { background: #dcefe3; color: #2f6b47; }
+.bk-ic.warn { background: var(--accent-soft, #eee8e2); color: var(--accent, #8a7362); }
+.big-ic { width: 64px; height: 64px; margin: 0 auto; border-radius: 50%; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); }
+.big-ic.ok { background: #dcefe3; color: #2f6b47; }
+.big-ic.warn { background: var(--accent-soft, #eee8e2); color: var(--accent, #8a7362); }
+.proof-tip svg { vertical-align: -3px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bk-ic.ok, :root:not([data-theme="light"]) .big-ic.ok { background: #1f3a2b; color: #9fd3b1; } }
+:root[data-theme="dark"] .bk-ic.ok, :root[data-theme="dark"] .big-ic.ok { background: #1f3a2b; color: #9fd3b1; }
+/* cartões de escolha empilhados (ícone em cima, nome, valor embaixo): cabem inteiros no celular */
+.opt { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; }
+.opt-txt small { white-space: normal; overflow: visible; }
+.opt-check { top: 10px; right: 10px; }

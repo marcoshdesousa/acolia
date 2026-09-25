@@ -81,7 +81,7 @@
                 <option value="200">Até R$ 200</option><option value="300">Até R$ 300</option>
               </select></div>
           </div>
-          ${full ? '' : '<p class="small muted" style="margin:0 0 10px">🔒 Filtrar por localização e por valor: <a href="/cadastro-paciente">crie sua conta grátis</a>.</p>'}
+          ${full ? '' : `<p class="small muted" style="margin:0 0 10px">${ICONS.lock.replace('<svg', '<svg style="width:15px;height:15px;vertical-align:-2px"')} Filtrar por localização e por valor: <a href="/cadastro-paciente">crie sua conta grátis</a>.</p>`}
           <div class="field sp-filter"><label>Especialidades <span class="muted small" style="font-weight:600">(mostra quem tem todas as que você escolher)</span></label><div data-sp-filter></div></div>
           <div class="row"><button class="btn" type="submit">Aplicar filtros</button><button class="btn ghost" type="button" data-clear>Limpar filtros</button></div>
         </div>

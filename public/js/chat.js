@@ -82,7 +82,7 @@
       if (m.kind === 'call') return `${prefix}Código de atendimento`;
       if (m.kind === 'audio') return `${prefix}🎤 Áudio (${fmtSecs(audioParts(m.body).secs)})`;
       if (m.kind === 'image') return `${prefix}📷 Foto`;
-      if (m.kind === 'location') return `${prefix}📍 Localização do consultório`;
+      if (m.kind === 'location') return `${prefix}Localização do consultório`;
       if (m.kind === 'deleted') return `${prefix}🚫 Mensagem apagada`;
       if (m.kind === 'doc') return `${prefix}📄 ${String(m.body).split('|')[1] || 'Documento'}`;
       if (m.kind === 'post') return `${prefix}📌 Publicação`;
@@ -294,7 +294,7 @@
         pop.innerHTML = `${window.AcoliaQuick ? `<button type="button" role="menuitem" data-fn-quick>${ICONS.chat}<span><b>Mensagens prontas</b><small>Escolha uma e mande com um toque</small></span></button>` : ''}
           ${window.AcoliaAgenda ? `<button type="button" role="menuitem" data-fn-schedule>${ICONS.calendar}<span><b>Agendar consulta</b><small>O paciente recebe e paga o Pix aqui</small></span></button>` : ''}
           <button type="button" role="menuitem" data-fn-photo>${ICONS.camera}<span><b>Enviar foto</b><small>Ex.: o comprovante do reembolso</small></span></button>
-          ${getMe()?.has_clinic && getMe()?.clinic_address ? `<button type="button" role="menuitem" data-fn-loc>${ICONS.pin || '📍'}<span><b>Enviar localização</b><small>Endereço e mapa do seu consultório</small></span></button>` : ''}`;
+          ${getMe()?.has_clinic && getMe()?.clinic_address ? `<button type="button" role="menuitem" data-fn-loc>${ICONS.pin}<span><b>Enviar localização</b><small>Endereço e mapa do seu consultório</small></span></button>` : ''}`;
         form.appendChild(pop);
         setTimeout(() => document.addEventListener('click', outsideFn, true));
         pop.addEventListener('click', (e) => {
@@ -615,7 +615,7 @@
         inner = `<div class="msg-card"><strong>${ICONS.pix.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px"')} Chave Pix para pagamento</strong>
           <span class="code" style="font-size:1rem;word-break:break-all">${esc(m.body)}</span>
           <button type="button" class="btn secondary sm" data-copy="${esc(m.body)}">${ICONS.copy} Copiar chave</button>
-          ${mine ? '' : `<span class="small proof-tip">📸 <b>Depois de pagar, tire um print do comprovante</b> e mande aqui na conversa pela foto (botão 📷 ao lado de "Digite uma mensagem").</span>`}</div>`;
+          ${mine ? '' : `<span class="small proof-tip">${ICONS.camera.replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px"')} <b>Depois de pagar, tire um print do comprovante</b> e mande aqui na conversa pela foto (botão da câmera ao lado de "Digite uma mensagem").</span>`}</div>`;
       } else if (m.kind === 'call') {
         const link = `${location.origin}/atendimento?codigo=${encodeURIComponent(m.body)}`;
         inner = `<div class="msg-card"><strong>${ICONS.video.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px"')} Código de atendimento</strong>
@@ -634,7 +634,7 @@
         // Localização do consultório (consulta presencial): nome, endereço e mapa
         let loc = null;
         try { loc = JSON.parse(m.body); } catch { /* antigo */ }
-        inner = `<div class="msg-card loc-card"><strong>📍 Local da consulta presencial</strong>${window.AcoliaAgenda && loc ? AcoliaAgenda.locationHtml(loc) : esc(m.body)}</div>`;
+        inner = `<div class="msg-card loc-card"><strong class="loc-title">${ICONS.home.replace('<svg', '<svg style="width:18px;height:18px"')} Local da consulta presencial</strong>${window.AcoliaAgenda && loc ? AcoliaAgenda.locationHtml(loc) : esc(m.body)}</div>`;
       } else if (m.kind === 'doc') {
         // Documento (atestado, receita, encaminhamento): abre a folha para ver e salvar
         const [code, title] = String(m.body).split('|');
