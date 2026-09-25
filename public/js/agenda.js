@@ -460,6 +460,7 @@
     recusado: ['⚠️ Pagamento não aprovado', (a, r) => (r === 'patient' ? 'Quer realmente fazer esta consulta? Se sim, o profissional manda a chave Pix de novo.' : 'O paciente vai responder se quer tentar de novo.')],
     tentar: ['🔁 Nova tentativa de pagamento', (a, r) => (r === 'professional' ? 'Mande a chave Pix de novo em até 5 minutos.' : 'O profissional vai mandar a chave Pix de novo.')],
     pro_cancelou: ['⚠️ O profissional não poderá atender', (a, r) => `${a.cancel_detail ? `“${a.cancel_detail}” · ` : ''}${r === 'patient' ? 'Escolha entre o reembolso e remarcar para outro horário.' : 'O paciente vai escolher entre o reembolso e remarcar.'}`],
+    finalizada: ['✅ Chamada finalizada', () => 'A consulta terminou.'],
     paciente_ausente: ['⚠️ O paciente não entrou na chamada', (a, r) => (r === 'patient'
       ? 'Você não entrou até 3 minutos depois do horário. A chamada foi encerrada e o valor não é devolvido.'
       : 'O paciente não entrou até 3 minutos depois do horário. A chamada foi encerrada e o valor não é devolvido.')],

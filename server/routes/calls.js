@@ -106,7 +106,10 @@ router.post('/', (req, res) => {
 router.post('/:id/end', (req, res) => {
   const call = db.prepare('SELECT * FROM calls WHERE id = ? AND professional_id = ?').get(Number(req.params.id), req.auth.user.id);
   if (!call) throw new U.HttpError(404, 'Atendimento não encontrado.');
+  const G = require('../agenda');
+  if (!G.canEndCall(call)) throw new U.HttpError(409, 'O paciente ainda não entrou. A chamada continua aberta para ele até 3 minutos depois do horário.');
   endCall(call);
+  G.finishFromCall(call); // consulta da agenda: fica concluída
   res.json({ ok: true });
 });
 

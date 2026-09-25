@@ -446,11 +446,17 @@ test('profissional entra na chamada: sem reembolso e a consulta fica concluída 
   clock = Date.parse(at('2030-01-16', '14:05'));
   await G.sweep();
   assert.equal((await bia.get(`/api/agenda/appointments/${a.id}`)).data.status, 'confirmada', 'entrou a tempo: nada de reembolso');
-  clock = Date.parse(at('2030-01-16', '15:21')); // fim 14:50 + 30 min
-  await G.sweep();
+  // O profissional finaliza: consulta concluída na hora, "Chamada finalizada" na conversa e sai das próximas
+  const hsock = ioClient(base, { extraHeaders: { Cookie: P.cl.cookie }, transports: ['websocket'] });
+  await new Promise((ok) => hsock.emit('call:join', { code }, ok));
+  hsock.emit('call:end');
+  await new Promise((ok) => setTimeout(ok, 150));
+  hsock.close();
   r = await bia.get(`/api/agenda/appointments/${a.id}`);
   assert.equal(r.data.status, 'concluida');
   assert.equal(r.data.call_code, null, 'chamada fechada');
+  assert.equal((await msgs(bia, a.conversation_id)).at(-1).event, 'finalizada');
+  assert.ok(!(await bia.get('/api/agenda/appointments')).data.items.some((x) => x.id === a.id), 'sai do aviso / próximas');
 });
 
 test('regra dos 3 minutos vale para o paciente: não entrou → chamada encerrada, sem reembolso', async () => {
@@ -466,7 +472,11 @@ test('regra dos 3 minutos vale para o paciente: não entrou → chamada encerrad
   assert.ok(code);
   const sock = ioClient(base, { extraHeaders: { Cookie: P.cl.cookie }, transports: ['websocket'] });
   assert.equal((await new Promise((ok) => sock.emit('call:join', { code }, ok))).role, 'host');
+  // Finalizar antes de o paciente entrar não fecha a chamada (ele ainda tem os 3 minutos)
+  sock.emit('call:end');
+  await new Promise((ok) => setTimeout(ok, 150));
   sock.close();
+  assert.ok((await bia.get(`/api/agenda/appointments/${a.id}`)).data.call_code, 'continua aberta para o paciente');
   clock = Date.parse(at('2030-01-23', '14:02'));
   await G.sweep();
   assert.equal((await bia.get(`/api/agenda/appointments/${a.id}`)).data.status, 'confirmada', 'ainda dentro dos 3 minutos');

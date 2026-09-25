@@ -404,8 +404,9 @@
 
   $('[data-end]').addEventListener('click', async () => {
     if (S.role === 'host') {
-      if (!await confirmDialog('Finalizar o atendimento? O código do paciente deixará de funcionar.', { okLabel: 'Finalizar', danger: true })) return;
+      if (!await confirmDialog('Finalizar o atendimento? O código do paciente deixará de funcionar e a conversa mostra "Chamada finalizada". (Se o paciente ainda não entrou, a chamada continua aberta para ele até 3 minutos depois do horário.)', { okLabel: 'Finalizar', danger: true })) return;
       S.socket.emit('call:end');
+      S.socket.emit('call:leave');
       finish(null);
     } else {
       if (!await confirmDialog('Sair do atendimento? Você pode voltar com o mesmo código enquanto o profissional não finalizar.', { okLabel: 'Sair' })) return;

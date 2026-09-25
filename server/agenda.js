@@ -243,6 +243,7 @@ const PUSH = {
   ausente: 'O profissional não compareceu. Seu dinheiro será reembolsado',
   paciente_ausente: 'Você não entrou na chamada a tempo. A consulta foi encerrada, sem reembolso',
   chamada: '🎥 Sua consulta vai começar: toque para entrar',
+  finalizada: '✅ Chamada finalizada',
   expirada: 'O tempo para pagar acabou',
   sem_resposta: 'O profissional não mandou a chave Pix a tempo',
 };
@@ -376,6 +377,24 @@ function closeCall(a) {
   if (call) require('./routes/calls').endCall(call);
 }
 
+// O profissional finalizou a chamada da consulta: a consulta está concluída. Sai o aviso fixo
+// (se não houver outra consulta) e todos na conversa veem "Chamada finalizada".
+// Se o paciente ainda não entrou, a chamada NÃO fecha (ele tem até 3 minutos depois do horário):
+// devolve false para quem chamou não encerrar.
+function canEndCall(call) {
+  if (!call?.appointment_id || call.guest_joined_at) return true;
+  const a = getAppt(call.appointment_id);
+  return !(a && a.status === 'confirmada');
+}
+function finishFromCall(call) {
+  if (!call?.appointment_id) return;
+  const a = getAppt(call.appointment_id);
+  if (!a || a.status !== 'confirmada') return;
+  const upd = setStatus(a.id, { status: 'concluida' });
+  post(upd, 'professional', 'finalizada');
+  notifyBoth(upd);
+}
+
 // ---------- Varredura (a cada 20 segundos) ----------
 let sweeping = false;
 async function sweep() {
@@ -432,7 +451,9 @@ async function sweep() {
     // Fim: 30 minutos depois do horário de término, a consulta está concluída
     for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'confirmada' AND end_at <= ?").all(iso(t - RULES.DONE_AFTER_MIN * MIN))) {
       closeCall(a);
-      notifyBoth(setStatus(a.id, { status: 'concluida' }));
+      const upd = setStatus(a.id, { status: 'concluida' });
+      post(upd, 'professional', 'finalizada');
+      notifyBoth(upd);
     }
   } catch (e) {
     console.error('[agenda] varredura', e);
@@ -527,6 +548,6 @@ module.exports = {
   now, iso, ms, localDate, localMin, fromLocal, hhmm, parseHHMM, addDays, fmtWhen, dayLabel, dowOf,
   getPro, getAppt, duration, readiness, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, assertFree, touch,
   ensureConversation, post, pushText, notifyBoth, setStatus, createCharge, confirmPaid, checkPayment, refund, refundLock,
-  openCall, closeCall, sweep, canDo, view, onAccountGone,
+  openCall, closeCall, canEndCall, finishFromCall, sweep, canDo, view, onAccountGone,
   _setNow(fn) { nowFn = fn || Date.now; touch(); },
 };

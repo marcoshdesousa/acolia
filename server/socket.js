@@ -75,7 +75,8 @@ function setupSocket(httpServer) {
       const c = socket.data.call;
       if (!c || c.role !== 'host') return;
       const call = db.prepare('SELECT * FROM calls WHERE id = ?').get(c.id);
-      if (call) endCall(call);
+      // Paciente ainda não entrou: a chamada continua aberta para ele (o profissional só sai)
+      if (call && require('./agenda').canEndCall(call)) { endCall(call); require('./agenda').finishFromCall(call); }
     });
 
     socket.on('call:leave', () => {
