@@ -1248,3 +1248,27 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .appt-bar.sec-mode .ab-next { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 8px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
 .appt-bar.sec-mode .ab-sec { display: flex; align-items: center; gap: 8px; font-size: .8rem; padding: 6px 10px; border-radius: 10px; background: var(--accent-soft); color: var(--text); }
 .appt-bar.sec-mode .ab-sec svg { color: var(--accent); flex: none; }
+/* Uma consulta por dia: dia em que o paciente já tem consulta */
+.cal-day.taken { background: var(--accent-soft); color: var(--accent); font-weight: 800; border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent); }
+.cal-dot.taken { background: var(--accent); }
+.cal-taken-note { margin: 4px 0 0; color: var(--muted); }
+.cal-taken-note .cal-dot { display: inline-block; vertical-align: -1px; margin-right: 4px; }
+/* Vitrine: atalhos de "Consulta disponível" */
+.disp-chips { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.disp-chips .chip-btn { padding: 5px 12px; font-size: .8rem; }
+/* Agendamento pelo chat: "Cancelar agendamento" pequeno e a caixa do Pix manual */
+.btn.tiny-link { background: none; border: 0; box-shadow: none; padding: 2px 4px; min-height: 0; font-size: .74rem; font-weight: 600; color: var(--muted); text-decoration: underline; }
+.pix-manual-box { display: grid; gap: 4px; background: var(--surface-2); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; }
+.pix-manual-box .pix-value { font-size: 1.6rem; color: var(--primary-strong); }
+/* Profissional: "O paciente fez o pagamento?" em cima do campo de mensagem */
+.pay-ask { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: var(--warn-soft); border-top: 1px solid var(--line); font-size: .86rem; }
+.pay-ask .grow { min-width: 160px; }
+.pay-ask b { color: var(--text); }
+.pay-ask .pa-time { font-variant-numeric: tabular-nums; color: var(--warn); font-weight: 800; }
+.pay-ask .btn.sm { padding: 6px 14px; }
+.composer [data-schedule] svg { width: 22px; height: 22px; }
+.composer .quick-btn { width: 40px; }
+/* Admin no celular: os 6 botões de baixo cabem na tela (texto encolhe em vez de cortar "Conta") */
+[data-bnav] a { flex: 1 1 0; min-width: 0; padding-left: 2px; padding-right: 2px; font-size: .64rem; }
+[data-bnav] a > :not(svg) { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 380px) { [data-bnav] a { font-size: .58rem; } [data-bnav] a svg { width: 22px; height: 22px; } }

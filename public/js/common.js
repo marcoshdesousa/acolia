@@ -306,10 +306,10 @@
     });
   }
 
-  function confirmDialog(text, { okLabel = 'Confirmar', danger = false, title = 'Confirmar' } = {}) {
+  function confirmDialog(text, { okLabel = 'Confirmar', danger = false, title = 'Confirmar', cancelLabel = 'Cancelar' } = {}) {
     return modal({
       title, html: `<p>${esc(text)}</p>`,
-      actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, { label: okLabel, value: true, class: danger ? 'danger' : '' }],
+      actions: [{ label: cancelLabel, value: false, class: 'secondary' }, { label: okLabel, value: true, class: danger ? 'danger' : '' }],
     });
   }
 

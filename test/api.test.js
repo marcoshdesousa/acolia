@@ -2231,3 +2231,21 @@ test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Bras
   const t = (await admin.post('/api/admin/test-accounts')).data;
   assert.equal(t.created.professional, true, 'admin reativa as contas de teste pelo botão');
 });
+
+test('contas de teste apagadas uma vez (Profissional Teste, Paciente Teste e a secretária de teste)', async () => {
+  const { db } = require('../server/db');
+  const T = require('../server/testAccounts');
+  assert.equal((await admin.post('/api/admin/test-accounts')).status, 200);
+  const pro = db.prepare("SELECT * FROM professionals WHERE code = '123456789'").get();
+  const pc = client();
+  await pc.post('/api/auth/professional/login', { login: '123456789', password: '123456789' });
+  assert.equal((await pc.post('/api/professional/secretary')).status, 201);
+  db.prepare("DELETE FROM settings WHERE key = 'test_accounts_removed_v1'").run();
+  const out = T.removeTestAccountsOnce();
+  assert.ok(out.professionals >= 1 && out.patients >= 1, JSON.stringify(out));
+  assert.equal(db.prepare('SELECT status FROM professionals WHERE id = ?').get(pro.id).status, 'excluido');
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM patients WHERE is_test = 1 AND status <> 'excluido'").get().n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM secretaries WHERE professional_id = ?').get(pro.id).n, 0, 'secretária de teste apagada');
+  assert.equal((await pc.get('/api/auth/me')).data.role, null, 'sessão caiu');
+  assert.equal(T.removeTestAccountsOnce(), null, 'não roda de novo');
+});

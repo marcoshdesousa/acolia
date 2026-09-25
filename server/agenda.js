@@ -110,8 +110,20 @@ function loadBusy(proId, fromMs, toMs, { patientId = null, exclude = 0 } = {}) {
   return [...busy, ...blocks, ...mine].map((r) => [ms(r.start_at), ms(r.end_at)]);
 }
 
+// Regra: cada paciente marca UMA consulta por dia (com qualquer profissional). Devolve a consulta que
+// já ocupa aquele dia (data de Brasília), se houver.
+function patientDayTaken(patientId, date, exclude = 0) {
+  if (!patientId) return null;
+  const from = fromLocal(date, 0);
+  return db.prepare(`SELECT a.*, p.name AS pro_name FROM appointments a JOIN professionals p ON p.id = a.professional_id
+    WHERE a.patient_id = ? AND a.id <> ? AND ${OCCUPY_SQL.replace(/status|hold_until/g, (w) => `a.${w}`)} AND a.start_at >= ? AND a.start_at < ? ORDER BY a.start_at LIMIT 1`)
+    .get(patientId, exclude, iso(now()), iso(from), iso(from + 1440 * MIN)) || null;
+}
+const takenText = (a, who = 'patient') => `${who === 'patient' ? 'Você já tem' : 'Este paciente já tem'} uma consulta marcada para ${fmtWhen(ms(a.start_at))}. Cada paciente marca uma consulta por dia: escolha outro dia.`;
+
 // Horários livres de um dia (data de Brasília)
 function slotsForDay(pro, date, opts = {}) {
+  if (opts.patientId && patientDayTaken(opts.patientId, date, opts.exclude || 0)) return []; // já tem consulta neste dia
   const dur = duration(pro);
   const step = dur + (pro.break_minutes || 0); // consulta + descanso até a próxima
   const ranges = db.prepare('SELECT start_min, end_min, single FROM agenda_hours WHERE professional_id = ? AND dow = ? ORDER BY start_min').all(pro.id, dowOf(date));
@@ -163,7 +175,8 @@ function monthDays(pro, ym, opts = {}) {
   const out = [];
   for (let d = 1; d <= days; d++) {
     const date = `${ym}-${String(d).padStart(2, '0')}`;
-    out.push({ date, free: slotsForDay(pro, date, { ...opts, busy }).length });
+    const taken = patientDayTaken(opts.patientId, date, opts.exclude || 0);
+    out.push({ date, free: taken ? 0 : slotsForDay(pro, date, { ...opts, busy }).length, ...(taken ? { taken: { when: fmtWhen(ms(taken.start_at)), time: hhmm(localMin(ms(taken.start_at))), with: taken.pro_name } } : {}) });
   }
   return out;
 }
@@ -188,11 +201,25 @@ function nextAvailable(pro) {
   nextCache.set(pro.id, { v: version, at: now(), value });
   return value;
 }
+// Para um paciente logado: pula os dias em que ele já tem consulta (uma por dia)
+function nextAvailableFor(pro, patientId) {
+  const base = nextAvailable(pro);
+  if (!base || !patientId || !patientDayTaken(patientId, base.date)) return base;
+  const today = localDate(now());
+  for (let i = 0; i <= 60; i++) {
+    const date = addDays(today, i);
+    const s = slotsForDay(pro, date, { patientId });
+    if (s.length) return { date, label: dayLabel(date), first: s[0].label };
+  }
+  return null;
+}
 
-function assertFree(pro, startIso, { patientId, exclude = 0 } = {}) {
+function assertFree(pro, startIso, { patientId, exclude = 0, who = 'patient' } = {}) {
   const t = ms(startIso);
   if (!Number.isFinite(t)) throw new U.HttpError(400, 'Escolha um horário.');
   const date = localDate(t);
+  const taken = patientDayTaken(patientId, date, exclude);
+  if (taken) throw new U.HttpError(409, takenText(taken, who));
   const ok = slotsForDay(pro, date, { patientId, exclude }).some((s) => ms(s.start) === t);
   if (!ok) {
     // Diz o motivo certo quando é choque com outra consulta do próprio paciente
@@ -229,7 +256,7 @@ function post(a, role, event, extra = '') {
 
 const PUSH = {
   pedido: 'Quer marcar uma consulta e fazer o pagamento',
-  proposta: 'Enviou uma proposta de consulta',
+  proposta: '📅 Sua consulta está quase pronta: faça o pagamento',
   agendada: '✅ Consulta agendada',
   remarcada: '🔁 Consulta remarcada',
   cancelada: 'Consulta cancelada',
@@ -488,6 +515,8 @@ function canDo(a, role) {
     c.reschedule = a.status === 'confirmada' && beforeCutoff && a.reschedules < RULES.MAX_RESCHEDULES;
     c.cancel = a.status === 'confirmada' && beforeCutoff;
     c.give_up = HOLDING.includes(a.status);
+    // Pix manual: a chave e o valor já vêm no cartão ("Copiar Pix")
+    c.copy_pix = a.mode === 'manual' && a.status === 'aguardando_pagamento' && !!a.pix_payload && ms(a.hold_until) > t;
     c.choose = a.status === 'aguardando_paciente' && t < start;
     c.retry = a.status === 'pagamento_recusado' && ms(a.hold_until) > t;
     c.refund_received = a.status === 'reembolso_pendente' && a.refund_status === 'feito';
@@ -496,6 +525,8 @@ function canDo(a, role) {
     c.approve = a.mode === 'manual' && !!a.pix_payload && (a.status === 'aguardando_pagamento' || (a.status === 'expirada' && ms(a.start_at) > t));
     c.pro_cancel = a.status === 'confirmada' && t < start - RULES.PRO_CANCEL_H * 60 * MIN;
     c.refund_done = a.status === 'reembolso_pendente' && a.refund_status === 'pedido';
+    // "Cancelar agendamento" antes do pagamento (profissional ou secretária)
+    c.withdraw = HOLDING.includes(a.status);
   }
   c.enter_call = a.status === 'confirmada' && !!a.call_id;
   return c;
@@ -546,7 +577,7 @@ function view(a, role) {
 module.exports = {
   RULES, CANCEL_REASONS, HOLDING, ACTIVE, OCCUPY_SQL,
   now, iso, ms, localDate, localMin, fromLocal, hhmm, parseHHMM, addDays, fmtWhen, dayLabel, dowOf,
-  getPro, getAppt, duration, readiness, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, assertFree, touch,
+  getPro, getAppt, duration, readiness, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
   ensureConversation, post, pushText, notifyBoth, setStatus, createCharge, confirmPaid, checkPayment, refund, refundLock,
   openCall, closeCall, canEndCall, finishFromCall, sweep, canDo, view, onAccountGone,
   _setNow(fn) { nowFn = fn || Date.now; touch(); },

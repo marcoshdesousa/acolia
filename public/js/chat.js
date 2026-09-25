@@ -2,9 +2,9 @@
    Apagar para mim / para todos, limpar conversa, bloquear (só mensagens) e arquivar. */
 (function () {
   'use strict';
-  const { $, $$, esc, api, ICONS, avatar, fmtTime, fmtDay, fmtShort, toast, modal, copyText } = window.Acolia;
+  const { $, $$, esc, api, ICONS, avatar, fmtTime, fmtDay, fmtShort, toast, modal, copyText, money } = window.Acolia;
 
-  function mount(root, { role, me, socket, onUnreadChange = () => {}, onNavigate = () => {} }) {
+  function mount(root, { role, me, socket, secretary = false, onUnreadChange = () => {}, onNavigate = () => {} }) {
     const getMe = typeof me === 'function' ? me : () => me;
     const state = { archived: false, list: [], current: null, messages: [], hasMore: false, loadingOlder: false, typingTimer: null };
 
@@ -162,8 +162,7 @@
       threadWrap.classList.remove('hidden');
       const proActions = role === 'professional' ? `
         <button class="icon-btn" title="Enviar chave Pix" aria-label="Enviar chave Pix" data-pix>${ICONS.pix}</button>
-        <button class="icon-btn" title="Agendar consulta para este paciente" aria-label="Agendar consulta" data-schedule>${ICONS.calendar}</button>
-        <button class="icon-btn" title="Documentos: atestado, receita, encaminhamento" aria-label="Documentos" data-docs>${ICONS.doc}</button>` : '';
+        ${secretary ? '' : `<button class="icon-btn" title="Documentos: atestado, receita, encaminhamento" aria-label="Documentos" data-docs>${ICONS.doc}</button>`}` : ''; // secretária não emite documentos (assinatura do profissional)
       threadWrap.innerHTML = `
         <div class="thread-head">
           <button class="icon-btn back-btn" aria-label="Voltar" data-close>${ICONS.back}</button>
@@ -188,8 +187,10 @@
         <div class="messages-wrap">
           <div class="messages" data-messages></div>
         </div>
+        <div data-pay-ask></div>
         <form class="composer" data-composer>
           ${role === 'professional' && window.AcoliaQuick ? `<button class="icon-btn quick-btn" type="button" data-quick aria-label="Mensagens prontas" title="Mensagens prontas" ${canWrite(c) ? '' : 'disabled'}>${ICONS.plus}</button>` : ''}
+          ${role === 'professional' && window.AcoliaAgenda ? `<button class="icon-btn quick-btn" type="button" data-schedule aria-label="Marcar consulta" title="Marcar consulta para este paciente" ${canWrite(c) ? '' : 'disabled'}>${ICONS.calendar}</button>` : ''}
           <textarea rows="1" placeholder="${!c.peer.active ? 'Esta conta não está mais ativa' : c.blocked_by_me || c.blocked_me ? 'Mensagens bloqueadas' : c.refund_lock ? 'Faça o reembolso para voltar a conversar' : 'Digite uma mensagem'}" aria-label="Mensagem" ${canWrite(c) ? '' : 'disabled'} maxlength="4000"></textarea>
           <button class="icon-btn rec-cancel" type="button" data-rec-cancel aria-label="Apagar áudio" title="Apagar áudio">${ICONS.trash}</button>
           <div class="rec-bar" aria-live="polite"><span class="rec-dot"></span><b data-rec-time>0:00</b><div class="rec-live" data-rec-live></div>
@@ -504,6 +505,7 @@
         html += msgHtml(m);
       }
       html += '<div class="typing hidden" data-typing>digitando…</div>';
+      renderPayAsk();
       const prevHeight = box.scrollHeight;
       const prevTop = box.scrollTop;
       box.innerHTML = html;
@@ -513,6 +515,29 @@
       else box.scrollTop = box.scrollHeight - prevHeight + prevTop;
       // Foto de publicação que termina de carregar depois: continua no fim da conversa
       if (scrollBottom) $$('img', box).forEach((im) => { if (!im.complete) im.addEventListener('load', () => { box.scrollTop = box.scrollHeight; }, { once: true }); });
+    }
+
+    // Profissional/secretária: "O paciente fez o pagamento?" em cima do campo de mensagem (Pix manual),
+    // enquanto ainda dá para conversar (ex.: perguntar o nome de quem pagou)
+    let payAskTimer = null;
+    function renderPayAsk() {
+      const el = $('[data-pay-ask]', threadWrap);
+      if (!el) return;
+      clearInterval(payAskTimer);
+      const ask = role === 'professional' ? state.messages.filter((m) => m.kind === 'booking' && m.booking?.can?.approve && latestBooking[m.booking.id] === m.id).map((m) => m.booking).pop() : null;
+      if (!ask) { el.innerHTML = ''; el.className = ''; return; }
+      el.className = 'pay-ask';
+      el.innerHTML = `<span class="grow">💰 O paciente fez o pagamento de <b>${money(ask.price_cents)}</b>? <span class="small muted">(${esc(ask.when)})</span> <span class="pa-time" data-pa-time></span></span>
+        <button type="button" class="btn sm" data-ag-act="approve" data-ag-id="${ask.id}">Sim</button>
+        <button type="button" class="btn sm secondary" data-ag-act="reject" data-ag-id="${ask.id}">Não</button>`;
+      const tick = () => {
+        const left = Date.parse(ask.hold_until) - Date.now();
+        const t = $('[data-pa-time]', el);
+        if (!t) return clearInterval(payAskTimer);
+        t.textContent = left > 0 ? `· ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}` : '· tempo para pagar acabou';
+      };
+      tick();
+      payAskTimer = setInterval(tick, 1000);
     }
 
     async function loadOlder() {

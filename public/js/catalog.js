@@ -25,7 +25,7 @@
       </div>
       ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}
       ${p.specialties ? `<div class="meta">${window.AcoliaSpecialties ? AcoliaSpecialties.badges(p) : p.specialties.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 2).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
-      ${p.next_available ? `<div class="next-line">${ICONS.calendar.replace('<svg', '<svg style="width:15px;height:15px"')} Próximo dia disponível: <b>${esc(p.next_available.label)}</b></div>` : ''}
+      ${p.next_available ? `<div class="next-line">${ICONS.calendar.replace('<svg', '<svg style="width:15px;height:15px"')} Próximo dia disponível: <b>${esc(p.next_available.label)}${p.next_available.first ? ` às ${esc(p.next_available.first)}` : ''}</b></div>` : ''}
       ${priceLine(p)}
       <div class="actions"><a class="btn ${pro ? '' : 'secondary'} sm grow" href="${profileHref(p)}">Ver perfil</a>
         ${pro ? '' : `<button class="btn sm grow" ${p.locked ? 'data-need-account' : 'data-msg'}>${ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"')} Mensagem</button>`}</div>
@@ -53,6 +53,14 @@
           <div class="filter-grid">
             <div class="field"><label for="f-prof">Tipo de profissional</label>
               <select id="f-prof" name="profession"><option value="">Todos os tipos</option></select></div>
+            <div class="field"><label for="f-disp">Consulta disponível</label>
+              <select id="f-disp" name="disp">
+                <option value="">Qualquer dia</option>
+                <option value="hoje">Hoje</option>
+                <option value="amanha">Até amanhã</option>
+                <option value="3">Nos próximos 3 dias</option>
+                <option value="7">Nos próximos 7 dias</option>
+              </select></div>
             <div class="field ${full ? '' : 'hidden'}"><label for="f-state">Estado</label>
               <select id="f-state" name="state"><option value="todos">Todos os estados</option></select></div>
             <div class="field ${full ? '' : 'hidden'}"><label for="f-city">Município</label><input id="f-city" name="city" placeholder="Qualquer município"></div>
@@ -75,6 +83,10 @@
           <div class="row"><button class="btn" type="submit">Aplicar filtros</button><button class="btn ghost" type="button" data-clear>Limpar filtros</button></div>
         </div>
       </form>
+      <div class="disp-chips" role="group" aria-label="Consulta disponível">
+        <span class="small muted">Consulta disponível:</span>
+        ${[['', 'Qualquer dia'], ['hoje', 'Hoje'], ['amanha', 'Até amanhã'], ['7', 'Próximos 7 dias']].map(([v, t]) => `<button type="button" class="chip-btn ${v ? '' : 'on'}" data-disp="${v}">${t}</button>`).join('')}
+      </div>
       <p class="muted small" data-hint style="margin:12px 0"></p>
       <div class="pro-grid" data-grid><div class="spinner"></div></div>`;
 
@@ -93,6 +105,10 @@
     const spFilter = window.AcoliaSpecialties ? AcoliaSpecialties.picker($('[data-sp-filter]', root), { onChange: (l) => { spChosen = l; } }) : null;
     if (!spFilter) $('.sp-filter', root).remove();
 
+    // Atalhos de disponibilidade (os mesmos do filtro "Consulta disponível")
+    const syncDisp = () => $$('[data-disp]', root).forEach((b) => b.classList.toggle('on', b.dataset.disp === form.disp.value));
+    $$('[data-disp]', root).forEach((b) => b.addEventListener('click', () => { form.disp.value = b.dataset.disp; syncDisp(); load(); }));
+    form.disp.addEventListener('change', syncDisp);
     toggle.addEventListener('click', () => {
       const open = panel.classList.toggle('hidden') === false;
       toggle.setAttribute('aria-expanded', String(open));
@@ -103,12 +119,14 @@
       form.city.value = '';
       spFilter?.then((sp) => sp.set([]));
       spChosen = [];
+      syncDisp();
       load();
     });
 
     function activeFilters() {
       let n = 0;
       if (form.profession.value) n++;
+      if (form.disp.value) n++;
       if (form.state.value && form.state.value !== 'todos') n++;
       if (form.city.value.trim()) n++;
       if (form.place.value.trim()) n++;

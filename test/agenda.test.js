@@ -247,8 +247,8 @@ test('manual: sem a chave Pix em 5 minutos o horário volta; "não aprovado" per
   assert.equal(m.at(-1).event, 'recusado');
   assert.equal(m.at(-1).booking.can.retry, true);
   r = await bia.post(`/api/agenda/appointments/${b.id}/retry`, { yes: true });
-  assert.equal(r.data.status, 'aguardando_pix', 'volta a esperar a chave Pix');
-  await P.cl.post(`/api/agenda/appointments/${b.id}/send-pix`);
+  assert.equal(r.data.status, 'aguardando_pagamento', 'tenta de novo direto: a chave e o valor voltam no cartão');
+  assert.equal(r.data.can.copy_pix, true);
   r = await P.cl.post(`/api/agenda/appointments/${b.id}/manual-result`, { approved: true });
   assert.equal(r.data.status, 'confirmada');
 });
@@ -265,7 +265,7 @@ test('remarcar: só uma vez e até 30 minutos antes; cancelar pede motivo e trav
   assert.equal(r.status, 403, 'segunda remarcação não');
   assert.match(r.data.error, /uma vez/);
   // O horário antigo voltou a ficar livre
-  assert.ok((await bia.get(`/api/agenda/pro/${P.id}/day?date=2030-01-08`)).data.slots.some((s) => s.label === '08:00'));
+  assert.ok((await P.cl.get(`/api/agenda/pro/${P.id}/day?date=2030-01-08`)).data.slots.some((s) => s.label === '08:00'));
   // Cancelar: precisa de motivo
   r = await ana.post(`/api/agenda/appointments/${a.id}/cancel`, {});
   assert.equal(r.status, 400);
@@ -562,4 +562,55 @@ test('conta apagada: consultas futuras são canceladas', async () => {
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(G.getAppt(id).status, 'cancelada');
   assert.ok((await ana.get(`/api/agenda/pro/${P.id}/day?date=2030-01-24`)).data.slots.some((s) => s.label === '08:00'), 'horário liberado');
+});
+
+test('uma consulta por dia por paciente; marcar pelo chat com "Copiar Pix"; cancelar agendamento; secretária sem documentos; filtro de disponibilidade', async () => {
+  const duda = await mkPatient('Duda Regra Dias', '390.533.447-05');
+  // Marca com P na segunda 28/01 e não consegue outra no mesmo dia (nem com outro profissional)
+  let r = await duda.post('/api/agenda/book', { professional_id: P.id, start: at('2030-01-28', '08:00'), accept: true });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  r = await duda.post('/api/agenda/book', { professional_id: Q.id, start: at('2030-01-28', '14:00'), accept: true });
+  assert.equal(r.status, 409);
+  assert.match(r.data.error, /uma consulta por dia/);
+  assert.equal((await duda.get(`/api/agenda/pro/${Q.id}/day?date=2030-01-28`)).data.slots.length, 0, 'o dia some para ela');
+  const month = (await duda.get(`/api/agenda/pro/${Q.id}/month?ym=2030-01`)).data.days;
+  assert.ok(month.find((d) => d.date === '2030-01-28').taken, 'calendário mostra que já tem consulta');
+  assert.ok((await duda.get(`/api/agenda/pro/${Q.id}/day?date=2030-01-29`)).data.slots.length > 0, 'no dia seguinte pode');
+  // Pelo chat: o profissional marca (proposta) e o paciente vê "Copiar Pix" com o valor
+  const conv = (await duda.post('/api/chat/conversations', { professional_id: P.id })).data;
+  await duda.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Oi! Quero marcar.' });
+  r = await P.cl.post('/api/agenda/propose', { conversation_id: conv.id, start: at('2030-01-28', '15:00') });
+  assert.equal(r.status, 409, 'mesmo dia: não');
+  assert.match(r.data.error, /Este paciente já tem/);
+  const free30 = (await P.cl.get(`/api/agenda/pro/${P.id}/day?date=2030-01-30`)).data.slots;
+  r = await P.cl.post('/api/agenda/propose', { conversation_id: conv.id, start: free30[1].start });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const prop = r.data;
+  let pv = (await duda.get(`/api/agenda/appointments/${prop.id}`)).data;
+  assert.equal(pv.can.copy_pix, true);
+  assert.ok(pv.pix_payload && pv.price_cents > 0);
+  assert.equal(prop.can.withdraw, true, 'profissional pode cancelar o agendamento antes do pagamento');
+  r = await P.cl.post(`/api/agenda/appointments/${prop.id}/withdraw`);
+  assert.equal(r.data.status, 'cancelada');
+  const m = await msgs(duda, conv.id);
+  assert.equal(m.at(-1).event, 'cancelada');
+  assert.equal(m.at(-1).extra, 'pro_antes_pagar');
+  // Secretária: marca pelo chat, mas não emite documentos
+  const creds = (await P.cl.post('/api/professional/secretary')).data;
+  const sec = client();
+  await sec.post('/api/auth/professional/login', { login: creds.login, password: creds.password });
+  r = await sec.post('/api/agenda/propose', { conversation_id: conv.id, start: free30[2].start });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal((await sec.post(`/api/agenda/appointments/${r.data.id}/withdraw`)).status, 200);
+  assert.equal((await sec.get(`/api/docs/options/${conv.id}`)).status, 403);
+  r = await sec.post('/api/docs', { conversation_id: conv.id, kind: 'encaminhamento' });
+  assert.equal(r.status, 403);
+  assert.match(r.data.error, /assinatura do profissional/);
+  await P.cl.del('/api/professional/secretary');
+  // Vitrine: filtro "consulta disponível"
+  const ids = async (q) => (await anon.get(`/api/professionals${q}`)).data.items.map((p) => p.id);
+  assert.ok((await ids('?disp=7')).includes(P.id));
+  const Z = await mkPro('Zeca Sem Agenda', 'zeca.agenda@example.com', '11955556666', 'CRP 06/51009', { pix_key: 'z@pix.com' });
+  assert.ok((await ids('')).includes(Z.id));
+  assert.ok(!(await ids('?disp=7')).includes(Z.id), 'sem agenda aberta não aparece');
 });

@@ -89,6 +89,16 @@ No chat, paciente e profissional podem mandar **mensagens de voz** no estilo Wha
 
 O profissional só vê uma conversa depois que o paciente manda a primeira mensagem. A única exceção é a da versão 1.1.2, abaixo.
 
+**Agendar pelo chat, uma consulta por dia e filtro de disponibilidade:**
+- **Marcar pelo chat:** o profissional (ou a secretária) toca no **📅 ao lado do +** no campo de mensagem, escolhe o dia e o horário e envia. O paciente recebe "📅 Consulta quase pronta: falta o pagamento":
+  - com **Asaas**: botão **"Pagar agora"** (aceita a política e vê o QR Code do Pix; confirma sozinho);
+  - **sem Asaas**: botão **"Copiar Pix · R$ …"** (aceita a política, copia a chave e vê o valor). Em cima do campo de mensagem do profissional aparece **"O paciente fez o pagamento? Sim / Não"** com os 10 minutos correndo; dá para continuar conversando. **Sim** → consulta agendada (aviso fixo com contagem). **Não** → o paciente pode tentar de novo e a pergunta volta.
+  - Todos os cartões antes do pagamento têm um **"Cancelar agendamento"** pequeno (paciente, profissional e secretária).
+- **Uma consulta por dia:** cada paciente marca uma consulta por dia (com qualquer profissional). No calendário o dia ocupado aparece marcado e explica "Você já tem uma consulta marcada para …: marque para outro dia"; o "Dia disponível" do perfil pula esse dia. O servidor confere.
+- **Vitrine:** filtro e atalhos **"Consulta disponível"**: Hoje, Até amanhã, Próximos 3 ou 7 dias. O cartão mostra o dia e o horário ("Hoje às 11:20").
+- **Secretária não envia documentos** (atestado, receita, encaminhamento levam a assinatura do profissional): o botão some e o servidor recusa.
+- **Contas de teste apagadas** uma vez (Profissional Teste, Paciente Teste e a secretária de teste) e não voltam sozinhas; o admin recria pelo botão "Preparar o teste de novo" se quiser.
+
 **Versão 1.1.3 — secretária e chamadas** (`server/secretary.js`, `public/js/secretary.js`):
 - **Criar:** em **Meu perfil**, logo depois da Localização, o profissional cria **uma** secretária. O sistema gera o **login** (`secretaria.xxxxxx`) e a **senha**, que só aparece nessa hora. Há os botões "Copiar login e senha", "Gerar nova senha" e "Apagar secretária". Gerar nova senha ou apagar derruba a secretária do painel na hora.
 - **Entrar:** a secretária entra no mesmo lugar do profissional (Entrar → Sou profissional) e usa o painel dele. Embaixo, no lugar do aviso de consulta, fica sempre o aviso "Você está usando o painel como secretária de …" e, em cima dele, pequeno, a próxima consulta do profissional (paciente, horário, quanto falta e "Ver", que abre Consultas).

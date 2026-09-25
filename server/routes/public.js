@@ -74,6 +74,19 @@ router.get('/professionals', (req, res) => {
   const maxPrice = me || viewerIsPro ? Number(req.query.max_price) : 0;
   if (maxPrice > 0) rows = rows.filter((p) => p.price_cents != null && p.price_cents <= maxPrice * 100);
 
+  // Disponível para consulta: hoje, até amanhã, em até 3 ou 7 dias (pelo próximo dia livre da agenda)
+  const within = { hoje: 0, amanha: 1, '3': 3, '7': 7 }[String(req.query.disp || '')];
+  if (within !== undefined) {
+    const G = require('../agenda');
+    const limit = G.addDays(G.localDate(G.now()), within);
+    const viewerTest = !!req.auth?.user?.is_test;
+    rows = rows.filter((p) => {
+      if (!!p.is_test !== viewerTest) return false;
+      const nx = G.nextAvailableFor(p, me ? me.id : null);
+      return nx && nx.date <= limit;
+    });
+  }
+
   let favSet = new Set();
   if (me) {
     favSet = new Set(db.prepare('SELECT professional_id FROM favorites WHERE patient_id = ?').all(me.id).map((r) => r.professional_id));
@@ -98,7 +111,7 @@ router.get('/professionals', (req, res) => {
     my_state: me ? me.state : null,
     my_city: me ? me.city : null,
     items: rows.map((p) => (me
-      ? { ...publicProfessional(p, { loggedIn: true, favorite: favSet.has(p.id), viewerTest: !!me.is_test }), near: near(p) === 0 }
+      ? { ...publicProfessional(p, { loggedIn: true, favorite: favSet.has(p.id), viewerTest: !!me.is_test, viewerPatientId: me.id }), near: near(p) === 0 }
       : publicProfessional(p, { loggedIn: viewerIsPro, viewerTest: !!req.auth?.user?.is_test }))),
   });
 });
@@ -117,7 +130,7 @@ router.get('/professionals/:id', (req, res) => {
   const isPatient = role === 'patient';
   const logged = isPatient || role === 'professional'; // profissionais também veem o perfil completo
   const favorite = isPatient && !!db.prepare('SELECT 1 FROM favorites WHERE patient_id = ? AND professional_id = ?').get(req.auth.user.id, p.id);
-  const out = publicProfessional(p, { loggedIn: logged, favorite, viewerTest: !!(logged && req.auth.user.is_test) });
+  const out = publicProfessional(p, { loggedIn: logged, favorite, viewerTest: !!(logged && req.auth.user.is_test), viewerPatientId: isPatient ? req.auth.user.id : null });
   if (logged) {
     out.following = !!db.prepare('SELECT 1 FROM follows WHERE follower_role = ? AND follower_id = ? AND professional_id = ?').get(role, req.auth.user.id, p.id);
     out.is_self = role === 'professional' && req.auth.user.id === p.id;

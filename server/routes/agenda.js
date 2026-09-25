@@ -21,7 +21,7 @@ const isPro = (req) => req.auth?.role === 'professional';
 router.get('/pro/:id/next', (req, res) => {
   const pro = visiblePro(req.params.id);
   if (!pro) throw new U.HttpError(404, 'Profissional não encontrado.');
-  res.json({ next: sameKind(pro, req.auth?.user) ? G.nextAvailable(pro) : null });
+  res.json({ next: sameKind(pro, req.auth?.user) ? G.nextAvailableFor(pro, isPatient(req) ? req.auth.user.id : null) : null });
 });
 
 router.use(A.requireRole('patient', 'professional'));
@@ -111,7 +111,7 @@ router.post('/propose', async (req, res) => {
   const ready = G.readiness(pro);
   if (!ready.ok) throw new U.HttpError(409, 'Abra a sua agenda primeiro (horários, valor da consulta e forma de receber).');
   const a = tx(() => {
-    const slot = G.assertFree(pro, req.body.start, { patientId: pat.id });
+    const slot = G.assertFree(pro, req.body.start, { patientId: pat.id, who: 'pro' });
     const t = G.now();
     const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, hold_until, pix_payload)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'profissional', 'aguardando_pagamento', ?, ?)`).run(pro.id, pat.id, c.id, G.iso(slot.start), G.iso(slot.end), pro.price_cents,
@@ -248,7 +248,12 @@ router.post('/appointments/:id/retry', (req, res) => {
   const a = loadMine(req, req.params.id);
   if (!G.canDo(a, 'patient').retry) throw new U.HttpError(409, 'Esta consulta não está mais esperando resposta.');
   let upd;
-  if (req.body.yes) {
+  const key = String(G.getPro(a.professional_id).pix_key || '').trim();
+  if (req.body.yes && key) {
+    // Tenta de novo direto: a chave e o valor voltam no cartão e o profissional confirma quando o Pix cair
+    upd = G.setStatus(a.id, { status: 'aguardando_pagamento', hold_until: G.iso(G.now() + G.RULES.PAY_MIN * MIN), pix_payload: key });
+    G.post(upd, 'patient', 'tentar', 'direto');
+  } else if (req.body.yes) {
     upd = G.setStatus(a.id, { status: 'aguardando_pix', hold_until: G.iso(G.now() + G.RULES.PRO_PIX_MIN * MIN), pix_payload: null });
     G.post(upd, 'patient', 'tentar');
   } else {
@@ -301,6 +306,23 @@ router.post('/appointments/:id/manual-result', (req, res) => {
   }
   const upd = G.setStatus(a.id, { status: 'pagamento_recusado', hold_until: G.iso(G.now() + G.RULES.ANSWER_MIN * MIN) });
   G.post(upd, 'professional', 'recusado');
+  G.notifyBoth(upd);
+  res.json(G.view(upd, role(req)));
+});
+
+// Cancelar agendamento antes do pagamento (profissional ou secretária): o horário fica livre
+router.post('/appointments/:id/withdraw', async (req, res) => {
+  if (!isPro(req)) throw new U.HttpError(403, 'Só o profissional usa esta opção.');
+  const a = loadMine(req, req.params.id);
+  if (!G.canDo(a, 'professional').withdraw) throw new U.HttpError(409, 'Esta consulta já foi paga. Se não puder atender, use "Não vou poder atender".');
+  if (a.mode === 'auto' && a.pay_id) {
+    const cur = await G.checkPayment(a, { force: true });
+    if (cur.status === 'confirmada') throw new U.HttpError(409, 'O Pix do paciente acabou de cair: a consulta está marcada. Se não puder atender, use "Não vou poder atender".');
+    const pay = G.autoPayment(a.professional_id);
+    if (pay) require('../asaas').cancel(pay.env, pay.key, a.pay_id);
+  }
+  const upd = G.setStatus(a.id, { status: 'cancelada', hold_until: null, cancel_reason: 'profissional_desistiu' });
+  G.post(upd, 'professional', 'cancelada', 'pro_antes_pagar');
   G.notifyBoth(upd);
   res.json(G.view(upd, role(req)));
 });

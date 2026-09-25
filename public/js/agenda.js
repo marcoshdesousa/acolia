@@ -48,6 +48,7 @@
     const r = rules || { CUTOFF_MIN: 30, PAY_MIN: 10, PRO_PIX_MIN: 5, PRO_GRACE_MIN: 3, PRO_CANCEL_H: 24 };
     return `<ul class="policy-list">
       <li>O pagamento é <b>só por Pix</b> e confirma a consulta. Você tem <b>${r.PAY_MIN} minutos</b> para pagar; depois disso o horário é liberado.</li>
+      <li>Cada paciente marca <b>uma consulta por dia</b>.</li>
       <li>Você pode <b>remarcar uma vez</b> ou <b>cancelar com reembolso</b> até <b>${r.CUTOFF_MIN} minutos antes</b>. Com ${r.CUTOFF_MIN} minutos ou menos, não dá mais para remarcar nem pedir reembolso.</li>
       <li>Se você <b>não entrar na chamada</b> até ${r.PRO_GRACE_MIN} minutos depois do horário, a chamada é encerrada e o valor <b>não é devolvido</b>.</li>
       <li>Se o profissional não puder atender, ele avisa até ${r.PRO_CANCEL_H} horas antes e <b>você escolhe</b>: reembolso ou remarcar.</li>
@@ -133,15 +134,25 @@
           <div class="cal-grid">${WD.map((d) => `<span class="cal-wd">${d}</span>`).join('')}${'<span></span>'.repeat(firstDow)}${info.days.map((d) => {
             const n = Number(d.date.slice(8));
             const on = d.free > 0;
+            // Dia em que o paciente já tem consulta (uma por dia): marcado e, ao tocar, explica
+            if (d.taken) return `<button type="button" class="cal-day taken ${sel?.date === d.date ? 'sel' : ''}" data-taken="${d.date}" aria-label="${n}, já tem consulta neste dia">${n}</button>`;
             return `<button type="button" class="cal-day ${on ? 'on' : ''} ${d.date === info.today ? 'today' : ''} ${sel?.date === d.date ? 'sel' : ''}" data-day="${d.date}" ${on ? '' : 'disabled'} aria-label="${n}${on ? `, ${d.free} horário(s) livre(s)` : ', sem horário'}">${n}</button>`;
           }).join('')}</div>
           <p class="small muted cal-legend"><span class="cal-dot"></span> dias com horário livre · ${info.minutes} min por consulta · ${info.price_cents != null ? money(info.price_cents) : ''}</p>
+          ${info.days.some((d) => d.taken) ? `<p class="small cal-taken-note"><span class="cal-dot taken"></span> ${mode === 'propose' ? 'Este paciente já tem consulta neste dia' : 'Você já tem consulta neste dia'}: cada paciente marca <b>uma consulta por dia</b>.</p>` : ''}
         </div>
         <div data-slots></div>
         <div class="ag-foot" data-foot></div>`;
       $('[data-prev]', page.body).addEventListener('click', () => { ym = shiftYm(ym, -1); sel = null; loadMonth(); });
       $('[data-next]', page.body).addEventListener('click', () => { ym = shiftYm(ym, 1); sel = null; loadMonth(); });
       $$('[data-day]', page.body).forEach((b) => b.addEventListener('click', () => pickDay(b.dataset.day)));
+      $$('[data-taken]', page.body).forEach((b) => b.addEventListener('click', () => {
+        const d = info.days.find((x) => x.date === b.dataset.taken);
+        sel = null;
+        $$('[data-day], [data-taken]', page.body).forEach((x) => x.classList.toggle('sel', x === b));
+        $('[data-slots]', page.body).innerHTML = `<div class="notice warn small">📅 ${mode === 'propose' ? 'Este paciente já tem' : 'Você já tem'} uma consulta marcada para <b>${esc(d.taken.when)}</b>${d.taken.with ? ` com ${esc(d.taken.with)}` : ''}. Cada paciente marca uma consulta por dia: ${mode === 'propose' ? 'escolha outro dia' : 'marque para outro dia'}.</div>`;
+        renderFoot();
+      }));
       if (!info.days.some((d) => d.free > 0)) $('[data-slots]', page.body).innerHTML = '<p class="muted center">Nenhum horário livre neste mês. Toque em › para ver o próximo.</p>';
       if (sel) pickDay(sel.date, true);
       renderFoot();
@@ -185,7 +196,7 @@
         </div>
         ${mode === 'book' ? `<h3 style="margin:18px 0 6px">Política de agendamento</h3>${policyHtml(rules)}
         <label class="check" style="margin:14px 0"><input type="checkbox" data-accept> Li e aceito a política de agendamento e cancelamento</label>` : ''}
-        ${mode === 'propose' ? `<p class="notice info small" style="margin-top:14px">O paciente recebe a proposta na conversa, lê e aceita a política de agendamento e tem ${rules?.PAY_MIN || 10} minutos para pagar. ${info.mode === 'auto' ? 'O Pix é o da sua conta Asaas: quando cair, a consulta é marcada sozinha.' : 'A sua chave Pix vai junto; quando o dinheiro cair, toque em "Pagamento aprovado".'}</p>` : ''}
+        ${mode === 'propose' ? `<p class="notice info small" style="margin-top:14px">O paciente recebe na conversa <b>"Sua consulta está quase pronta"</b>, aceita a política de agendamento e tem ${rules?.PAY_MIN || 10} minutos para pagar. ${info.mode === 'auto' ? 'Ele toca em "Pagar agora" e paga o Pix da sua conta Asaas: quando cair, a consulta é confirmada sozinha.' : 'Ele toca em "Copiar Pix" (sua chave e o valor já vão juntos). Quando o dinheiro cair, toque em <b>Sim</b> em "O paciente fez o pagamento?", em cima do campo de mensagem.'}</p>` : ''}
         <div class="form-error hidden" data-err></div>
         <div class="row" style="gap:10px;margin-top:10px"><button type="button" class="btn secondary" data-back2>Voltar</button>
           <button type="button" class="btn grow" data-ok ${mode === 'book' ? 'disabled' : ''}>${mode === 'reschedule' ? 'Remarcar' : mode === 'propose' ? 'Enviar para o paciente' : `Ir para o pagamento (${info.mode === 'auto' ? 'Pix' : 'Pix pelo chat'})`}</button></div>`;
@@ -322,6 +333,31 @@
     refreshAll();
   }
 
+  // Pix manual: copia a chave (e mostra o valor). Na primeira vez, o paciente aceita a política.
+  async function copyPix(a) {
+    if (a.can?.accept) {
+      let rules = null;
+      try { rules = (await api('/api/agenda/appointments')).rules; } catch { /* padrão */ }
+      const ok = await modal({
+        title: 'Confirmar consulta',
+        html: `<p><b>${esc(a.when)}</b> · ${money(a.price_cents)} · ${a.minutes} min</p>${policyHtml(rules)}
+          <label class="check" style="margin-top:12px"><input type="checkbox" data-accept> Li e aceito a política de agendamento e cancelamento</label>`,
+        actions: [{ label: 'Agora não', value: false, class: 'secondary' }, { label: 'Aceitar e copiar o Pix', handler: (dlg) => ($('[data-accept]', dlg).checked ? true : (toast('Marque "Li e aceito" para continuar.', 'error'), false)) }],
+      });
+      if (!ok) return;
+      a = await api(`/api/agenda/appointments/${a.id}/accept`, { method: 'POST' });
+    }
+    copyText(a.pix_payload);
+    await modal({
+      title: 'Chave Pix copiada ✓',
+      html: `<div class="pix-manual-box"><span class="small muted">Valor</span><b class="pix-value">${money(a.price_cents)}</b>
+          <span class="small muted">Chave Pix do profissional</span><div class="code-box" style="font-size:1rem;word-break:break-all">${esc(a.pix_payload || '')}</div></div>
+        <p class="small muted">Abra o app do seu banco, escolha <b>Pix → Pagar com chave</b>, cole a chave e pague <b>${money(a.price_cents)}</b> em até 10 minutos. O profissional confirma aqui na conversa quando o dinheiro cair.</p>`,
+      actions: [{ label: 'Copiar de novo', class: 'secondary', handler: () => { copyText(a.pix_payload); return false; } }, { label: 'Ok' }],
+    });
+    refreshAll();
+  }
+
   // ---------- Ações (do "Ver" e dos cartões do chat) ----------
   async function cancelDialog(a) {
     const { reasons, rules } = await api('/api/agenda/appointments');
@@ -368,11 +404,21 @@
         }
         case 'cancel': await cancelDialog(a); break;
         case 'give_up':
-          if (!await confirmDialog('Desistir desta consulta? O horário fica livre para outra pessoa.', { okLabel: 'Desistir', danger: true })) return;
+          if (!await confirmDialog('Cancelar este agendamento? Nada foi cobrado e o horário fica livre para outra pessoa.', { okLabel: 'Cancelar agendamento', danger: true, cancelLabel: 'Voltar' })) return;
           await api(`/api/agenda/appointments/${a.id}/cancel`, { method: 'POST', body: {} });
-          toast('Você desistiu da consulta.');
+          toast('Agendamento cancelado.');
           break;
-        case 'retry_yes': await api(`/api/agenda/appointments/${a.id}/retry`, { method: 'POST', body: { yes: true } }); toast('Ok! O profissional vai mandar a chave Pix de novo.'); break;
+        case 'withdraw':
+          if (!await confirmDialog(`Cancelar o agendamento de ${a.when} com ${a.patient.name}? Ele ainda não pagou e será avisado na conversa.`, { okLabel: 'Cancelar agendamento', danger: true, cancelLabel: 'Voltar' })) return;
+          await api(`/api/agenda/appointments/${a.id}/withdraw`, { method: 'POST' });
+          toast('Agendamento cancelado.');
+          break;
+        case 'copy_pix': await copyPix(a); return;
+        case 'retry_yes': {
+          const r = await api(`/api/agenda/appointments/${a.id}/retry`, { method: 'POST', body: { yes: true } });
+          toast(r.status === 'aguardando_pagamento' ? 'Ok! Toque em "Copiar Pix" e pague de novo.' : 'Ok! O profissional vai mandar a chave Pix de novo.');
+          break;
+        }
         case 'retry_no': await api(`/api/agenda/appointments/${a.id}/retry`, { method: 'POST', body: { yes: false } }); break;
         case 'refund_yes': await api(`/api/agenda/appointments/${a.id}/refund-received`, { method: 'POST', body: { yes: true } }); toast('Obrigado! Reembolso confirmado ✓'); break;
         case 'refund_no': await api(`/api/agenda/appointments/${a.id}/refund-received`, { method: 'POST', body: { yes: false } }); toast('Avisamos o profissional que o dinheiro ainda não chegou.'); break;
@@ -418,19 +464,21 @@
     const out = [];
     if (c.enter_call) out.push(b('enter', `${ic('video', 16)} Entrar na chamada`, ''));
     if (role === 'patient') {
-      if (c.accept) out.push(b('accept', 'Aceitar e pagar', ''));
-      else if (c.pay) out.push(b('pay', 'Pagar com Pix', ''));
+      if (c.copy_pix) out.push(b('copy_pix', `${ic('pix', 16)} Copiar Pix · ${money(a.price_cents)}`, ''));
+      else if (c.accept) out.push(b('accept', `${ic('pix', 16)} Pagar agora`, ''));
+      else if (c.pay) out.push(b('pay', `${ic('pix', 16)} Pagar agora`, ''));
       if (c.choose) out.push(b('choose', 'Escolher: reembolso ou remarcar', ''));
       if (c.retry) { out.push(b('retry_yes', 'Sim, quero tentar de novo', '')); out.push(b('retry_no', 'Não')); }
       if (c.refund_received) { out.push(b('refund_yes', 'Sim, recebi', '')); out.push(b('refund_no', 'Ainda não recebi')); }
       if (c.reschedule) out.push(b('reschedule', 'Remarcar'));
       if (c.cancel) out.push(b('cancel', 'Cancelar consulta', 'ghost danger-text'));
-      if (c.give_up && !c.retry) out.push(b('give_up', 'Desistir', 'ghost'));
+      if (c.give_up && !c.retry) out.push(b('give_up', 'Cancelar agendamento', 'ghost tiny-link'));
     } else {
       if (c.send_pix) out.push(b('send_pix', `${ic('pix', 16)} Enviar chave Pix`, ''));
       if (c.approve) { out.push(b('approve', 'Pagamento aprovado', '')); out.push(b('reject', 'Pagamento não aprovado', 'ghost danger-text')); }
       if (c.refund_done) out.push(b('refund_done', 'Fiz o reembolso', ''));
       if (c.pro_cancel) out.push(b('pro_cancel', 'Não vou poder atender', 'ghost danger-text'));
+      if (c.withdraw) out.push(b('withdraw', 'Cancelar agendamento', 'ghost tiny-link'));
     }
     return out.join('');
   }
@@ -449,16 +497,21 @@
   // ---------- Cartão da consulta no chat ----------
   const EVENT = {
     pedido: ['📅 Pedido de consulta', (a, r) => (r === 'professional' ? 'O paciente quer marcar esta consulta e fazer o pagamento. Mande a sua chave Pix em até 5 minutos.' : 'Pedido enviado. O profissional manda a chave Pix aqui em até 5 minutos.')],
-    proposta: ['📅 Proposta de consulta', (a, r) => (r === 'patient' ? `Toque em "Aceitar e pagar" para confirmar. Você tem 10 minutos para pagar o Pix.` : 'Enviada ao paciente. Ele tem 10 minutos para pagar.')],
+    proposta: ['📅 Consulta quase pronta: falta o pagamento', (a, r) => (r === 'patient'
+      ? (a.mode === 'auto' ? `Sua consulta de ${a.when} está quase pronta! Toque em "Pagar agora" e pague o Pix em até 10 minutos para confirmar.`
+        : `Sua consulta de ${a.when} está quase pronta! Toque em "Copiar Pix", pague ${money(a.price_cents)} no app do seu banco em até 10 minutos e o profissional confirma aqui.`)
+      : (a.mode === 'auto' ? 'Enviada ao paciente. Ele tem 10 minutos para pagar o Pix; a confirmação é automática.' : 'Enviada ao paciente com a sua chave Pix e o valor. Ele tem 10 minutos para pagar; confirme em cima do campo de mensagem quando o Pix cair.'))],
     agendada: ['✅ Consulta agendada', () => 'Pagamento aprovado. O link da chamada aparece aqui 5 minutos antes.'],
     remarcada: ['🔁 Consulta remarcada', (a, r, m) => (m.extra ? `Novo horário (antes era ${fmtIso(m.extra)}).` : 'Novo horário.')],
-    cancelada: ['Consulta cancelada', () => 'O horário foi liberado.'],
+    cancelada: ['Consulta cancelada', (a, r, m) => (m?.extra === 'pro_antes_pagar' ? (r === 'patient' ? 'O profissional cancelou este agendamento antes do pagamento. Nada foi cobrado.' : 'Agendamento cancelado antes do pagamento. O horário foi liberado.') : 'O horário foi liberado.')],
     reembolso_pedido: ['↩️ Pedido de reembolso', (a, r, m) => `${a.cancel_reason_label ? `Motivo: ${a.cancel_reason_label}${a.cancel_detail && a.cancel_reason === 'outros' ? ` — “${a.cancel_detail}”` : ''}. ` : ''}${a.mode === 'auto' && m.extra !== 'erro_auto' ? 'O reembolso automático foi pedido ao Pix.' : (r === 'professional' ? 'Devolva o valor pelo Pix e toque em "Fiz o reembolso". Até o paciente confirmar, você não consegue mandar mensagens para ele.' : 'O profissional vai devolver o valor pelo Pix.')}`],
     reembolso_feito: ['↩️ Reembolso feito', (a, r) => (r === 'patient' ? 'O profissional informou que devolveu o valor. Você recebeu?' : 'Esperando o paciente confirmar que recebeu.')],
     reembolso_nao: ['↩️ Reembolso ainda não chegou', (a, r) => (r === 'professional' ? 'O paciente disse que ainda não recebeu. Confira e toque em "Fiz o reembolso" de novo.' : 'Avisamos o profissional.')],
     reembolsada: ['✅ Reembolso concluído', () => 'O valor da consulta foi devolvido.'],
     recusado: ['⚠️ Pagamento não aprovado', (a, r) => (r === 'patient' ? 'Quer realmente fazer esta consulta? Se sim, o profissional manda a chave Pix de novo.' : 'O paciente vai responder se quer tentar de novo.')],
-    tentar: ['🔁 Nova tentativa de pagamento', (a, r) => (r === 'professional' ? 'Mande a chave Pix de novo em até 5 minutos.' : 'O profissional vai mandar a chave Pix de novo.')],
+    tentar: ['🔁 Nova tentativa de pagamento', (a, r, m) => (m?.extra === 'direto'
+      ? (r === 'professional' ? 'O paciente vai pagar de novo. Confirme em cima do campo de mensagem quando o Pix cair.' : `Toque em "Copiar Pix" e pague ${money(a.price_cents)} em até 10 minutos.`)
+      : (r === 'professional' ? 'Mande a chave Pix de novo em até 5 minutos.' : 'O profissional vai mandar a chave Pix de novo.'))],
     pro_cancelou: ['⚠️ O profissional não poderá atender', (a, r) => `${a.cancel_detail ? `“${a.cancel_detail}” · ` : ''}${r === 'patient' ? 'Escolha entre o reembolso e remarcar para outro horário.' : 'O paciente vai escolher entre o reembolso e remarcar.'}`],
     finalizada: ['✅ Chamada finalizada', () => 'A consulta terminou.'],
     paciente_ausente: ['⚠️ O paciente não entrou na chamada', (a, r) => (r === 'patient'
@@ -588,7 +641,8 @@
     if (reels) { bar.style.bottom = ''; return; }
     // (menu e campo de mensagem podem ser "fixed": confere se estão visíveis pelo tamanho na tela)
     const shown = (el) => { const r = el.getBoundingClientRect(); return r.height > 0 && r.width > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('.hidden'); };
-    const composer = [...$$('.composer')].find(shown);
+    // (no chat do profissional, a pergunta "O paciente fez o pagamento?" fica logo acima do campo)
+    const composer = [...$$('.pay-ask')].find(shown) || [...$$('.composer')].find(shown);
     const nav = [...$$('.bottom-nav')].find(shown);
     // Sempre acima do menu de baixo (casinha, profissionais, mensagens…) ou do campo de mensagem
     let bottom = null;

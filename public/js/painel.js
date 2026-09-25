@@ -227,6 +227,7 @@
   // Chamadas (câmera): só o profissional
   const callsPage = isSec ? null : AcoliaSecretary.mountCalls($('[data-calls-list]'));
   const chat = AcoliaChat.mount($('[data-chat]'), {
+    secretary: isSec, // secretária: sem documentos
     role: 'professional', me: () => me, socket, onUnreadChange: setUnread,
     onNavigate: (id) => { const h = id ? `#conversas/${id}` : '#conversas'; if (location.hash.startsWith('#conversas') && location.hash !== h) history.replaceState(null, '', h); },
   });

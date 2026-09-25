@@ -56,4 +56,25 @@ function seedOnce() {
   db.prepare("INSERT INTO settings (key, value) VALUES ('test_accounts_seeded', ?)").run(new Date().toISOString());
 }
 
-module.exports = { ensureTestAccounts, seedOnce, PRO, PATIENT };
+// Pedido do dono (depois dos testes da versão 1.1.3): apaga UMA vez as contas de teste (Profissional
+// Teste, Paciente Teste) e a secretária de teste, com tudo delas (conversas, consultas, Asaas simulado).
+// Não voltam sozinhas: só se o admin tocar em "Preparar o teste de novo".
+function removeTestAccountsOnce() {
+  const KEY = 'test_accounts_removed_v1';
+  if (db.prepare('SELECT 1 FROM settings WHERE key = ?').get(KEY)) return null;
+  const out = { professionals: 0, patients: 0 };
+  for (const p of db.prepare("SELECT * FROM professionals WHERE is_test = 1 AND status <> 'excluido'").all()) {
+    require('./routes/professional').wipeProfessional(p); // também apaga a secretária e o Asaas simulado
+    db.prepare('UPDATE professionals SET code = ?, slug = NULL WHERE id = ?').run(`excluido-${p.id}`, p.id);
+    out.professionals++;
+  }
+  for (const p of db.prepare("SELECT * FROM patients WHERE is_test = 1 AND status <> 'excluido'").all()) {
+    require('./routes/patient').wipePatient(p);
+    out.patients++;
+  }
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(KEY, new Date().toISOString());
+  if (out.professionals || out.patients) console.log(`[teste] contas de teste apagadas: ${out.professionals} profissional(is), ${out.patients} paciente(s)`);
+  return out;
+}
+
+module.exports = { ensureTestAccounts, seedOnce, removeTestAccountsOnce, PRO, PATIENT };

@@ -58,7 +58,7 @@ function shortBio(bio) {
 
 // viewerTest: quem está vendo é a conta de teste (o "dia disponível" de conta de teste só aparece
 // para conta de teste, e vice-versa: consultas de teste nunca se misturam com as de verdade)
-function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest = false } = {}) {
+function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest = false, viewerPatientId = null } = {}) {
   const base = {
     id: p.id,
     slug: p.slug,
@@ -96,7 +96,8 @@ function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest 
     instagram: p.instagram || '',
     social: require('./social').list(p), // Instagram, TikTok, X, YouTube: no perfil só o ícone
     // Próximo dia com horário livre na agenda (aparece para todos, até sem conta)
-    next_available: !!p.is_test === !!viewerTest ? require('./agenda').nextAvailable(p) : null,
+    // (paciente logado: pula o dia em que ele já tem consulta — uma por dia)
+    next_available: !!p.is_test === !!viewerTest ? require('./agenda').nextAvailableFor(p, viewerPatientId) : null,
     // Profissional Teste visto por conta de verdade: a agenda só abre para o Paciente Teste
     test_only: !!p.is_test && !viewerTest,
   };

@@ -163,9 +163,10 @@ async function start(port = Number(process.env.PORT) || 3000) {
   ensureAdmin();
   require('./launchReset').runOnce(); // início oficial: zera as contas de teste/antigas (uma vez só)
   require('./official').officialId(); // cria o perfil oficial Acolia Brasil (uma vez só)
-  if (process.env.TEST_ACCOUNTS !== '0') require('./testAccounts').seedOnce();
-  // Teste da agenda do dono: Profissional Teste pronto com o Asaas simulado (uma vez; os testes automáticos pulam)
-  if (process.env.SKIP_OWNER_TEST !== '1') require('./testAgenda').runOnce();
+  // Contas de teste (Profissional Teste, Paciente Teste e a secretária de teste): apagadas a pedido do
+  // dono, uma vez. Não são mais criadas sozinhas na subida do servidor: só pelos botões do admin
+  // ("Recriar contas de teste" / "Preparar o teste de novo").
+  require('./testAccounts').removeTestAccountsOnce();
   // Stories somem depois de 24 h
   const { cleanupStories } = require('./routes/social');
   cleanupStories();

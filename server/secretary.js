@@ -67,6 +67,9 @@ const DENY = [
   [null, /^\/api\/professional\/secretary(\/.*)?$/, 'mexer na secretária'],
   // pagamento automático (Asaas)
   [null, /^\/api\/agenda\/asaas$/, 'mexer no pagamento automático pelo Pix'],
+  // documentos (atestado, receita, encaminhamento): levam a assinatura do profissional
+  ['POST', /^\/api\/docs\/?$/, 'enviar documentos (atestado, receita ou encaminhamento): eles levam a assinatura do profissional'],
+  ['GET', /^\/api\/docs\/options\/[^/]+$/, 'enviar documentos (atestado, receita ou encaminhamento): eles levam a assinatura do profissional'],
   // chamadas de vídeo
   ['POST', /^\/api\/calls(\/(?!resolve$).*)?$/, 'entrar nas chamadas de vídeo'],
 ];

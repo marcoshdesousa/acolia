@@ -114,6 +114,16 @@
     try { st = await api('/api/admin/test-agenda'); } catch (e) { box.innerHTML = `<p class="small muted">${esc(e.message)}</p>`; return; }
     const ok = (v) => (v ? '✅' : '❌');
     const p = st.pro;
+    // Contas de teste apagadas: só o aviso e o botão para recriar, se um dia quiser testar de novo
+    if (!p.exists && !st.patient.active) {
+      box.innerHTML = `<b>Teste da agenda e do Pix automático</b>
+        <p class="small muted" style="margin:6px 0 10px">As contas de teste (Profissional Teste e Paciente Teste) estão apagadas. Se quiser testar a agenda e o Pix de novo, toque no botão: as duas contas voltam com o Asaas simulado.</p>
+        <button type="button" class="btn secondary sm" data-prep-test>Preparar o teste de novo</button>`;
+      $('[data-prep-test]', box).addEventListener('click', async () => {
+        try { await api('/api/admin/test-agenda/prepare', { method: 'POST' }); toast('Teste preparado ✓'); loadTestAgenda(); } catch (e) { toast(e.message, 'error'); }
+      });
+      return;
+    }
     const lines = p.exists ? [
       [p.status === 'aprovado' && p.visible, `Profissional Teste ativo e aparecendo (${esc(p.status)})`],
       [p.payment?.env === 'simulado' && p.payment.enabled, 'Pagamento: Asaas simulado conectado (o Paciente Teste paga em "Simular pagamento")'],
