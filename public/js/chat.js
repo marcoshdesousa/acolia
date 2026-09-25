@@ -6,7 +6,10 @@
 
   function mount(root, { role, me, socket, secretary = false, onUnreadChange = () => {}, onNavigate = () => {} }) {
     const getMe = typeof me === 'function' ? me : () => me;
-    const state = { archived: false, list: [], current: null, messages: [], hasMore: false, loadingOlder: false, typingTimer: null };
+    const state = { archived: false, list: [], current: null, messages: [], hasMore: false, loadingOlder: false, typingTimer: null, support: null };
+    // Suporte Acolia: conversa fixa no topo (endereços próprios em /api/support)
+    const isSup = () => !!state.current?.support;
+    const SUP = { id: 'suporte', support: true, peer: { name: 'Suporte Acolia', photo: '/img/logo-simbolo.png', active: true, subtitle: 'Equipe Acolia · dúvidas, erros e sugestões' } };
 
     root.innerHTML = `
       <div class="chat">
@@ -87,8 +90,9 @@
 
     async function loadList() {
       try {
-        const data = await api(`/api/chat/conversations?archived=${state.archived ? 1 : 0}`);
+        const [data, sup] = await Promise.all([api(`/api/chat/conversations?archived=${state.archived ? 1 : 0}`), api('/api/support').catch(() => null)]);
         state.list = data.items;
+        state.support = sup;
         const link = $('[data-archived-link]', root);
         link.classList.toggle('hidden', state.archived || data.archived_count === 0);
         $('[data-archived-count]', root).textContent = data.archived_count || '';
@@ -103,12 +107,23 @@
     }
 
     function renderList() {
+      // Suporte Acolia fixo no topo (não arquiva, não bloqueia)
+      const s = state.support;
+      const pinned = !state.archived && s ? `
+        <li class="conv pinned ${isSup() ? 'active' : ''}" data-support tabindex="0">
+          <span class="avatar sup-avatar"><img src="/img/logo-simbolo.png" alt=""></span>
+          <div class="grow">
+            <div class="top"><span class="nm">${esc(s.name)} <span class="pin-ic" title="Conversa fixada" aria-label="Conversa fixada">📌</span></span><span class="tm">${s.last_message ? fmtShort(s.last_message.created_at) : ''}</span></div>
+            <div class="row" style="gap:8px;flex-wrap:nowrap"><span class="pv grow">${esc(s.last_message ? previewOf(s.last_message) : 'Dúvidas, erros ou sugestões? Fale com a gente.')}</span>${s.unread ? `<span class="unread">${s.unread}</span>` : ''}</div>
+          </div>
+        </li>` : '';
       if (!state.list.length) {
-        listEl.innerHTML = `<li class="empty">${state.archived ? 'Nenhuma conversa arquivada.' : role === 'patient'
+        listEl.innerHTML = `${pinned}<li class="empty">${state.archived ? 'Nenhuma conversa arquivada.' : role === 'patient'
           ? 'Você ainda não tem conversas. Encontre um profissional e envie uma mensagem.' : 'Nenhuma conversa ainda. Quando um paciente enviar mensagem, ela aparece aqui.'}</li>`;
+        bindSupportItem();
         return;
       }
-      listEl.innerHTML = state.list.map((c) => `
+      listEl.innerHTML = pinned + state.list.map((c) => `
         <li class="conv ${state.current?.id === c.id ? 'active' : ''}" data-id="${c.id}" tabindex="0">
           ${avatar(c.peer.name, c.peer.photo)}
           <div class="grow">
@@ -116,17 +131,42 @@
             <div class="row" style="gap:8px;flex-wrap:nowrap"><span class="pv grow">${esc(previewOf(c.last_message))}</span>${c.unread ? `<span class="unread">${c.unread}</span>` : ''}</div>
           </div>
         </li>`).join('');
-      $$('.conv', listEl).forEach((li) => {
+      $$('.conv:not([data-support])', listEl).forEach((li) => {
         li.addEventListener('click', () => open(Number(li.dataset.id)));
         li.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(Number(li.dataset.id)); });
       });
+      bindSupportItem();
+    }
+    function bindSupportItem() {
+      const li = $('[data-support]', listEl);
+      if (!li) return;
+      li.addEventListener('click', openSupport);
+      li.addEventListener('keydown', (e) => { if (e.key === 'Enter') openSupport(); });
     }
 
     async function refreshUnread() {
-      try { onUnreadChange((await api('/api/chat/unread')).unread); } catch { /* ignora */ }
+      try { onUnreadChange((await api('/api/chat/unread')).unread + (state.support?.unread || 0)); } catch { /* ignora */ }
+    }
+
+    async function openSupport() {
+      try {
+        const data = await api('/api/support/messages');
+        state.current = { ...SUP };
+        state.messages = data.items.map((m) => ({ ...m, support: true }));
+        state.hasMore = data.has_more;
+        renderThread();
+        chatEl.classList.add('open');
+        const toEnd = () => { const box = $('[data-messages]', threadWrap); if (box) box.scrollTop = box.scrollHeight; };
+        requestAnimationFrame(toEnd);
+        setTimeout(toEnd, 250);
+        onNavigate('suporte');
+        markRead();
+        $$('.conv', listEl).forEach((li) => li.classList.toggle('active', li.hasAttribute('data-support')));
+      } catch (e) { toast(e.message, 'error'); }
     }
 
     async function open(id) {
+      if (id === 'suporte') return openSupport();
       try {
         const conv = await api(`/api/chat/conversations/${id}`);
         state.current = conv;
@@ -160,6 +200,7 @@
       const c = state.current;
       $('[data-empty]', root).classList.add('hidden');
       threadWrap.classList.remove('hidden');
+      if (c.support) { renderSupportThread(); return; }
       const proActions = role === 'professional' ? `
         <button class="icon-btn" title="Enviar chave Pix" aria-label="Enviar chave Pix" data-pix>${ICONS.pix}</button>
         ${secretary ? '' : `<button class="icon-btn" title="Documentos: atestado, receita, encaminhamento" aria-label="Documentos" data-docs>${ICONS.doc}</button>`}` : ''; // secretária não emite documentos (assinatura do profissional)
@@ -232,7 +273,7 @@
       ta.addEventListener('input', () => {
         ta.style.height = 'auto';
         ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
-        if (socket && !state.typingTimer) {
+        if (socket && !state.typingTimer && !isSup()) {
           socket.emit('chat:typing', { conversation_id: c.id });
           state.typingTimer = setTimeout(() => { state.typingTimer = null; }, 2500);
         }
@@ -250,7 +291,8 @@
         ta.style.height = 'auto';
         syncButtons();
         try {
-          addMessage(await api(`/api/chat/conversations/${c.id}/messages`, { method: 'POST', body: { body } }));
+          addMessage(isSup() ? { ...(await api('/api/support/messages', { method: 'POST', body: { body } })), support: true }
+            : await api(`/api/chat/conversations/${c.id}/messages`, { method: 'POST', body: { body } }));
         } catch (ex) { ta.value = body; toast(ex.message, 'error'); }
         ta.focus();
       });
@@ -277,6 +319,91 @@
           pop.remove();
           deleteMessage(Number(b.dataset.msgMenu), d.dataset.del);
         });
+      });
+    }
+
+    // ---------- Suporte Acolia: conversa com a equipe (texto, foto e áudio) ----------
+    function renderSupportThread() {
+      const c = state.current;
+      threadWrap.innerHTML = `
+        <div class="thread-head">
+          <button class="icon-btn back-btn" aria-label="Voltar" data-close>${ICONS.back}</button>
+          <span class="avatar sm sup-avatar"><img src="/img/logo-simbolo.png" alt=""></span>
+          <div class="grow" style="min-width:0">
+            <div class="nm">${esc(c.peer.name)}</div>
+            <div class="sub">${esc(c.peer.subtitle)}</div>
+          </div>
+          <div class="thread-menu-wrap">
+            <button class="icon-btn" data-thread-menu aria-label="Opções da conversa" title="Opções"><span style="font-size:1.3rem;line-height:1">⋮</span></button>
+            <div class="msg-pop thread-pop hidden" data-thread-pop>
+              <button type="button" data-clear>${ICONS.trash} Limpar conversa</button>
+            </div>
+          </div>
+        </div>
+        <div class="sup-note small">Tire dúvidas, avise se algo deu erro ou mande sugestões. Pode mandar <b>foto</b> e <b>áudio</b>. A equipe Acolia responde por aqui.</div>
+        <div class="messages-wrap"><div class="messages" data-messages></div></div>
+        <form class="composer" data-composer>
+          <label class="icon-btn quick-btn" title="Enviar foto" aria-label="Enviar foto">${ICONS.camera}<input type="file" accept="image/jpeg,image/png,image/webp" data-sup-photo hidden></label>
+          <textarea rows="1" placeholder="Escreva para o suporte" aria-label="Mensagem" maxlength="4000"></textarea>
+          <button class="icon-btn rec-cancel" type="button" data-rec-cancel aria-label="Apagar áudio" title="Apagar áudio">${ICONS.trash}</button>
+          <div class="rec-bar" aria-live="polite"><span class="rec-dot"></span><b data-rec-time>0:00</b><div class="rec-live" data-rec-live></div>
+            <button class="icon-btn rec-stop" type="button" data-rec-stop aria-label="Parar e ouvir antes de enviar" title="Parar e ouvir">${ICONS.stop}</button></div>
+          <div class="rec-preview" data-rec-preview></div>
+          <button class="btn send mic" type="button" data-mic aria-label="Gravar áudio" title="Gravar áudio">${ICONS.mic}</button>
+          <button class="btn send" type="submit" data-send aria-label="Enviar">${ICONS.send}</button>
+        </form>`;
+      renderMessages(true);
+      $('[data-close]', threadWrap).addEventListener('click', closeThread);
+      const pop = $('[data-thread-pop]', threadWrap);
+      $('[data-thread-menu]', threadWrap).addEventListener('click', (e) => { e.stopPropagation(); pop.classList.toggle('hidden'); });
+      $('[data-clear]', threadWrap).addEventListener('click', () => { pop.classList.add('hidden'); clearConversation(); });
+      const form = $('[data-composer]', threadWrap);
+      const ta = $('textarea', form);
+      const syncButtons = () => form.classList.toggle('has-text', ta.value.trim().length > 0);
+      syncButtons();
+      $('[data-mic]', form).addEventListener('click', () => startRecording(form));
+      $('[data-rec-cancel]', form).addEventListener('click', () => stopRecording(form, 'cancel'));
+      $('[data-rec-stop]', form).addEventListener('click', () => stopRecording(form, 'preview'));
+      ta.addEventListener('input', () => { syncButtons(); ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; });
+      ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(min-width: 801px)').matches) { e.preventDefault(); form.requestSubmit(); } });
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (form.classList.contains('recording')) { stopRecording(form, 'send'); return; }
+        if (form.classList.contains('previewing')) { sendRecording(form); return; }
+        const body = ta.value.trim();
+        if (!body) return;
+        ta.value = ''; ta.style.height = 'auto'; syncButtons();
+        try { addMessage({ ...(await api('/api/support/messages', { method: 'POST', body: { body } })), support: true }); } catch (ex) { ta.value = body; toast(ex.message, 'error'); }
+        ta.focus();
+      });
+      // Foto: diminui antes de enviar (até 3 MB)
+      $('[data-sup-photo]', form).addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        e.target.value = '';
+        if (!file) return;
+        try {
+          const img = await Acolia.shrinkImage(file);
+          const fd = new FormData();
+          fd.append('photo', img, 'foto.jpg');
+          toast('Enviando foto…');
+          addMessage({ ...(await api('/api/support/photo', { method: 'POST', form: fd })), support: true });
+        } catch (ex) { toast(ex.message, 'error'); }
+      });
+      const box = $('[data-messages]', threadWrap);
+      box.addEventListener('scroll', () => { if (box.scrollTop < 60) loadOlder(); });
+      box.addEventListener('click', (e) => {
+        const im = e.target.closest('[data-img]');
+        if (im && !e.target.closest('[data-msg-menu]')) { modal({ title: 'Foto', html: `<img src="${esc(im.dataset.img)}" alt="" style="width:100%;border-radius:12px">`, actions: [{ label: 'Fechar' }] }); return; }
+        const b = e.target.closest('[data-msg-menu]');
+        const old = $('.msg-pop', box);
+        if (old) old.remove();
+        if (!b) return;
+        e.stopPropagation();
+        const p = document.createElement('div');
+        p.className = 'msg-pop';
+        p.innerHTML = `<button type="button" data-del="everyone">${ICONS.trash} Apagar para todos</button>`;
+        b.closest('.msg').appendChild(p);
+        p.addEventListener('click', (ev) => { if (!ev.target.closest('[data-del]')) return; ev.stopPropagation(); p.remove(); deleteMessage(Number(b.dataset.msgMenu), 'everyone'); });
       });
     }
 
@@ -368,7 +495,8 @@
       fd.append('peaks', r.peaks);
       fd.append('audio', r.blob, 'audio.wav');
       try {
-        addMessage(await api(`/api/chat/conversations/${c.id}/audio`, { method: 'POST', form: fd }));
+        addMessage(c.support ? { ...(await api('/api/support/audio', { method: 'POST', form: fd })), support: true }
+          : await api(`/api/chat/conversations/${c.id}/audio`, { method: 'POST', form: fd }));
       } catch (ex) { toast(ex.message, 'error'); }
     }
 
@@ -381,7 +509,8 @@
         : 'Apagar esta mensagem só para você? A outra pessoa continua vendo.', { okLabel: 'Apagar', danger: true, title: mode === 'everyone' ? 'Apagar para todos' : 'Apagar para mim' });
       if (!ok) return;
       try {
-        await api(`/api/chat/messages/${id}/delete`, { method: 'POST', body: { for: mode } });
+        if (isSup()) await api(`/api/support/messages/${id}/delete`, { method: 'POST' });
+        else await api(`/api/chat/messages/${id}/delete`, { method: 'POST', body: { for: mode } });
         if (mode === 'everyone') markDeleted(id); else removeMessage(id);
         loadList();
       } catch (ex) { toast(ex.message, 'error'); }
@@ -409,7 +538,7 @@
     async function clearConversation() {
       if (!await Acolia.confirmDialog('Limpar esta conversa? Todas as mensagens somem para você. A outra pessoa continua vendo as dela.', { okLabel: 'Limpar', danger: true, title: 'Limpar conversa' })) return;
       try {
-        await api(`/api/chat/conversations/${state.current.id}/clear`, { method: 'POST' });
+        await api(isSup() ? '/api/support/clear' : `/api/chat/conversations/${state.current.id}/clear`, { method: 'POST' });
         state.messages = [];
         state.hasMore = false;
         renderMessages(true);
@@ -453,7 +582,10 @@
             : `<a class="btn sm" href="${esc(link)}" target="_blank" rel="noopener">${ICONS.video} Entrar no atendimento</a>`}</div>`;
       } else if (m.kind === 'audio') {
         const a = audioParts(m.body);
-        inner = window.AcoliaVoice.playerHtml({ src: `/api/chat/audio/${encodeURIComponent(a.file)}`, secs: a.secs, peaks: a.peaks, hint: true });
+        inner = window.AcoliaVoice.playerHtml({ src: `${m.support ? '/api/support/audio/' : '/api/chat/audio/'}${encodeURIComponent(a.file)}`, secs: a.secs, peaks: a.peaks, hint: true });
+      } else if (m.kind === 'image') {
+        // Foto (só no Suporte Acolia)
+        inner = `<button type="button" class="msg-img" data-img="${esc(m.body)}" aria-label="Ver foto"><img src="${esc(m.body)}" alt="Foto" loading="lazy"></button>`;
       } else if (m.kind === 'doc') {
         // Documento (atestado, receita, encaminhamento): abre a folha para ver e salvar
         const [code, title] = String(m.body).split('|');
@@ -544,8 +676,9 @@
       if (!state.hasMore || state.loadingOlder || !state.messages.length) return;
       state.loadingOlder = true;
       try {
-        const data = await api(`/api/chat/conversations/${state.current.id}/messages?before=${state.messages[0].id}`);
-        state.messages = [...data.items, ...state.messages];
+        const sup = isSup();
+        const data = await api(sup ? `/api/support/messages?before=${state.messages[0].id}` : `/api/chat/conversations/${state.current.id}/messages?before=${state.messages[0].id}`);
+        state.messages = [...data.items.map((m) => (sup ? { ...m, support: true } : m)), ...state.messages];
         state.hasMore = data.has_more;
         renderMessages(false);
       } finally { state.loadingOlder = false; }
@@ -561,7 +694,7 @@
 
     async function markRead() {
       if (!state.current) return;
-      await api(`/api/chat/conversations/${state.current.id}/read`, { method: 'POST' }).catch(() => {});
+      await api(isSup() ? '/api/support/read' : `/api/chat/conversations/${state.current.id}/read`, { method: 'POST' }).catch(() => {});
       loadList();
     }
 
@@ -598,6 +731,10 @@
     async function refreshThread() {
       const c = state.current;
       if (!c) return;
+      if (c.support) {
+        try { const d = await api('/api/support/messages'); if (isSup()) { state.messages = d.items.map((m) => ({ ...m, support: true })); state.hasMore = d.has_more; renderMessages(false); } } catch { /* ignora */ }
+        return;
+      }
       clearTimeout(refreshing);
       refreshing = setTimeout(async () => {
         try {
@@ -646,6 +783,17 @@
           if (m.sender_role !== role) notify(m);
         }
       });
+      // Suporte Acolia
+      socket.on('support:new', (m) => {
+        if (isSup()) {
+          addMessage({ ...m, support: true });
+          if (m.sender_role === 'admin' && document.visibilityState === 'visible') markRead(); else loadList();
+        } else {
+          loadList();
+          if (m.sender_role === 'admin') toast('Nova mensagem do Suporte Acolia');
+        }
+      });
+      socket.on('support:changed', () => { if (isSup()) refreshThread(); loadList(); });
       socket.on('message:read', ({ conversation_id }) => {
         if (state.current?.id === conversation_id) {
           state.messages.forEach((m) => { if (m.sender_role === role && !m.read_at) m.read_at = new Date().toISOString(); });
@@ -661,7 +809,7 @@
         clearTimeout(t._h);
         t._h = setTimeout(() => t.classList.add('hidden'), 3000);
       });
-      socket.on('connect', () => { loadList(); if (state.current) open(state.current.id); });
+      socket.on('connect', () => { loadList(); if (state.current) open(state.current.support ? 'suporte' : state.current.id); });
     }
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.current) markRead(); });
 
@@ -670,7 +818,7 @@
     }
 
     loadList();
-    return { open, reload: loadList, close: closeThread, get current() { return state.current; } };
+    return { open, openSupport, reload: loadList, close: closeThread, get current() { return state.current; } };
   }
 
   window.AcoliaChat = { mount };

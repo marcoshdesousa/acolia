@@ -226,6 +226,8 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE INDEX IF NOT EXISTS idx_notif_to ON notifications(recipient_role, recipient_id, id);
 `);
 
+// Avisos da Acolia no sininho (server/routes/notices.js)
+addColumn('notifications', 'notice_id', 'INTEGER');
 addColumn('posts', 'thumb', 'TEXT'); // miniatura leve para a prévia do link (WhatsApp etc.)
 addColumn('stories', 'post_id', 'INTEGER'); // story que mostra uma publicação do próprio profissional
 // Reels: a publicação pode ser um vídeo (kind = 'reel'); posts.image guarda a capa do vídeo

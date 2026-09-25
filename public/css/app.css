@@ -1272,3 +1272,25 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 [data-bnav] a { flex: 1 1 0; min-width: 0; padding-left: 2px; padding-right: 2px; font-size: .64rem; }
 [data-bnav] a > :not(svg) { overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 380px) { [data-bnav] a { font-size: .58rem; } [data-bnav] a svg { width: 22px; height: 22px; } }
+/* Suporte Acolia: conversa fixa no topo */
+.conv.pinned { background: color-mix(in srgb, var(--primary-soft) 70%, transparent); }
+.conv.pinned .nm { display: inline-flex; align-items: center; gap: 6px; }
+.pin-ic { font-size: .8rem; }
+.sup-avatar { background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; }
+.sup-avatar img { width: 72%; height: 72%; object-fit: contain; }
+.sup-note { padding: 8px 14px; background: var(--primary-soft); color: var(--text); border-bottom: 1px solid var(--line); }
+.msg-img { display: block; border: 0; padding: 0; background: none; cursor: zoom-in; border-radius: 12px; overflow: hidden; max-width: 240px; }
+.msg-img img { display: block; width: 100%; height: auto; max-height: 320px; object-fit: cover; }
+/* Avisos da Acolia no sininho */
+.notifs li.aviso { cursor: pointer; }
+.aviso-ic { background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; }
+.aviso-ic img { width: 72%; height: 72%; object-fit: contain; }
+.aviso-txt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
+/* Admin: Mensagens (Suporte Acolia) */
+.seg-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.sup-admin { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 800px) { .sup-admin { grid-template-columns: 1fr; } }
+.sup-list { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow-y: auto; }
+.sup-list .conv { border-radius: 12px; }
+.sup-thread { display: flex; flex-direction: column; min-height: 300px; }
+.sup-msgs { max-height: 55vh; min-height: 200px; overflow-y: auto; background: var(--chat-bg); border-radius: 14px 14px 0 0; padding: 12px; }

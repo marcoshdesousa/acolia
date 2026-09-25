@@ -631,6 +631,11 @@ function notifOut(n) {
   const kindOf = n.actor_role === 'patient' ? 'Um paciente' : 'Um profissional';
   let text;
   let showActor = false;
+  // Aviso da Acolia (enviado pelo admin)
+  if (n.type === 'aviso') {
+    const nt = require('./notices').get(n.notice_id);
+    return { id: n.id, type: 'aviso', text: nt ? nt.text : 'Aviso da Acolia', notice: nt, created_at: n.created_at, read: !!n.read_at, actor: null, post: null };
+  }
   if (n.type === 'follow') text = `${kindOf} começou a seguir você.`;
   else if (n.type === 'like_post') text = 'Sua publicação recebeu uma curtida.';
   else if (n.type === 'like_story') { text = `${a.name} curtiu seu story.`; showActor = true; }

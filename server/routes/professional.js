@@ -183,6 +183,7 @@ function wipeProfessional(me) {
   // Apaga tudo: publicações, reels, stories, curtidas, comentários, seguidores e o conteúdo das
   // mensagens que ele mandou. E-mail, registro, código e link ficam livres para um cadastro novo.
   require('./social').purgeUserSocial('professional', me.id);
+  require('./support').purge('professional', me.id);
   require('../secretary').remove(me.id);
   require('../agenda').onAccountGone('professional', me.id);
   // Agenda e pagamento automático saem junto (inclusive o Asaas simulado da conta de teste)

@@ -76,6 +76,7 @@ function createApp() {
   app.use('/api/patient', require('./routes/patient').router);
   app.use('/api/professional', require('./routes/professional').router);
   app.use('/api/chat', require('./routes/chat').router);
+  app.use('/api/support', require('./routes/support').router); // Suporte Acolia (conversa fixa no topo)
   app.use('/api/social', require('./routes/social').router);
   app.use('/api/push', require('./routes/push').router);
   app.use('/api/calls', require('./routes/calls').router);
@@ -167,6 +168,8 @@ async function start(port = Number(process.env.PORT) || 3000) {
   // dono, uma vez. Não são mais criadas sozinhas na subida do servidor: só pelos botões do admin
   // ("Recriar contas de teste" / "Preparar o teste de novo").
   require('./testAccounts').removeTestAccountsOnce();
+  // …e recriadas depois, a pedido do dono (uma vez), com a agenda e o Asaas simulado de antes
+  if (process.env.TEST_ACCOUNTS !== '0') require('./testAgenda').recreateOnce();
   // Stories somem depois de 24 h
   const { cleanupStories } = require('./routes/social');
   cleanupStories();

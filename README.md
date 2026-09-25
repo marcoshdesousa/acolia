@@ -89,6 +89,19 @@ No chat, paciente e profissional podem mandar **mensagens de voz** no estilo Wha
 
 O profissional só vê uma conversa depois que o paciente manda a primeira mensagem. A única exceção é a da versão 1.1.2, abaixo.
 
+**Suporte Acolia, mensagens do admin e avisos:**
+- **Suporte Acolia** (`server/routes/support.js`): conversa **fixada no topo** das mensagens de profissionais, secretárias e pacientes, com a equipe Acolia.
+  - Dá para mandar texto, **foto** (a única conversa com foto) e áudio.
+  - Não tem Pix, documentos, agendamento nem mensagens prontas.
+  - Apaga a própria mensagem e limpa a conversa (só para si); não arquiva, não bloqueia e não apaga a conversa.
+- **Admin → Mensagens:**
+  - caixa do **Suporte** (só aparece quem escreveu; filtro por profissionais e pacientes), responder com texto ou foto;
+  - **Mensagem para todos os profissionais** (chega na conversa de suporte de cada um; para pacientes não existe);
+  - **Avisos (sininho)** para pacientes, profissionais (e secretárias) ou todos, com foto opcional (vídeo não). Aviso apagado some do sininho de todos.
+- **Paciente → Configurações:** "Falar com a Acolia" com o botão do WhatsApp do administrador e o atalho para o Suporte Acolia.
+- O cadastro e a aprovação de profissionais continuam como antes (WhatsApp e painel de aprovação).
+- **Contas de teste recriadas** uma vez (Profissional Teste com agenda 02:35, 1 h + 15 min, "Disponível" ligado e Asaas simulado; Paciente Teste ativo).
+
 **Agendar pelo chat, uma consulta por dia e filtro de disponibilidade:**
 - **Marcar pelo chat:** o profissional (ou a secretária) toca no **📅 ao lado do +** no campo de mensagem, escolhe o dia e o horário e envia. O paciente recebe "📅 Consulta quase pronta: falta o pagamento":
   - com **Asaas**: botão **"Pagar agora"** (aceita a política e vê o QR Code do Pix; confirma sozinho);

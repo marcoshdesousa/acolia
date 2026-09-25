@@ -274,7 +274,7 @@
     if (v === 'perfil') loadMyPosts(); // sempre atualizada (inclusive depois de publicar no Início)
     if (v === 'atendimento') { agendaPro.load(); loadCalls().catch((e) => toast(e.message, 'error')); loadMyPatients().catch((e) => toast(e.message, 'error')); }
     if (v === 'conversas') {
-      if (arg && chat.current?.id !== Number(arg)) chat.open(Number(arg));
+      if (arg === 'suporte') { if (!chat.current?.support) chat.openSupport(); } else if (arg && chat.current?.id !== Number(arg)) chat.open(Number(arg)); // Suporte Acolia: #…/suporte
       if (!arg && chat.current) chat.close();
     }
     document.body.style.overflow = v === 'conversas' ? 'hidden' : '';

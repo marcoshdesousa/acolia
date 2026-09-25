@@ -61,6 +61,7 @@ function wipePatient(me) {
   // Apaga tudo: curtidas, comentários, quem seguia e o conteúdo das mensagens que mandou.
   // O CPF fica livre para criar uma conta nova.
   require('./social').purgeUserSocial('patient', me.id);
+  require('./support').purge('patient', me.id);
   require('../agenda').onAccountGone('patient', me.id);
   require('./chat').eraseMessagesOf('patient', me.id);
   removePhoto(me.photo);

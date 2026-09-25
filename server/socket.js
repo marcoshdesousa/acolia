@@ -13,6 +13,7 @@ function setupSocket(httpServer) {
     const auth = sessionFromCookie(socket.handshake.headers.cookie);
     socket.data.auth = auth;
     if (auth && (auth.role === 'patient' || auth.role === 'professional')) socket.join(`${auth.role}:${auth.user.id}`);
+    if (auth?.role === 'admin') socket.join('admin'); // caixa do Suporte Acolia
 
     // Indicador "digitando..."
     socket.on('chat:typing', ({ conversation_id } = {}) => {

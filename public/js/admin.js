@@ -592,7 +592,7 @@
   async function route() {
     $$('dialog').forEach((d) => { d.close(); d.remove(); });
     const [view, arg] = (location.hash.slice(1) || 'inicio').split('/');
-    const v = ['inicio', 'profissionais', 'pacientes', 'novo', 'acolia', 'conta'].includes(view) ? view : 'inicio';
+    const v = ['inicio', 'profissionais', 'pacientes', 'novo', 'mensagens', 'acolia', 'conta'].includes(view) ? view : 'inicio';
     $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
     $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === v));
     try {
@@ -604,6 +604,7 @@
       }
       if (v === 'pacientes') await loadList('patients');
       if (v === 'acolia') await loadOfficial();
+      if (v === 'mensagens') window.AcoliaAdminMessages?.show(arg);
     } catch (e) { toast(e.message, 'error'); }
   }
   window.addEventListener('hashchange', route);

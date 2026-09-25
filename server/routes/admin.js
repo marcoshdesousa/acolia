@@ -13,6 +13,10 @@ const { DOC_DIR } = require('../upload');
 
 const router = express.Router();
 router.use(A.requireRole('admin'));
+// Suporte Acolia: caixa de entrada do admin (responder e mandar para todos os profissionais)
+router.use('/support', require('./support').admin);
+// Avisos no sininho (pacientes, profissionais ou todos)
+router.use('/notices', require('./notices').admin);
 // O perfil oficial (Acolia Brasil) não aparece nem é mexido pelas telas de profissionais
 router.use('/professionals/:id', (req, _res, next) => {
   if (require('../official').isOfficial(req.params.id)) return next(new U.HttpError(404, 'Profissional não encontrado.'));

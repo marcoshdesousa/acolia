@@ -38,6 +38,18 @@ function provision({ withHours = true } = {}) {
   return true;
 }
 
+// Pedido do dono (depois de apagar): recria UMA vez as contas de teste com tudo que tinham —
+// Profissional Teste com agenda (02:35, 1 h + 15 min), "Disponível" ligado e o Asaas simulado,
+// e o Paciente Teste ativo — para testar agendamento e pagamento no automático.
+function recreateOnce() {
+  const KEY2 = 'test_accounts_recreated_v1';
+  if (db.prepare('SELECT 1 FROM settings WHERE key = ?').get(KEY2)) return false;
+  const ok = provision({ withHours: true });
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(KEY2, new Date().toISOString());
+  if (ok) console.log('[teste] contas de teste recriadas (agenda + Asaas simulado)');
+  return ok;
+}
+
 function runOnce() {
   if (db.prepare('SELECT 1 FROM settings WHERE key = ?').get(KEY)) return;
   const ok = provision();
@@ -63,4 +75,4 @@ function status() {
   return out;
 }
 
-module.exports = { runOnce, provision, status };
+module.exports = { runOnce, recreateOnce, provision, status };

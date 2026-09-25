@@ -748,16 +748,27 @@
     api('/api/social/notifications/read', { method: 'POST' }).then(onRead).catch(() => {});
     await modal({
       title: 'Notificações',
-      html: data.items.length ? `<ul class="notifs">${data.items.map((n) => `
+      html: data.items.length ? `<ul class="notifs">${data.items.map((n) => (n.type === 'aviso' ? `
+        <li class="${n.read ? '' : 'unread'} aviso" data-aviso="${n.id}">
+          <span class="avatar sm notif-ic aviso-ic"><img src="/img/logo-simbolo.png" alt=""></span>
+          <div class="grow"><div><b>📣 Aviso da Acolia</b></div><div class="aviso-txt">${esc(n.text)}</div><small class="muted">${esc(timeAgo(n.created_at))}</small></div>
+          ${n.notice?.image ? `<img src="${esc(n.notice.image)}" alt="" class="notif-thumb">` : ''}
+        </li>` : `
         <li class="${n.read ? '' : 'unread'}" ${n.post ? `data-open-post="${n.post.id}"` : ''}>
           ${n.actor ? avatar(n.actor.name, n.actor.photo, 'sm') : `<span class="avatar sm notif-ic">${n.type === 'follow' ? ic('userPlus', 18) : '<span class="like-btn on" style="padding:0"><span class="mind" style="width:22px;height:22px"></span></span>'}</span>`}
           <div class="grow"><div>${esc(n.text)}</div><small class="muted">${esc(timeAgo(n.created_at))}</small></div>
           ${n.post ? `<img src="${esc(n.post.image)}" alt="" class="notif-thumb">` : ''}
-        </li>`).join('')}</ul>` : '<p class="muted">Nenhuma notificação ainda.</p>',
+        </li>`)).join('')}</ul>` : '<p class="muted">Nenhuma notificação ainda.</p>',
       actions: [],
       onOpen: (dlg) => {
         dlg.classList.add('sheet');
         dlg.addEventListener('click', (e) => {
+          const av = e.target.closest('[data-aviso]');
+          if (av) {
+            const n = data.items.find((x) => String(x.id) === av.dataset.aviso);
+            modal({ title: '📣 Aviso da Acolia', html: `${n.notice?.image ? `<img src="${esc(n.notice.image)}" alt="" style="width:100%;border-radius:12px;margin-bottom:10px">` : ''}<p style="white-space:pre-wrap;margin:0">${esc(n.text)}</p><p class="small muted">${esc(timeAgo(n.created_at))}</p>`, actions: [{ label: 'Ok' }] });
+            return;
+          }
           const li = e.target.closest('[data-open-post]');
           if (li) { dlg.close(); dlg.remove(); openPost(Number(li.dataset.openPost)); }
         });

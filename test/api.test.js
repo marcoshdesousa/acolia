@@ -2249,3 +2249,88 @@ test('contas de teste apagadas uma vez (Profissional Teste, Paciente Teste e a s
   assert.equal((await pc.get('/api/auth/me')).data.role, null, 'sessão caiu');
   assert.equal(T.removeTestAccountsOnce(), null, 'não roda de novo');
 });
+
+test('Suporte Acolia: conversa fixa com a equipe (texto, foto, apagar, limpar) e resposta do admin; mensagem para todos os profissionais', async () => {
+  const r0 = await admin.post('/api/admin/professionals', { name: 'Tereza Suporte Lima', profession: 'Psicólogo(a)', registry: 'CRP 06/40444', email: 'tereza.sup@example.com', phone: '11912121212', state: 'SP', city: 'Campinas' });
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: r0.data.code, password: r0.data.password });
+  let s = (await pro.get('/api/support')).data;
+  assert.equal(s.name, 'Suporte Acolia');
+  assert.equal(s.unread, 0);
+  // Admin ainda não vê (só quem escreveu aparece)
+  assert.ok(!(await admin.get('/api/admin/support/threads')).data.items.some((t) => t.user.id === r0.data.id && t.user.role === 'professional'));
+  let r = await pro.post('/api/support/messages', { body: 'Olá! Achei um erro na agenda.' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const first = r.data;
+  // Foto (só no suporte)
+  const fd = new FormData();
+  fd.append('photo', new Blob([Buffer.from('89504e470d0a1a0a', 'hex')], { type: 'image/png' }), 'erro.png');
+  const up = await fetch(base + '/api/support/photo', { method: 'POST', body: fd, headers: { Cookie: pro.cookie } });
+  assert.equal(up.status, 201);
+  assert.equal((await up.json()).kind, 'image');
+  // Admin vê, lê e responde
+  const threads = (await admin.get('/api/admin/support/threads')).data;
+  const t = threads.items.find((x) => x.user.role === 'professional' && x.user.id === r0.data.id);
+  assert.ok(t && t.unread === 2, JSON.stringify(t));
+  const msgs = (await admin.get(`/api/admin/support/threads/${t.id}/messages`)).data.items;
+  assert.equal(msgs.length, 2);
+  r = await admin.post(`/api/admin/support/threads/${t.id}/messages`, { body: 'Oi, Tereza! Já estamos vendo.' });
+  assert.equal(r.status, 201);
+  s = (await pro.get('/api/support')).data;
+  assert.equal(s.unread, 1);
+  assert.equal(s.last_message.sender_role, 'admin');
+  await pro.post('/api/support/read');
+  assert.equal((await pro.get('/api/support')).data.unread, 0);
+  // Apagar a própria mensagem (vira "apagada") e limpar a conversa (só para ela)
+  assert.equal((await pro.post(`/api/support/messages/${first.id}/delete`)).status, 200);
+  assert.equal((await pro.get('/api/support/messages')).data.items[0].kind, 'deleted');
+  await pro.post('/api/support/clear');
+  assert.equal((await pro.get('/api/support/messages')).data.items.length, 0);
+  assert.equal((await admin.get(`/api/admin/support/threads/${t.id}/messages`)).data.items.length, 3, 'o suporte continua com o histórico');
+  // Paciente também tem o suporte
+  const pt = client();
+  await pt.post('/api/auth/patient/register', { name: 'Olga Suporte Dias', cpf: '714.287.938-60', state: 'SP', city: 'Campinas', birth_date: '1990-01-02', password: '123456' });
+  assert.equal((await pt.post('/api/support/messages', { body: 'Como marco uma consulta?' })).status, 201);
+  assert.ok((await admin.get('/api/admin/support/threads?role=patient')).data.items.some((x) => x.user.name.startsWith('Olga')));
+  // Mensagem para todos os profissionais
+  r = await admin.post('/api/admin/support/broadcast-professionals', { body: 'Nova versão no ar! 🎉' });
+  assert.ok(r.data.sent >= 1);
+  assert.equal((await pro.get('/api/support/messages')).data.items.at(-1).body, 'Nova versão no ar! 🎉');
+  assert.ok(!(await pt.get('/api/support/messages')).data.items.some((m) => m.body === 'Nova versão no ar! 🎉'), 'paciente não recebe');
+  // Visitante não usa
+  assert.equal((await client().get('/api/support')).status, 401);
+});
+
+test('Avisos da Acolia no sininho: pacientes, profissionais ou todos', async () => {
+  const pt = client();
+  await pt.post('/api/auth/patient/register', { name: 'Vera Aviso Dias', cpf: '111.444.777-35', state: 'SP', city: 'Campinas', birth_date: '1990-01-02', password: '123456' });
+  const r0 = await admin.post('/api/admin/professionals', { name: 'Ugo Aviso Lima', profession: 'Psicólogo(a)', registry: 'CRP 06/40555', email: 'ugo.aviso@example.com', phone: '11911112233', state: 'SP', city: 'Campinas' });
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: r0.data.code, password: r0.data.password });
+  let r = await admin.post('/api/admin/notices', { audience: 'patient', text: 'Semana da saúde mental: novos profissionais na plataforma!' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  let n = (await pt.get('/api/social/notifications')).data.items;
+  assert.equal(n[0].type, 'aviso');
+  assert.match(n[0].text, /Semana da saúde mental/);
+  assert.ok(!(await pro.get('/api/social/notifications')).data.items.some((x) => x.type === 'aviso'), 'profissional não recebe aviso de pacientes');
+  r = await admin.post('/api/admin/notices', { audience: 'all', text: 'Manutenção hoje às 23h.' });
+  assert.ok((await pro.get('/api/social/notifications')).data.items.some((x) => x.text === 'Manutenção hoje às 23h.'));
+  // Apagar: some do sininho de todos
+  assert.equal((await admin.del(`/api/admin/notices/${r.data.id}`)).status, 200);
+  assert.ok(!(await pt.get('/api/social/notifications')).data.items.some((x) => x.text === 'Manutenção hoje às 23h.'));
+  assert.equal((await admin.post('/api/admin/notices', { audience: 'x', text: 'a' })).status, 400);
+  assert.equal((await pt.post('/api/admin/notices', { audience: 'all', text: 'a' })).status, 401, 'só o admin');
+});
+
+test('contas de teste recriadas uma vez com agenda e Asaas simulado', async () => {
+  const { db } = require('../server/db');
+  const TA = require('../server/testAgenda');
+  db.prepare("DELETE FROM settings WHERE key = 'test_accounts_recreated_v1'").run();
+  assert.equal(TA.recreateOnce(), true);
+  const pro = db.prepare("SELECT * FROM professionals WHERE code = '123456789' AND is_test = 1").get();
+  assert.ok(pro && pro.status === 'aprovado' && pro.agenda_on === 1);
+  assert.equal(db.prepare('SELECT env FROM pro_payment WHERE professional_id = ?').get(pro.id).env, 'simulado');
+  assert.ok(db.prepare('SELECT COUNT(*) n FROM agenda_hours WHERE professional_id = ?').get(pro.id).n > 0);
+  assert.equal(db.prepare("SELECT status FROM patients WHERE cpf = '00000000000'").get().status, 'ativo');
+  assert.equal(TA.recreateOnce(), false, 'não roda de novo');
+});

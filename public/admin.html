@@ -34,6 +34,7 @@
       <a href="#profissionais" data-nav="profissionais"><span data-i="therapist"></span>Profissionais<span class="nav-badge" data-pending></span></a>
       <a href="#pacientes" data-nav="pacientes"><span data-i="users"></span>Pacientes</a>
       <a href="#novo" data-nav="novo"><span data-i="userPlus"></span>Cadastrar profissional</a>
+      <a href="#mensagens" data-nav="mensagens"><span data-i="chat"></span>Mensagens<span class="nav-badge" data-sup-unread></span></a>
       <a href="#acolia" data-nav="acolia"><span data-i="gear"></span>Acolia Brasil</a>
       <a href="#conta" data-nav="conta"><span data-i="user"></span>Conta</a>
     </aside>
@@ -135,6 +136,18 @@
         <div style="margin-top:12px"><button type="button" class="btn secondary sm hidden" data-official-more>Carregar mais</button></div>
       </section>
 
+      <section data-view="mensagens" class="hidden" style="max-width:1000px">
+        <h1 style="font-size:1.5rem">Mensagens</h1>
+        <div class="seg-tabs" role="tablist">
+          <button type="button" class="chip-btn on" data-msg-tab="suporte">Suporte Acolia</button>
+          <button type="button" class="chip-btn" data-msg-tab="todos">Mensagem para todos os profissionais</button>
+          <button type="button" class="chip-btn" data-msg-tab="avisos">Avisos (sininho)</button>
+        </div>
+        <div data-msg-pane="suporte" style="margin-top:14px"></div>
+        <div data-msg-pane="todos" class="hidden" style="margin-top:14px"></div>
+        <div data-msg-pane="avisos" class="hidden" style="margin-top:14px"></div>
+      </section>
+
       <section data-view="conta" class="hidden" style="max-width:520px">
         <h1 style="font-size:1.5rem">Conta do administrador</h1>
         <form class="card" data-pw-form>
@@ -152,6 +165,7 @@
     <a href="#profissionais" data-nav="profissionais"><span data-i="therapist"></span>Profissionais<span class="nav-badge" data-pending></span></a>
     <a href="#pacientes" data-nav="pacientes"><span data-i="users"></span>Pacientes</a>
     <a href="#novo" data-nav="novo"><span data-i="userPlus"></span>Cadastrar</a>
+    <a href="#mensagens" data-nav="mensagens"><span data-i="chat"></span>Mensagens<span class="nav-badge" data-sup-unread></span></a>
     <a href="#acolia" data-nav="acolia"><span data-i="gear"></span>Acolia</a>
     <a href="#conta" data-nav="conta"><span data-i="user"></span>Conta</a>
   </nav>
@@ -159,6 +173,9 @@
   <script src="/js/common.js"></script>
   <script src="/js/social.js"></script>
   <script src="/js/specialties.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/voice.js"></script>
   <script src="/js/admin.js"></script>
+  <script src="/js/admin-messages.js"></script>
 </body>
 </html>
