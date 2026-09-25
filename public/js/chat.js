@@ -81,6 +81,7 @@
       if (m.kind === 'pix') return `${prefix}Chave Pix enviada`;
       if (m.kind === 'call') return `${prefix}Código de atendimento`;
       if (m.kind === 'audio') return `${prefix}🎤 Áudio (${fmtSecs(audioParts(m.body).secs)})`;
+      if (m.kind === 'image') return `${prefix}📷 Foto`;
       if (m.kind === 'deleted') return `${prefix}🚫 Mensagem apagada`;
       if (m.kind === 'doc') return `${prefix}📄 ${String(m.body).split('|')[1] || 'Documento'}`;
       if (m.kind === 'post') return `${prefix}📌 Publicação`;
@@ -231,9 +232,13 @@
         </div>
         <div data-pay-ask></div>
         <form class="composer" data-composer>
-          ${role === 'professional' && window.AcoliaQuick ? `<button class="icon-btn quick-btn" type="button" data-quick aria-label="Mensagens prontas" title="Mensagens prontas" ${canWrite(c) ? '' : 'disabled'}>${ICONS.plus}</button>` : ''}
-          ${role === 'professional' && window.AcoliaAgenda ? `<button class="icon-btn quick-btn" type="button" data-schedule aria-label="Marcar consulta" title="Marcar consulta para este paciente" ${canWrite(c) ? '' : 'disabled'}>${ICONS.calendar}</button>` : ''}
-          <textarea rows="1" placeholder="${!c.peer.active ? 'Esta conta não está mais ativa' : c.blocked_by_me || c.blocked_me ? 'Mensagens bloqueadas' : c.refund_lock ? 'Faça o reembolso para voltar a conversar' : 'Digite uma mensagem'}" aria-label="Mensagem" ${canWrite(c) ? '' : 'disabled'} maxlength="4000"></textarea>
+          ${role === 'professional'
+            // Profissional (e secretária): um botão de funções com mensagens prontas, agendar e enviar foto
+            ? `<button class="icon-btn quick-btn" type="button" data-fn aria-label="Funções: mensagens prontas, agendar consulta e enviar foto" title="Funções" ${canWrite(c) ? '' : 'disabled'}>${ICONS.apps}</button>`
+            // Paciente: só a foto (ex.: o print do comprovante do Pix)
+            : `<label class="icon-btn quick-btn ${canWrite(c) ? '' : 'off'}" title="Enviar foto (ex.: comprovante do Pix)" aria-label="Enviar foto">${ICONS.camera}</label>`}
+          <input type="file" accept="image/jpeg,image/png,image/webp" data-chat-photo hidden ${canWrite(c) ? '' : 'disabled'}>
+          <textarea rows="1" placeholder="${!c.peer.active ? 'Esta conta não está mais ativa' : c.blocked_by_me || c.blocked_me ? 'Mensagens bloqueadas' : 'Digite uma mensagem'}" aria-label="Mensagem" ${canWrite(c) ? '' : 'disabled'} maxlength="4000"></textarea>
           <button class="icon-btn rec-cancel" type="button" data-rec-cancel aria-label="Apagar áudio" title="Apagar áudio">${ICONS.trash}</button>
           <div class="rec-bar" aria-live="polite"><span class="rec-dot"></span><b data-rec-time>0:00</b><div class="rec-live" data-rec-live></div>
             <button class="icon-btn rec-stop" type="button" data-rec-stop aria-label="Parar e ouvir antes de enviar" title="Parar e ouvir">${ICONS.stop}</button></div>
@@ -251,11 +256,6 @@
       $('[data-block]', threadWrap).addEventListener('click', () => { pop.classList.add('hidden'); toggleBlock(); });
       $('[data-unblock-here]', threadWrap)?.addEventListener('click', toggleBlock);
       $('[data-pix]', threadWrap)?.addEventListener('click', sendPix);
-      // Agendar consulta pelo chat: o profissional escolhe dia e horário e o paciente paga o Pix
-      $('[data-schedule]', threadWrap)?.addEventListener('click', () => {
-        if (!canWrite(state.current)) { toast('Não é possível enviar nesta conversa.', 'error'); return; }
-        window.AcoliaAgenda?.openBooking({ mode: 'propose', conversationId: state.current.id, patientId: state.current.peer.id, peerName: state.current.peer.name, me: getMe() });
-      });
       $('[data-docs]', threadWrap)?.addEventListener('click', () => {
         if (!canWrite(state.current)) { toast('Não é possível enviar nesta conversa.', 'error'); return; }
         window.AcoliaDocs.openForm(state.current.id, (msg) => addMessage(msg));
@@ -266,8 +266,45 @@
       const syncButtons = () => form.classList.toggle('has-text', ta.value.trim().length > 0);
       syncButtons();
       $('[data-mic]', form).addEventListener('click', () => startRecording(form));
-      // Mensagens prontas do profissional: escolhe uma e ela vai inteira para o campo de digitar
-      $('[data-quick]', form)?.addEventListener('click', () => window.AcoliaQuick.openPicker(form, ta));
+      // Foto (os dois lados): diminui antes de enviar. Serve para o comprovante do Pix (pagamento ou reembolso)
+      const photoInput = $('[data-chat-photo]', form);
+      $('label.quick-btn', form)?.addEventListener('click', (e) => { e.preventDefault(); if (canWrite(state.current)) photoInput.click(); });
+      photoInput.addEventListener('change', async () => {
+        const file = photoInput.files[0];
+        photoInput.value = '';
+        if (!file) return;
+        if (!file.type.startsWith('image/')) { toast('Envie só fotos. Vídeos não são aceitos.', 'error'); return; }
+        try {
+          const fd = new FormData();
+          fd.append('photo', await Acolia.shrinkImage(file), 'foto.jpg');
+          toast('Enviando foto…');
+          addMessage(await api(`/api/chat/conversations/${c.id}/photo`, { method: 'POST', form: fd }));
+        } catch (ex) { toast(ex.message, 'error'); }
+      });
+      // Funções do profissional (quatro pontinhos): mensagens prontas, agendar consulta e enviar foto
+      const closeFn = () => { $('.fn-pop', form)?.remove(); document.removeEventListener('click', outsideFn, true); };
+      function outsideFn(e) { if (!e.target.closest('.fn-pop, [data-fn]')) closeFn(); }
+      $('[data-fn]', form)?.addEventListener('click', () => {
+        if ($('.fn-pop', form)) { closeFn(); return; }
+        window.AcoliaQuick?.closePicker();
+        const pop = document.createElement('div');
+        pop.className = 'fn-pop';
+        pop.setAttribute('role', 'menu');
+        pop.innerHTML = `${window.AcoliaQuick ? `<button type="button" role="menuitem" data-fn-quick>${ICONS.chat}<span><b>Mensagens prontas</b><small>Escolha uma e mande com um toque</small></span></button>` : ''}
+          ${window.AcoliaAgenda ? `<button type="button" role="menuitem" data-fn-schedule>${ICONS.calendar}<span><b>Agendar consulta</b><small>O paciente recebe e paga o Pix aqui</small></span></button>` : ''}
+          <button type="button" role="menuitem" data-fn-photo>${ICONS.camera}<span><b>Enviar foto</b><small>Ex.: o comprovante do reembolso</small></span></button>`;
+        form.appendChild(pop);
+        setTimeout(() => document.addEventListener('click', outsideFn, true));
+        pop.addEventListener('click', (e) => {
+          const b = e.target.closest('button');
+          if (!b) return;
+          closeFn();
+          if (!canWrite(state.current)) { toast('Não é possível enviar nesta conversa.', 'error'); return; }
+          if (b.hasAttribute('data-fn-quick')) window.AcoliaQuick.openPicker(form, ta);
+          else if (b.hasAttribute('data-fn-schedule')) window.AcoliaAgenda.openBooking({ mode: 'propose', conversationId: state.current.id, patientId: state.current.peer.id, peerName: state.current.peer.name, me: getMe() });
+          else photoInput.click();
+        });
+      });
       $('[data-rec-cancel]', form).addEventListener('click', () => stopRecording(form, 'cancel'));
       $('[data-rec-stop]', form).addEventListener('click', () => stopRecording(form, 'preview'));
       ta.addEventListener('input', syncButtons);
@@ -303,6 +340,8 @@
       box.addEventListener('click', (e) => {
         const op = e.target.closest('[data-open-post]');
         if (op && !e.target.closest('[data-msg-menu]')) { window.AcoliaSocial?.openPost?.(Number(op.dataset.openPost)); return; }
+        const im = e.target.closest('[data-img]');
+        if (im && !e.target.closest('[data-msg-menu]')) { modal({ title: 'Foto', html: `<img src="${esc(im.dataset.img)}" alt="" style="width:100%;border-radius:12px">`, actions: [{ label: 'Fechar' }] }); return; }
         const b = e.target.closest('[data-msg-menu]');
         const old = $('.msg-pop', box);
         if (old) old.remove();
@@ -532,8 +571,7 @@
       if (el) el.outerHTML = msgHtml(m);
     }
 
-    // Reembolso manual pendente: o profissional não escreve para este paciente até ele confirmar
-    const canWrite = (c) => c.peer.active && !c.blocked_by_me && !c.blocked_me && !c.refund_lock;
+    const canWrite = (c) => c.peer.active && !c.blocked_by_me && !c.blocked_me;
 
     // Limpar conversa: apaga todas as mensagens só para você
     async function clearConversation() {
@@ -573,7 +611,8 @@
       if (m.kind === 'pix') {
         inner = `<div class="msg-card"><strong>${ICONS.pix.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px"')} Chave Pix para pagamento</strong>
           <span class="code" style="font-size:1rem;word-break:break-all">${esc(m.body)}</span>
-          <button type="button" class="btn secondary sm" data-copy="${esc(m.body)}">${ICONS.copy} Copiar chave</button></div>`;
+          <button type="button" class="btn secondary sm" data-copy="${esc(m.body)}">${ICONS.copy} Copiar chave</button>
+          ${mine ? '' : `<span class="small proof-tip">📸 <b>Depois de pagar, tire um print do comprovante</b> e mande aqui na conversa pela foto (botão 📷 ao lado de "Digite uma mensagem").</span>`}</div>`;
       } else if (m.kind === 'call') {
         const link = `${location.origin}/atendimento?codigo=${encodeURIComponent(m.body)}`;
         inner = `<div class="msg-card"><strong>${ICONS.video.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px"')} Código de atendimento</strong>
@@ -585,8 +624,9 @@
         const a = audioParts(m.body);
         inner = window.AcoliaVoice.playerHtml({ src: `${m.support ? '/api/support/audio/' : '/api/chat/audio/'}${encodeURIComponent(a.file)}`, secs: a.secs, peaks: a.peaks, hint: true });
       } else if (m.kind === 'image') {
-        // Foto (só no Suporte Acolia)
-        inner = `<button type="button" class="msg-img" data-img="${esc(m.body)}" aria-label="Ver foto"><img src="${esc(m.body)}" alt="Foto" loading="lazy"></button>`;
+        // Foto: no Suporte Acolia é um endereço; nas conversas, o arquivo privado (só os dois abrem)
+        const src = m.support ? m.body : `/api/chat/photo/${encodeURIComponent(m.body)}`;
+        inner = `<button type="button" class="msg-img" data-img="${esc(src)}" aria-label="Ver foto"><img src="${esc(src)}" alt="Foto" loading="lazy"></button>`;
       } else if (m.kind === 'doc') {
         // Documento (atestado, receita, encaminhamento): abre a folha para ver e salvar
         const [code, title] = String(m.body).split('|');
@@ -660,7 +700,8 @@
       const ask = role === 'professional' ? state.messages.filter((m) => m.kind === 'booking' && m.booking?.can?.approve && latestBooking[m.booking.id] === m.id).map((m) => m.booking).pop() : null;
       if (!ask) { el.innerHTML = ''; el.className = ''; return; }
       el.className = 'pay-ask';
-      el.innerHTML = `<span class="grow">💰 O paciente fez o pagamento de <b>${money(ask.price_cents)}</b>? <span class="small muted">(${esc(ask.when)})</span> <span class="pa-time" data-pa-time></span></span>
+      el.innerHTML = `<span class="grow">💰 O paciente fez o pagamento de <b>${money(ask.price_cents)}</b>? <span class="small muted">(${esc(ask.when)})</span> <span class="pa-time" data-pa-time></span>
+          <span class="small muted pa-hint">Confira no seu banco e no comprovante que ele mandar em foto.</span></span>
         <button type="button" class="btn sm" data-ag-act="approve" data-ag-id="${ask.id}">Sim</button>
         <button type="button" class="btn sm secondary" data-ag-act="reject" data-ag-id="${ask.id}">Não</button>`;
       const tick = () => {
@@ -741,11 +782,10 @@
         try {
           const [conv, data] = await Promise.all([api(`/api/chat/conversations/${c.id}`), api(`/api/chat/conversations/${c.id}/messages`)]);
           if (state.current?.id !== c.id) return;
-          const lockChanged = conv.refund_lock !== state.current.refund_lock;
           state.current = conv;
           state.messages = data.items;
           state.hasMore = data.has_more;
-          if (lockChanged) renderThread(); else renderMessages(false);
+          renderMessages(false);
         } catch { /* conversa sumiu */ }
       }, 300);
     }

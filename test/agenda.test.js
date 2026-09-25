@@ -253,7 +253,7 @@ test('manual: sem a chave Pix em 5 minutos o horário volta; "não aprovado" per
   assert.equal(r.data.status, 'confirmada');
 });
 
-test('remarcar: só uma vez e até 30 minutos antes; cancelar pede motivo e trava o chat do profissional até o reembolso', async () => {
+test('remarcar: só uma vez e até 30 minutos antes; cancelar pede motivo; reembolso manual sem travar o chat, com comprovante em foto', async () => {
   const list = (await ana.get('/api/agenda/appointments')).data.items;
   const a = list[0];
   let r = await ana.post(`/api/agenda/appointments/${a.id}/reschedule`, { start: at('2030-01-09', '10:30') });
@@ -273,22 +273,42 @@ test('remarcar: só uma vez e até 30 minutos antes; cancelar pede motivo e trav
   assert.equal(r.status, 400, '"outros" pede para contar o motivo');
   r = await ana.post(`/api/agenda/appointments/${a.id}/cancel`, { reason: 'horario' });
   assert.equal(r.data.status, 'reembolso_pendente');
-  // Chat travado só para o profissional, só com esta paciente
-  let s = await P.cl.post(`/api/chat/conversations/${a.conversation_id}/messages`, { body: 'Mas por quê?' });
-  assert.equal(s.status, 403);
-  assert.match(s.data.error, /reembolso/);
-  assert.equal((await P.cl.get('/api/chat/conversations')).data.items.find((c) => c.id === a.conversation_id).refund_lock, true);
-  assert.equal((await ana.post(`/api/chat/conversations/${a.conversation_id}/messages`, { body: 'Obrigada' })).status, 201, 'a paciente escreve normalmente');
-  await P.cl.post(`/api/agenda/appointments/${a.id}/refund-done`);
-  r = await ana.post(`/api/agenda/appointments/${a.id}/refund-received`, { yes: false });
-  assert.equal(r.data.status, 'reembolso_pendente');
-  s = await P.cl.post(`/api/chat/conversations/${a.conversation_id}/messages`, { body: 'Já devolvi' });
-  assert.equal(s.status, 403, 'continua travado enquanto ela disser que não recebeu');
-  await P.cl.post(`/api/agenda/appointments/${a.id}/refund-done`);
-  r = await ana.post(`/api/agenda/appointments/${a.id}/refund-received`, { yes: true });
+  // O chat NÃO trava: os dois continuam conversando
+  let s = await P.cl.post(`/api/chat/conversations/${a.conversation_id}/messages`, { body: 'Tudo bem, vou devolver.' });
+  assert.equal(s.status, 201, 'o profissional continua escrevendo');
+  assert.equal((await ana.post(`/api/chat/conversations/${a.conversation_id}/messages`, { body: 'Obrigada' })).status, 201);
+  // Enquanto não fizer o reembolso, não marca outra consulta com ela
+  r = await P.cl.post('/api/agenda/propose', { conversation_id: a.conversation_id, start: at('2030-01-10', '08:00') });
+  assert.equal(r.status, 403);
+  assert.match(r.data.error, /reembolso/);
+  // "Fiz o reembolso": termina na hora (a paciente não precisa mais confirmar) e ele manda o comprovante em foto
+  r = await P.cl.post(`/api/agenda/appointments/${a.id}/refund-done`);
   assert.equal(r.data.status, 'reembolsada');
-  s = await P.cl.post(`/api/chat/conversations/${a.conversation_id}/messages`, { body: 'Qualquer coisa, estou aqui.' });
-  assert.equal(s.status, 201, 'chat liberado');
+  const m = (await ana.get(`/api/chat/conversations/${a.conversation_id}/messages`)).data.items;
+  assert.equal(m.at(-1).event, 'reembolso_feito');
+  assert.equal(m.at(-1).booking.can.refund_received, false);
+  const photo = (who, conv) => {
+    const fd = new FormData();
+    fd.append('photo', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], { type: 'image/png' }), 'comprovante.png');
+    return fetch(`${base}/api/chat/conversations/${conv}/photo`, { method: 'POST', headers: { Cookie: who.cookie }, body: fd }).then(async (x) => ({ status: x.status, data: await x.json() }));
+  };
+  const up = await photo(P.cl, a.conversation_id);
+  assert.equal(up.status, 201, JSON.stringify(up.data));
+  assert.equal(up.data.kind, 'image');
+  // Só quem está na conversa abre a foto (fica fora da pasta pública)
+  assert.equal((await fetch(`${base}/uploads/${up.data.body}`)).status, 404);
+  assert.equal((await fetch(`${base}/api/chat/photo/${up.data.body}`, { headers: { Cookie: ana.cookie } })).status, 200);
+  assert.equal((await fetch(`${base}/api/chat/photo/${up.data.body}`, { headers: { Cookie: bia.cookie } })).status, 404, 'outra paciente não abre');
+  // A paciente também manda foto (o print do comprovante do Pix); vídeo não
+  assert.equal((await photo(ana, a.conversation_id)).status, 201);
+  const fd = new FormData();
+  fd.append('photo', new Blob([Buffer.from('video')], { type: 'video/mp4' }), 'v.mp4');
+  const v = await fetch(`${base}/api/chat/conversations/${a.conversation_id}/photo`, { method: 'POST', headers: { Cookie: ana.cookie }, body: fd });
+  assert.equal(v.status, 400);
+  // Apagada para todos: o arquivo sai do disco
+  assert.equal((await ana.post(`/api/chat/messages/${up.data.id}/delete`, { for: 'me' })).status, 200);
+  assert.equal((await P.cl.post(`/api/chat/messages/${up.data.id}/delete`, { for: 'everyone' })).status, 200);
+  assert.equal((await fetch(`${base}/api/chat/photo/${up.data.body}`, { headers: { Cookie: ana.cookie } })).status, 404);
 });
 
 test('prazo de 30 minutos e "não vou poder atender" do profissional (até 24 horas antes)', async () => {

@@ -342,7 +342,8 @@ router.post('/appointments/:id/refund-done', (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só o profissional informa o reembolso.');
   const a = loadMine(req, req.params.id);
   if (!G.canDo(a, 'professional').refund_done) throw new U.HttpError(409, 'Não há reembolso pendente nesta consulta.');
-  const upd = G.setStatus(a.id, { refund_status: 'feito' });
+  // Reembolso manual: o profissional informa e manda a foto do comprovante na conversa (sem esperar o paciente)
+  const upd = G.setStatus(a.id, { status: 'reembolsada', refund_status: 'feito' });
   G.post(upd, 'professional', 'reembolso_feito');
   G.notifyBoth(upd);
   res.json(G.view(upd, role(req)));

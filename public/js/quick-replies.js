@@ -1,6 +1,6 @@
 /* Mensagens prontas do profissional (até 10).
    - Meu perfil: cria, edita e apaga as mensagens (editor).
-   - Chat: o "+" ao lado do "Digite uma mensagem" abre a lista; tocando numa, a mensagem inteira vai para
+   - Chat: botão de funções (quatro pontinhos) → "Mensagens prontas" abre a lista; tocando numa, a mensagem inteira vai para
      o campo de digitar e é só enviar. */
 (function () {
   'use strict';
@@ -21,7 +21,7 @@
         <button type="button" class="icon-btn" data-qr-rm aria-label="Apagar esta mensagem" title="Apagar">${window.Acolia.ICONS.trash}</button></div>`;
     function paint() {
       root.innerHTML = `<h2 style="margin:0">Mensagens prontas</h2>
-        <p class="small muted" style="margin:0">Deixe salvas as mensagens que você manda sempre (até ${max}). No chat, toque no <b>+</b> ao lado de "Digite uma mensagem", escolha a mensagem e é só enviar.</p>
+        <p class="small muted" style="margin:0">Deixe salvas as mensagens que você manda sempre (até ${max}). No chat, toque no botão de <b>funções</b> (os quatro pontinhos ao lado de "Digite uma mensagem") → <b>Mensagens prontas</b>, escolha a mensagem e é só enviar.</p>
         <div class="qr-list">${items.length ? items.map(row).join('') : '<p class="small muted" style="margin:0">Você ainda não tem mensagens prontas.</p>'}</div>
         <div class="row" style="gap:8px;flex-wrap:wrap">
           ${items.length < max ? `<button type="button" class="btn secondary sm" data-qr-add>+ Nova mensagem</button>` : `<span class="small muted">Você chegou ao limite de ${max} mensagens.</span>`}

@@ -49,7 +49,7 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
   - **Apagou a conta de teste, o simulado some junto.** Para montar de novo, troque `KEY` em `server/testAgenda.js`.
 - Só vale a chave da **conta real** do Asaas. A de teste (Sandbox) é recusada, porque não recebe dinheiro de verdade. `ALLOW_ASAAS_SANDBOX=1` libera a de teste só para os testes automáticos.
 - **Próximas consultas:** lista com contagem regressiva, "Não vou poder atender", "Fiz o reembolso" e histórico.
-- **Pelo chat** (ícone 📅 da conversa), o profissional **propõe uma consulta** ao paciente. O paciente aceita a política e paga.
+- **Pelo chat** (botão de funções da conversa → Agendar consulta), o profissional **propõe uma consulta** ao paciente. O paciente aceita a política e paga.
 
 **Paciente**
 - No **perfil** do profissional aparece **"Dia disponível: Hoje/Amanhã/…"** (também para visitantes, e na vitrine sem ser clicável). Tocando, a tela desce até os valores, onde fica **Agendar consulta**. Visitante é convidado a criar a conta.
@@ -69,7 +69,7 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 - **Profissional não remarca sozinho:** até **24 horas antes**, toca em "Não vou poder atender" e o **paciente escolhe** entre reembolso e remarcar. Essa remarcação não gasta a dele. Se o paciente não escolher até o horário, recebe o reembolso.
 - **Reembolso:**
   - **Automático** pelo Asaas do profissional. Se falhar, por exemplo por falta de saldo, vira pedido manual.
-  - **Manual:** o chat do profissional **com esse paciente** fica travado até o paciente confirmar "Sim, recebi". Se ele disser que não recebeu, continua travado.
+  - **Manual:** o profissional devolve pelo Pix, toca em **"Fiz o reembolso"** (a consulta fica reembolsada na hora) e manda a **foto do comprovante** na conversa. O chat **não trava** e o paciente não precisa confirmar; sem comprovante, o paciente pode denunciar ao Suporte Acolia. Enquanto o reembolso não for feito, o profissional não marca outra consulta com esse paciente.
 - **Chamada automática:** é criada **5 minutos antes** (e o paciente recebe o aviso na conversa). **Regra dos 3 minutos (vale para os dois):** o profissional que não entrar até 3 minutos depois do horário perde a consulta e o paciente recebe 100% de volta; o paciente que não entrar até 3 minutos depois do horário perde a consulta, a chamada é encerrada e o valor **não** é devolvido (situação "Paciente não entrou"). **Fim:** quando o profissional finaliza a chamada (com o paciente já tendo entrado), a consulta fica **concluída** na hora e todos na conversa (paciente, profissional e secretária) veem "✅ Chamada finalizada"; o aviso fixo some (ou passa para a próxima consulta). Se ninguém finalizar, isso acontece sozinho 30 minutos depois do fim. Finalizar antes de o paciente entrar não fecha a chamada e o botão "Entrar na chamada" aparece na conversa, na lista e no aviso. Não existe mais "criar atendimento"; o código de login do profissional continua.
 - **Profissional ausente:** se não entrar até **3 minutos** depois do horário, a chamada é fechada, o paciente vê "O profissional não compareceu" e recebe **100% de volta**.
 - 30 minutos depois do fim, a consulta fica **concluída** e a chamada é encerrada.
@@ -103,7 +103,7 @@ O profissional só vê uma conversa depois que o paciente manda a primeira mensa
 - **Contas de teste recriadas** uma vez (Profissional Teste com agenda 02:35, 1 h + 15 min, "Disponível" ligado e Asaas simulado; Paciente Teste ativo).
 
 **Agendar pelo chat, uma consulta por dia e filtro de disponibilidade:**
-- **Marcar pelo chat:** o profissional (ou a secretária) toca no **📅 ao lado do +** no campo de mensagem, escolhe o dia e o horário e envia. O paciente recebe "📅 Consulta quase pronta: falta o pagamento":
+- **Marcar pelo chat:** o profissional (ou a secretária) toca no **botão de funções** (quatro pontinhos ao lado do campo de mensagem) → **Agendar consulta**, escolhe o dia e o horário e envia. O paciente recebe "📅 Consulta quase pronta: falta o pagamento":
   - com **Asaas**: botão **"Pagar agora"** (aceita a política e vê o QR Code do Pix; confirma sozinho);
   - **sem Asaas**: botão **"Copiar Pix · R$ …"** (aceita a política, copia a chave e vê o valor). Em cima do campo de mensagem do profissional aparece **"O paciente fez o pagamento? Sim / Não"** com os 10 minutos correndo; dá para continuar conversando. **Sim** → consulta agendada (aviso fixo com contagem). **Não** → o paciente pode tentar de novo e a pergunta volta.
   - Todos os cartões antes do pagamento têm um **"Cancelar agendamento"** pequeno (paciente, profissional e secretária).
@@ -143,6 +143,8 @@ A chamada é ponto a ponto (WebRTC): o áudio e o vídeo não passam pelo servid
 O site pode ser instalado como app (Android, iPhone e computador) pelo próprio site, sem loja. As páginas de entrada e o rodapé têm um tutorial de instalação por aparelho. Depois de instalar e tocar em **Ativar notificações**, paciente e profissional recebem cada mensagem nova como notificação, mesmo com o app fechado (Web Push). As chaves de notificação são criadas sozinhas e ficam guardadas no banco. No iPhone, as notificações só funcionam com o app instalado (iOS 16.4 ou mais novo).
 
 ## Mensagens
+- **Fotos no chat (paciente e profissional):** só foto, vídeo não. Servem principalmente para o **comprovante do Pix** (o paciente manda o print do pagamento; o profissional manda o do reembolso). O cartão da chave Pix e o "Copiar Pix" mostram o aviso "tire um print do comprovante e mande aqui". As fotos ficam numa pasta privada: só os dois da conversa abrem.
+- **Botão de funções do profissional** (quatro pontinhos ao lado de "Digite uma mensagem"): **Mensagens prontas**, **Agendar consulta** e **Enviar foto**. O paciente tem só o botão 📷. No Suporte Acolia continua o 📷 direto.
 - **Uma a uma → apagar para todos** (só as suas mensagens, pelo ⋮ da mensagem): o conteúdo sai do banco (áudio também), os dois lados (você e o outro) veem "Mensagem apagada".
 - **Limpar conversa** (⋮ da conversa): apaga todas as mensagens (as suas e as do outro) **só para você**; o outro continua vendo.
 - Quando **os dois** limparam/apagaram a mesma mensagem, ela **sai do banco de vez**.

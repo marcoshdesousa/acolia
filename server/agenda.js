@@ -347,8 +347,8 @@ async function checkPayment(a, { force = false } = {}) {
   return getAppt(a.id);
 }
 
-// Reembolso: automático (Asaas) ou pedido ao profissional (manual — o chat dele com o paciente trava
-// até o paciente confirmar que recebeu)
+// Reembolso: automático (Asaas) ou pedido ao profissional (manual — ele devolve, toca em "Fiz o reembolso"
+// e manda a foto do comprovante na conversa)
 function refund(a, reason, detail = '') {
   const fields = { cancel_reason: reason, cancel_detail: detail || null };
   if (a.mode === 'auto' && a.pay_id) {
@@ -377,10 +377,14 @@ function refund(a, reason, detail = '') {
   return upd;
 }
 
-// Chat do profissional com esse paciente fica travado enquanto houver reembolso manual pendente
+// Reembolso manual pedido e ainda não feito: o profissional não marca outra consulta com esse paciente
+// até tocar em "Fiz o reembolso" (o chat NÃO fica travado: os dois continuam conversando e mandando fotos)
 function refundLock(conversationId) {
-  return !!db.prepare("SELECT 1 FROM appointments WHERE conversation_id = ? AND status = 'reembolso_pendente' AND refund_status IN ('pedido', 'feito')").get(conversationId);
+  return !!db.prepare("SELECT 1 FROM appointments WHERE conversation_id = ? AND status = 'reembolso_pendente' AND refund_status = 'pedido'").get(conversationId);
 }
+// Antes, o reembolso manual esperava o paciente confirmar ("Você recebeu?"). Agora o profissional
+// informa e manda o comprovante em foto: as consultas que estavam esperando essa confirmação terminam.
+db.prepare("UPDATE appointments SET status = 'reembolsada' WHERE status = 'reembolso_pendente' AND refund_status = 'feito'").run();
 
 // ---------- Chamada automática ----------
 function openCall(a) {
@@ -519,7 +523,7 @@ function canDo(a, role) {
     c.copy_pix = a.mode === 'manual' && a.status === 'aguardando_pagamento' && !!a.pix_payload && ms(a.hold_until) > t;
     c.choose = a.status === 'aguardando_paciente' && t < start;
     c.retry = a.status === 'pagamento_recusado' && ms(a.hold_until) > t;
-    c.refund_received = a.status === 'reembolso_pendente' && a.refund_status === 'feito';
+    c.refund_received = false; // o paciente não precisa mais confirmar (o comprovante vai em foto)
   } else {
     c.send_pix = a.mode === 'manual' && a.status === 'aguardando_pix' && ms(a.hold_until) > t;
     c.approve = a.mode === 'manual' && !!a.pix_payload && (a.status === 'aguardando_pagamento' || (a.status === 'expirada' && ms(a.start_at) > t));

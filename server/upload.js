@@ -176,7 +176,7 @@ function handleReel(req, res) {
 }
 
 // Áudios do chat: pasta PRIVADA (só quem participa da conversa ouve)
-const AUDIO_DIR = path.join(DATA_DIR, 'audio');
+const AUDIO_DIR = path.resolve(DATA_DIR, 'audio');
 fs.mkdirSync(AUDIO_DIR, { recursive: true });
 const AUDIO_EXT = {
   'audio/wav': '.wav', 'audio/x-wav': '.wav', 'audio/wave': '.wav', 'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/aac': '.aac', 'audio/mpeg': '.mp3',
@@ -207,6 +207,34 @@ function handleAudio(req, res) {
   });
 }
 
+// Foto do chat (comprovante do Pix, por exemplo): pasta privada, aberta só por quem está na conversa
+const CHAT_PHOTO_DIR = path.resolve(DATA_DIR, 'chat-photos');
+fs.mkdirSync(CHAT_PHOTO_DIR, { recursive: true });
+const chatPhotoUpload = multer({
+  storage: multer.diskStorage({
+    destination: CHAT_PHOTO_DIR,
+    filename: (_req, file, cb) => cb(null, crypto.randomBytes(16).toString('hex') + EXT[file.mimetype]),
+  }),
+  limits: { fileSize: 3 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (!EXT[file.mimetype]) return cb(new HttpError(400, 'Envie só fotos (JPG, PNG ou WEBP). Vídeos não são aceitos.'));
+    cb(null, true);
+  },
+}).single('photo');
+function handleChatPhoto(req, res) {
+  return new Promise((resolve, reject) => {
+    chatPhotoUpload(req, res, (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') return reject(new HttpError(400, 'A foto deve ter no máximo 3 MB.'));
+        return reject(err.status ? err : new HttpError(400, 'Não foi possível enviar a foto.'));
+      }
+      if (!req.file) return reject(new HttpError(400, 'Selecione uma foto.'));
+      cloud.uploadFile('chat-photos', req.file.path);
+      resolve(req.file.filename);
+    });
+  });
+}
+
 function removePhoto(url) {
   if (!url || !url.startsWith('/uploads/')) return;
   const file = path.join(UPLOAD_DIR, path.basename(url));
@@ -214,4 +242,4 @@ function removePhoto(url) {
   cloud.removeFile('uploads', url);
 }
 
-module.exports = { handleReel, VIDEO_EXT, partPath, finishPart, handlePhotos, handleMedia, handleAudio, AUDIO_DIR, handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };
+module.exports = { handleChatPhoto, CHAT_PHOTO_DIR, handleReel, VIDEO_EXT, partPath, finishPart, handlePhotos, handleMedia, handleAudio, AUDIO_DIR, handlePhoto, removePhoto, handleDocument, removeDocument, UPLOAD_DIR, DOC_DIR };

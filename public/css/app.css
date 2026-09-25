@@ -459,6 +459,16 @@ dialog .dlg-body h2 { padding-right: 28px; }
 .qr-pop-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; }
 .qr-pop button { text-align: left; font: inherit; color: var(--text); background: var(--surface-2); border: 0; border-radius: 12px; padding: 10px 12px; cursor: pointer; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .qr-pop button:hover, .qr-pop button:focus-visible { background: var(--primary-soft); }
+.fn-pop { position: absolute; left: 8px; bottom: calc(100% + 6px); z-index: 30; width: min(320px, calc(100% - 16px)); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.composer:has(.fn-pop) { overflow: visible; }
+.fn-pop button { display: flex; align-items: center; gap: 12px; text-align: left; font: inherit; color: var(--text); background: none; border: 0; border-radius: 12px; padding: 10px 12px; cursor: pointer; }
+.fn-pop button:hover, .fn-pop button:focus-visible { background: var(--primary-soft); }
+.fn-pop button svg { width: 24px; height: 24px; flex: none; color: var(--primary); }
+.fn-pop button span { display: flex; flex-direction: column; }
+.fn-pop small { color: var(--muted); font-size: .8rem; }
+.quick-btn.off { opacity: .4; pointer-events: none; }
+.proof-tip { display: block; margin-top: 4px; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft, #eee8e2); color: var(--text); line-height: 1.4; }
+.pa-hint { display: block; margin-top: 2px; }
 .qr-list { display: flex; flex-direction: column; gap: 10px; }
 .qr-item { display: flex; gap: 8px; align-items: flex-start; }
 .qr-item textarea { flex: 1; min-height: 90px; resize: none; overflow: hidden; }
@@ -1280,8 +1290,8 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .sup-avatar { background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; }
 .sup-avatar img { width: 72%; height: 72%; object-fit: contain; }
 .sup-note { padding: 8px 14px; background: var(--primary-soft); color: var(--text); border-bottom: 1px solid var(--line); }
-.msg-img { display: block; border: 0; padding: 0; background: none; cursor: zoom-in; border-radius: 12px; overflow: hidden; max-width: 240px; }
-.msg-img img { display: block; width: 100%; height: auto; max-height: 320px; object-fit: cover; }
+.msg-img { display: block; border: 0; padding: 0; background: none; cursor: zoom-in; border-radius: 12px; overflow: hidden; max-width: 200px; }
+.msg-img img { display: block; width: 100%; height: auto; max-height: 240px; object-fit: cover; }
 /* Avisos da Acolia no sininho */
 .notifs li.aviso { cursor: pointer; }
 .aviso-ic { background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; }

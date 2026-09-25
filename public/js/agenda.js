@@ -352,7 +352,8 @@
       title: 'Chave Pix copiada ✓',
       html: `<div class="pix-manual-box"><span class="small muted">Valor</span><b class="pix-value">${money(a.price_cents)}</b>
           <span class="small muted">Chave Pix do profissional</span><div class="code-box" style="font-size:1rem;word-break:break-all">${esc(a.pix_payload || '')}</div></div>
-        <p class="small muted">Abra o app do seu banco, escolha <b>Pix → Pagar com chave</b>, cole a chave e pague <b>${money(a.price_cents)}</b> em até 10 minutos. O profissional confirma aqui na conversa quando o dinheiro cair.</p>`,
+        <p class="small muted">Abra o app do seu banco, escolha <b>Pix → Pagar com chave</b>, cole a chave e pague <b>${money(a.price_cents)}</b> em até 10 minutos. O profissional confirma aqui na conversa quando o dinheiro cair.</p>
+        <div class="notice small proof-tip">📸 <b>Depois de pagar, tire um print do comprovante</b> e mande aqui na conversa pela foto (botão 📷 ao lado de "Digite uma mensagem").</div>`,
       actions: [{ label: 'Copiar de novo', class: 'secondary', handler: () => { copyText(a.pix_payload); return false; } }, { label: 'Ok' }],
     });
     refreshAll();
@@ -420,8 +421,6 @@
           break;
         }
         case 'retry_no': await api(`/api/agenda/appointments/${a.id}/retry`, { method: 'POST', body: { yes: false } }); break;
-        case 'refund_yes': await api(`/api/agenda/appointments/${a.id}/refund-received`, { method: 'POST', body: { yes: true } }); toast('Obrigado! Reembolso confirmado ✓'); break;
-        case 'refund_no': await api(`/api/agenda/appointments/${a.id}/refund-received`, { method: 'POST', body: { yes: false } }); toast('Avisamos o profissional que o dinheiro ainda não chegou.'); break;
         case 'send_pix': await api(`/api/agenda/appointments/${a.id}/send-pix`, { method: 'POST' }); toast('Chave Pix enviada. O paciente tem 10 minutos para pagar.'); break;
         case 'approve':
           if (!await confirmDialog(`Confirma que o Pix de ${money(a.price_cents)} caiu na sua conta?`, { okLabel: 'Pagamento aprovado' })) return;
@@ -445,9 +444,9 @@
           break;
         }
         case 'refund_done':
-          if (!await confirmDialog(`Você já devolveu ${money(a.price_cents)} para o paciente pelo Pix?`, { okLabel: 'Sim, fiz o reembolso' })) return;
+          if (!await confirmDialog(`Você já devolveu ${money(a.price_cents)} para o paciente pelo Pix? Depois de confirmar, mande a foto do comprovante aqui na conversa. Sem o comprovante, o paciente pode denunciar o reembolso ao Suporte Acolia.`, { okLabel: 'Sim, fiz o reembolso' })) return;
           await api(`/api/agenda/appointments/${a.id}/refund-done`, { method: 'POST' });
-          toast('Pronto! O paciente vai confirmar que recebeu.');
+          toast('Pronto! Agora mande a foto do comprovante na conversa.');
           break;
         case 'enter': window.open(`/atendimento?codigo=${encodeURIComponent(a.call_code)}`, '_blank', 'noopener'); return;
         case 'chat': goChat(a.conversation_id); return;
@@ -469,7 +468,6 @@
       else if (c.pay) out.push(b('pay', `${ic('pix', 16)} Pagar agora`, ''));
       if (c.choose) out.push(b('choose', 'Escolher: reembolso ou remarcar', ''));
       if (c.retry) { out.push(b('retry_yes', 'Sim, quero tentar de novo', '')); out.push(b('retry_no', 'Não')); }
-      if (c.refund_received) { out.push(b('refund_yes', 'Sim, recebi', '')); out.push(b('refund_no', 'Ainda não recebi')); }
       if (c.reschedule) out.push(b('reschedule', 'Remarcar'));
       if (c.cancel) out.push(b('cancel', 'Cancelar consulta', 'ghost danger-text'));
       if (c.give_up && !c.retry) out.push(b('give_up', 'Cancelar agendamento', 'ghost tiny-link'));
@@ -504,8 +502,8 @@
     agendada: ['✅ Consulta agendada', () => 'Pagamento aprovado. O link da chamada aparece aqui 5 minutos antes.'],
     remarcada: ['🔁 Consulta remarcada', (a, r, m) => (m.extra ? `Novo horário (antes era ${fmtIso(m.extra)}).` : 'Novo horário.')],
     cancelada: ['Consulta cancelada', (a, r, m) => (m?.extra === 'pro_antes_pagar' ? (r === 'patient' ? 'O profissional cancelou este agendamento antes do pagamento. Nada foi cobrado.' : 'Agendamento cancelado antes do pagamento. O horário foi liberado.') : 'O horário foi liberado.')],
-    reembolso_pedido: ['↩️ Pedido de reembolso', (a, r, m) => `${a.cancel_reason_label ? `Motivo: ${a.cancel_reason_label}${a.cancel_detail && a.cancel_reason === 'outros' ? ` — “${a.cancel_detail}”` : ''}. ` : ''}${a.mode === 'auto' && m.extra !== 'erro_auto' ? 'O reembolso automático foi pedido ao Pix.' : (r === 'professional' ? 'Devolva o valor pelo Pix e toque em "Fiz o reembolso". Até o paciente confirmar, você não consegue mandar mensagens para ele.' : 'O profissional vai devolver o valor pelo Pix.')}`],
-    reembolso_feito: ['↩️ Reembolso feito', (a, r) => (r === 'patient' ? 'O profissional informou que devolveu o valor. Você recebeu?' : 'Esperando o paciente confirmar que recebeu.')],
+    reembolso_pedido: ['↩️ Pedido de reembolso', (a, r, m) => `${a.cancel_reason_label ? `Motivo: ${a.cancel_reason_label}${a.cancel_detail && a.cancel_reason === 'outros' ? ` — “${a.cancel_detail}”` : ''}. ` : ''}${a.mode === 'auto' && m.extra !== 'erro_auto' ? 'O reembolso automático foi pedido ao Pix.' : (r === 'professional' ? 'Devolva o valor pelo Pix, toque em "Fiz o reembolso" e mande a foto do comprovante aqui na conversa.' : 'O profissional vai devolver o valor pelo Pix e mandar o comprovante aqui na conversa.')}`],
+    reembolso_feito: ['✅ Reembolso feito', (a, r) => (r === 'patient' ? 'O profissional informou que devolveu o valor pelo Pix. O comprovante vem aqui na conversa, em foto. Se o dinheiro não chegou, fale com o Suporte Acolia.' : 'Agora mande a foto do comprovante do Pix aqui na conversa (botão de funções → Enviar foto). Sem o comprovante, o paciente pode denunciar ao Suporte Acolia.')],
     reembolso_nao: ['↩️ Reembolso ainda não chegou', (a, r) => (r === 'professional' ? 'O paciente disse que ainda não recebeu. Confira e toque em "Fiz o reembolso" de novo.' : 'Avisamos o profissional.')],
     reembolsada: ['✅ Reembolso concluído', () => 'O valor da consulta foi devolvido.'],
     recusado: ['⚠️ Pagamento não aprovado', (a, r) => (r === 'patient' ? 'Quer realmente fazer esta consulta? Se sim, o profissional manda a chave Pix de novo.' : 'O paciente vai responder se quer tentar de novo.')],
@@ -543,6 +541,7 @@
       <span class="bk-when">${ic('calendar', 16)} ${esc(a.when)}</span>
       <span class="small muted">${a.minutes} min · ${a.price_cents != null ? money(a.price_cents) : ''} · ${badge(a)}</span>
       <span class="small">${esc(text(a, role, m))}</span>
+      ${role === 'patient' && a.can?.copy_pix ? `<span class="small proof-tip">📸 <b>Depois de pagar, tire um print do comprovante</b> e mande aqui na conversa pela foto (botão 📷 ao lado de "Digite uma mensagem").</span>` : ''}
       <div class="bk-actions">${buttons(a, role)}</div>
     </div>`;
   }

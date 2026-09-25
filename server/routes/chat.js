@@ -27,13 +27,15 @@ const PATIENT_SEES = 'NOT (c.pro_started = 1 AND c.patient_wrote = 0 AND c.last_
 // veem "Mensagem apagada". "Limpar conversa": some só para quem limpou (o outro continua vendo).
 // Quando os dois lados limparam a mesma mensagem, ela sai do banco de vez (junto com o áudio).
 const hideCol = (role) => (role === 'patient' ? 'hidden_for_patient' : 'hidden_for_professional');
+// Arquivo do áudio ou da foto da mensagem (os dois ficam fora da pasta pública)
 function removeAudioFile(m) {
-  if (m.kind !== 'audio') return;
+  if (m.kind !== 'audio' && m.kind !== 'image') return;
   const file = String(m.body).split('|')[0];
   if (!/^[a-f0-9]{32}\.[a-z0-9]+$/.test(file)) return;
-  const { AUDIO_DIR } = require('../upload');
-  require('node:fs').promises.unlink(require('node:path').join(AUDIO_DIR, file)).catch(() => {});
-  require('../cloud').removeFile('audio', file);
+  const { AUDIO_DIR, CHAT_PHOTO_DIR } = require('../upload');
+  const [dir, folder] = m.kind === 'image' ? [CHAT_PHOTO_DIR, 'chat-photos'] : [AUDIO_DIR, 'audio'];
+  require('node:fs').promises.unlink(require('node:path').join(dir, file)).catch(() => {});
+  require('../cloud').removeFile(folder, file);
 }
 function purgeHidden(conversationId) {
   const rows = db.prepare('SELECT id, kind, body FROM messages WHERE conversation_id = ? AND hidden_for_patient = 1 AND hidden_for_professional = 1').all(conversationId);
@@ -49,11 +51,6 @@ function blocksOf(c) {
   return { patient: rows.includes('patient'), professional: rows.includes('professional') };
 }
 function assertCanSend(role, c) {
-  // Reembolso manual pendente: o profissional só volta a mandar mensagem para este paciente depois
-  // que o paciente confirmar que recebeu o dinheiro de volta
-  if (role === 'professional' && require('../agenda').refundLock(c.id)) {
-    throw new U.HttpError(403, 'Faça o reembolso pedido por este paciente e toque em "Fiz o reembolso". O chat volta quando ele confirmar que recebeu.');
-  }
   const b = blocksOf(c);
   const other = role === 'patient' ? 'professional' : 'patient';
   if (b[role]) throw new U.HttpError(403, `Você bloqueou este ${other === 'patient' ? 'paciente' : 'profissional'}. Desbloqueie para mandar mensagens.`);
@@ -91,7 +88,7 @@ function summarize(role, c) {
   const unread = db.prepare(`SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND sender_role = ? AND read_at IS NULL AND kind <> 'deleted' AND ${hc} = 0`).get(c.id, other).n;
   const b = blocksOf(c);
   return { id: c.id, archived: !!c[s], peer: peerOf(role, c), last_message: last, unread, updated_at: c.last_message_at || c.created_at,
-    blocked_by_me: b[role], blocked_me: b[other], refund_lock: role === 'professional' && require('../agenda').refundLock(c.id) };
+    blocked_by_me: b[role], blocked_me: b[other] };
 }
 
 router.get('/conversations', (req, res) => {
@@ -198,7 +195,7 @@ function sendMessage(c, role, from, kind, body) {
   // Notificação no aparelho de quem recebe
   const to = role === 'patient' ? ['professional', c.professional_id, `/painel#conversas/${c.id}`] : ['patient', c.patient_id, `/app#chat/${c.id}`];
   const text = kind === 'booking' ? require('../agenda').pushText(body) : kind === 'pix' ? 'Enviou a chave Pix para pagamento' : kind === 'call' ? 'Enviou um código de atendimento'
-    : kind === 'audio' ? '🎤 Enviou um áudio' : kind === 'doc' ? `📄 Enviou um documento: ${String(body).split('|')[1] || ''}` : kind === 'post' ? '📌 Enviou uma das suas publicações' : body;
+    : kind === 'audio' ? '🎤 Enviou um áudio' : kind === 'image' ? '📷 Enviou uma foto' : kind === 'doc' ? `📄 Enviou um documento: ${String(body).split('|')[1] || ''}` : kind === 'post' ? '📌 Enviou uma das suas publicações' : body;
   require('../push').notify(to[0], to[1], {
     title: from, body: text.length > 140 ? `${text.slice(0, 137)}…` : text, url: to[2], tag: `conversa-${c.id}`,
   });
@@ -233,7 +230,32 @@ router.post('/conversations/:id/messages', (req, res) => {
   res.status(201).json(postMessage(req, c, kind, body));
 });
 
-// Mensagem de voz (os dois podem mandar; fotos e vídeos não existem no chat).
+// Foto (os dois mandam; vídeo não). Serve para o comprovante do Pix (pagamento ou reembolso).
+// Fica numa pasta privada: só quem participa da conversa abre. body = nome do arquivo.
+router.post('/conversations/:id/photo', async (req, res) => {
+  const c = loadConversation(req, req.params.id);
+  const peer = peerOf(req.auth.role, c);
+  if (!peer.active) throw new U.HttpError(403, 'Esta conta não está mais ativa na plataforma.');
+  assertCanSend(req.auth.role, c);
+  const file = await require('../upload').handleChatPhoto(req, res);
+  res.status(201).json(postMessage(req, c, 'image', file));
+});
+
+router.get('/photo/:file', async (req, res) => {
+  const file = String(req.params.file);
+  if (!/^[a-f0-9]{32}\.(jpg|png|webp)$/.test(file)) throw new U.HttpError(404, 'Foto não encontrada.');
+  const s = side(req);
+  const ok = db.prepare(`SELECT 1 FROM messages m JOIN conversations c ON c.id = m.conversation_id
+    WHERE m.kind = 'image' AND m.body = ? AND c.${s.col} = ?`).get(file, req.auth.user.id);
+  if (!ok) throw new U.HttpError(404, 'Foto não encontrada.');
+  const { CHAT_PHOTO_DIR } = require('../upload');
+  const full = require('node:path').join(CHAT_PHOTO_DIR, file);
+  if (!(await require('../cloud').ensureLocalFile('chat-photos', full))) throw new U.HttpError(404, 'Foto não encontrada.');
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.sendFile(full);
+});
+
+// Mensagem de voz (os dois podem mandar).
 // body = "arquivo|segundos|ondas" (ondas = até 64 dígitos 0-9 com a altura das barrinhas, estilo WhatsApp)
 router.post('/conversations/:id/audio', async (req, res) => {
   const c = loadConversation(req, req.params.id);
@@ -360,7 +382,7 @@ function eraseMessagesOf(role, userId) {
   const col = role === 'patient' ? 'patient_id' : 'professional_id';
   let n = 0;
   for (const c of db.prepare(`SELECT id, patient_id, professional_id FROM conversations WHERE ${col} = ?`).all(userId)) {
-    for (const m of db.prepare("SELECT id, kind, body FROM messages WHERE conversation_id = ? AND kind = 'audio'").all(c.id)) removeAudioFile(m);
+    for (const m of db.prepare("SELECT id, kind, body FROM messages WHERE conversation_id = ? AND kind IN ('audio', 'image')").all(c.id)) removeAudioFile(m);
     n += db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(c.id).changes;
     db.prepare('DELETE FROM chat_blocks WHERE conversation_id = ?').run(c.id);
     try { db.prepare('DELETE FROM documents WHERE conversation_id = ?').run(c.id); } catch { /* tabela ainda não existe */ }
