@@ -201,21 +201,26 @@ test('profissional entra (código ou e-mail) e edita o perfil', async () => {
   assert.equal(r.data.name, 'João Pereira');
 });
 
-test('vitrine: visitante vê o básico (local), mas não valores, "Sobre" nem endereço; paciente vê tudo', async () => {
+test('vitrine: visitante vê o básico (com o "Sobre"), mas não valores, sessões nem localização; paciente vê tudo', async () => {
   let r = await anon.get('/api/professionals');
   assert.equal(r.data.items.length, 1);
   const p = r.data.items[0];
   assert.equal(p.locked, true);
   assert.equal(p.price_cents, undefined);
-  assert.equal(p.city, 'Parauapebas', 'localização aparece para todos');
+  assert.equal(p.city, undefined, 'localização só com conta');
+  assert.equal(p.state, undefined);
   assert.equal(p.clinic_address, undefined);
-  assert.equal(p.bio, undefined, '"Sobre" só com conta');
-  assert.equal(p.has_bio, true);
+  assert.equal(p.bio, 'Atendo adultos.', '"Sobre" aparece para todos');
+  assert.ok(p.specialties && p.profession && 'instagram' in p && 'accepts_insurance' in p && p.followers_count >= 1, 'especialidades, profissão, Instagram, plano e seguidores aparecem');
   r = await anon.get(`/api/professionals/${proId}`);
   assert.equal(r.data.price_cents, undefined);
   assert.equal(r.data.has_price, true);
-  assert.deepEqual(r.data.package_sessions, [4], 'mostra que tem pacote, sem o valor');
+  assert.equal(r.data.has_packages, true, 'mostra que tem pacote, sem sessões nem valor');
+  assert.equal(r.data.package_sessions, undefined);
+  assert.equal(r.data.session_minutes, undefined);
+  assert.equal(r.data.city, undefined);
   assert.equal(JSON.stringify(r.data).includes('520'), false, 'valor do pacote não vaza');
+  assert.equal(JSON.stringify(r.data).includes('Parauapebas'), false, 'cidade não vaza');
 
   r = await pat.get('/api/professionals');
   assert.equal(r.data.items[0].price_cents, 15000);
@@ -457,14 +462,15 @@ test('admin cadastra profissional já aprovado', async () => {
   const names = async (sort) => (await patient.get(`/api/professionals?state=todos&sort=${sort}`)).data.items.map((x) => x.name);
   assert.deepEqual(await names('preco_menor'), ['Rui Alves', 'João Pereira', 'Ana Costa']);
   assert.deepEqual(await names('preco_maior'), ['João Pereira', 'Rui Alves', 'Ana Costa']);
-  // Visitante sem conta também filtra e ordena; vê o local, mas não o valor
+  // Visitante sem conta: não vê local nem valor, então filtro por estado/valor e ordem por valor não valem
   const v = client();
+  const all = (await v.get('/api/professionals')).data.items.map((x) => x.name);
   let r2 = await v.get('/api/professionals?state=SP&sort=preco_menor');
-  assert.deepEqual(r2.data.items.map((x) => x.name), ['Rui Alves', 'Ana Costa']);
+  assert.deepEqual(r2.data.items.map((x) => x.name), all, 'estado e ordem por valor ignorados');
   assert.equal(r2.data.items[0].price_cents, undefined);
-  assert.equal(r2.data.items[0].city, 'Campinas');
+  assert.equal(r2.data.items[0].city, undefined);
   r2 = await v.get('/api/professionals?max_price=100');
-  assert.deepEqual(r2.data.items.map((x) => x.name), ['Rui Alves']);
+  assert.deepEqual(r2.data.items.map((x) => x.name), all, 'valor máximo ignorado');
   // Destaques: quem tem mais conversas/atendimentos aparece primeiro para o visitante
   r2 = await v.get('/api/professionals');
   assert.equal(r2.data.items[0].name, 'João Pereira', 'João tem conversa e atendimentos');

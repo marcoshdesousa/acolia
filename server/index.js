@@ -125,7 +125,7 @@ function createApp() {
     const official = p.status === 'oficial';
     const title = U.cleanText(official ? `${p.name} — perfil oficial | Acolia` : `${p.name} — ${p.profession} | Acolia`, 160).replace(/[<>&"]/g, '');
     const desc = U.cleanText(official ? 'Perfil oficial da Acolia: saúde mental ao seu alcance. Veja as publicações.'
-      : `${p.profession} (${p.registry}). Veja o perfil, valores e agende sua consulta online pela Acolia.`, 300).replace(/[<>&"]/g, '');
+      : `${p.profession}${p.registry ? ` (${p.registry})` : ''}. Veja o perfil e agende sua consulta online pela Acolia.`, 300).replace(/[<>&"]/g, '');
     const html = profileHtml
       .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>
   <meta name="description" content="${desc}">

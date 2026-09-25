@@ -64,12 +64,14 @@ router.get('/professionals', (req, res) => {
   if (me && req.query.auto === '1' && !q && req.query.state === undefined && !city) {
     if (rows.some((p) => p.state === me.state && p.city_norm === me.city_norm)) { city = me.city_norm; cityLabel = me.city; }
   }
-  const place = U.norm(req.query.place);
+  // Visitante sem conta não filtra por localização nem por valor (essas informações são só com conta)
+  if (!me && !viewerIsPro) { state = ''; city = ''; }
+  const place = me || viewerIsPro ? U.norm(req.query.place) : '';
   if (state) rows = rows.filter((p) => p.state === state);
   if (city) rows = rows.filter((p) => p.city_norm === city);
   if (place) rows = rows.filter((p) => U.norm(`${p.city} ${p.state} ${p.clinic_address}`).includes(place));
 
-  const maxPrice = Number(req.query.max_price);
+  const maxPrice = me || viewerIsPro ? Number(req.query.max_price) : 0;
   if (maxPrice > 0) rows = rows.filter((p) => p.price_cents != null && p.price_cents <= maxPrice * 100);
 
   let favSet = new Set();
@@ -83,8 +85,9 @@ router.get('/professionals', (req, res) => {
   const byPop = (a, b) => (pop.get(b.id) || 0) - (pop.get(a.id) || 0);
   const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
   const price = (p, dir) => (p.price_cents == null ? Infinity : dir * p.price_cents); // sem valor vai para o fim
-  if (req.query.sort === 'preco_menor') rows.sort((a, b) => price(a, 1) - price(b, 1) || byPop(a, b) || byName(a, b));
-  else if (req.query.sort === 'preco_maior') rows.sort((a, b) => price(a, -1) - price(b, -1) || byPop(a, b) || byName(a, b));
+  const sort = me || viewerIsPro ? req.query.sort : ''; // ordenar por valor também só com conta
+  if (sort === 'preco_menor') rows.sort((a, b) => price(a, 1) - price(b, 1) || byPop(a, b) || byName(a, b));
+  else if (sort === 'preco_maior') rows.sort((a, b) => price(a, -1) - price(b, -1) || byPop(a, b) || byName(a, b));
   else rows.sort((a, b) => near(a) - near(b) || byPop(a, b) || byName(a, b));
 
   res.json({

@@ -4,10 +4,11 @@
   const { $, $$, esc, api, ICONS, avatar, money, toast, modal, ufOptions, bindUfCity } = window.Acolia;
 
   function priceLine(p) {
-    const where = `<div class="meta"><span class="badge ${p.near ? 'ok' : ''}">${ICONS.pin.replace('<svg', '<svg style="width:14px;height:14px"')} ${esc(p.city)} - ${esc(p.state)}</span>
+    const place = p.locked ? '' : `<span class="badge ${p.near ? 'ok' : ''}">${ICONS.pin.replace('<svg', '<svg style="width:14px;height:14px"')} ${esc(p.city)} - ${esc(p.state)}</span>`;
+    const where = `<div class="meta">${place}
       <span class="badge">Atende online</span>${p.has_clinic ? '<span class="badge">Atende presencial</span>' : ''}${p.accepts_insurance ? '<span class="badge ok">Aceita plano de saúde</span>' : ''}</div>`;
     if (p.locked) {
-      return `<div class="locked">${ICONS.lock.replace('<svg', '<svg style="width:18px;height:18px"')} Valores: crie sua conta grátis para ver</div>${where}`;
+      return `<div class="locked">${ICONS.lock.replace('<svg', '<svg style="width:18px;height:18px"')} Valores e localização: crie sua conta grátis para ver</div>${where}`;
     }
     const bits = [];
     if (p.price_cents != null) bits.push(`<span class="price">${money(p.price_cents)}</span> <span class="muted small">/ sessão online</span>`);
@@ -39,6 +40,7 @@
   // opts: { root, loggedIn, me, profileHref, onMessage }
   function mount(root, opts) {
     const logged = opts.loggedIn;
+    const full = logged || opts.viewerRole === 'professional'; // visitante: sem filtros de localização e valor
     const me = opts.me;
     // Paciente logado: a vitrine já começa filtrada (estado e, se houver, município dele) —
     // o número no botão Filtrar mostra isso. Sem filtro nenhum = todos os profissionais.
@@ -53,23 +55,24 @@
           <div class="filter-grid">
             <div class="field"><label for="f-prof">Tipo de profissional</label>
               <select id="f-prof" name="profession"><option value="">Todos os tipos</option></select></div>
-            <div class="field"><label for="f-state">Estado</label>
+            <div class="field ${full ? '' : 'hidden'}"><label for="f-state">Estado</label>
               <select id="f-state" name="state"><option value="todos">Todos os estados</option></select></div>
-            <div class="field"><label for="f-city">Município</label><input id="f-city" name="city" placeholder="Qualquer município"></div>
-            <div class="field"><label for="f-place">Bairro ou localidade</label><input id="f-place" name="place" type="search" placeholder="Ex.: Centro"></div>
-            <div class="field"><label for="f-sort">Ordenar por</label>
+            <div class="field ${full ? '' : 'hidden'}"><label for="f-city">Município</label><input id="f-city" name="city" placeholder="Qualquer município"></div>
+            <div class="field ${full ? '' : 'hidden'}"><label for="f-place">Bairro ou localidade</label><input id="f-place" name="place" type="search" placeholder="Ex.: Centro"></div>
+            <div class="field ${full ? '' : 'hidden'}"><label for="f-sort">Ordenar por</label>
               <select id="f-sort" name="sort">
                 <option value="">${logged ? 'Mais perto de você' : 'Destaques'}</option>
                 <option value="preco_menor">Menor valor primeiro</option>
                 <option value="preco_maior">Maior valor primeiro</option>
               </select></div>
-            <div class="field"><label for="f-max">Valor máximo da consulta</label>
+            <div class="field ${full ? '' : 'hidden'}"><label for="f-max">Valor máximo da consulta</label>
               <select id="f-max" name="max_price">
                 <option value="">Qualquer valor</option>
                 <option value="80">Até R$ 80</option><option value="100">Até R$ 100</option><option value="150">Até R$ 150</option>
                 <option value="200">Até R$ 200</option><option value="300">Até R$ 300</option>
               </select></div>
           </div>
+          ${full ? '' : '<p class="small muted" style="margin:0 0 10px">🔒 Filtrar por localização e por valor: <a href="/cadastro-paciente">crie sua conta grátis</a>.</p>'}
           <div class="field sp-filter"><label>Especialidades <span class="muted small" style="font-weight:600">(mostra quem tem todas as que você escolher)</span></label><div data-sp-filter></div></div>
           ${logged ? `<label class="check" style="margin-bottom:12px"><input type="checkbox" name="favorites" value="1"> ${ic('heart')} Só meus favoritos</label>` : ''}
           <div class="row"><button class="btn" type="submit">Aplicar filtros</button><button class="btn ghost" type="button" data-clear>Limpar filtros</button></div>

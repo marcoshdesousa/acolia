@@ -36,9 +36,10 @@ function parseGallery(json) {
   return Array.from({ length: GALLERY_SLOTS }, (_, i) => (typeof arr[i] === 'string' && arr[i].startsWith('/uploads/') ? arr[i] : null));
 }
 
-// Visitante sem conta tem um acesso básico: vê nome, registro, especialidades, localização,
-// Instagram, se há pacotes e até 2 fotos da galeria (sem ampliar). Valores, duração da sessão, o
-// "Sobre", o endereço da clínica e o resto da galeria ficam para quem cria a conta grátis.
+// Visitante sem conta vê: nome, profissão, registro, especialidades, o "Sobre", Instagram, se aceita
+// plano de saúde, se atende presencial, seguidores e até 2 fotos da galeria (sem ampliar).
+// Valores, sessões (duração e pacotes), localização (cidade, estado, endereço e mapa) e o resto da
+// galeria ficam para quem cria a conta grátis.
 // Fotos abertas para o visitante: 1 foto → 0, 2 ou 3 fotos → 1, 4 ou mais → 2
 function freeGalleryCount(n) {
   if (n <= 1) return 0;
@@ -85,16 +86,15 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
   };
   if (!loggedIn) {
     const packages = parsePackages(p.packages);
-    const { bio, ...rest } = base;
+    const { state, city, ...visible } = common; // localização só com conta
     const free = freeGalleryCount(gallery.length);
     return {
-      ...rest,
-      ...common,
+      ...base,
+      ...visible,
       ...social,
       locked: true,
-      has_bio: !!bio,
       has_price: p.price_cents != null,
-      package_sessions: packages.map((k) => k.sessions),
+      has_packages: packages.length > 0,
       has_session_minutes: !!p.session_minutes,
       gallery: gallery.slice(0, free),
       gallery_hidden: photosCount - free,

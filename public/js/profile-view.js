@@ -85,11 +85,10 @@
     const insurance = p.accepts_insurance ? `<div class="insurance">${ic('shield', 18)} <span><b>Aceita plano de saúde</b><br><span class="muted small">Pergunte ao profissional pelo chat quais planos e como funciona.</span></span></div>` : '';
     let values;
     if (p.locked) {
-      const pk = p.package_sessions || [];
       values = `<div class="card flat stack">
-          <h3>${ic('calendar')} Valores</h3>
+          <h3>${ic('calendar')} Valores e sessões</h3>
           <div class="row between"><span>Sessão online</span>${lockLink()}</div>
-          ${pk.map((n) => `<div class="row between"><span>Pacote de ${n} sessões</span>${lockLink()}</div>`).join('')}
+          ${p.has_packages ? `<div class="row between"><span>Pacotes de sessões</span>${lockLink()}</div>` : ''}
           ${insurance}
         </div>`;
     } else {
@@ -102,13 +101,13 @@
         </div>`;
     }
 
-    // ---------- Localização (visível para todos; endereço da clínica só com conta) ----------
+    // ---------- Localização (cidade, endereço e mapa só com conta) ----------
     // Todos atendem online; alguns também presencial — as duas opções aparecem
     const modes = `<div class="row" style="gap:6px"><span class="badge ok">${ic('video', 15)} Atende online</span>
         ${p.has_clinic ? `<span class="badge ok">${ic('clinic', 15)} Atende presencial</span>` : ''}
         ${p.accepts_insurance ? `<span class="badge ok">${ic('shield', 15)} Aceita plano de saúde</span>` : ''}</div>`;
     let clinic = '';
-    if (p.has_clinic && p.locked) clinic = `<div>${lockLink('Crie conta para ver o endereço e o mapa')}</div>`;
+    if (p.locked) clinic = '';
     else if (p.has_clinic) {
       clinic = `<div><b>${ic('clinic')} ${esc(p.clinic_name || 'Consultório presencial')}</b><div class="muted">${esc(p.clinic_address)}</div></div>
         ${p.map_embed ? `<div class="mini-map"><iframe src="${esc(p.map_embed)}" title="Mapa: ${esc(p.clinic_name || 'consultório')}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe></div>` : ''}
@@ -116,15 +115,14 @@
     }
     const location = `<div class="card flat stack">
         <h3>${ic('pin')} Localização</h3>
-        <div>${esc(p.city)} - ${esc(p.state)}</div>
+        <div>${p.locked ? lockLink('Crie conta para ver a localização') : `${esc(p.city)} - ${esc(p.state)}`}</div>
         ${modes}
         ${clinic}
       </div>`;
 
     // ---------- Sobre ----------
     let about = '';
-    if (p.locked && p.has_bio) about = `<div><h3>Sobre</h3>${lockLink()}</div>`;
-    else if (p.bio) {
+    if (p.bio) {
       const long = p.bio.length > BIO_SHORT || p.bio.split('\n').length > 4;
       about = `<div><h3>Sobre</h3><p class="bio-short${long ? ' clamp' : ''}">${esc(p.bio)}</p>
         ${long ? `<button type="button" class="link-btn" data-bio-more>Ler mais</button>` : ''}</div>`;
@@ -193,7 +191,7 @@
         ${about}
         ${gallery}
       </div>
-      ${p.locked ? `<div class="notice info" style="margin-top:16px">${ic('lock')} Crie sua conta grátis para ver valores, a duração da sessão, o endereço, o "Sobre", toda a galeria (e ampliar as fotos) e para mandar mensagem.
+      ${p.locked ? `<div class="notice info" style="margin-top:16px">${ic('lock')} Crie sua conta grátis para ver valores, sessões, a localização, todas as fotos (e ampliar) e para mandar mensagem.
         <div class="row" style="margin-top:10px"><a class="btn sm" href="${signup}">Criar conta grátis</a><a class="btn secondary sm" href="/entrar?next=${encodeURIComponent(next || '/app#perfil/' + p.id)}">Já tenho conta</a></div></div>` : ''}
       <div class="grid-2" style="margin-top:16px;align-items:start">${values}${location}</div>`;
   }
