@@ -161,6 +161,16 @@ O site pode ser instalado como app (Android, iPhone e computador) pelo próprio 
 - O dono da publicação toca no @ de quem comentou para abrir a conversa (regras da 1.1.2). Quem curtiu aparece como "@x curtiu", sem busca pelo paciente.
 - Profissionais não têm @. O Paciente Teste é `@pacienteteste`.
 
+## Versão 1.2.1: consulta presencial e pelo convênio
+- **Presencial ou online:** se o profissional marcou "Atendo presencialmente" e cadastrou o endereço do consultório, o paciente escolhe **Online** ou **Presencial** ao agendar. A presencial é paga antes, pelo mesmo Pix (automático ou manual), e segue as mesmas regras de remarcar e cancelar; **não tem chamada de vídeo** nem regra dos 3 minutos e vira "concluída" depois do horário.
+- **Confirmação da cidade:** antes de pagar a presencial, aparece "A consulta presencial é no consultório em *Cidade - UF*. Você consegue ir até lá no dia?". **Sim** marca presencial; **Não** muda para online (o município do cadastro pode estar desatualizado).
+- **Depois de confirmada:** na conversa chegam **duas mensagens**: "📍 Consulta presencial agendada" (com o botão **Ver**) e a **localização** (nome do consultório, endereço, cidade e o mapa; tocar abre no Google Maps). O aviso fixo mostra "📍 Presencial · faltam…". Em **Ver**: remarcar/cancelar, o endereço e o mapa.
+- **Plano de saúde:** quando o profissional aceita plano, o paciente vê "Vai usar plano de saúde? Converse antes pelo chat" (com o botão **Mandar mensagem**): pelo plano, **quem marca é o profissional**.
+- **Profissional marca pelo chat** (funções → Agendar consulta): vê os dados do paciente (nome, CPF, nascimento, município), escolhe **Online/Presencial** e **Pix/Convênio**. Pelo **convênio** não há cobrança pela Acolia: a consulta já fica **agendada** (e, se presencial, a localização vai junto). Cancelar pelo convênio só cancela (não há reembolso). Pelo Pix segue o fluxo de sempre (automático ou manual, conforme o que ele configurou).
+- **Enviar localização:** novo item no botão de funções (quatro pontinhos), para quem tem consultório cadastrado; a secretária também pode.
+- **Meus pacientes:** consultas presenciais feitas pela Acolia entram sozinhas como "Presencial".
+- A aba **Chamadas** mostra só as consultas online.
+
 ## Colocar no ar com um clique
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/marcoshdesousa/acolia)

@@ -88,6 +88,20 @@ function autoPayment(proId) {
   return key ? { env: row.env, key, name: row.account_name } : null;
 }
 
+// Consultório (consulta presencial): só quem marcou "Atende presencialmente" e cadastrou o endereço
+function clinicOf(pro) {
+  if (!pro || !pro.has_clinic || !String(pro.clinic_address || '').trim()) return null;
+  const m = require('./serialize').clinicMap(pro);
+  return { name: pro.clinic_name || '', address: pro.clinic_address, city: pro.city || '', state: pro.state || '',
+    place: [pro.city, pro.state].filter(Boolean).join(' - '), maps_url: m.maps_url, map_embed: m.map_embed };
+}
+// Mensagem automática com o local da consulta (nome, endereço e mapa)
+function sendLocation(c, pro) {
+  const loc = clinicOf(pro);
+  if (!c || !loc) return null;
+  return require('./routes/chat').sendMessage(c, 'professional', pro.name, 'location', JSON.stringify(loc));
+}
+
 // Pode receber marcações? (horários cadastrados, valor da consulta e uma forma de receber o Pix)
 function readiness(pro) {
   const missing = [];
@@ -275,8 +289,20 @@ const PUSH = {
   sem_resposta: 'O profissional não mandou a chave Pix a tempo',
 };
 function pushText(body) {
-  const [, event] = String(body).split('|');
+  const [id, event] = String(body).split('|');
+  if (event === 'agendada') {
+    const a = getAppt(id);
+    if (a?.modality === 'presencial') return `📍 Consulta presencial agendada: ${fmtWhen(ms(a.start_at))}`;
+    if (a?.billing === 'convenio') return `✅ Consulta agendada pelo convênio: ${fmtWhen(ms(a.start_at))}`;
+  }
   return PUSH[event] || 'Consulta';
+}
+// Consulta confirmada: o cartão "agendada" e, se for presencial, a localização logo em seguida
+function announceConfirmed(a) {
+  post(a, 'patient', 'agendada', a.billing === 'convenio' ? 'convenio' : '');
+  if (a.modality === 'presencial' && a.conversation_id) {
+    sendLocation(db.prepare('SELECT * FROM conversations WHERE id = ?').get(a.conversation_id), getPro(a.professional_id));
+  }
 }
 
 function notifyBoth(a) {
@@ -327,7 +353,7 @@ function confirmPaid(a) {
     refund(r.a, 'horario_ocupado');
     return getAppt(a.id);
   }
-  post(r.a, r.a.origin === 'profissional' ? 'patient' : 'patient', 'agendada');
+  announceConfirmed(r.a);
   notifyBoth(r.a);
   return r.a;
 }
@@ -351,6 +377,13 @@ async function checkPayment(a, { force = false } = {}) {
 // e manda a foto do comprovante na conversa)
 function refund(a, reason, detail = '') {
   const fields = { cancel_reason: reason, cancel_detail: detail || null };
+  if (a.billing === 'convenio') {
+    // Pelo convênio não houve pagamento pela Acolia: só cancela
+    const upd = setStatus(a.id, { ...fields, status: 'cancelada', hold_until: null });
+    post(upd, 'patient', 'cancelada', 'convenio');
+    notifyBoth(upd);
+    return upd;
+  }
   if (a.mode === 'auto' && a.pay_id) {
     const pay = autoPayment(a.professional_id);
     setStatus(a.id, { ...fields, status: 'reembolso_pendente', refund_status: 'processando' });
@@ -455,13 +488,13 @@ async function sweep() {
       await checkPayment(a);
     }
     // Chamada: abre 5 minutos antes (manda o aviso na conversa)
-    for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'confirmada' AND call_id IS NULL AND start_at <= ?").all(iso(t + RULES.CALL_BEFORE_MIN * MIN))) {
+    for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'confirmada' AND modality = 'online' AND call_id IS NULL AND start_at <= ?").all(iso(t + RULES.CALL_BEFORE_MIN * MIN))) {
       openCall(a);
     }
     // Regra dos 3 minutos (vale para os dois), contada a partir do horário da consulta:
     // - profissional não entrou → reembolso de 100% e fecha a chamada (vale mesmo se o paciente também faltou)
     // - paciente não entrou → a chamada acaba e o valor NÃO é devolvido
-    for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'confirmada' AND start_at <= ?").all(iso(t - RULES.PRO_GRACE_MIN * MIN))) {
+    for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'confirmada' AND modality = 'online' AND start_at <= ?").all(iso(t - RULES.PRO_GRACE_MIN * MIN))) {
       const call = a.call_id ? db.prepare('SELECT host_joined_at, guest_joined_at FROM calls WHERE id = ?').get(a.call_id) : null;
       if (!call?.host_joined_at) {
         closeCall(a);
@@ -483,7 +516,7 @@ async function sweep() {
     for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'confirmada' AND end_at <= ?").all(iso(t - RULES.DONE_AFTER_MIN * MIN))) {
       closeCall(a);
       const upd = setStatus(a.id, { status: 'concluida' });
-      post(upd, 'professional', 'finalizada');
+      post(upd, 'professional', a.modality === 'presencial' ? 'concluida' : 'finalizada');
       notifyBoth(upd);
     }
   } catch (e) {
@@ -532,7 +565,7 @@ function canDo(a, role) {
     // "Cancelar agendamento" antes do pagamento (profissional ou secretária)
     c.withdraw = HOLDING.includes(a.status);
   }
-  c.enter_call = a.status === 'confirmada' && !!a.call_id;
+  c.enter_call = a.status === 'confirmada' && !!a.call_id && a.modality !== 'presencial';
   return c;
 }
 
@@ -559,6 +592,9 @@ function view(a, role) {
     minutes: Math.round((ms(a.end_at) - t0) / MIN),
     price_cents: a.price_cents,
     mode: a.mode,
+    modality: a.modality || 'online',
+    billing: a.billing || 'pix',
+    location: a.modality === 'presencial' ? clinicOf(pro) : null,
     origin: a.origin,
     status: a.status,
     hold_until: a.hold_until,
@@ -581,7 +617,7 @@ function view(a, role) {
 module.exports = {
   RULES, CANCEL_REASONS, HOLDING, ACTIVE, OCCUPY_SQL,
   now, iso, ms, localDate, localMin, fromLocal, hhmm, parseHHMM, addDays, fmtWhen, dayLabel, dowOf,
-  getPro, getAppt, duration, readiness, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
+  getPro, getAppt, duration, readiness, clinicOf, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
   ensureConversation, post, pushText, notifyBoth, setStatus, createCharge, confirmPaid, checkPayment, refund, refundLock,
   openCall, closeCall, canEndCall, finishFromCall, sweep, canDo, view, onAccountGone,
   _setNow(fn) { nowFn = fn || Date.now; touch(); },

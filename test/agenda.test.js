@@ -634,3 +634,91 @@ test('uma consulta por dia por paciente; marcar pelo chat com "Copiar Pix"; canc
   assert.ok((await ids('')).includes(Z.id));
   assert.ok(!(await ids('?disp=7')).includes(Z.id), 'sem agenda aberta não aparece');
 });
+
+test('versão 1.2.1: consulta presencial (confirma a cidade, localização com mapa, sem chamada) e pelo convênio (sem Pix)', async () => {
+  const cpfOf = (d) => { const dv = (a) => { const s = a.reduce((x, n, i) => x + n * (a.length + 1 - i), 0); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; d.push(dv(d)); d.push(dv(d)); return d.join(''); };
+  const K = await mkPro('Karina Consultorio Reis', 'karina.consultorio@example.com', '11966667777', 'CRP 06/51011',
+    { pix_key: 'karina@pix.com', has_clinic: true, clinic_name: 'Espaço Acolher', clinic_address: 'Rua das Flores, 100 - Centro', accepts_insurance: true });
+  let r = await K.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true });
+  assert.equal(r.data.ready, true);
+  const carla = await mkPatient('Carla Presencial Reis', cpfOf([3, 1, 4, 1, 5, 9, 2, 6, 5]));
+  r = await carla.get(`/api/agenda/pro/${K.id}/month?ym=2030-02`);
+  assert.equal(r.data.presencial.place, 'Campinas - SP');
+  assert.equal(r.data.presencial.address, 'Rua das Flores, 100 - Centro');
+  assert.equal(r.data.insurance, true);
+  const slots = (await carla.get(`/api/agenda/pro/${K.id}/day?date=2030-02-05`)).data.slots;
+  // Presencial: precisa confirmar que consegue ir até a cidade do consultório
+  r = await carla.post('/api/agenda/book', { professional_id: K.id, start: slots[0].start, accept: true, modality: 'presencial' });
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /Campinas - SP/);
+  r = await carla.post('/api/agenda/book', { professional_id: K.id, start: slots[0].start, accept: true, modality: 'presencial', confirm_place: true });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.modality, 'presencial');
+  assert.equal(r.data.location.name, 'Espaço Acolher');
+  const a = r.data;
+  // Paga (Pix manual) e o profissional confirma: "Consulta presencial agendada" + a localização
+  assert.equal((await K.cl.post(`/api/agenda/appointments/${a.id}/send-pix`)).status, 200);
+  r = await K.cl.post(`/api/agenda/appointments/${a.id}/manual-result`, { approved: true });
+  assert.equal(r.data.status, 'confirmada');
+  let m = await msgs(carla, a.conversation_id);
+  const ag = m.findLast((x) => x.kind === 'booking' && x.event === 'agendada');
+  const loc = m.at(-1);
+  assert.ok(ag && loc.kind === 'location' && loc.id > ag.id, 'agendada e, logo depois, a localização');
+  assert.equal(JSON.parse(loc.body).address, 'Rua das Flores, 100 - Centro');
+  assert.equal(require('../server/agenda').pushText(`${a.id}|agendada|`).startsWith('📍 Consulta presencial agendada'), true);
+  // Não abre chamada nem aplica a regra dos 3 minutos: vira "concluída" depois do fim
+  const cur = G.getAppt(a.id);
+  const back = clock;
+  clock = Date.parse(cur.start_at) + 10 * 60e3;
+  await G.sweep();
+  assert.equal(G.getAppt(a.id).status, 'confirmada');
+  assert.equal(G.getAppt(a.id).call_id, null, 'presencial não tem chamada');
+  clock = Date.parse(cur.end_at) + 31 * 60e3;
+  await G.sweep();
+  assert.equal(G.getAppt(a.id).status, 'concluida');
+  m = await msgs(carla, a.conversation_id);
+  assert.equal(m.at(-1).event, 'concluida');
+  clock = back;
+  // Profissional marca pelo chat: convênio (sem Pix) já fica agendada; presencial manda a localização
+  const conv = a.conversation_id;
+  const s2 = (await K.cl.get(`/api/agenda/pro/${K.id}/day?date=2030-02-06&patient_id=${G.getAppt(a.id).patient_id}`)).data.slots;
+  r = await K.cl.post('/api/agenda/propose', { conversation_id: conv, start: s2[0].start, billing: 'convenio', modality: 'online' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.status, 'confirmada');
+  assert.equal(r.data.billing, 'convenio');
+  assert.equal(r.data.price_cents, null);
+  // Cancelar pelo convênio: só cancela (não há reembolso)
+  r = await carla.post(`/api/agenda/appointments/${r.data.id}/cancel`, { reason: 'horario' });
+  assert.equal(r.data.status, 'cancelada');
+  const s3 = (await K.cl.get(`/api/agenda/pro/${K.id}/day?date=2030-02-07&patient_id=${G.getAppt(a.id).patient_id}`)).data.slots;
+  r = await K.cl.post('/api/agenda/propose', { conversation_id: conv, start: s3[0].start, billing: 'convenio', modality: 'presencial' });
+  assert.equal(r.data.status, 'confirmada');
+  m = await msgs(carla, conv);
+  assert.equal(m.at(-1).kind, 'location');
+  // Presencial pelo Pix: fica esperando o pagamento, como a online
+  const s4 = (await K.cl.get(`/api/agenda/pro/${K.id}/day?date=2030-02-08&patient_id=${G.getAppt(a.id).patient_id}`)).data.slots;
+  r = await K.cl.post('/api/agenda/propose', { conversation_id: conv, start: s4[0].start, billing: 'pix', modality: 'presencial' });
+  assert.equal(r.data.status, 'aguardando_pagamento');
+  assert.equal(r.data.modality, 'presencial');
+  // Quem não tem consultório / não aceita plano não marca assim
+  const convP = (await ana.post('/api/chat/conversations', { professional_id: P.id })).data.id;
+  const sp = (await P.cl.get(`/api/agenda/pro/${P.id}/day?date=2030-02-05`)).data.slots;
+  r = await P.cl.post('/api/agenda/propose', { conversation_id: convP, start: sp[0].start, modality: 'presencial' });
+  assert.equal(r.status, 400);
+  r = await P.cl.post('/api/agenda/propose', { conversation_id: convP, start: sp[0].start, billing: 'convenio' });
+  assert.equal(r.status, 400);
+  r = await ana.post('/api/agenda/book', { professional_id: P.id, start: sp[0].start, accept: true, modality: 'presencial', confirm_place: true });
+  assert.equal(r.status, 400, 'paciente não marca presencial com quem não atende presencialmente');
+  // Enviar localização pelo botão de funções
+  r = await K.cl.post(`/api/chat/conversations/${conv}/location`);
+  assert.equal(r.status, 201);
+  assert.equal(r.data.kind, 'location');
+  assert.equal((await P.cl.post(`/api/chat/conversations/${convP}/location`)).status, 400);
+  assert.equal((await carla.post(`/api/chat/conversations/${conv}/location`)).status, 403);
+  // Meus pacientes: a consulta presencial feita entra como "presencial"
+  const keep = clock;
+  clock = Date.parse('2030-02-10T12:00:00.000Z');
+  const list = (await K.cl.get('/api/professional/patients?modality=presencial')).data.items;
+  clock = keep;
+  assert.ok(list.some((p) => p.name === 'Carla Presencial Reis' && p.kind === 'acolia'));
+});

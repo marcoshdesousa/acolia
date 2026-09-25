@@ -1313,3 +1313,17 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .chip-radio { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; font-weight: 600; }
 .chip-radio:has(input:checked) { background: var(--primary-soft); border-color: var(--primary); }
 [data-my-patients] td:first-child { min-width: 180px; }
+/* Versão 1.2.1: presencial / online, convênio e localização do consultório */
+.seg { display: flex; gap: 6px; background: var(--surface-2, #f1f0eb); border-radius: 999px; padding: 5px; margin: 4px 0 8px; }
+.seg button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; background: none; font: inherit; font-weight: 700; color: var(--text); padding: 10px 12px; border-radius: 999px; cursor: pointer; }
+.seg button.on { background: var(--primary); color: var(--on-primary, #fff); }
+.seg-note { margin: 0 0 10px; }
+.ins-note { margin: 4px 0 12px; }
+.pat-data { margin-bottom: 12px; display: grid; gap: 2px; }
+.loc-box { display: grid; gap: 8px; margin-top: 6px; }
+.loc-head { display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; }
+.loc-map { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); height: 150px; }
+.loc-map iframe { width: 100%; height: 100%; border: 0; display: block; pointer-events: none; }
+.loc-map-link { position: absolute; inset: 0; }
+.loc-card { min-width: min(280px, 70vw); }
+.loc-box .btn { justify-self: start; }

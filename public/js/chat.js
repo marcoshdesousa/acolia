@@ -82,6 +82,7 @@
       if (m.kind === 'call') return `${prefix}Código de atendimento`;
       if (m.kind === 'audio') return `${prefix}🎤 Áudio (${fmtSecs(audioParts(m.body).secs)})`;
       if (m.kind === 'image') return `${prefix}📷 Foto`;
+      if (m.kind === 'location') return `${prefix}📍 Localização do consultório`;
       if (m.kind === 'deleted') return `${prefix}🚫 Mensagem apagada`;
       if (m.kind === 'doc') return `${prefix}📄 ${String(m.body).split('|')[1] || 'Documento'}`;
       if (m.kind === 'post') return `${prefix}📌 Publicação`;
@@ -292,7 +293,8 @@
         pop.setAttribute('role', 'menu');
         pop.innerHTML = `${window.AcoliaQuick ? `<button type="button" role="menuitem" data-fn-quick>${ICONS.chat}<span><b>Mensagens prontas</b><small>Escolha uma e mande com um toque</small></span></button>` : ''}
           ${window.AcoliaAgenda ? `<button type="button" role="menuitem" data-fn-schedule>${ICONS.calendar}<span><b>Agendar consulta</b><small>O paciente recebe e paga o Pix aqui</small></span></button>` : ''}
-          <button type="button" role="menuitem" data-fn-photo>${ICONS.camera}<span><b>Enviar foto</b><small>Ex.: o comprovante do reembolso</small></span></button>`;
+          <button type="button" role="menuitem" data-fn-photo>${ICONS.camera}<span><b>Enviar foto</b><small>Ex.: o comprovante do reembolso</small></span></button>
+          ${getMe()?.has_clinic && getMe()?.clinic_address ? `<button type="button" role="menuitem" data-fn-loc>${ICONS.pin || '📍'}<span><b>Enviar localização</b><small>Endereço e mapa do seu consultório</small></span></button>` : ''}`;
         form.appendChild(pop);
         setTimeout(() => document.addEventListener('click', outsideFn, true));
         pop.addEventListener('click', (e) => {
@@ -301,6 +303,7 @@
           closeFn();
           if (!canWrite(state.current)) { toast('Não é possível enviar nesta conversa.', 'error'); return; }
           if (b.hasAttribute('data-fn-quick')) window.AcoliaQuick.openPicker(form, ta);
+          else if (b.hasAttribute('data-fn-loc')) api(`/api/chat/conversations/${c.id}/location`, { method: 'POST' }).then(addMessage).catch((ex) => toast(ex.message, 'error'));
           else if (b.hasAttribute('data-fn-schedule')) window.AcoliaAgenda.openBooking({ mode: 'propose', conversationId: state.current.id, patientId: state.current.peer.id, peerName: state.current.peer.name, me: getMe() });
           else photoInput.click();
         });
@@ -627,6 +630,11 @@
         // Foto: no Suporte Acolia é um endereço; nas conversas, o arquivo privado (só os dois abrem)
         const src = m.support ? m.body : `/api/chat/photo/${encodeURIComponent(m.body)}`;
         inner = `<button type="button" class="msg-img" data-img="${esc(src)}" aria-label="Ver foto"><img src="${esc(src)}" alt="Foto" loading="lazy"></button>`;
+      } else if (m.kind === 'location') {
+        // Localização do consultório (consulta presencial): nome, endereço e mapa
+        let loc = null;
+        try { loc = JSON.parse(m.body); } catch { /* antigo */ }
+        inner = `<div class="msg-card loc-card"><strong>📍 Local da consulta presencial</strong>${window.AcoliaAgenda && loc ? AcoliaAgenda.locationHtml(loc) : esc(m.body)}</div>`;
       } else if (m.kind === 'doc') {
         // Documento (atestado, receita, encaminhamento): abre a folha para ver e salvar
         const [code, title] = String(m.body).split('|');

@@ -89,7 +89,7 @@
           <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary" data-install>Instalar o app</button><button type="button" class="btn secondary" data-enable-push>Ativar notificações</button></div>
         </div>
         <button class="btn secondary block" style="margin-top:16px" data-sec-logout>Sair</button>
-        <p class="small muted center" style="margin-top:16px">Acolia · versão 1.1.3</p>`;
+        <p class="small muted center" style="margin-top:16px">Acolia · versão 1.2.1</p>`;
       $('[data-sec-logout]', conta).addEventListener('click', () => window.Acolia.logout('/entrar#profissional'));
     }
   }
@@ -100,7 +100,7 @@
     const G = window.AcoliaAgenda;
     let list;
     try { list = await G.loadUpcoming(); } catch (ex) { root.innerHTML = `<p class="muted">${esc(ex.message)}</p>`; return; }
-    const calls = list.filter((a) => a.status === 'confirmada').sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
+    const calls = list.filter((a) => a.status === 'confirmada' && a.modality !== 'presencial').sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
     if (!calls.length) {
       root.innerHTML = `<div class="card empty-calls">${ic('video', 34)}<p style="margin:8px 0 0"><b>Nenhuma chamada marcada.</b></p><p class="small muted" style="margin:4px 0 0">Quando um paciente confirmar uma consulta, a chamada aparece aqui.</p></div>`;
       return;

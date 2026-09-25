@@ -278,6 +278,19 @@ function myPatients(proId, { q = '', from = '', to = '', modality = '' } = {}) {
       GROUP BY pa.id`).all(proId, proId, proId, f, f, t, t)
       .map((r) => ({ ...r, kind: 'acolia', modality: 'online' }));
   }
+  if (mod !== 'online') {
+    // Consultas presenciais marcadas pela Acolia (versão 1.2.1): entram quando acontecem
+    rows = rows.concat(db.prepare(`
+      SELECT pa.id, pa.name, pa.cpf, pa.birth_date, pa.city, pa.state, COUNT(*) AS consultas,
+        MIN(date(datetime(a.start_at), '-3 hours')) AS primeira, MAX(date(datetime(a.start_at), '-3 hours')) AS ultima
+      FROM appointments a JOIN patients pa ON pa.id = a.patient_id AND pa.status <> 'excluido'
+      LEFT JOIN pro_patient_hidden h ON h.professional_id = a.professional_id AND h.patient_id = pa.id
+      WHERE a.professional_id = ? AND a.modality = 'presencial' AND a.status IN ('concluida', 'confirmada') AND datetime(a.start_at) <= datetime(?)
+        AND (h.patient_id IS NULL OR datetime(a.start_at) > h.hidden_at)
+        AND (? IS NULL OR datetime(a.start_at) >= datetime(? || ' 00:00:00', '+3 hours'))
+        AND (? IS NULL OR datetime(a.start_at) <= datetime(? || ' 23:59:59', '+3 hours'))
+      GROUP BY pa.id`).all(proId, require('../agenda').iso(require('../agenda').now()), f, f, t, t).map((r) => ({ ...r, kind: 'acolia', modality: 'presencial' })));
+  }
   const manual = db.prepare(`SELECT * FROM pro_manual_patients WHERE professional_id = ?
       AND (? = '' OR modality = ?) AND (? IS NULL OR last_date >= ?) AND (? IS NULL OR last_date <= ?)`)
     .all(proId, mod, mod, f, f, t, t)
@@ -287,7 +300,7 @@ function myPatients(proId, { q = '', from = '', to = '', modality = '' } = {}) {
   const digits = U.onlyDigits(q || '');
   const list = !text ? rows : rows.filter((r) => U.norm(r.name).includes(text) || (digits.length >= 3 && r.cpf.includes(digits)));
   return list.map((r) => ({
-    key: `${r.kind === 'manual' ? 'm' : 'a'}${r.id}`, id: r.id, kind: r.kind, modality: r.modality,
+    key: `${r.kind === 'manual' ? 'm' : r.modality === 'presencial' ? 'p' : 'a'}${r.id}`, id: r.id, kind: r.kind, modality: r.modality,
     name: r.name, cpf: U.formatCpf(r.cpf), birth_date: brDate(r.birth_date), place: [r.city, r.state].filter(Boolean).join(' - '),
     consultas: r.consultas, primeira: brDate(r.primeira), ultima: brDate(r.ultima),
     modalidade: r.modality === 'online' ? 'Online' : 'Presencial', origem: r.kind === 'manual' ? 'Adicionado' : 'Acolia',

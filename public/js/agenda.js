@@ -54,6 +54,7 @@
       <li>Se o profissional não puder atender, ele avisa até ${r.PRO_CANCEL_H} horas antes e <b>você escolhe</b>: reembolso ou remarcar.</li>
       <li>Se o profissional <b>não entrar na chamada</b> até ${r.PRO_GRACE_MIN} minutos depois do horário, você recebe <b>100% de volta</b>.</li>
       <li>O dinheiro vai direto para a conta do profissional. A Acolia não recebe nem cobra taxa sobre a consulta.</li>
+      <li><b>Consulta presencial:</b> é no consultório do profissional (o endereço e o mapa vão na conversa). As regras de pagamento, remarcar e cancelar são as mesmas; não há chamada de vídeo.</li>
     </ul><a href="/politica-agendamento" target="_blank" rel="noopener" class="small">Ler a política completa</a>`;
   }
 
@@ -104,6 +105,11 @@
     let sel = null; // { start, label, date, dayLabel }
     let info = null;
     let rules = null;
+    // Versão 1.2.1: online ou presencial (se o profissional atende no consultório) e, quando o
+    // profissional marca pelo chat, Pix ou convênio (plano de saúde, sem cobrança pela Acolia)
+    let modality = opts.appt?.modality || 'online';
+    let billing = 'pix';
+    let placeChecked = false;
 
     async function loadMonth() {
       page.body.innerHTML = '<div class="spinner"></div>';
@@ -111,7 +117,7 @@
         info = await api(`/api/agenda/pro/${proId}/month?${ym ? `ym=${ym}&` : ''}${extra}`);
       } catch (e) { page.body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
       ym = info.ym;
-      if (!info.ready) {
+      if (!(mode === 'propose' ? info.agenda_ok : info.ready)) {
         page.body.innerHTML = `<div class="empty">${mode === 'propose' ? 'Abra a sua agenda primeiro: em <b>Consultas</b>, cadastre os horários (e confira o valor da consulta e a forma de receber).' : 'Este profissional ainda não abriu a agenda. Mande uma mensagem para combinar.'}</div>`;
         return;
       }
@@ -123,10 +129,24 @@
       const firstDow = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
       const minYm = info.today.slice(0, 7);
       const maxYm = info.max_date.slice(0, 7);
-      const head = mode === 'propose' ? `<p class="muted" style="margin-top:0">Consulta com <b>${esc(opts.peerName || 'o paciente')}</b>. Ele recebe no chat e tem ${10} minutos para pagar.</p>`
+      const pt = info.patient;
+      const head = mode === 'propose' ? `<div class="card flat pat-data"><div class="small muted" style="font-weight:700">PACIENTE</div><b>${esc(pt?.name || opts.peerName || 'Paciente')}</b>
+            ${pt ? `<div class="small muted">CPF ${esc(pt.cpf)}${pt.birth_date ? ` · nascimento ${esc(pt.birth_date)}` : ''}${pt.place ? ` · ${esc(pt.place)}` : ''}</div>` : ''}</div>`
         : mode === 'reschedule' ? `<p class="muted" style="margin-top:0">Consulta atual: <b>${esc(opts.appt.when)}</b>. Escolha o novo dia e horário.${opts.appt.status === 'confirmada' ? ' <b>Você só pode remarcar uma vez.</b>' : ''}</p>`
           : `<div class="row" style="gap:12px;margin-bottom:12px">${avatar(proName, opts.pro.photo, 'md')}<div><b>${esc(proName)}</b><div class="muted small">${esc(opts.pro.profession || '')}</div></div></div>`;
-      page.body.innerHTML = `${head}
+      const loc = info.presencial;
+      const choices = mode === 'reschedule' ? '' : `
+        ${loc ? `<div class="seg" role="group" aria-label="Tipo de consulta">
+            <button type="button" class="${modality === 'online' ? 'on' : ''}" data-mod="online">${ic('video', 18)} Online</button>
+            <button type="button" class="${modality === 'presencial' ? 'on' : ''}" data-mod="presencial">📍 Presencial</button></div>
+          ${modality === 'presencial' ? `<p class="small muted seg-note">Consultório${loc.name ? ` ${esc(loc.name)}` : ''}: ${esc(loc.address)} · <b>${esc(loc.place)}</b></p>` : ''}` : ''}
+        ${mode === 'propose' && info.insurance ? `<div class="seg" role="group" aria-label="Pagamento">
+            <button type="button" class="${billing === 'pix' ? 'on' : ''}" data-bill="pix">${ic('pix', 18)} Pix</button>
+            <button type="button" class="${billing === 'convenio' ? 'on' : ''}" data-bill="convenio">🩺 Convênio (plano)</button></div>
+          ${billing === 'convenio' ? '<p class="small muted seg-note">Pelo convênio nada é cobrado pela Acolia: a consulta já fica agendada e o paciente acerta com o plano de saúde.</p>' : ''}` : ''}
+        ${mode === 'book' && info.insurance ? `<div class="notice small ins-note">🩺 <b>Vai usar plano de saúde?</b> Não marque por aqui: converse antes com ${esc(proName.split(' ')[0])} pelo chat. Se o seu plano for aceito, ele(a) marca a consulta pelo convênio para você.
+            <button type="button" class="btn sm secondary" data-ins-chat style="margin-top:8px">${ic('chat', 16)} Mandar mensagem</button></div>` : ''}`;
+      page.body.innerHTML = `${head}${choices}
         <div class="cal">
           <div class="cal-head"><button type="button" class="icon-btn" data-prev aria-label="Mês anterior" ${ym <= minYm ? 'disabled' : ''}>‹</button>
             <b>${MONTHS[m - 1][0].toUpperCase() + MONTHS[m - 1].slice(1)} ${y}</b>
@@ -143,6 +163,15 @@
         </div>
         <div data-slots></div>
         <div class="ag-foot" data-foot></div>`;
+      $$('[data-mod]', page.body).forEach((b) => b.addEventListener('click', () => { modality = b.dataset.mod; placeChecked = false; renderMonth(); }));
+      $$('[data-bill]', page.body).forEach((b) => b.addEventListener('click', () => { billing = b.dataset.bill; renderMonth(); }));
+      $('[data-ins-chat]', page.body)?.addEventListener('click', async () => {
+        try {
+          const c = await api('/api/chat/conversations', { method: 'POST', body: { professional_id: proId } });
+          await page.close();
+          goChat(c.id);
+        } catch (ex) { toast(ex.message, 'error'); }
+      });
       $('[data-prev]', page.body).addEventListener('click', () => { ym = shiftYm(ym, -1); sel = null; loadMonth(); });
       $('[data-next]', page.body).addEventListener('click', () => { ym = shiftYm(ym, 1); sel = null; loadMonth(); });
       $$('[data-day]', page.body).forEach((b) => b.addEventListener('click', () => pickDay(b.dataset.day)));
@@ -180,7 +209,7 @@
       const foot = $('[data-foot]', page.body);
       if (!foot) return;
       foot.innerHTML = sel?.start
-        ? `<div class="ag-sum"><b>${esc(sel.dayLabel)} às ${esc(sel.label)}</b><span class="muted small">${info.minutes} min · ${info.price_cents != null ? money(info.price_cents) : ''} · online</span></div>
+        ? `<div class="ag-sum"><b>${esc(sel.dayLabel)} às ${esc(sel.label)}</b><span class="muted small">${info.minutes} min · ${billing === 'convenio' ? 'convênio' : info.price_cents != null ? money(info.price_cents) : ''} · ${modality}</span></div>
            <button type="button" class="btn" data-go>Avançar</button>`
         : '<span class="muted small">Escolha um dia e um horário.</span>';
       $('[data-go]', foot)?.addEventListener('click', confirmStep);
@@ -190,16 +219,20 @@
       if (!rules) { try { rules = (await api('/api/agenda/appointments')).rules; } catch { /* usa o padrão */ } }
       page.setTitle(mode === 'reschedule' ? 'Confirmar remarcação' : 'Confirmar consulta');
       const when = `${sel.dayLabel} às ${sel.label}`;
+      const loc = modality === 'presencial' ? (info.presencial || opts.appt?.location) : null;
       page.body.innerHTML = `<div class="card stack">
-          <div class="row" style="gap:12px">${ic('calendar', 26)}<div><b style="font-size:1.1rem">${esc(when)}</b><div class="muted small">${esc(proName)} · ${info.minutes} min · consulta online</div></div></div>
-          ${mode === 'reschedule' ? '<p class="small" style="margin:0">O valor que você já pagou continua valendo para o novo horário.</p>' : `<div class="row between"><span>Valor da consulta</span><b>${money(info.price_cents)}</b></div>`}
+          <div class="row" style="gap:12px">${ic('calendar', 26)}<div><b style="font-size:1.1rem">${esc(when)}</b><div class="muted small">${esc(proName)} · ${info.minutes} min · consulta ${modality === 'presencial' ? 'presencial' : 'online'}</div></div></div>
+          ${loc ? `<div class="small">📍 ${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)} · ${esc(loc.place)}</div>` : ''}
+          ${mode === 'reschedule' ? `<p class="small" style="margin:0">${opts.appt.billing === 'convenio' ? 'A consulta continua pelo convênio.' : 'O valor que você já pagou continua valendo para o novo horário.'}</p>`
+            : billing === 'convenio' ? '<div class="row between"><span>Pagamento</span><b>Convênio (plano de saúde)</b></div>' : `<div class="row between"><span>Valor da consulta</span><b>${money(info.price_cents)}</b></div>`}
         </div>
         ${mode === 'book' ? `<h3 style="margin:18px 0 6px">Política de agendamento</h3>${policyHtml(rules)}
         <label class="check" style="margin:14px 0"><input type="checkbox" data-accept> Li e aceito a política de agendamento e cancelamento</label>` : ''}
-        ${mode === 'propose' ? `<p class="notice info small" style="margin-top:14px">O paciente recebe na conversa <b>"Sua consulta está quase pronta"</b>, aceita a política de agendamento e tem ${rules?.PAY_MIN || 10} minutos para pagar. ${info.mode === 'auto' ? 'Ele toca em "Pagar agora" e paga o Pix da sua conta Asaas: quando cair, a consulta é confirmada sozinha.' : 'Ele toca em "Copiar Pix" (sua chave e o valor já vão juntos). Quando o dinheiro cair, toque em <b>Sim</b> em "O paciente fez o pagamento?", em cima do campo de mensagem.'}</p>` : ''}
+        ${mode === 'propose' && billing === 'convenio' ? `<p class="notice info small" style="margin-top:14px">A consulta já fica <b>agendada</b> (sem Pix). O paciente recebe na conversa <b>"${modality === 'presencial' ? 'Consulta presencial agendada' : 'Consulta agendada'}"</b>${modality === 'presencial' ? ' e, logo depois, a localização do consultório com o mapa' : ''}.</p>` : ''}
+        ${mode === 'propose' && billing !== 'convenio' ? `<p class="notice info small" style="margin-top:14px">O paciente recebe na conversa <b>"Sua consulta está quase pronta"</b>, aceita a política de agendamento e tem ${rules?.PAY_MIN || 10} minutos para pagar. ${info.mode === 'auto' ? 'Ele toca em "Pagar agora" e paga o Pix da sua conta Asaas: quando cair, a consulta é confirmada sozinha.' : 'Ele toca em "Copiar Pix" (sua chave e o valor já vão juntos). Quando o dinheiro cair, toque em <b>Sim</b> em "O paciente fez o pagamento?", em cima do campo de mensagem.'}</p>` : ''}
         <div class="form-error hidden" data-err></div>
         <div class="row" style="gap:10px;margin-top:10px"><button type="button" class="btn secondary" data-back2>Voltar</button>
-          <button type="button" class="btn grow" data-ok ${mode === 'book' ? 'disabled' : ''}>${mode === 'reschedule' ? 'Remarcar' : mode === 'propose' ? 'Enviar para o paciente' : `Ir para o pagamento (${info.mode === 'auto' ? 'Pix' : 'Pix pelo chat'})`}</button></div>`;
+          <button type="button" class="btn grow" data-ok ${mode === 'book' ? 'disabled' : ''}>${mode === 'reschedule' ? 'Remarcar' : mode === 'propose' ? (billing === 'convenio' ? 'Agendar pelo convênio' : 'Enviar para o paciente') : `Ir para o pagamento (${info.mode === 'auto' ? 'Pix' : 'Pix pelo chat'})`}</button></div>`;
       $('[data-accept]', page.body)?.addEventListener('change', (e) => { $('[data-ok]', page.body).disabled = !e.target.checked; });
       $('[data-back2]', page.body).addEventListener('click', () => { page.setTitle(mode === 'reschedule' ? 'Remarcar consulta' : 'Agendar consulta'); renderMonth(); });
       $('[data-ok]', page.body).addEventListener('click', async (e) => {
@@ -216,13 +249,32 @@
             return;
           }
           if (mode === 'propose') {
-            const a = await api('/api/agenda/propose', { method: 'POST', body: { conversation_id: opts.conversationId, start: sel.start } });
-            toast('Proposta enviada ao paciente ✓', '', { top: true });
+            const a = await api('/api/agenda/propose', { method: 'POST', body: { conversation_id: opts.conversationId, start: sel.start, modality, billing } });
+            toast(billing === 'convenio' ? 'Consulta agendada pelo convênio ✓' : 'Proposta enviada ao paciente ✓', '', { top: true });
             page.close();
             opts.onDone?.(a);
             return;
           }
-          const a = await api('/api/agenda/book', { method: 'POST', body: { professional_id: proId, start: sel.start, accept: true } });
+          // Presencial: confirma que a pessoa consegue ir até a cidade do consultório (o município do
+          // cadastro pode estar desatualizado). "Não" → a consulta vira online.
+          if (modality === 'presencial' && !placeChecked) {
+            const loc2 = info.presencial;
+            const v = await modal({
+              title: 'Consulta presencial',
+              html: `<p>A consulta presencial é no consultório em <b>${esc(loc2.place)}</b>:</p><p class="small">📍 ${loc2.name ? `<b>${esc(loc2.name)}</b> · ` : ''}${esc(loc2.address)}</p>
+                <p style="margin-bottom:0"><b>Você consegue ir até ${esc(loc2.place)} no dia da consulta?</b></p>`,
+              actions: [{ label: 'Não, marcar online', value: 'online', class: 'secondary' }, { label: `Sim, marcar presencial`, value: 'presencial' }],
+            });
+            if (!v) { btn.disabled = false; return; }
+            placeChecked = true;
+            if (v === 'online') {
+              modality = 'online';
+              toast('Ok! A consulta vai ser online.', '', { top: true });
+              await confirmStep();
+              return;
+            }
+          }
+          const a = await api('/api/agenda/book', { method: 'POST', body: { professional_id: proId, start: sel.start, accept: true, modality, confirm_place: modality === 'presencial' } });
           if (a.mode === 'auto') payScreen(page, a);
           else manualSent(page, a);
         } catch (ex) {
@@ -363,16 +415,17 @@
   async function cancelDialog(a) {
     const { reasons, rules } = await api('/api/agenda/appointments');
     const byPro = a.status === 'aguardando_paciente';
-    const how = a.mode === 'auto' ? 'O valor volta automaticamente para o seu Pix.' : 'O profissional devolve o valor pelo Pix. Enquanto isso, ele não consegue te mandar mensagens; quando o dinheiro chegar, você confirma aqui.';
+    const conv = a.billing === 'convenio';
+    const how = conv ? 'Consulta pelo convênio: nada foi cobrado aqui, é só cancelar.' : a.mode === 'auto' ? 'O valor volta automaticamente para o seu Pix.' : 'O profissional devolve o valor pelo Pix e manda o comprovante aqui na conversa.';
     const res = await modal({
-      title: byPro ? 'Quero o reembolso' : 'Cancelar consulta',
+      title: byPro ? (conv ? 'Cancelar consulta' : 'Quero o reembolso') : 'Cancelar consulta',
       html: `<p><b>${esc(a.when)}</b> com ${esc(a.professional.name)}</p>
         ${byPro ? '' : `<p class="small muted">Dá para cancelar até ${rules.CUTOFF_MIN} minutos antes. Por que você vai cancelar?</p>
         <div class="stack" style="gap:6px">${Object.entries(reasons).map(([k, v]) => `<label class="check"><input type="radio" name="motivo" value="${k}"> ${esc(v)}</label>`).join('')}</div>
         <textarea data-detail rows="2" maxlength="500" placeholder="Conte o motivo (obrigatório em &quot;Outros motivos&quot;)" style="margin-top:8px"></textarea>`}
         <p class="notice info small" style="margin-top:10px">${how}</p>`,
       actions: [{ label: 'Voltar', value: null, class: 'secondary' }, {
-        label: byPro ? 'Quero o reembolso' : 'Cancelar e pedir reembolso', class: 'danger',
+        label: conv ? 'Cancelar consulta' : byPro ? 'Quero o reembolso' : 'Cancelar e pedir reembolso', class: 'danger',
         handler: (dlg) => {
           if (byPro) return {};
           const r = $('input[name=motivo]:checked', dlg)?.value;
@@ -385,7 +438,7 @@
     });
     if (!res) return;
     await api(`/api/agenda/appointments/${a.id}/cancel`, { method: 'POST', body: res });
-    toast(a.mode === 'auto' ? 'Consulta cancelada. O reembolso foi pedido ao Pix ✓' : 'Consulta cancelada. Pedido de reembolso enviado ao profissional.', '', { top: true });
+    toast(conv ? 'Consulta cancelada.' : a.mode === 'auto' ? 'Consulta cancelada. O reembolso foi pedido ao Pix ✓' : 'Consulta cancelada. Pedido de reembolso enviado ao profissional.', '', { top: true });
   }
 
   async function act(a, action) {
@@ -397,7 +450,7 @@
         case 'choose': {
           const v = await modal({
             title: 'O profissional não poderá atender', html: `<p>${esc(a.professional.name)} avisou que não poderá atender <b>${esc(a.when)}</b>${a.cancel_detail ? ` (“${esc(a.cancel_detail)}”)` : ''}. O que você prefere?</p>`,
-            actions: [{ label: 'Remarcar', value: 'remarcar', class: 'secondary' }, { label: 'Quero o reembolso', value: 'reembolso' }],
+            actions: [{ label: 'Remarcar', value: 'remarcar', class: 'secondary' }, { label: a.billing === 'convenio' ? 'Cancelar' : 'Quero o reembolso', value: 'reembolso' }],
           });
           if (v === 'remarcar') openBooking({ mode: 'reschedule', appt: a, onDone: refreshAll });
           if (v === 'reembolso') await cancelDialog(a);
@@ -448,6 +501,7 @@
           await api(`/api/agenda/appointments/${a.id}/refund-done`, { method: 'POST' });
           toast('Pronto! Agora mande a foto do comprovante na conversa.');
           break;
+        case 'see': openDetail(a); return;
         case 'enter': window.open(`/atendimento?codigo=${encodeURIComponent(a.call_code)}`, '_blank', 'noopener'); return;
         case 'chat': goChat(a.conversation_id); return;
         default: return;
@@ -466,7 +520,7 @@
       if (c.copy_pix) out.push(b('copy_pix', `${ic('pix', 16)} Copiar Pix · ${money(a.price_cents)}`, ''));
       else if (c.accept) out.push(b('accept', `${ic('pix', 16)} Pagar agora`, ''));
       else if (c.pay) out.push(b('pay', `${ic('pix', 16)} Pagar agora`, ''));
-      if (c.choose) out.push(b('choose', 'Escolher: reembolso ou remarcar', ''));
+      if (c.choose) out.push(b('choose', a.billing === 'convenio' ? 'Escolher: cancelar ou remarcar' : 'Escolher: reembolso ou remarcar', ''));
       if (c.retry) { out.push(b('retry_yes', 'Sim, quero tentar de novo', '')); out.push(b('retry_no', 'Não')); }
       if (c.reschedule) out.push(b('reschedule', 'Remarcar'));
       if (c.cancel) out.push(b('cancel', 'Cancelar consulta', 'ghost danger-text'));
@@ -512,6 +566,7 @@
       : (r === 'professional' ? 'Mande a chave Pix de novo em até 5 minutos.' : 'O profissional vai mandar a chave Pix de novo.'))],
     pro_cancelou: ['⚠️ O profissional não poderá atender', (a, r) => `${a.cancel_detail ? `“${a.cancel_detail}” · ` : ''}${r === 'patient' ? 'Escolha entre o reembolso e remarcar para outro horário.' : 'O paciente vai escolher entre o reembolso e remarcar.'}`],
     finalizada: ['✅ Chamada finalizada', () => 'A consulta terminou.'],
+    concluida: ['✅ Consulta concluída', () => 'A consulta presencial terminou.'],
     paciente_ausente: ['⚠️ O paciente não entrou na chamada', (a, r) => (r === 'patient'
       ? 'Você não entrou até 3 minutos depois do horário. A chamada foi encerrada e o valor não é devolvido.'
       : 'O paciente não entrou até 3 minutos depois do horário. A chamada foi encerrada e o valor não é devolvido.')],
@@ -529,7 +584,18 @@
   function chatCardHtml(m, role, latest) {
     const a = m.booking;
     if (!a) return '<div class="msg-card"><strong>📅 Consulta</strong><span class="small muted">Esta consulta não está mais disponível.</span></div>';
-    const [title, text] = EVENT[m.event] || ['📅 Consulta', () => ''];
+    let [title, text] = EVENT[m.event] || ['📅 Consulta', () => ''];
+    // Versão 1.2.1: presencial e convênio
+    if (m.event === 'agendada' && a.modality === 'presencial') {
+      title = '📍 Consulta presencial agendada';
+      text = (x, r) => `${x.billing === 'convenio' ? 'Pelo convênio (plano de saúde). ' : 'Pagamento aprovado. '}${r === 'patient' ? 'Vá ao consultório no dia e horário marcados: o endereço e o mapa estão logo abaixo e em "Ver".' : 'O paciente recebeu o endereço e o mapa do consultório.'}`;
+    } else if (m.event === 'agendada' && a.billing === 'convenio') {
+      text = () => 'Pelo convênio (plano de saúde): nada é cobrado aqui. O link da chamada aparece aqui 5 minutos antes.';
+    } else if (m.event === 'cancelada' && m.extra === 'convenio') {
+      text = () => 'Consulta pelo convênio cancelada. O horário foi liberado.';
+    } else if (m.event === 'proposta' && a.modality === 'presencial') {
+      title = '📍 Consulta presencial quase pronta: falta o pagamento';
+    }
     // Cartões antigos da mesma consulta: só o registro (título e horário); a situação atual e os
     // botões ficam no cartão mais recente
     if (!latest) {
@@ -542,10 +608,34 @@
       <span class="small muted">${a.minutes} min · ${a.price_cents != null ? money(a.price_cents) : ''} · ${badge(a)}</span>
       <span class="small">${esc(text(a, role, m))}</span>
       ${role === 'patient' && a.can?.copy_pix ? `<span class="small proof-tip">📸 <b>Depois de pagar, tire um print do comprovante</b> e mande aqui na conversa pela foto (botão 📷 ao lado de "Digite uma mensagem").</span>` : ''}
-      <div class="bk-actions">${buttons(a, role)}</div>
+      <div class="bk-actions">${buttons(a, role)}${['confirmada', 'aguardando_paciente'].includes(a.status) ? `<button type="button" class="btn sm secondary" data-ag-act="see" data-ag-id="${a.id}">Ver</button>` : ''}</div>
     </div>`;
   }
   const previewText = (m) => (EVENT[String(m.body).split('|')[1]] || ['📅 Consulta'])[0];
+
+  // Local da consulta presencial: nome, endereço, cidade e o mapa (toque abre no Google Maps)
+  function locationHtml(loc, { map = true } = {}) {
+    if (!loc) return '';
+    return `<div class="loc-box">
+      <div class="loc-head">📍 <span>${loc.name ? `<b>${esc(loc.name)}</b><br>` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>
+      ${map && loc.map_embed ? `<div class="loc-map"><iframe src="${esc(loc.map_embed)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Mapa do consultório" tabindex="-1"></iframe>${loc.maps_url ? `<a class="loc-map-link" href="${esc(loc.maps_url)}" target="_blank" rel="noopener" aria-label="Abrir no mapa"></a>` : ''}</div>` : ''}
+      ${loc.maps_url ? `<a class="btn sm secondary" href="${esc(loc.maps_url)}" target="_blank" rel="noopener">🗺️ Abrir no mapa</a>` : ''}
+    </div>`;
+  }
+  // "Ver": detalhes da consulta (presencial com endereço e mapa), com remarcar/cancelar
+  function openDetail(a) {
+    const role = ctx.role;
+    const other = role === 'patient' ? a.professional : a.patient;
+    modal({
+      title: a.modality === 'presencial' ? 'Consulta presencial' : 'Consulta online',
+      html: `<div class="row" style="gap:10px;align-items:center">${avatar(other.name, other.photo, 'sm')}<div><b>${esc(other.name)}</b><div class="small muted">${esc(a.when)} · ${a.minutes} min</div></div></div>
+        <div style="margin:10px 0">${badge(a)} <span class="small muted">· ${a.billing === 'convenio' ? 'Convênio (plano de saúde)' : a.price_cents != null ? `${money(a.price_cents)} · Pix` : ''}</span></div>
+        ${a.modality === 'presencial' ? locationHtml(a.location) : '<p class="small muted">O link da chamada aparece na conversa 5 minutos antes.</p>'}
+        <div class="bk-actions" style="margin-top:12px">${buttons(a, role)}</div>`,
+      actions: [{ label: 'Fechar' }],
+      onOpen: (dlg) => bindActions(dlg, (id) => { if (id === a.id) { dlg.close(); dlg.remove(); } return id === a.id ? a : findAppt(id); }),
+    });
+  }
 
   // ---------- "Ver": lista das consultas ----------
   let cache = [];
@@ -565,7 +655,8 @@
     const html = cache.length ? cache.map((a) => {
       const other = role === 'patient' ? a.professional : a.patient;
       return `<div class="appt-item" data-appt="${a.id}">
-        <div class="row" style="gap:10px;align-items:flex-start;flex-wrap:nowrap">${avatar(other.name, other.photo, 'sm')}<div class="grow" style="min-width:0"><b>${esc(other.name)}</b><div class="small muted">${esc(a.when)} · ${a.minutes} min</div><div style="margin-top:4px">${badge(a)}</div></div></div>
+        <div class="row" style="gap:10px;align-items:flex-start;flex-wrap:nowrap">${avatar(other.name, other.photo, 'sm')}<div class="grow" style="min-width:0"><b>${esc(other.name)}</b><div class="small muted">${esc(a.when)} · ${a.minutes} min · ${a.modality === 'presencial' ? '📍 presencial' : 'online'}${a.billing === 'convenio' ? ' · convênio' : ''}</div><div style="margin-top:4px">${badge(a)}</div></div></div>
+        ${a.modality === 'presencial' && ['confirmada', 'aguardando_paciente'].includes(a.status) ? locationHtml(a.location, { map: false }) : ''}
         ${a.status === 'confirmada' ? `<div class="small appt-left">Faltam <b data-cd="${esc(a.start_at)}">${countdown(Date.parse(a.start_at) - now())}</b></div>` : ''}
         ${a.status === 'confirmada' && role === 'patient' && !a.can.reschedule && !a.can.cancel ? `<div class="small muted">${a.reschedules >= a.max_reschedules ? 'Você já remarcou uma vez.' : ''} ${Date.parse(a.start_at) - now() <= 30 * 60000 ? 'Faltam 30 minutos ou menos: não dá mais para remarcar nem pedir reembolso.' : ''}</div>` : ''}
         <div class="bk-actions">${buttons(a, role)}${a.conversation_id ? `<button type="button" class="btn sm ghost" data-ag-act="chat" data-ag-id="${a.id}">${ic('chat', 16)} Conversa</button>` : ''}</div>
@@ -618,7 +709,7 @@
     const other = ctx.role === 'patient' ? a.professional.name : a.patient.name;
     const left = Date.parse(a.start_at) - now();
     let line2;
-    if (a.status === 'confirmada') line2 = a.can.enter_call ? '🎥 A chamada está aberta' : left > 0 ? `Consulta · faltam ${countdown(left)}` : 'Consulta acontecendo agora';
+    if (a.status === 'confirmada') line2 = a.can.enter_call ? '🎥 A chamada está aberta' : left > 0 ? `${a.modality === 'presencial' ? '📍 Presencial' : 'Consulta'} · faltam ${countdown(left)}` : 'Consulta acontecendo agora';
     else line2 = (STATUS[a.status] || [''])[0];
     const main = a.can.enter_call ? `<button type="button" class="btn sm" data-ag-act="enter" data-ag-id="${a.id}">Entrar</button>` : '';
     bar.innerHTML = `<span class="ab-ic">${ic('calendar', 18)}</span>
@@ -636,7 +727,7 @@
     const story = $('.story-viewer');
     const agendaOpen = $('.agenda-page');
     bar.classList.toggle('in-reels', !!reels);
-    bar.classList.toggle('gone', !!story || !!agendaOpen || !!document.querySelector('dialog[open]'));
+    bar.classList.toggle('gone', !!story || !!agendaOpen || !!document.querySelector('dialog[open], .fn-pop, .qr-pop'));
     if (reels) { bar.style.bottom = ''; return; }
     // (menu e campo de mensagem podem ser "fixed": confere se estão visíveis pelo tamanho na tela)
     const shown = (el) => { const r = el.getBoundingClientRect(); return r.height > 0 && r.width > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('.hidden'); };
@@ -682,7 +773,7 @@
   const onChange = (f) => listeners.add(f);
 
   window.AcoliaAgenda = {
-    setContext, openBooking, payScreen, acceptAndPay, act, buttons, bindActions, chatCardHtml, previewText,
+    setContext, openBooking, openDetail, locationHtml, payScreen, acceptAndPay, act, buttons, bindActions, chatCardHtml, previewText,
     mountBar, refreshBar, openList, loadUpcoming, findAppt, onChange, refreshAll, countdown, policyHtml, badge, STATUS,
     get cache() { return cache; },
   };

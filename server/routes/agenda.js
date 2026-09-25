@@ -46,10 +46,19 @@ router.get('/pro/:id/month', (req, res) => {
   const patientId = isPatient(req) ? req.auth.user.id : (req.query.patient_id ? Number(req.query.patient_id) : null);
   const pat = patientId ? db.prepare('SELECT is_test FROM patients WHERE id = ?').get(patientId) : null;
   const ready = sameKind(pro, pat || (isPatient(req) ? req.auth.user : pro)) ? G.readiness(pro) : { ok: false, mode: 'manual' };
+  // Pelo convênio o profissional marca sem valor nem Pix (só precisa dos horários)
+  const agendaOk = ready.ok || (isPro(req) && !!pro.accepts_insurance && ready.missing.every((m) => ['valor', 'pix'].includes(m)) && sameKind(pro, pat || pro));
+  let patient = null;
+  if (isPro(req) && patientId) {
+    const p = db.prepare('SELECT name, cpf, birth_date, city, state FROM patients WHERE id = ?').get(patientId);
+    const mine = db.prepare('SELECT 1 FROM conversations WHERE professional_id = ? AND patient_id = ?').get(pro.id, patientId);
+    if (p && mine) patient = { name: p.name, cpf: U.formatCpf(p.cpf), birth_date: p.birth_date ? p.birth_date.split('-').reverse().join('/') : '', place: [p.city, p.state].filter(Boolean).join(' - ') };
+  }
   res.json({
     ym, today: G.localDate(G.now()), max_date: G.addDays(G.localDate(G.now()), G.RULES.HORIZON_DAYS),
-    ready: ready.ok, mode: ready.mode, price_cents: pro.price_cents, minutes: G.duration(pro),
-    days: ready.ok ? G.monthDays(pro, ym, { patientId }) : [],
+    ready: ready.ok, agenda_ok: agendaOk, mode: ready.mode, price_cents: pro.price_cents, minutes: G.duration(pro),
+    presencial: G.clinicOf(pro), insurance: !!pro.accepts_insurance, patient,
+    days: agendaOk ? G.monthDays(pro, ym, { patientId }) : [],
   });
 });
 
@@ -60,7 +69,8 @@ router.get('/pro/:id/day', (req, res) => {
   const patientId = isPatient(req) ? req.auth.user.id : (req.query.patient_id ? Number(req.query.patient_id) : null);
   const pat = patientId ? db.prepare('SELECT is_test FROM patients WHERE id = ?').get(patientId) : null;
   const exclude = Number(req.query.exclude) || 0;
-  const ok = G.readiness(pro).ok && sameKind(pro, pat || (isPatient(req) ? req.auth.user : pro));
+  const rd = G.readiness(pro);
+  const ok = (rd.ok || (isPro(req) && !!pro.accepts_insurance && rd.missing.every((m) => ['valor', 'pix'].includes(m)))) && sameKind(pro, pat || (isPatient(req) ? req.auth.user : pro));
   res.json({ date, label: G.dayLabel(date), slots: ok ? G.slotsForDay(pro, date, { patientId, exclude }) : [] });
 });
 
@@ -74,14 +84,17 @@ router.post('/book', async (req, res) => {
   if (!sameKind(pro, me)) throw new U.HttpError(403, TEST_MSG);
   const ready = G.readiness(pro);
   if (!ready.ok) throw new U.HttpError(409, 'Este profissional ainda não abriu a agenda.');
+  const modality = req.body.modality === 'presencial' ? 'presencial' : 'online';
+  if (modality === 'presencial' && !G.clinicOf(pro)) throw new U.HttpError(400, 'Este profissional não atende presencialmente. Marque uma consulta online.');
+  if (modality === 'presencial' && !req.body.confirm_place) throw new U.HttpError(400, `Confirme que você consegue ir até ${pro.city} - ${pro.state} para a consulta presencial.`);
   const a = tx(() => {
     const slot = G.assertFree(pro, req.body.start, { patientId: me.id });
     const c = G.ensureConversation(me.id, pro.id);
     const t = G.now();
     const auto = ready.mode === 'auto';
-    const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, hold_until, accepted_policy_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'paciente', ?, ?, ?)`).run(pro.id, me.id, c.id, G.iso(slot.start), G.iso(slot.end), pro.price_cents, ready.mode,
-      auto ? 'aguardando_pagamento' : 'aguardando_pix', G.iso(t + (auto ? G.RULES.PAY_MIN : G.RULES.PRO_PIX_MIN) * MIN), G.iso(t));
+    const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, hold_until, accepted_policy_at, modality)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'paciente', ?, ?, ?, ?)`).run(pro.id, me.id, c.id, G.iso(slot.start), G.iso(slot.end), pro.price_cents, ready.mode,
+      auto ? 'aguardando_pagamento' : 'aguardando_pix', G.iso(t + (auto ? G.RULES.PAY_MIN : G.RULES.PRO_PIX_MIN) * MIN), G.iso(t), modality);
     return G.getAppt(Number(info.lastInsertRowid));
   });
   let out = a;
@@ -109,13 +122,30 @@ router.post('/propose', async (req, res) => {
   if (!pat) throw new U.HttpError(403, 'Esta conta não está mais ativa na plataforma.');
   if (!sameKind(pro, pat)) throw new U.HttpError(403, TEST_MSG);
   const ready = G.readiness(pro);
+  const modality = req.body.modality === 'presencial' ? 'presencial' : 'online';
+  const billing = req.body.billing === 'convenio' ? 'convenio' : 'pix';
+  if (modality === 'presencial' && !G.clinicOf(pro)) throw new U.HttpError(400, 'Para marcar consulta presencial, cadastre o endereço do consultório em Meu perfil ("Atendo presencialmente").');
+  if (billing === 'convenio') {
+    if (!pro.accepts_insurance) throw new U.HttpError(400, 'Para marcar pelo convênio, marque "Aceito plano de saúde" em Meu perfil.');
+    if (!ready.missing.every((m) => ['valor', 'pix'].includes(m))) throw new U.HttpError(409, 'Abra a sua agenda primeiro (horários de atendimento).');
+    // Convênio: sem Pix. A consulta já fica agendada (o paciente acerta com o plano)
+    const conv = tx(() => {
+      const slot = G.assertFree(pro, req.body.start, { patientId: pat.id, who: 'pro' });
+      const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, modality, billing, paid_at)
+        VALUES (?, ?, ?, ?, ?, NULL, 'manual', 'profissional', 'confirmada', ?, 'convenio', NULL)`).run(pro.id, pat.id, c.id, G.iso(slot.start), G.iso(slot.end), modality);
+      return G.getAppt(Number(info.lastInsertRowid));
+    });
+    G.announceConfirmed(conv);
+    G.notifyBoth(conv);
+    return res.status(201).json(G.view(conv, role(req)));
+  }
   if (!ready.ok) throw new U.HttpError(409, 'Abra a sua agenda primeiro (horários, valor da consulta e forma de receber).');
   const a = tx(() => {
     const slot = G.assertFree(pro, req.body.start, { patientId: pat.id, who: 'pro' });
     const t = G.now();
-    const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, hold_until, pix_payload)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'profissional', 'aguardando_pagamento', ?, ?)`).run(pro.id, pat.id, c.id, G.iso(slot.start), G.iso(slot.end), pro.price_cents,
-      ready.mode, G.iso(t + G.RULES.PAY_MIN * MIN), ready.mode === 'manual' ? pro.pix_key : null);
+    const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, hold_until, pix_payload, modality)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'profissional', 'aguardando_pagamento', ?, ?, ?)`).run(pro.id, pat.id, c.id, G.iso(slot.start), G.iso(slot.end), pro.price_cents,
+      ready.mode, G.iso(t + G.RULES.PAY_MIN * MIN), ready.mode === 'manual' ? pro.pix_key : null, modality);
     return G.getAppt(Number(info.lastInsertRowid));
   });
   let out = a;
@@ -237,7 +267,7 @@ router.post('/appointments/:id/cancel', async (req, res) => {
     if (reason === 'outros' && detail.length < 3) throw new U.HttpError(400, 'Conte rapidinho o motivo do cancelamento.');
   }
   G.closeCall(a);
-  G.post(a, 'patient', 'reembolso_pedido', reason);
+  if (a.billing !== 'convenio') G.post(a, 'patient', 'reembolso_pedido', reason);
   const upd = await G.refund(a, reason, detail);
   res.json(G.view(G.getAppt(upd.id), 'patient'));
 });

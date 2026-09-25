@@ -195,7 +195,7 @@ function sendMessage(c, role, from, kind, body) {
   // Notificação no aparelho de quem recebe
   const to = role === 'patient' ? ['professional', c.professional_id, `/painel#conversas/${c.id}`] : ['patient', c.patient_id, `/app#chat/${c.id}`];
   const text = kind === 'booking' ? require('../agenda').pushText(body) : kind === 'pix' ? 'Enviou a chave Pix para pagamento' : kind === 'call' ? 'Enviou um código de atendimento'
-    : kind === 'audio' ? '🎤 Enviou um áudio' : kind === 'image' ? '📷 Enviou uma foto' : kind === 'doc' ? `📄 Enviou um documento: ${String(body).split('|')[1] || ''}` : kind === 'post' ? '📌 Enviou uma das suas publicações' : body;
+    : kind === 'audio' ? '🎤 Enviou um áudio' : kind === 'image' ? '📷 Enviou uma foto' : kind === 'location' ? '📍 Enviou a localização do consultório' : kind === 'doc' ? `📄 Enviou um documento: ${String(body).split('|')[1] || ''}` : kind === 'post' ? '📌 Enviou uma das suas publicações' : body;
   require('../push').notify(to[0], to[1], {
     title: from, body: text.length > 140 ? `${text.slice(0, 137)}…` : text, url: to[2], tag: `conversa-${c.id}`,
   });
@@ -228,6 +228,18 @@ router.post('/conversations/:id/messages', (req, res) => {
   }
   if (!body) throw new U.HttpError(400, 'Mensagem vazia.');
   res.status(201).json(postMessage(req, c, kind, body));
+});
+
+// Localização do consultório (profissional ou secretária): nome, endereço e mapa, do que está no perfil
+router.post('/conversations/:id/location', (req, res) => {
+  if (req.auth.role !== 'professional') throw new U.HttpError(403, 'Só o profissional envia a localização do consultório.');
+  const c = loadConversation(req, req.params.id);
+  const peer = peerOf(req.auth.role, c);
+  if (!peer.active) throw new U.HttpError(403, 'Esta conta não está mais ativa na plataforma.');
+  assertCanSend(req.auth.role, c);
+  const pro = db.prepare('SELECT * FROM professionals WHERE id = ?').get(c.professional_id);
+  if (!require('../agenda').clinicOf(pro)) throw new U.HttpError(400, 'Cadastre o endereço do consultório em Meu perfil ("Atendo presencialmente") para enviar a localização.');
+  res.status(201).json(require('../agenda').sendLocation(c, pro));
 });
 
 // Foto (os dois mandam; vídeo não). Serve para o comprovante do Pix (pagamento ou reembolso).
