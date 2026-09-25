@@ -206,6 +206,11 @@
       const id = Number(art.dataset.id);
       if (e.target.closest('[data-need-account]')) return needAccount();
       if (e.target.closest('[data-msg]')) return opts.onMessage?.(id);
+      // Toque em qualquer parte do cartão (foto, nome, cidade, especialidades…) abre o perfil;
+      // os botões (Mensagem, "+N" das especialidades) continuam fazendo o que fazem
+      if (e.target.closest('a, button, input, select, label')) return;
+      const link = art.querySelector('.actions a[href]');
+      if (link) link.click();
     });
     form.addEventListener('submit', (e) => { e.preventDefault(); load(); });
     $$('select, input[type=checkbox]', panel).forEach((el) => el.addEventListener('change', () => load()));

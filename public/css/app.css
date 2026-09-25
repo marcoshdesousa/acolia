@@ -1331,3 +1331,4 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .price-rows .price { font-size: 1.2rem; font-weight: 800; }
 .seg button small { font-weight: 600; opacity: .85; }
 .chip-radio input { width: auto; height: auto; margin: 0; padding: 0; flex: none; }
+.pro-card { cursor: pointer; }
