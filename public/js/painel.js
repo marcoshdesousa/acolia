@@ -55,21 +55,6 @@
   const form = $('[data-profile-form]');
   form.profession.innerHTML = cfg.professions.map((p) => `<option>${esc(p)}</option>`).join('');
   maskPhone(form.phone);
-  const pkBox = $('[data-packages]');
-
-  function packageRow(pk = {}) {
-    const div = document.createElement('div');
-    div.className = 'row';
-    div.style.flexWrap = 'nowrap';
-    div.innerHTML = `
-      <input data-pk-sessions type="number" min="2" max="100" placeholder="Sessões" aria-label="Quantidade de sessões" style="width:110px" value="${pk.sessions ?? ''}">
-      <input data-pk-price inputmode="decimal" placeholder="Valor total (R$)" aria-label="Valor do pacote" class="grow" value="${pk.price_cents != null ? (pk.price_cents / 100).toFixed(2).replace('.', ',') : ''}">
-      <input data-pk-desc placeholder="Observação (opcional)" aria-label="Observação" class="grow" maxlength="120" value="${esc(pk.description || '')}">
-      <button type="button" class="icon-btn" aria-label="Remover pacote" title="Remover">✕</button>`;
-    $('button', div).addEventListener('click', () => div.remove());
-    pkBox.appendChild(div);
-  }
-  $('[data-add-package]').addEventListener('click', () => packageRow());
   $('[data-has-clinic]').addEventListener('change', (e) => $('[data-clinic]').classList.toggle('hidden', !e.target.checked));
 
   // Especialidades: escolhe na lista (pode acrescentar e tirar; as 2 primeiras aparecem no perfil)
@@ -95,8 +80,6 @@
     form.clinic_name.value = me.clinic_name;
     form.clinic_address.value = me.clinic_address;
     form.maps_url.value = me.maps_url || '';
-    pkBox.innerHTML = '';
-    me.packages.forEach(packageRow);
   }
   fillProfile();
   bindUfCity(form.state, form.city);
@@ -107,9 +90,6 @@
     d.specialties = (await spPicker).value();
     if (!d.specialties.length) throw new Error('Escolha pelo menos uma especialidade.');
     d.accepts_insurance = form.accepts_insurance.checked;
-    d.packages = $$('.row', pkBox).map((r) => ({
-      sessions: $('[data-pk-sessions]', r).value, price: $('[data-pk-price]', r).value, description: $('[data-pk-desc]', r).value,
-    })).filter((p) => p.sessions || p.price);
     me = await api('/api/professional/profile', { method: 'PUT', body: d });
     renderMe();
     toast('Perfil salvo!');
@@ -166,22 +146,13 @@
     const data = await api('/api/calls');
     const box = $('[data-active-call]');
     const actives = data.actives || [];
-    $('[data-new-call]').classList.toggle('hidden', actives.length >= data.max_active);
-    $('[data-calls-left]').textContent = actives.length
-      ? `Você tem ${actives.length} de ${data.max_active} atendimentos abertos.` : '';
-    const small = (name) => ICONS[name].replace('<svg', '<svg style="width:16px;height:16px"');
     box.innerHTML = actives.map((c) => `<div class="card stack" style="border-color:var(--primary);margin-bottom:16px" data-call="${c.id}">
-        <div class="row between"><h2 style="margin:0">Atendimento com ${esc(c.patient_label)}</h2><span class="badge ok">Aberto</span></div>
-        <div><div class="muted small" style="font-weight:700">CÓDIGO DO PACIENTE</div><div class="code-box">${esc(c.patient_code)}</div></div>
-        <div class="row"><button class="btn secondary sm" data-copy-code="${esc(c.patient_code)}">${small('copy')} Copiar código</button>
-          <button class="btn secondary sm" data-copy-link="${esc(c.patient_code)}">${small('copy')} Copiar link para o paciente</button></div>
+        <div class="row between"><h2 style="margin:0">Chamada com ${esc(c.patient_label)}</h2><span class="badge ok">Aberta</span></div>
         <div class="row">
           <a class="btn" href="/atendimento?codigo=${encodeURIComponent(c.patient_code)}" target="_blank" rel="noopener">${ICONS.video.replace('<svg', '<svg style="width:20px;height:20px"')} Entrar na chamada</a>
           <button class="btn danger" data-end-call="${c.id}">Finalizar atendimento</button>
         </div>
       </div>`).join('');
-    $$('[data-copy-code]', box).forEach((b) => b.addEventListener('click', () => copyText(b.dataset.copyCode)));
-    $$('[data-copy-link]', box).forEach((b) => b.addEventListener('click', () => copyText(`${location.origin}/atendimento?codigo=${b.dataset.copyLink}`)));
     $$('[data-end-call]', box).forEach((b) => b.addEventListener('click', async () => {
       if (!await confirmDialog('Finalizar este atendimento? O código do paciente deixará de funcionar.', { okLabel: 'Finalizar', danger: true })) return;
       await api(`/api/calls/${b.dataset.endCall}/end`, { method: 'POST' });
@@ -239,17 +210,15 @@
     location.href = `/api/professional/patients.${a.dataset.patExport}${qs ? `?${qs}` : ''}`;
   }));
 
-  handleForm($('[data-new-call]'), async (d, f) => {
-    await api('/api/calls', { method: 'POST', body: d });
-    f.reset();
-    toast('Código do paciente gerado!');
-    loadCalls();
-  });
 
   // ---------- Chat ----------
   const socket = io();
   socket.on('account:blocked', () => location.reload());
   const setUnread = (n) => $$('[data-unread]').forEach((el) => { el.textContent = n ? String(n) : ''; });
+  // Consultas: aviso fixo da próxima consulta ("Ver" abre a página Consultas) e a agenda
+  AcoliaAgenda.setContext({ role: 'professional', onGoChat: (id) => { location.hash = `conversas/${id}`; } });
+  AcoliaAgenda.mountBar({ role: 'professional', socket, onSee: () => { location.hash = 'atendimento'; } });
+  const agendaPro = AcoliaAgendaPro.mount({ appts: $('[data-appts]'), agenda: $('[data-agenda-card]'), asaas: $('[data-asaas-card]') });
   const chat = AcoliaChat.mount($('[data-chat]'), {
     role: 'professional', me: () => me, socket, onUnreadChange: setUnread,
     onNavigate: (id) => { const h = id ? `#conversas/${id}` : '#conversas'; if (location.hash.startsWith('#conversas') && location.hash !== h) history.replaceState(null, '', h); },
@@ -293,7 +262,7 @@
     }
     if (v === 'verpro' && arg) showPro(Number(arg));
     if (v === 'perfil') loadMyPosts(); // sempre atualizada (inclusive depois de publicar no Início)
-    if (v === 'atendimento') { loadCalls().catch((e) => toast(e.message, 'error')); loadMyPatients().catch((e) => toast(e.message, 'error')); }
+    if (v === 'atendimento') { agendaPro.load(); loadCalls().catch((e) => toast(e.message, 'error')); loadMyPatients().catch((e) => toast(e.message, 'error')); }
     if (v === 'conversas') {
       if (arg && chat.current?.id !== Number(arg)) chat.open(Number(arg));
       if (!arg && chat.current) chat.close();

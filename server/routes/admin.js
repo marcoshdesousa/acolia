@@ -5,7 +5,7 @@ const express = require('express');
 const { db } = require('../db');
 const U = require('../util');
 const A = require('../auth');
-const { isVisible, parsePackages } = require('../serialize');
+const { isVisible } = require('../serialize');
 const { validateProfessionalInput, insertProfessional, requirePassword } = require('./auth');
 const { endCall } = require('./calls');
 const path = require('node:path');
@@ -25,7 +25,7 @@ function adminPro(p) {
   return {
     id: p.id, code: p.code, name: p.name, profession: p.profession, registry: p.registry, email: p.email, phone: p.phone,
     status: p.status, state: p.state, city: p.city, photo: p.photo, bio: p.bio, specialties: p.specialties,
-    price_cents: p.price_cents, packages: parsePackages(p.packages), has_clinic: !!p.has_clinic,
+    price_cents: p.price_cents, has_clinic: !!p.has_clinic,
     clinic_name: p.clinic_name, clinic_address: p.clinic_address, subscription_until: p.subscription_until,
     visible: isVisible(p), admin_note: p.admin_note, created_at: p.created_at,
     has_document: !!p.document_file, document_is_pdf: /\.pdf$/.test(p.document_file || ''),

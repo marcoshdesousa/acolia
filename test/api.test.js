@@ -197,7 +197,7 @@ test('profissional entra (código ou e-mail) e edita o perfil', async () => {
   r = await pro.put('/api/professional/profile', { ...full, name: 'Carlos Silva' });
   assert.equal(r.status, 400);
   r = await pro.get('/api/professional/me');
-  assert.equal(r.data.packages[0].price_cents, 52000);
+  assert.equal(r.data.packages, undefined, 'pacotes saíram (consulta avulsa; pacote se combina pelo chat)');
   assert.equal(r.data.name, 'João Pereira');
 });
 
@@ -215,7 +215,7 @@ test('vitrine: visitante vê o básico (com o "Sobre"), mas não valores, sessõ
   r = await anon.get(`/api/professionals/${proId}`);
   assert.equal(r.data.price_cents, undefined);
   assert.equal(r.data.has_price, true);
-  assert.equal(r.data.has_packages, true, 'mostra que tem pacote, sem sessões nem valor');
+  assert.equal(r.data.has_packages, undefined, 'sem pacotes');
   assert.equal(r.data.package_sessions, undefined);
   assert.equal(r.data.session_minutes, undefined);
   assert.equal(r.data.city, undefined);

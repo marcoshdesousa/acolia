@@ -101,4 +101,4 @@ router.post('/:id/end', (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router, resolveCode, endCall, cleanCode };
+module.exports = { router, resolveCode, endCall, cleanCode, newPatientCode };

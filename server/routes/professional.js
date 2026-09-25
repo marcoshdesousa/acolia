@@ -57,13 +57,7 @@ router.put('/profile', async (req, res) => {
   // Especialidades: pode acrescentar e tirar à vontade, mas fica pelo menos uma
   const specialties = require('../specialties').parse(b.specialties, req.auth.user.specialties);
 
-  const packages = (Array.isArray(b.packages) ? b.packages : []).slice(0, 10).map((pk) => {
-    const sessions = Number.parseInt(pk.sessions, 10);
-    if (!Number.isInteger(sessions) || sessions < 2 || sessions > 100) throw new U.HttpError(400, 'Cada pacote precisa ter de 2 a 100 sessões.');
-    const cents = toCents(pk.price);
-    if (!cents) throw new U.HttpError(400, 'Informe o valor de cada pacote.');
-    return { sessions, price_cents: cents, description: U.cleanText(pk.description, 120) };
-  });
+  const packages = []; // pacotes saíram: a consulta pela agenda é avulsa (pacote se combina pelo chat)
 
   const hasClinic = b.has_clinic ? 1 : 0;
   const clinicName = hasClinic ? U.cleanText(b.clinic_name, 120) : '';
@@ -152,6 +146,7 @@ function wipeProfessional(me) {
   // Apaga tudo: publicações, reels, stories, curtidas, comentários, seguidores e o conteúdo das
   // mensagens que ele mandou. E-mail, registro, código e link ficam livres para um cadastro novo.
   require('./social').purgeUserSocial('professional', me.id);
+  require('../agenda').onAccountGone('professional', me.id);
   require('./chat').eraseMessagesOf('professional', me.id);
   db.prepare(`UPDATE professionals SET status = 'excluido', name = 'Profissional removido', legal_name = NULL, registry = ?, email = ?,
     phone = '', bio = '', specialties = '', photo = NULL, document_file = NULL, pix_key = '', clinic_name = '', clinic_address = '',

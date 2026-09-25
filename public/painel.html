@@ -24,7 +24,7 @@
       <a href="#inicio" data-nav="inicio" title="Início" aria-label="Início"><span data-i="home"></span><span class="nav-badge" data-home-badge></span></a>
       <a href="#profissionais" data-nav="profissionais" title="Profissionais" aria-label="Profissionais"><span data-i="therapist"></span></a>
       <a href="#conversas" data-nav="conversas" title="Mensagens" aria-label="Mensagens"><span data-i="chat"></span><span class="nav-badge" data-unread></span></a>
-      <a href="#atendimento" data-nav="atendimento" title="Atendimento" aria-label="Atendimento"><span data-i="video"></span></a>
+      <a href="#atendimento" data-nav="atendimento" title="Consultas" aria-label="Consultas"><span data-i="calendar"></span></a>
       <a href="#perfil" data-nav="perfil" title="Meu perfil" aria-label="Meu perfil"><span data-i="user"></span></a>
       <a href="#conta" data-nav="conta" title="Configurações" aria-label="Configurações"><span data-i="gear"></span></a>
     </aside>
@@ -50,21 +50,18 @@
       <section data-view="conversas" class="chat-wrap hidden"><div data-chat></div></section>
 
       <section data-view="atendimento" class="hidden" style="max-width:820px">
-        <h1 style="font-size:1.5rem">Atendimento</h1>
-        <div class="card stack">
+        <h1 style="font-size:1.5rem">Consultas</h1>
+        <p class="muted small" style="margin-top:-6px">Os pacientes marcam pela sua agenda (ou você marca pelo chat, no ícone 📅 da conversa). Depois do pagamento, a chamada é criada sozinha e o link aparece na conversa 10 minutos antes.</p>
+        <div data-appts></div>
+        <div data-active-call style="margin-top:16px"></div>
+        <div class="card stack" data-agenda-card style="margin-top:16px"></div>
+        <div class="card stack" data-asaas-card style="margin-top:16px"></div>
+        <div class="card stack" style="margin-top:16px">
           <div class="row between">
             <div><div class="muted small" style="font-weight:700">SEU CÓDIGO ÚNICO</div><div class="code-box" style="font-size:1.4rem;padding:8px 16px" data-my-code></div></div>
-            <p class="small muted grow" style="margin:0;min-width:220px">Este é o seu código de login. Não compartilhe com pacientes — para eles você gera um código próprio abaixo. Você pode ter <b>até 2 atendimentos abertos</b> ao mesmo tempo; entre em cada um pelo botão <b>Entrar na chamada</b>.</p>
+            <p class="small muted grow" style="margin:0;min-width:220px">É o seu código de login. Não compartilhe com pacientes: o código da chamada de cada consulta é criado sozinho.</p>
           </div>
         </div>
-        <div data-active-call style="margin-top:16px"></div>
-        <p class="small muted" data-calls-left style="margin:0"></p>
-        <form class="card" data-new-call style="margin-top:16px">
-          <h2>Criar atendimento</h2>
-          <p class="muted small">Gera um código para o paciente (começa com os 2 primeiros caracteres do seu código). Envie para ele pelo chat ou como preferir. Ao finalizar o atendimento, o código deixa de funcionar.</p>
-          <div class="field"><label for="plabel">Nome do paciente (pode ser fictício)</label><input id="plabel" name="patient_label" maxlength="80" required></div>
-          <button class="btn" type="submit">Gerar código do paciente</button>
-        </form>
         <div class="card" data-my-patients style="margin-top:24px">
           <div class="row between" style="flex-wrap:wrap;gap:10px">
             <h2 style="margin:0">Meus pacientes</h2>
@@ -88,7 +85,7 @@
           <div class="pat-summary" data-pat-summary></div>
           <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Nome completo</th><th>CPF</th><th>Nascimento</th><th>Município</th><th>Consultas</th><th>Última</th></tr></thead><tbody data-pat-list></tbody></table></div>
         </div>
-        <h2 style="margin-top:24px">Histórico</h2>
+        <h2 style="margin-top:24px">Histórico de chamadas</h2>
         <div class="table-wrap"><table><thead><tr><th>Paciente</th><th>Código</th><th>Criado</th><th>Situação</th></tr></thead><tbody data-history></tbody></table></div>
       </section>
 
@@ -149,11 +146,10 @@
           <h2 style="margin-top:24px">Valores</h2>
           <div class="grid-2">
             <div class="field"><label for="price">Valor da consulta online (R$)</label><input id="price" name="price" inputmode="decimal" placeholder="Ex.: 150,00"></div>
-            <div class="field"><label for="pix">Chave Pix (para enviar no chat)</label><input id="pix" name="pix_key" maxlength="140" placeholder="CPF, e-mail, telefone ou chave aleatória"></div>
+            <div class="field"><label for="pix">Chave Pix (para enviar no chat)</label><input id="pix" name="pix_key" maxlength="140" placeholder="CPF, e-mail, telefone ou chave aleatória">
+              <div class="hint">Usada no pagamento manual das consultas (quando o pagamento automático pelo Asaas não está ligado).</div></div>
           </div>
-          <label>Pacotes de sessões</label>
-          <div data-packages class="stack"></div>
-          <button type="button" class="btn secondary sm" data-add-package style="margin-top:8px">+ Adicionar pacote</button>
+          <p class="small muted" style="margin:0">A consulta marcada pela agenda é sempre avulsa (uma sessão). Pacotes, se quiser oferecer, combine com o paciente pelo chat.</p>
 
           <h2 style="margin-top:24px">Plano de saúde</h2>
           <label class="switch-row"><span class="grow"><b>Aceito plano de saúde</b><span class="hint" style="display:block">Aparece no seu perfil e na vitrine. Como funciona (quais planos, autorização) você combina com o paciente pelo chat.</span></span>
@@ -206,7 +202,7 @@
     <a href="#inicio" data-nav="inicio" title="Início" aria-label="Início"><span data-i="home"></span><span class="nav-badge" data-home-badge></span></a>
     <a href="#profissionais" data-nav="profissionais" title="Profissionais" aria-label="Profissionais"><span data-i="therapist"></span></a>
     <a href="#conversas" data-nav="conversas" title="Mensagens" aria-label="Mensagens"><span data-i="chat"></span><span class="nav-badge" data-unread></span></a>
-    <a href="#atendimento" data-nav="atendimento" title="Atendimento" aria-label="Atendimento"><span data-i="video"></span></a>
+    <a href="#atendimento" data-nav="atendimento" title="Consultas" aria-label="Consultas"><span data-i="calendar"></span></a>
     <a href="#perfil" data-nav="perfil" title="Meu perfil" aria-label="Meu perfil"><span data-i="user"></span></a>
     <a href="#conta" data-nav="conta" title="Configurações" aria-label="Configurações"><span data-i="gear"></span></a>
   </nav>
@@ -219,6 +215,8 @@
   <script src="/js/social.js"></script>
   <script src="/js/voice.js"></script>
   <script src="/js/docs.js"></script>
+  <script src="/js/agenda.js"></script>
+  <script src="/js/agenda-pro.js"></script>
   <script src="/js/chat.js"></script>
   <script src="/js/delete-account.js"></script>
   <script src="/js/painel.js"></script>

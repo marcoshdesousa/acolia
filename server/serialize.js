@@ -92,9 +92,10 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     has_clinic: !!p.has_clinic,
     accepts_insurance: !!p.accepts_insurance,
     instagram: p.instagram || '',
+    // Próximo dia com horário livre na agenda (aparece para todos, até sem conta)
+    next_available: require('./agenda').nextAvailable(p),
   };
   if (!loggedIn) {
-    const packages = parsePackages(p.packages);
     const { state, city, ...visible } = common; // localização só com conta
     const free = freeGalleryCount(gallery.length);
     // Especialidades: só as 2 primeiras (o "+N" pede conta)
@@ -108,7 +109,6 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
       ...social,
       locked: true,
       has_price: p.price_cents != null,
-      has_packages: packages.length > 0,
       has_session_minutes: !!p.session_minutes,
       gallery: gallery.slice(0, free),
       gallery_hidden: photosCount - free,
@@ -124,7 +124,6 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     ...social,
     session_minutes: p.session_minutes || null,
     price_cents: p.price_cents,
-    packages: parsePackages(p.packages),
     clinic_name: p.has_clinic ? p.clinic_name : '',
     clinic_address: p.has_clinic ? p.clinic_address : '',
     ...clinicMap(p),
@@ -150,7 +149,6 @@ function ownProfessional(p) {
     specialties: p.specialties,
     photo: p.photo,
     price_cents: p.price_cents,
-    packages: parsePackages(p.packages),
     state: p.state,
     city: p.city,
     has_clinic: !!p.has_clinic,

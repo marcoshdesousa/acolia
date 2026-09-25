@@ -35,7 +35,7 @@ function runOnce() {
   db.exec('BEGIN');
   try {
     // Filhos primeiro (chaves estrangeiras)
-    for (const t of ['notifications', 'story_likes', 'stories', 'post_views', 'post_likes', 'post_comments', 'post_images', 'posts',
+    for (const t of ['appointments', 'agenda_hours', 'agenda_blocks', 'pro_payment', 'asaas_customers', 'notifications', 'story_likes', 'stories', 'post_views', 'post_likes', 'post_comments', 'post_images', 'posts',
       'follows', 'favorites', 'documents', 'messages', 'chat_blocks', 'calls', 'conversations', 'upload_sessions', 'blocked_identities']) {
       if (has(t)) db.exec(`DELETE FROM ${t}`);
     }

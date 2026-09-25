@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Agendamento e pagamento — Acolia</title>
+  <meta name="description" content="Como funciona marcar, pagar, remarcar e cancelar uma consulta na Acolia, e a segurança do pagamento por Pix.">
+  <meta name="theme-color" content="#3f5550">
+  <link rel="icon" href="/img/favicon.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="topbar"><div class="container">
+    <a class="brand" href="/"><span data-logo><img class="brand-mark" src="/img/logo-simbolo.png" alt="" width="34" height="34"></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
+  </div></header>
+  <main class="container narrow policy-page" style="padding-top:24px;padding-bottom:48px">
+    <h1 style="font-size:1.6rem">Agendamento, pagamento e segurança</h1>
+    <p class="muted">Regras da plataforma para as consultas marcadas pela agenda da Acolia.</p>
+
+    <div class="card stack">
+      <h2>1. Marcar a consulta</h2>
+      <ul class="policy-list">
+        <li>O paciente escolhe o dia e o horário livres na agenda do profissional (ou aceita um horário proposto pelo profissional na conversa).</li>
+        <li>Cada marcação é de <b>uma consulta avulsa</b>. Pacotes, quando existirem, são combinados diretamente com o profissional pela conversa.</li>
+        <li>O horário precisa começar daqui a pelo menos 30 minutos. O mesmo paciente não marca duas consultas no mesmo horário.</li>
+      </ul>
+    </div>
+
+    <div class="card stack" style="margin-top:14px">
+      <h2>2. Pagamento (somente Pix)</h2>
+      <ul class="policy-list">
+        <li>A consulta só é confirmada depois do pagamento, para garantir o horário de quem se compromete.</li>
+        <li><b>Pagamento automático:</b> o QR Code e o "Pix copia e cola" aparecem dentro da Acolia. O paciente tem <b>10 minutos</b> para pagar; quando o Pix cai, a consulta é marcada sozinha.</li>
+        <li><b>Pagamento manual:</b> o profissional manda a chave Pix na conversa em até <b>5 minutos</b> e o paciente tem <b>10 minutos</b> para pagar. O profissional confirma "pagamento aprovado" ou "não aprovado"; se não for aprovado, o paciente pode tentar de novo.</li>
+        <li>Se o prazo acabar sem pagamento, o horário é liberado para outras pessoas.</li>
+      </ul>
+    </div>
+
+    <div class="card stack" style="margin-top:14px">
+      <h2>3. Remarcar e cancelar</h2>
+      <ul class="policy-list">
+        <li>O paciente pode <b>remarcar uma única vez</b>, para outro horário livre, até <b>30 minutos antes</b> da consulta. O valor pago continua valendo.</li>
+        <li>O paciente pode <b>cancelar com reembolso</b> até <b>30 minutos antes</b>, informando o motivo.</li>
+        <li>Com <b>30 minutos ou menos</b> para a consulta, não é mais possível remarcar nem pedir reembolso.</li>
+        <li>Se o paciente <b>não comparecer</b>, o valor não é devolvido.</li>
+      </ul>
+    </div>
+
+    <div class="card stack" style="margin-top:14px">
+      <h2>4. Quando o profissional não pode atender</h2>
+      <ul class="policy-list">
+        <li>O profissional não remarca sozinho. Até <b>24 horas antes</b>, ele avisa que não poderá atender e o <b>paciente escolhe</b>: reembolso ou remarcar para outro horário livre (sem gastar a remarcação dele).</li>
+        <li>Se o profissional <b>não entrar na chamada</b> até <b>3 minutos</b> depois do horário, a chamada é encerrada e o paciente recebe <b>100% de volta</b>.</li>
+      </ul>
+    </div>
+
+    <div class="card stack" style="margin-top:14px">
+      <h2>5. Reembolso</h2>
+      <ul class="policy-list">
+        <li><b>Automático:</b> o valor volta para o Pix de quem pagou, pela própria conta do profissional.</li>
+        <li><b>Manual:</b> o profissional devolve pelo Pix e toca em "Fiz o reembolso"; o paciente confirma se recebeu. Enquanto o reembolso não for confirmado, o profissional não consegue mandar mensagens para esse paciente.</li>
+      </ul>
+    </div>
+
+    <div class="card stack" style="margin-top:14px">
+      <h2>6. Segurança do pagamento</h2>
+      <ul class="policy-list">
+        <li><b>O dinheiro vai direto para a conta do profissional.</b> A Acolia não recebe, não guarda e não repassa valores, e não cobra taxa sobre as consultas.</li>
+        <li>O pagamento automático usa a conta do próprio profissional no <b>Asaas</b>. A chave de integração fica guardada <b>criptografada</b> e só é usada para criar o Pix da consulta e fazer os reembolsos.</li>
+        <li>A Acolia não vê nem guarda dados bancários ou de cartão de ninguém.</li>
+        <li>A chamada da consulta é criada automaticamente e só os dois participantes recebem o link. O áudio e o vídeo não passam pelo servidor nem são gravados.</li>
+      </ul>
+    </div>
+    <p class="small muted" style="margin-top:16px">Ao marcar uma consulta, o paciente confirma que leu e aceitou estas regras (a data e a hora do aceite ficam registradas).</p>
+  </main>
+</body>
+</html>

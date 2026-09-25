@@ -81,6 +81,7 @@
       if (m.kind === 'deleted') return `${prefix}🚫 Mensagem apagada`;
       if (m.kind === 'doc') return `${prefix}📄 ${String(m.body).split('|')[1] || 'Documento'}`;
       if (m.kind === 'post') return `${prefix}📌 Publicação`;
+      if (m.kind === 'booking') return prefix + (window.AcoliaAgenda ? AcoliaAgenda.previewText(m) : '📅 Consulta');
       return prefix + m.body;
     }
 
@@ -134,6 +135,10 @@
         state.hasMore = data.has_more;
         renderThread();
         chatEl.classList.add('open');
+        // No celular a conversa só aparece agora: rola até a última mensagem depois que ela está na tela
+        const toEnd = () => { const box = $('[data-messages]', threadWrap); if (box) box.scrollTop = box.scrollHeight; };
+        requestAnimationFrame(toEnd);
+        setTimeout(toEnd, 250);
         onNavigate(id);
         markRead();
         $$('.conv', listEl).forEach((li) => li.classList.toggle('active', Number(li.dataset.id) === id));
@@ -157,7 +162,7 @@
       threadWrap.classList.remove('hidden');
       const proActions = role === 'professional' ? `
         <button class="icon-btn" title="Enviar chave Pix" aria-label="Enviar chave Pix" data-pix>${ICONS.pix}</button>
-        <button class="icon-btn" title="Criar atendimento (chamada)" aria-label="Criar atendimento" data-call>${ICONS.video}</button>
+        <button class="icon-btn" title="Agendar consulta para este paciente" aria-label="Agendar consulta" data-schedule>${ICONS.calendar}</button>
         <button class="icon-btn" title="Documentos: atestado, receita, encaminhamento" aria-label="Documentos" data-docs>${ICONS.doc}</button>` : '';
       threadWrap.innerHTML = `
         <div class="thread-head">
@@ -184,7 +189,7 @@
           <div class="messages" data-messages></div>
         </div>
         <form class="composer" data-composer>
-          <textarea rows="1" placeholder="${!c.peer.active ? 'Esta conta não está mais ativa' : c.blocked_by_me || c.blocked_me ? 'Mensagens bloqueadas' : 'Digite uma mensagem'}" aria-label="Mensagem" ${canWrite(c) ? '' : 'disabled'} maxlength="4000"></textarea>
+          <textarea rows="1" placeholder="${!c.peer.active ? 'Esta conta não está mais ativa' : c.blocked_by_me || c.blocked_me ? 'Mensagens bloqueadas' : c.refund_lock ? 'Faça o reembolso para voltar a conversar' : 'Digite uma mensagem'}" aria-label="Mensagem" ${canWrite(c) ? '' : 'disabled'} maxlength="4000"></textarea>
           <button class="icon-btn rec-cancel" type="button" data-rec-cancel aria-label="Apagar áudio" title="Apagar áudio">${ICONS.trash}</button>
           <div class="rec-bar" aria-live="polite"><span class="rec-dot"></span><b data-rec-time>0:00</b><div class="rec-live" data-rec-live></div>
             <button class="icon-btn rec-stop" type="button" data-rec-stop aria-label="Parar e ouvir antes de enviar" title="Parar e ouvir">${ICONS.stop}</button></div>
@@ -202,7 +207,11 @@
       $('[data-block]', threadWrap).addEventListener('click', () => { pop.classList.add('hidden'); toggleBlock(); });
       $('[data-unblock-here]', threadWrap)?.addEventListener('click', toggleBlock);
       $('[data-pix]', threadWrap)?.addEventListener('click', sendPix);
-      $('[data-call]', threadWrap)?.addEventListener('click', createCall);
+      // Agendar consulta pelo chat: o profissional escolhe dia e horário e o paciente paga o Pix
+      $('[data-schedule]', threadWrap)?.addEventListener('click', () => {
+        if (!canWrite(state.current)) { toast('Não é possível enviar nesta conversa.', 'error'); return; }
+        window.AcoliaAgenda?.openBooking({ mode: 'propose', conversationId: state.current.id, patientId: state.current.peer.id, peerName: state.current.peer.name, me: getMe() });
+      });
       $('[data-docs]', threadWrap)?.addEventListener('click', () => {
         if (!canWrite(state.current)) { toast('Não é possível enviar nesta conversa.', 'error'); return; }
         window.AcoliaDocs.openForm(state.current.id, (msg) => addMessage(msg));
@@ -389,7 +398,8 @@
       if (el) el.outerHTML = msgHtml(m);
     }
 
-    const canWrite = (c) => c.peer.active && !c.blocked_by_me && !c.blocked_me;
+    // Reembolso manual pendente: o profissional não escreve para este paciente até ele confirmar
+    const canWrite = (c) => c.peer.active && !c.blocked_by_me && !c.blocked_me && !c.refund_lock;
 
     // Limpar conversa: apaga todas as mensagens só para você
     async function clearConversation() {
@@ -448,12 +458,15 @@
           <button type="button" class="btn ${mine ? 'secondary' : ''} sm" data-open-doc="${esc(code)}">${ICONS.doc} ${mine ? 'Ver documento' : 'Ver e salvar documento'}</button></div>`;
       } else if (m.kind === 'post') {
         inner = postCardHtml(m.post, mine);
+      } else if (m.kind === 'booking') {
+        // Cartão da consulta: só o mais recente de cada consulta mostra os botões
+        inner = window.AcoliaAgenda ? AcoliaAgenda.chatCardHtml(m, role, m.booking && latestBooking[m.booking.id] === m.id) : '📅 Consulta';
       } else if (m.kind === 'deleted') {
         inner = `<span class="msg-deleted">${ICONS.ban} Mensagem apagada</span>`;
       } else {
         inner = esc(m.body);
       }
-      const menu = mine && m.kind !== 'deleted'
+      const menu = mine && m.kind !== 'deleted' && m.kind !== 'booking'
         ? `<button type="button" class="msg-menu" data-msg-menu="${m.id}" aria-label="Opções da mensagem" title="Opções">⋮</button>` : '';
       return `<div class="msg ${mine ? 'me' : ''} ${m.kind === 'audio' ? 'is-audio' : ''}" data-mid="${m.id}">${menu}${inner}<span class="when">${fmtTime(m.created_at)}${ticks}</span></div>`;
     }
@@ -471,12 +484,15 @@
         <span class="cp-open small">Ver publicação</span></button>`;
     }
 
+    let latestBooking = {};
     function renderMessages(scrollBottom) {
       const box = $('[data-messages]', threadWrap);
       if (!box) return;
       let lastDay = '';
       let html = state.hasMore ? '<div class="day-sep">Role para cima para ver mensagens anteriores</div>' : '';
       if (!state.messages.length) html += `<div class="day-sep">${role === 'patient' ? 'Envie uma mensagem para começar' : 'Sem mensagens'}</div>`;
+      latestBooking = {};
+      for (const m of state.messages) if (m.kind === 'booking' && m.booking) latestBooking[m.booking.id] = m.id;
       for (const m of state.messages) {
         const day = fmtDay(m.created_at);
         if (day !== lastDay) { html += `<div class="day-sep">${esc(day)}</div>`; lastDay = day; }
@@ -543,27 +559,27 @@
       try { addMessage(await api(`/api/chat/conversations/${state.current.id}/messages`, { method: 'POST', body: { kind: 'pix' } })); } catch (e) { toast(e.message, 'error'); }
     }
 
-    async function createCall() {
+    // ---------- Consultas: botões dos cartões e atualização quando a consulta muda ----------
+    if (window.AcoliaAgenda) {
+      AcoliaAgenda.bindActions(threadWrap, (id) => [...state.messages].reverse().find((m) => m.kind === 'booking' && m.booking?.id === id)?.booking);
+      AcoliaAgenda.onChange(() => refreshThread());
+    }
+    let refreshing = null;
+    async function refreshThread() {
       const c = state.current;
-      const label = await modal({
-        title: 'Criar atendimento',
-        html: `<p class="muted">Será gerado um código para este paciente e ele será enviado aqui na conversa. Você pode ter até 2 atendimentos abertos ao mesmo tempo.</p>
-          <div class="field"><label for="callLabel">Nome do paciente (pode ser fictício)</label><input id="callLabel" maxlength="80" value="${esc(c.peer.name)}"></div>`,
-        actions: [{ label: 'Cancelar', value: null, class: 'secondary' },
-          { label: 'Criar e enviar código', handler: (dlg) => $('#callLabel', dlg).value.trim() || false }],
-      });
-      if (!label) return;
-      try {
-        const call = await api('/api/calls', { method: 'POST', body: { patient_label: label, conversation_id: c.id } });
-        const again = await api(`/api/chat/conversations/${c.id}/messages`);
-        state.messages = again.items; state.hasMore = again.has_more;
-        renderMessages(true);
-        const go = await modal({
-          title: 'Atendimento criado', html: '<p>O código foi enviado ao paciente. Deseja entrar na sala de atendimento agora?</p>',
-          actions: [{ label: 'Depois', value: false, class: 'secondary' }, { label: 'Iniciar atendimento', value: true }],
-        });
-        if (go) window.open(`/atendimento?codigo=${encodeURIComponent(call.patient_code)}`, '_blank', 'noopener');
-      } catch (e) { toast(e.message, 'error'); }
+      if (!c) return;
+      clearTimeout(refreshing);
+      refreshing = setTimeout(async () => {
+        try {
+          const [conv, data] = await Promise.all([api(`/api/chat/conversations/${c.id}`), api(`/api/chat/conversations/${c.id}/messages`)]);
+          if (state.current?.id !== c.id) return;
+          const lockChanged = conv.refund_lock !== state.current.refund_lock;
+          state.current = conv;
+          state.messages = data.items;
+          state.hasMore = data.has_more;
+          if (lockChanged) renderThread(); else renderMessages(false);
+        } catch { /* conversa sumiu */ }
+      }, 300);
     }
 
     // ---------- Tempo real ----------
@@ -584,7 +600,13 @@
         }
         loadList();
       });
-      socket.on('message:new', (m) => {
+      socket.on('message:new', async (m) => {
+        // Cartão de consulta chegou pelo tempo real: busca a situação dela (com os botões certos)
+        if (m.kind === 'booking' && !m.booking) {
+          const [id, event, extra] = String(m.body).split('|');
+          m.event = event; m.extra = extra;
+          try { m.booking = await api(`/api/agenda/appointments/${id}`); } catch { m.booking = null; }
+        }
         if (state.current && m.conversation_id === state.current.id) {
           addMessage(m);
           if (m.sender_role !== role && document.visibilityState === 'visible') markRead();

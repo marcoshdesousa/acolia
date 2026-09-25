@@ -44,6 +44,7 @@
 
   const BIO_SHORT = 260; // acima disso (ou mais de 4 linhas), o "Sobre" aparece resumido com "Ler mais"
   const BIO_CACHE = new Map();
+  const PRO_CACHE = new Map(); // perfis com agenda aberta (para o botão "Agendar consulta")
 
   // "Ler mais": abre uma página com a história completa, com botão Voltar (o voltar do celular também fecha)
   function openBio(pro) {
@@ -66,6 +67,27 @@
     el.addEventListener('click', (e) => { if (e.target.closest('[data-bio-back]')) history.back(); });
   }
   document.addEventListener('click', (e) => {
+    // "Dia disponível" no topo: desce até os valores, onde fica o botão de agendar
+    const go = e.target.closest('[data-next-go]');
+    if (go) {
+      const scope = go.closest('[data-pro-id]')?.parentElement || document;
+      const box = scope.querySelector('[data-values-anchor]');
+      box?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      box?.querySelector('[data-book]')?.classList.add('pulse');
+      setTimeout(() => box?.querySelector('[data-book]')?.classList.remove('pulse'), 1600);
+      return;
+    }
+    const book = e.target.closest('[data-book]');
+    if (book) {
+      const pro = PRO_CACHE.get(Number(book.dataset.book));
+      if (!pro) return;
+      if (pro.locked) {
+        if (window.AcoliaSpecialties) AcoliaSpecialties.needAccount('agendar sua consulta');
+        else location.href = '/cadastro-paciente?next=' + encodeURIComponent(location.pathname);
+      } else if (window.AcoliaAgenda) AcoliaAgenda.openBooking({ mode: 'book', pro });
+      else location.href = `/app#perfil/${pro.id}`; // página pública aberta por quem tem conta: agenda pelo app
+      return;
+    }
     if (e.target.closest('[data-bio-locked]')) {
       if (window.AcoliaSpecialties) AcoliaSpecialties.needAccount('ler o texto completo');
       else location.href = '/cadastro-paciente?next=' + encodeURIComponent(location.pathname + location.hash);
@@ -88,20 +110,29 @@
     // ---------- Valores ----------
     // Plano de saúde: só o aviso de que aceita (qual plano e como funciona, o paciente pergunta pelo chat)
     const insurance = p.accepts_insurance ? `<div class="insurance">${ic('shield', 18)} <span><b>Aceita plano de saúde</b><br><span class="muted small">Pergunte ao profissional pelo chat quais planos e como funciona.</span></span></div>` : '';
+    // Agenda: próximo dia livre e o botão de marcar (paciente; visitante é convidado a criar a conta).
+    // Profissional vendo outro profissional não marca consulta.
+    const nx = p.next_available;
+    const canBook = !p.is_self && p.viewer_role !== 'professional';
+    if (nx) PRO_CACHE.set(p.id, p);
+    const agendaBox = nx
+      ? `<div class="agenda-box"><div>${ic('calendar', 18)} Próximo horário livre: <b>${esc(nx.label)} às ${esc(nx.first)}</b></div>
+          ${canBook ? `<button type="button" class="btn block" data-book="${p.id}">${ic('calendar', 18)} Agendar consulta</button>
+          <span class="small muted">Escolha o dia e o horário e pague pelo Pix para confirmar. Pacotes: combine pelo chat.</span>` : ''}</div>`
+      : `<div class="small muted">A agenda online deste profissional está fechada no momento. ${canBook ? 'Mande uma mensagem para combinar.' : ''}</div>`;
     let values;
     if (p.locked) {
       values = `<div class="card flat stack">
           <h3>${ic('calendar')} Valores e sessões</h3>
           <div class="row between"><span>Sessão online</span>${lockLink()}</div>
-          ${p.has_packages ? `<div class="row between"><span>Pacotes de sessões</span>${lockLink()}</div>` : ''}
+          ${agendaBox}
           ${insurance}
         </div>`;
     } else {
-      const pk = p.packages || [];
       values = `<div class="card flat stack">
           <h3>${ic('calendar')} Valores</h3>
           <div><span class="price" style="font-size:1.5rem;font-weight:800">${p.price_cents != null ? money(p.price_cents) : 'A combinar'}</span> <span class="muted">por sessão online</span></div>
-          ${pk.length ? `<div><b>Pacotes</b><ul style="margin:6px 0 0;padding-left:20px">${pk.map((k) => `<li>${k.sessions} sessões por <b>${money(k.price_cents)}</b> <span class="muted small">(${money(Math.round(k.price_cents / k.sessions))}/sessão)</span>${k.description ? ` — ${esc(k.description)}` : ''}</li>`).join('')}</ul></div>` : ''}
+          ${agendaBox}
           ${insurance}
         </div>`;
     }
@@ -193,6 +224,7 @@
               ${p.session_minutes ? `<span class="badge">${ic('clock', 15)} Sessão de ${duration(p.session_minutes)}</span>` : ''}
               ${p.locked && p.has_session_minutes ? `<a class="lock-link" href="${signup}">${ic('clock', 15)} Duração: crie conta para ver</a>` : ''}</div>
             ${p.instagram ? `<a class="insta-btn" href="https://www.instagram.com/${encodeURIComponent(p.instagram)}/" target="_blank" rel="noopener">${ic('instagram', 18)} @${esc(p.instagram)}</a>` : ''}
+            ${nx ? `<button type="button" class="next-chip" data-next-go>${ic('calendar', 16)} Dia disponível: <b>${esc(nx.label)}</b></button>` : ''}
             ${specialties.length ? `<div class="meta row" style="gap:6px;margin-top:10px">${window.AcoliaSpecialties ? AcoliaSpecialties.badges(p) : specialties.slice(0, 2).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
           </div>
           <div class="row">${followBtn}${actions}</div>
@@ -202,7 +234,7 @@
       </div>
       ${p.locked ? `<div class="notice info" style="margin-top:16px">${ic('lock')} Crie sua conta grátis para ver valores, sessões, a localização, todas as fotos (e ampliar) e para mandar mensagem.
         <div class="row" style="margin-top:10px"><a class="btn sm" href="${signup}">Criar conta grátis</a><a class="btn secondary sm" href="/entrar?next=${encodeURIComponent(next || '/app#perfil/' + p.id)}">Já tenho conta</a></div></div>` : ''}
-      <div class="grid-2" style="margin-top:16px;align-items:start">${values}${location}</div>`;
+      <div class="grid-2" style="margin-top:16px;align-items:start" data-values-anchor>${values}${location}</div>`;
   }
 
   // Abas Fotos | Vídeos do perfil

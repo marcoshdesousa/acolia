@@ -237,6 +237,75 @@ addColumn('calls', 'conversation_id', 'INTEGER'); // atendimento criado pela con
 addColumn('conversations', 'patient_wrote', 'INTEGER NOT NULL DEFAULT 0');
 // Versão 1.1.2: o profissional abre conversa com o paciente que comentou numa publicação dele
 addColumn('conversations', 'pro_started', 'INTEGER NOT NULL DEFAULT 0');
+// ---------- Agenda e consultas (marcar, pagar com Pix, remarcar, cancelar) ----------
+db.exec(`
+-- Horários da semana em que o profissional atende online (minutos do dia, horário de Brasília)
+CREATE TABLE IF NOT EXISTS agenda_hours (
+  id INTEGER PRIMARY KEY,
+  professional_id INTEGER NOT NULL REFERENCES professionals(id),
+  dow INTEGER NOT NULL,          -- 0 = domingo ... 6 = sábado
+  start_min INTEGER NOT NULL,
+  end_min INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_agenda_hours_pro ON agenda_hours(professional_id);
+-- Horários fechados (ex.: consulta presencial, folga)
+CREATE TABLE IF NOT EXISTS agenda_blocks (
+  id INTEGER PRIMARY KEY,
+  professional_id INTEGER NOT NULL REFERENCES professionals(id),
+  start_at TEXT NOT NULL,        -- ISO UTC
+  end_at TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_agenda_blocks_pro ON agenda_blocks(professional_id, start_at);
+-- Consultas marcadas (uma consulta, sem pacote). O dinheiro vai direto para a conta do profissional.
+CREATE TABLE IF NOT EXISTS appointments (
+  id INTEGER PRIMARY KEY,
+  professional_id INTEGER NOT NULL REFERENCES professionals(id),
+  patient_id INTEGER NOT NULL REFERENCES patients(id),
+  conversation_id INTEGER,
+  start_at TEXT NOT NULL,        -- ISO UTC
+  end_at TEXT NOT NULL,
+  price_cents INTEGER,
+  mode TEXT NOT NULL,            -- auto (Asaas) | manual (chave Pix pelo chat)
+  origin TEXT NOT NULL,          -- paciente | profissional
+  status TEXT NOT NULL,
+  hold_until TEXT,               -- até quando o horário fica reservado esperando o pagamento
+  pay_id TEXT,                   -- id da cobrança no Asaas
+  pix_payload TEXT,              -- Pix copia e cola
+  pix_image TEXT,                -- QR Code (imagem em base64)
+  reschedules INTEGER NOT NULL DEFAULT 0,
+  cancel_reason TEXT,
+  cancel_detail TEXT,
+  refund_status TEXT,            -- pedido | feito | confirmado | erro
+  call_id INTEGER,
+  accepted_policy_at TEXT,
+  paid_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_appt_pro ON appointments(professional_id, start_at);
+CREATE INDEX IF NOT EXISTS idx_appt_pat ON appointments(patient_id, start_at);
+CREATE INDEX IF NOT EXISTS idx_appt_status ON appointments(status);
+-- Pagamento automático do profissional (só Asaas): a chave fica guardada criptografada
+CREATE TABLE IF NOT EXISTS pro_payment (
+  professional_id INTEGER PRIMARY KEY REFERENCES professionals(id),
+  provider TEXT NOT NULL DEFAULT 'asaas',
+  key_enc TEXT NOT NULL,
+  env TEXT NOT NULL,             -- producao | teste
+  account_name TEXT NOT NULL DEFAULT '',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  connected_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- Cliente do Asaas (paciente) em cada conta de profissional
+CREATE TABLE IF NOT EXISTS asaas_customers (
+  professional_id INTEGER NOT NULL,
+  patient_id INTEGER NOT NULL,
+  customer_id TEXT NOT NULL,
+  PRIMARY KEY (professional_id, patient_id)
+);
+`);
+addColumn('calls', 'appointment_id', 'INTEGER');   // chamada criada sozinha para a consulta marcada
+addColumn('calls', 'host_joined_at', 'TEXT');      // quando o profissional entrou (ausência → reembolso)
 db.exec(`UPDATE conversations SET patient_wrote = 1 WHERE patient_wrote = 0
   AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = conversations.id AND m.sender_role = 'patient')`);
 // Chat: bloquear alguém (só as mensagens: quem foi bloqueado não consegue mais mandar mensagem)

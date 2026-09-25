@@ -74,6 +74,7 @@ function createApp() {
   app.use('/api/social', require('./routes/social').router);
   app.use('/api/push', require('./routes/push').router);
   app.use('/api/calls', require('./routes/calls').router);
+  app.use('/api/agenda', require('./routes/agenda').router); // agenda, consultas e pagamento por Pix
   app.use('/api/admin', require('./routes/admin').router);
   app.use('/api/docs', require('./routes/docs').router); // atestado, receita e encaminhamento
   app.use('/api', (_req, _res, next) => next(new U.HttpError(404, 'Rota não encontrada.')));
@@ -162,6 +163,9 @@ async function start(port = Number(process.env.PORT) || 3000) {
   const { cleanupStories } = require('./routes/social');
   cleanupStories();
   setInterval(cleanupStories, 60 * 60 * 1000).unref();
+  // Agenda: prazos do Pix, chamada automática, ausência do profissional, consultas concluídas
+  const agenda = require('./agenda');
+  setInterval(() => agenda.sweep(), 20 * 1000).unref();
   // Fotos antigas: grava o formato do feed (4:5, 1:1 ou 1,91:1) para aparecerem recortadas certinho
   require('./routes/social').fixOldAspects().catch((e) => console.error('[formatos]', e.message));
   const app = createApp();

@@ -46,6 +46,8 @@ function setupSocket(httpServer) {
         }
       }
       socket.data.call = { id: r.call.id, role: r.role };
+      // Consulta marcada: registra que o profissional entrou (se não entrar em 3 minutos, o paciente é reembolsado)
+      if (r.role === 'host') db.prepare("UPDATE calls SET host_joined_at = COALESCE(host_joined_at, datetime('now')) WHERE id = ?").run(r.call.id);
       socket.join(room);
       const others = (await io.in(room).fetchSockets()).filter((s) => s.id !== socket.id && s.data.call);
       const peerPresent = others.length > 0;

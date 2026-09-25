@@ -96,6 +96,7 @@
   <script src="/js/docs.js"></script>
   <script src="/js/chat.js"></script>
   <script src="/js/delete-account.js"></script>
+  <script src="/js/agenda.js"></script>
   <script>
   (async function () {
     const { $, $$, api, ICONS, avatar, esc, toast, handleForm, logout, installApp } = Acolia;
@@ -150,6 +151,9 @@
     const socket = io();
     socket.on('account:blocked', () => location.reload()); // o admin bloqueou: mostra a tela de bloqueio na hora
     const setUnread = (n) => { $('[data-unread]').textContent = n ? String(n) : ''; };
+    // Consultas: depois de pagar vai direto para a conversa; aviso fixo com a contagem regressiva
+    AcoliaAgenda.setContext({ role: 'patient', onGoChat: (id) => { location.hash = 'chat/' + id; } });
+    AcoliaAgenda.mountBar({ role: 'patient', socket });
     const chat = AcoliaChat.mount($('[data-chat]'), {
       role: 'patient', me, socket, onUnreadChange: setUnread,
       onNavigate: (id) => { const h = id ? '#chat/' + id : '#chat'; if (location.hash !== h && location.hash.startsWith('#chat')) history.replaceState(null, '', h); },

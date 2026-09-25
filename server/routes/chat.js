@@ -46,6 +46,11 @@ function blocksOf(c) {
   return { patient: rows.includes('patient'), professional: rows.includes('professional') };
 }
 function assertCanSend(role, c) {
+  // Reembolso manual pendente: o profissional só volta a mandar mensagem para este paciente depois
+  // que o paciente confirmar que recebeu o dinheiro de volta
+  if (role === 'professional' && require('../agenda').refundLock(c.id)) {
+    throw new U.HttpError(403, 'Faça o reembolso pedido por este paciente e toque em "Fiz o reembolso". O chat volta quando ele confirmar que recebeu.');
+  }
   const b = blocksOf(c);
   const other = role === 'patient' ? 'professional' : 'patient';
   if (b[role]) throw new U.HttpError(403, `Você bloqueou este ${other === 'patient' ? 'paciente' : 'profissional'}. Desbloqueie para mandar mensagens.`);
@@ -83,7 +88,7 @@ function summarize(role, c) {
   const unread = db.prepare(`SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND sender_role = ? AND read_at IS NULL AND kind <> 'deleted' AND ${hc} = 0`).get(c.id, other).n;
   const b = blocksOf(c);
   return { id: c.id, archived: !!c[s], peer: peerOf(role, c), last_message: last, unread, updated_at: c.last_message_at || c.created_at,
-    blocked_by_me: b[role], blocked_me: b[other] };
+    blocked_by_me: b[role], blocked_me: b[other], refund_lock: role === 'professional' && require('../agenda').refundLock(c.id) };
 }
 
 router.get('/conversations', (req, res) => {
@@ -145,7 +150,7 @@ router.get('/conversations/:id/messages', (req, res) => {
   const before = Number(req.query.before) || Number.MAX_SAFE_INTEGER;
   const limit = Math.min(Number(req.query.limit) || 60, 200);
   const rows = db.prepare(`SELECT ${MSG_COLS} FROM messages WHERE conversation_id = ? AND id < ? AND ${hideCol(req.auth.role)} = 0 ORDER BY id DESC LIMIT ?`).all(c.id, before, limit);
-  res.json({ items: rows.reverse().map(withPost), has_more: rows.length === limit });
+  res.json({ items: rows.reverse().map((m) => withBooking(withPost(m), req.auth.role)), has_more: rows.length === limit });
 });
 
 // Publicação enviada no chat (paciente toca em "Mensagem" num post): a mensagem guarda só o id
@@ -157,14 +162,28 @@ function postInfo(id) {
   return { id: p.id, kind: p.kind || 'photo', image: p.kind === 'text' ? null : (p.thumb || p.image), caption: String(p.caption || '').slice(0, 220),
     font: p.font || null, author: p.name, professional_id: p.professional_id };
 }
+// Cartão de consulta no chat: body = "id|evento|extra"; vem com a situação atual da consulta
+function withBooking(m, role) {
+  if (!m || m.kind !== 'booking') return m;
+  const [id, event, extra] = String(m.body).split('|');
+  const G = require('../agenda');
+  const a = G.getAppt(id);
+  return { ...m, event, extra, booking: a ? G.view(a, role) : null };
+}
+
 function withPost(m) {
   return m && m.kind === 'post' ? { ...m, post: postInfo(m.body) } : m;
 }
 
 function postMessage(req, c, kind, body) {
-  const role = req.auth.role;
+  assertCanSend(req.auth.role, c);
   const sender = req.auth.user;
-  assertCanSend(role, c);
+  return sendMessage(c, req.auth.role, req.auth.role === 'patient' ? (sender.display_name || sender.name) : sender.name, kind, body);
+}
+
+// Mensagem da conversa sem a checagem de bloqueio (usada também pelos avisos automáticos das
+// consultas: "consulta agendada", "pagamento aprovado", link da chamada...)
+function sendMessage(c, role, from, kind, body) {
   const info = db.prepare('INSERT INTO messages (conversation_id, sender_role, kind, body) VALUES (?, ?, ?, ?)').run(c.id, role, kind, body);
   const msg = withPost(db.prepare(`SELECT ${MSG_COLS} FROM messages WHERE id = ?`).get(Number(info.lastInsertRowid)));
   db.prepare(`UPDATE conversations SET last_message_at = ?${role === 'patient' ? ', patient_wrote = 1' : ''} WHERE id = ?`).run(msg.created_at, c.id);
@@ -172,8 +191,7 @@ function postMessage(req, c, kind, body) {
   rt.emit(`professional:${c.professional_id}`, 'message:new', msg);
   // Notificação no aparelho de quem recebe
   const to = role === 'patient' ? ['professional', c.professional_id, `/painel#conversas/${c.id}`] : ['patient', c.patient_id, `/app#chat/${c.id}`];
-  const from = role === 'patient' ? (sender.display_name || sender.name) : sender.name;
-  const text = kind === 'pix' ? 'Enviou a chave Pix para pagamento' : kind === 'call' ? 'Enviou um código de atendimento'
+  const text = kind === 'booking' ? require('../agenda').pushText(body) : kind === 'pix' ? 'Enviou a chave Pix para pagamento' : kind === 'call' ? 'Enviou um código de atendimento'
     : kind === 'audio' ? '🎤 Enviou um áudio' : kind === 'doc' ? `📄 Enviou um documento: ${String(body).split('|')[1] || ''}` : kind === 'post' ? '📌 Enviou uma das suas publicações' : body;
   require('../push').notify(to[0], to[1], {
     title: from, body: text.length > 140 ? `${text.slice(0, 137)}…` : text, url: to[2], tag: `conversa-${c.id}`,
@@ -352,4 +370,4 @@ function eraseMessagesOf(role, userId) {
   return n;
 }
 
-module.exports = { router, postMessage, loadConversation, eraseMessagesOf, assertCanSend };
+module.exports = { router, postMessage, sendMessage, loadConversation, eraseMessagesOf, assertCanSend };

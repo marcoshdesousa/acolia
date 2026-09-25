@@ -229,7 +229,6 @@
 
   async function openPro(id) {
     const p = await api(`/api/admin/professionals/${id}`);
-    const pk = p.packages.map((k) => `${k.sessions} sessões: ${money(k.price_cents)}`).join(' · ');
     const btn = (status, label, cls = 'secondary') => `<button type="button" class="btn sm ${cls}" data-set="${status}">${label}</button>`;
     let statusBtns = '';
     if (p.status === 'pendente') statusBtns = btn('aprovado', 'Aprovar', '') + btn('recusado', 'Recusar', 'danger');
@@ -263,7 +262,7 @@
           <tr><th>WhatsApp</th><td><a href="https://wa.me/55${esc(p.phone)}" target="_blank" rel="noopener">${esc(fmtPhone(p.phone))}</a></td></tr>
           <tr><th>Local</th><td>${esc(p.city)} - ${esc(p.state)}<div class="small muted">Atende online${p.has_clinic ? ' e presencial' : ''}</div>${p.has_clinic ? `<div class="small">${esc(p.clinic_name)} — ${esc(p.clinic_address)}</div>` : ''}</td></tr>
           <tr><th>Especialidades</th><td>${esc((p.specialties || '').split(',').map((x) => x.trim()).filter(Boolean).join(' · ') || '—')}</td></tr>
-          <tr><th>Consulta</th><td>${p.price_cents != null ? money(p.price_cents) : '—'}${pk ? `<div class="small muted">${esc(pk)}</div>` : ''}</td></tr>
+          <tr><th>Consulta</th><td>${p.price_cents != null ? money(p.price_cents) : '—'}</td></tr>
           <tr><th>Cadastro</th><td>${fmtDT(p.created_at)}</td></tr>
           <tr><th>Mensalidade</th><td>${subBadge(p)}</td></tr>
         </tbody></table>

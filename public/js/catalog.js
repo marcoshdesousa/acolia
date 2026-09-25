@@ -13,7 +13,6 @@
     const bits = [];
     if (p.price_cents != null) bits.push(`<span class="price">${money(p.price_cents)}</span> <span class="muted small">/ sessão online</span>`);
     else bits.push('<span class="muted small">Valor a combinar</span>');
-    if (p.packages?.length) bits.push(`<span class="badge primary">${p.packages.length} pacote${p.packages.length > 1 ? 's' : ''}</span>`);
     return `<div>${bits.join(' ')}</div>${where}`;
   }
 
@@ -28,6 +27,7 @@
       </div>
       ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}
       ${p.specialties ? `<div class="meta">${window.AcoliaSpecialties ? AcoliaSpecialties.badges(p) : p.specialties.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 2).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
+      ${p.next_available ? `<div class="next-line">${ICONS.calendar.replace('<svg', '<svg style="width:15px;height:15px"')} Próximo dia disponível: <b>${esc(p.next_available.label)}</b></div>` : ''}
       ${priceLine(p)}
       <div class="actions"><a class="btn ${pro ? '' : 'secondary'} sm grow" href="${profileHref(p)}">Ver perfil</a>
         ${pro ? '' : `<button class="btn sm grow" ${p.locked ? 'data-need-account' : 'data-msg'}>${ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"')} Mensagem</button>`}</div>

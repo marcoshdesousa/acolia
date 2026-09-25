@@ -7,7 +7,7 @@ Plataforma que funciona como **vitrine** de profissionais de saúde mental (psic
 | Área | Endereço | O que faz |
 |---|---|---|
 | Administrador geral | `/admin` | Aprova/recusa cadastros de profissionais, cadastra profissionais, restringe/bloqueia, controla a mensalidade, vê e filtra pacientes e profissionais por estado/município, bloqueia pacientes, gera nova senha, exporta planilha (CSV). **Não tem acesso às mensagens nem às chamadas.** |
-| Profissional | `/cadastro-profissional`, `/painel` | Cadastro com e-mail e WhatsApp; **número e foto da carteirinha só para psicólogo/neuropsicólogo (CRP) e psiquiatra (CRM)** — psicanalista, psicoterapeuta e terapeuta não enviam carteirinha → recebe um **código único** (anotar/printar). Após aprovação: perfil (foto, nome, registro, valor da consulta, pacotes, estado/município, clínica presencial opcional, chave Pix, duração da sessão, Instagram, galeria de até 6 fotos e link do Google Maps da clínica (mini mapa só para quem tem conta) — visitante vê profissão, registro, as 2 primeiras especialidades (o "+N" pede conta), o começo do "Sobre" (o "Ler mais" pede conta), Instagram, se aceita plano de saúde, seguidores e até 2 fotos (1 foto: nenhuma; 2 ou 3: uma; 4 ou mais: duas), **nenhum vídeo/Reels no perfil** (o link compartilhado de um vídeo, pelo WhatsApp ou outra rede, abre para qualquer pessoa); valores, sessões (duração e pacotes), localização (cidade, endereço e mapa) e o resto da galeria só com conta), chat com pacientes (arquivar/desarquivar, enviar Pix), criar atendimento. |
+| Profissional | `/cadastro-profissional`, `/painel` | Cadastro com e-mail e WhatsApp; **número e foto da carteirinha só para psicólogo/neuropsicólogo (CRP) e psiquiatra (CRM)** — psicanalista, psicoterapeuta e terapeuta não enviam carteirinha → recebe um **código único** (anotar/printar). Após aprovação: perfil (foto, nome, registro, valor da consulta (consulta avulsa; pacotes saíram — se quiser, combina pelo chat), estado/município, clínica presencial opcional, chave Pix, duração da sessão, Instagram, galeria de até 6 fotos e link do Google Maps da clínica (mini mapa só para quem tem conta) — visitante vê profissão, registro, as 2 primeiras especialidades (o "+N" pede conta), o começo do "Sobre" (o "Ler mais" pede conta), Instagram, se aceita plano de saúde, seguidores e até 2 fotos (1 foto: nenhuma; 2 ou 3: uma; 4 ou mais: duas), **nenhum vídeo/Reels no perfil** (o link compartilhado de um vídeo, pelo WhatsApp ou outra rede, abre para qualquer pessoa); valores, sessões (duração), localização (cidade, endereço e mapa) e o resto da galeria só com conta), chat com pacientes (arquivar/desarquivar, enviar Pix, agendar consulta), agenda e consultas. |
 | (perfil) | — | O "Sobre" aparece resumido no perfil (4 linhas) com **Ler mais**, que abre uma página com a história completa e botão Voltar. **Aceito plano de saúde** (chavezinha no perfil do profissional): aparece no perfil, nos valores e na vitrine; vale para online e presencial — os detalhes o paciente pergunta pelo chat. |
 | Paciente | `/cadastro-paciente`, `/app` | Cadastro com nome completo (igual ao do CPF), CPF válido, **data de nascimento** (menor de idade pode criar conta, sem documento dos pais), estado/município e senha. Login com CPF + senha. Vitrine com os da sua cidade primeiro, busca por nome, estado, município e localidade, favoritos (coração), chat, configurações (foto, nome exibido, estado/município e senha). **Nome completo, CPF e data de nascimento não mudam** (vão nos documentos). Conta antiga sem data de nascimento: o app pede e **não deixa continuar** até informar. |
 
@@ -20,11 +20,50 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 - Na busca, o texto também procura nas especialidades. Em **Filtrar**, o paciente escolhe uma ou mais especialidades, e aparecem os profissionais que têm **todas** as escolhidas.
 - Quem já tinha especialidades escritas à mão antes da lista não perde nada: elas continuam no perfil até o profissional tirar.
 
+## Agenda, consultas e pagamento por Pix
+
+**O dinheiro vai sempre direto para a conta do profissional.** A Acolia não recebe, não repassa e não cobra taxa sobre as consultas. Só Pix. As regras ficam em `server/agenda.js` e a página pública é `/politica-agendamento`.
+
+**Profissional (Painel → Consultas, ícone 📅)**
+- **Minha agenda:** dias e horários da semana (várias faixas por dia; "copiar segunda para os dias úteis"), duração da consulta e **Fechar um horário** (consulta presencial ou compromisso). Consulta já paga continua valendo.
+- A agenda aparece para os pacientes quando tem **horários + valor da consulta + forma de receber**.
+- **Forma de receber:**
+  - **Pix automático pelo Asaas:** o profissional cria a conta no Asaas (CPF ou CNPJ), cadastra uma chave Pix lá e cola a **chave de API** na Acolia, com um passo a passo em telas; cada tela pede um print e só avança com "Sim".
+  - **Pix manual:** a chave Pix do perfil vai pelo chat.
+- A chave do Asaas fica **criptografada** com a senha do administrador que já está no Render (`ADMIN_PASSWORD`; dá para usar `PAYMENT_SECRET` no lugar). Se essa senha mudar, cada profissional precisa conectar o Asaas de novo.
+- A Acolia reconhece sozinha a chave de **teste** (Sandbox) e a **real**.
+- **Próximas consultas:** lista com contagem regressiva, "Não vou poder atender", "Fiz o reembolso" e histórico.
+- **Pelo chat** (ícone 📅 da conversa), o profissional **propõe uma consulta** ao paciente. O paciente aceita a política e paga.
+
+**Paciente**
+- No **perfil** do profissional aparece **"Dia disponível: Hoje/Amanhã/…"** (também para visitantes, e na vitrine sem ser clicável). Tocando, a tela desce até os valores, onde fica **Agendar consulta**. Visitante é convidado a criar a conta.
+- **Agendar:**
+  1. Calendário do mês, com setas para os próximos meses. Dia sem horário não é clicável; horário que já passou (ou em menos de 30 minutos) não aparece.
+  2. Horários do dia → **Avançar** → política com **"Li e aceito"** (a data e a hora do aceite ficam registradas).
+  3. **Automático:** QR Code e "Copiar código Pix" **dentro da Acolia**, com **10 minutos**. Quando o Pix cai, a consulta é marcada sozinha e a pessoa vai direto para a conversa com "✅ Consulta agendada".
+  4. **Manual:** o pedido vai para a conversa. O profissional tem **5 minutos** para "Enviar chave Pix", depois o paciente tem **10 minutos** para pagar. O profissional toca em **Pagamento aprovado** ou **Não aprovado**; se não aprovado, o paciente responde se quer tentar de novo e o profissional manda a chave outra vez.
+- Enquanto espera o pagamento, o horário fica guardado. No fim do prazo ele é liberado.
+- Uma consulta por vez (sem pacote). O mesmo paciente não marca dois horários que se sobrepõem, mesmo com profissionais diferentes.
+- **Aviso fixo** embaixo em todas as telas: "Beatriz · hoje às 14:00 · faltam 2 h 10 min", com **Ver**.
+  - Ele fica em cima do menu; em cima do campo de mensagem quando a conversa está aberta; como pílula no alto nos Reels; e some nos stories e no calendário.
+  - Com a chamada aberta, aparece **Entrar**.
+
+**Regras**
+- **Paciente remarca 1 vez** e **cancela com reembolso** (motivo obrigatório) até **30 minutos antes**. Com 30 minutos ou menos, não remarca nem pede reembolso. Se não comparecer, o valor não volta.
+- **Profissional não remarca sozinho:** até **24 horas antes**, toca em "Não vou poder atender" e o **paciente escolhe** entre reembolso e remarcar. Essa remarcação não gasta a dele. Se o paciente não escolher até o horário, recebe o reembolso.
+- **Reembolso:**
+  - **Automático** pelo Asaas do profissional. Se falhar, por exemplo por falta de saldo, vira pedido manual.
+  - **Manual:** o chat do profissional **com esse paciente** fica travado até o paciente confirmar "Sim, recebi". Se ele disser que não recebeu, continua travado.
+- **Chamada automática:** é criada **10 minutos antes** e o botão "Entrar na chamada" aparece na conversa, na lista e no aviso. Não existe mais "criar atendimento"; o código de login do profissional continua.
+- **Profissional ausente:** se não entrar até **3 minutos** depois do horário, a chamada é fechada, o paciente vê "O profissional não compareceu" e recebe **100% de volta**.
+- 30 minutos depois do fim, a consulta fica **concluída** e a chamada é encerrada.
+- Uma varredura a cada 20 segundos cuida dos prazos. Conta apagada cancela as consultas futuras, com estorno automático quando é pelo Asaas.
+
 ## Atendimento (chamada)
 
-1. O profissional cria o atendimento informando o nome (real ou fictício) do paciente — pelo painel ou direto no chat.
-2. É gerado um código para o paciente, que começa com os **2 primeiros caracteres do código do profissional** + 6 caracteres aleatórios (letras e números).
-3. O profissional (logado) entra pelo botão **Entrar na chamada** de cada atendimento no painel; o paciente, com o **código dele** em `/atendimento`.
+1. A chamada de cada consulta é criada sozinha 10 minutos antes (ver acima). O código do paciente começa com os **2 primeiros caracteres do código do profissional** + 6 caracteres aleatórios.
+2. Os dois entram pelo botão **Entrar na chamada**: na conversa, em Consultas ou no aviso fixo.
+3. Ao clicar em **Finalizar atendimento**, o código deixa de funcionar.
 4. Vídeo e voz. Os dois podem ligar/desligar a câmera e o microfone.
 5. O profissional pode ter **até 2 atendimentos abertos ao mesmo tempo**. Ao clicar em **Finalizar atendimento**, o código do paciente deixa de funcionar.
 6. **Sem janelinha flutuante**: a pessoa fica na tela da chamada. Embaixo da logo aparece um aviso pequeno, "Não saia desta tela nem atualize a página", e ao tentar atualizar ou fechar a página o navegador pergunta antes. Se mesmo assim sair do site, a câmera desliga (a outra pessoa vê a foto) e o áudio continua; ao voltar, a câmera religa sozinha.
