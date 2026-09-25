@@ -112,17 +112,19 @@ function loadBusy(proId, fromMs, toMs, { patientId = null, exclude = 0 } = {}) {
 // Horários livres de um dia (data de Brasília)
 function slotsForDay(pro, date, opts = {}) {
   const dur = duration(pro);
+  const step = dur + (pro.break_minutes || 0); // consulta + descanso até a próxima
   const ranges = db.prepare('SELECT start_min, end_min FROM agenda_hours WHERE professional_id = ? AND dow = ? ORDER BY start_min').all(pro.id, dowOf(date));
   if (!ranges.length) return [];
   const t0 = now();
-  const earliest = t0 + RULES.MIN_ADVANCE_MIN * MIN;
+  // Conta de teste: dá para marcar até em cima da hora (para o dono testar na hora)
+  const earliest = t0 + (pro.is_test ? 1 : RULES.MIN_ADVANCE_MIN) * MIN;
   const latest = fromLocal(localDate(t0), 0) + (RULES.HORIZON_DAYS + 1) * 1440 * MIN;
   const dayStart = fromLocal(date, 0);
   const busy = opts.busy || loadBusy(pro.id, dayStart, dayStart + 1440 * MIN, opts);
   const out = [];
   const seen = new Set();
   for (const r of ranges) {
-    for (let m = r.start_min; m + dur <= r.end_min; m += dur) {
+    for (let m = r.start_min; m + dur <= r.end_min; m += step) {
       const s = fromLocal(date, m);
       const e = s + dur * MIN;
       if (s < earliest || s > latest || seen.has(s)) continue;

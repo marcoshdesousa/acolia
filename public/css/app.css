@@ -1156,5 +1156,7 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .booking-card.old { opacity: .8; }
 .appt-bar.in-reels .ab-txt small { white-space: nowrap; }
 .agenda-page .bio-body { max-width: 520px; }
-.range-row input[type=time], .block-form input[type=time] { width: 132px; flex: none; }
+.range-row input[type=time] { flex: 1 1 0; min-width: 0; width: auto; max-width: 150px; }
+.range-row .icon-btn { flex: none; }
+.block-form input[type=time] { width: 132px; flex: none; }
 .block-form [data-btimes] { flex-wrap: nowrap; }

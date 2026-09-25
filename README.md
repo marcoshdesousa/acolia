@@ -25,14 +25,14 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 **O dinheiro vai sempre direto para a conta do profissional.** A Acolia não recebe, não repassa e não cobra taxa sobre as consultas. Só Pix. As regras ficam em `server/agenda.js` e a página pública é `/politica-agendamento`.
 
 **Profissional (Painel → Consultas, ícone 📅)**
-- **Minha agenda:** dias e horários da semana (várias faixas por dia; "copiar segunda para os dias úteis"), duração da consulta e **Fechar um horário** (consulta presencial ou compromisso). Consulta já paga continua valendo.
+- **Minha agenda:** duração da consulta e **descanso entre as consultas** (ex.: 1 hora + 15 minutos → 08:00, 09:15, 10:30…), dias e horários da semana (várias faixas por dia; "copiar segunda para os dias úteis"), duração da consulta e **Fechar um horário** (consulta presencial ou compromisso). Consulta já paga continua valendo.
 - A agenda aparece para os pacientes quando tem **horários + valor da consulta + forma de receber**.
 - **Forma de receber:**
   - **Pix automático pelo Asaas:** o profissional cria a conta no Asaas (CPF ou CNPJ), cadastra uma chave Pix lá e cola a **chave de API** na Acolia, com um passo a passo em telas; cada tela pede um print e só avança com "Sim".
   - **Pix manual:** a chave Pix do perfil vai pelo chat.
 - A chave do Asaas fica **criptografada** com a senha do administrador que já está no Render (`ADMIN_PASSWORD`; dá para usar `PAYMENT_SECRET` no lugar). Se essa senha mudar, cada profissional precisa conectar o Asaas de novo.
 - **Teste do dono (Profissional Teste e Paciente Teste):** na subida do servidor, **uma vez só** (`server/testAgenda.js`), o site:
-  - deixa o Profissional Teste **ativo**, com a agenda aberta todos os dias, o dia inteiro, e o **Asaas simulado** já conectado;
+  - deixa o Profissional Teste **ativo**, com a agenda aberta todos os dias a partir das 02:35 (consulta de 1 hora + 15 minutos de descanso; ele marca até em cima da hora) e o **Asaas simulado** já conectado;
   - deixa o Paciente Teste ativo.
   - O Paciente Teste marca e toca em **"Simular pagamento"**: a consulta é confirmada sozinha, e o cancelamento faz o reembolso simulado.
   - **Ninguém conecta o simulado nem chave de teste pela tela**, nem a conta de teste, e o tutorial não fala disso.

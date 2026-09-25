@@ -304,6 +304,7 @@ CREATE TABLE IF NOT EXISTS asaas_customers (
   PRIMARY KEY (professional_id, patient_id)
 );
 `);
+addColumn('professionals', 'break_minutes', 'INTEGER NOT NULL DEFAULT 0'); // descanso entre uma consulta e outra
 addColumn('calls', 'appointment_id', 'INTEGER');   // chamada criada sozinha para a consulta marcada
 addColumn('calls', 'host_joined_at', 'TEXT');      // quando o profissional entrou (ausência → reembolso)
 db.exec(`UPDATE conversations SET patient_wrote = 1 WHERE patient_wrote = 0

@@ -13,6 +13,7 @@ process.env.DATA_DIR = tmp;
 process.env.ADMIN_USER = 'admin';
 process.env.ADMIN_PASSWORD = 'senha-admin-123';
 process.env.TEST_ACCOUNTS = '0';
+process.env.SKIP_OWNER_TEST = '1';
 delete process.env.PAYMENT_SECRET;
 process.env.ALLOW_ASAAS_SANDBOX = '1'; // o Asaas falso usa chave de teste
 
@@ -148,6 +149,15 @@ test('agenda: profissional abre a agenda e aparece o próximo dia disponível (a
   r = await ana.get(`/api/agenda/pro/${P.id}/day?date=2030-01-08`);
   // 50 min cada: 11:20 terminaria 12:10 (depois do fim) e não aparece
   assert.deepEqual(r.data.slots.map((s) => s.label), ['08:00', '08:50', '09:40', '10:30', '14:00', '14:50', '15:40', '16:30']);
+});
+
+test('descanso entre as consultas: 1 hora de consulta + 15 minutos de descanso', async () => {
+  const X = await mkPro('Xavier Pausa Lima', 'xavier.pausa@example.com', '11922223333', 'CRP 06/51003', { pix_key: 'x@pix.com' });
+  let r = await X.cl.put('/api/agenda/settings', { hours: [{ dow: 2, start: '08:00', end: '12:00' }], session_minutes: 60, break_minutes: 15 });
+  assert.equal(r.data.break_minutes, 15);
+  assert.equal((await X.cl.put('/api/agenda/settings', { hours: [], break_minutes: 7 })).status, 400);
+  r = await ana.get(`/api/agenda/pro/${X.id}/day?date=2030-01-08`);
+  assert.deepEqual(r.data.slots.map((s) => s.label), ['08:00', '09:15', '10:30'], '11:45 terminaria 12:45');
 });
 
 test('manual: paciente marca, profissional manda a chave Pix, aprova e a consulta fica marcada', async () => {

@@ -329,6 +329,7 @@ function settingsOf(pro) {
     blocks: db.prepare('SELECT id, start_at, end_at, note FROM agenda_blocks WHERE professional_id = ? AND end_at > ? ORDER BY start_at').all(pro.id, G.iso(G.now()))
       .map((b) => ({ ...b, date: G.localDate(G.ms(b.start_at)), from: G.hhmm(G.localMin(G.ms(b.start_at))), to: G.hhmm(G.localMin(G.ms(b.end_at))) || '24:00' })),
     session_minutes: G.duration(pro),
+    break_minutes: pro.break_minutes || 0,
     price_cents: pro.price_cents,
     has_pix_key: !!String(pro.pix_key || '').trim(),
     payment: pay ? { connected: true, env: pay.env, account_name: pay.account_name, enabled: !!pay.enabled, connected_at: pay.connected_at, key_ok: !!require('../secretBox').open(pay.key_enc) } : { connected: false },
@@ -361,11 +362,14 @@ router.put('/settings', (req, res) => {
   }
   const minutes = req.body.session_minutes ? Number(req.body.session_minutes) : null;
   if (minutes !== null && ![30, 40, 45, 50, 60, 90, 120].includes(minutes)) throw new U.HttpError(400, 'Escolha a duração da sessão.');
+  const pause = req.body.break_minutes === undefined ? null : Number(req.body.break_minutes);
+  if (pause !== null && ![0, 5, 10, 15, 20, 30].includes(pause)) throw new U.HttpError(400, 'Escolha o intervalo entre as consultas.');
   tx(() => {
     db.prepare('DELETE FROM agenda_hours WHERE professional_id = ?').run(pro.id);
     const ins = db.prepare('INSERT INTO agenda_hours (professional_id, dow, start_min, end_min) VALUES (?, ?, ?, ?)');
     for (const h of hours) ins.run(pro.id, h.dow, h.s, h.e);
     if (minutes) db.prepare('UPDATE professionals SET session_minutes = ? WHERE id = ?').run(minutes, pro.id);
+    if (pause !== null) db.prepare('UPDATE professionals SET break_minutes = ? WHERE id = ?').run(pause, pro.id);
   });
   G.touch();
   res.json(settingsOf(G.getPro(pro.id)));

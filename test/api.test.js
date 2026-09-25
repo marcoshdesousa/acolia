@@ -11,6 +11,7 @@ process.env.ADMIN_USER = 'admin';
 process.env.ADMIN_PASSWORD = 'senha-admin-123';
 delete process.env.CPF_API_URL;
 process.env.TEST_ACCOUNTS = '0';
+process.env.SKIP_OWNER_TEST = '1';
 
 const { start } = require('../server');
 const { isValidCpf } = require('../server/util');

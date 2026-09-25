@@ -55,9 +55,13 @@
       : `<div class="notice warn small"><b>Sua agenda ainda não aparece para os pacientes.</b> Falta:<ul style="margin:6px 0 0;padding-left:18px">${s.missing.map((m) => `<li>${MISSING[m]}</li>`).join('')}</ul></div>`;
     els.agenda.innerHTML = `<h2 style="margin:0">Minha agenda</h2>
       ${status}
-      <div class="field" style="margin:0"><label for="ag-min">Duração de cada consulta</label>
-        <select id="ag-min" data-min>${MINUTES.map((m) => `<option value="${m}" ${m === s.session_minutes ? 'selected' : ''}>${m} minutos</option>`).join('')}</select></div>
-      <div><b>Dias e horários em que você atende online</b><div class="small muted">Os horários de consulta são criados um atrás do outro, do começo ao fim de cada faixa. Quem marca precisa de pelo menos ${s.rules.MIN_ADVANCE_MIN} minutos de antecedência.</div></div>
+      <div class="grid-2">
+        <div class="field" style="margin:0"><label for="ag-min">Duração de cada consulta</label>
+          <select id="ag-min" data-min>${MINUTES.map((m) => `<option value="${m}" ${m === s.session_minutes ? 'selected' : ''}>${m} minutos</option>`).join('')}</select></div>
+        <div class="field" style="margin:0"><label for="ag-break">Descanso entre as consultas</label>
+          <select id="ag-break" data-break>${[0, 5, 10, 15, 20, 30].map((m) => `<option value="${m}" ${m === (s.break_minutes || 0) ? 'selected' : ''}>${m ? `${m} minutos` : 'Sem descanso'}</option>`).join('')}</select></div>
+      </div>
+      <div><b>Dias e horários em que você atende online</b><div class="small muted">Os horários de consulta são criados do começo ao fim de cada faixa: uma consulta, o descanso, a próxima consulta… Quem marca precisa de pelo menos ${s.rules.MIN_ADVANCE_MIN} minutos de antecedência.</div></div>
       <div class="week">${DAYS.map(([d, name]) => `<div class="week-day" data-day="${d}">
           <label class="check"><input type="checkbox" data-on ${byDay(d).length ? 'checked' : ''}> <b>${name}</b></label>
           <div class="ranges" data-ranges>${byDay(d).map((r) => rangeRow(d, r)).join('')}</div>
@@ -108,7 +112,7 @@
       const hours = $$('[data-range]', root).map((r) => ({ dow: Number(r.dataset.dow), start: $('[data-s]', r).value, end: $('[data-e]', r).value }));
       btn.disabled = true;
       try {
-        settings = await api('/api/agenda/settings', { method: 'PUT', body: { hours, session_minutes: Number($('[data-min]', root).value) } });
+        settings = await api('/api/agenda/settings', { method: 'PUT', body: { hours, session_minutes: Number($('[data-min]', root).value), break_minutes: Number($('[data-break]', root).value) } });
         toast('Agenda salva ✓', '', { top: true });
         renderAgenda();
       } catch (ex) { toast(ex.message, 'error'); btn.disabled = false; }

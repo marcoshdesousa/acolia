@@ -7,7 +7,12 @@
 const { db } = require('./db');
 const U = require('./util');
 
-const KEY = 'agenda_teste_simulado_v1';
+const KEY = 'agenda_teste_simulado_v2';
+// Agenda do teste (pedido do dono): todos os dias a partir das 02:35, consulta de 1 hora e 15 minutos
+// de descanso entre uma e outra (02:35, 03:50, 05:05, 06:20…)
+const START_MIN = 2 * 60 + 35;
+const SESSION = 60;
+const BREAK = 15;
 
 function provision() {
   const T = require('./testAccounts');
@@ -15,13 +20,12 @@ function provision() {
   const pro = db.prepare('SELECT * FROM professionals WHERE code = ? AND is_test = 1').get(T.PRO.code);
   if (!pro) return false;
   db.prepare(`UPDATE professionals SET status = 'aprovado', subscription_until = ?, price_cents = COALESCE(price_cents, 10000),
-    session_minutes = COALESCE(session_minutes, 50), specialties = CASE WHEN specialties = '' THEN 'Ansiedade, Adultos' ELSE specialties END WHERE id = ?`)
-    .run(U.addDaysISO(U.todayISO(), 3650), pro.id);
-  // Agenda aberta todos os dias, o dia inteiro (para dar para testar a qualquer hora)
-  if (!db.prepare('SELECT 1 FROM agenda_hours WHERE professional_id = ?').get(pro.id)) {
-    const ins = db.prepare('INSERT INTO agenda_hours (professional_id, dow, start_min, end_min) VALUES (?, ?, 0, 1439)');
-    for (let d = 0; d <= 6; d++) ins.run(pro.id, d);
-  }
+    session_minutes = ?, break_minutes = ?, specialties = CASE WHEN specialties = '' THEN 'Ansiedade, Adultos' ELSE specialties END WHERE id = ?`)
+    .run(U.addDaysISO(U.todayISO(), 3650), SESSION, BREAK, pro.id);
+  // Agenda aberta todos os dias, das 02:35 até o fim do dia
+  db.prepare('DELETE FROM agenda_hours WHERE professional_id = ?').run(pro.id);
+  const ins = db.prepare('INSERT INTO agenda_hours (professional_id, dow, start_min, end_min) VALUES (?, ?, ?, 1439)');
+  for (let d = 0; d <= 6; d++) ins.run(pro.id, d, START_MIN);
   db.prepare(`INSERT INTO pro_payment (professional_id, provider, key_enc, env, account_name, enabled) VALUES (?, 'asaas', ?, 'simulado', 'Asaas simulado (teste)', 1)
     ON CONFLICT(professional_id) DO UPDATE SET key_enc = excluded.key_enc, env = 'simulado', account_name = excluded.account_name, enabled = 1`)
     .run(pro.id, require('./secretBox').seal('SIMULADO'));

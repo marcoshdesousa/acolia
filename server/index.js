@@ -158,10 +158,9 @@ async function start(port = Number(process.env.PORT) || 3000) {
   ensureAdmin();
   require('./launchReset').runOnce(); // início oficial: zera as contas de teste/antigas (uma vez só)
   require('./official').officialId(); // cria o perfil oficial Acolia Brasil (uma vez só)
-  if (process.env.TEST_ACCOUNTS !== '0') {
-    require('./testAccounts').seedOnce();
-    require('./testAgenda').runOnce(); // teste da agenda: Profissional Teste pronto com o Asaas simulado (uma vez)
-  }
+  if (process.env.TEST_ACCOUNTS !== '0') require('./testAccounts').seedOnce();
+  // Teste da agenda do dono: Profissional Teste pronto com o Asaas simulado (uma vez; os testes automáticos pulam)
+  if (process.env.SKIP_OWNER_TEST !== '1') require('./testAgenda').runOnce();
   // Stories somem depois de 24 h
   const { cleanupStories } = require('./routes/social');
   cleanupStories();
