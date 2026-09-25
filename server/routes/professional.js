@@ -12,15 +12,7 @@ const router = express.Router();
 router.use(A.requireRole('professional'));
 
 // Aceita "@nome", "nome" ou o link do perfil; guarda só o nome de usuário
-function cleanInstagram(v) {
-  let h = String(v || '').trim();
-  const m = h.match(/instagram\.com\/([^/?#\s]+)/i);
-  if (m) h = m[1];
-  h = h.replace(/^@+/, '');
-  if (!h) return '';
-  if (!/^[A-Za-z0-9._]{1,30}$/.test(h)) throw new U.HttpError(400, 'Instagram inválido. Digite só o seu @ (letras, números, ponto e _).');
-  return h;
-}
+const cleanInstagram = (v) => require('../social').clean('instagram', v);
 
 const SESSION_MINUTES = [30, 40, 45, 50, 60, 90, 120];
 
@@ -76,12 +68,14 @@ router.put('/profile', async (req, res) => {
   const minutes = b.session_minutes === undefined ? req.auth.user.session_minutes : (b.session_minutes ? Number(b.session_minutes) : null);
   if (minutes !== null && !SESSION_MINUTES.includes(minutes)) throw new U.HttpError(400, 'Escolha a duração da sessão.');
   const pixKey = b.pix_key === undefined ? req.auth.user.pix_key : U.cleanText(b.pix_key, 140);
-  const instagram = cleanInstagram(b.instagram);
+  // Redes sociais: cada uma só aceita o @ ou o link da própria rede
+  const social = require('../social').fromBody(b, req.auth.user);
 
   db.prepare(`UPDATE professionals SET name=?, profession=?, registry=?, phone=?, bio=?, specialties=?, price_cents=?, packages=?,
       state=?, city=?, city_norm=?, has_clinic=?, clinic_name=?, clinic_address=?, pix_key=?, session_minutes=?, instagram=?, maps_url=?, maps_query=? WHERE id=?`)
     .run(name, profession, registry, phone, U.cleanText(b.bio, 2000), require('../specialties').store(specialties), price, JSON.stringify(packages),
-      state, city, U.norm(city), hasClinic, clinicName, clinicAddress, pixKey, minutes, instagram, mapsUrl, mapsQuery, req.auth.user.id);
+      state, city, U.norm(city), hasClinic, clinicName, clinicAddress, pixKey, minutes, social.instagram, mapsUrl, mapsQuery, req.auth.user.id);
+  db.prepare('UPDATE professionals SET tiktok = ?, x_handle = ?, youtube = ? WHERE id = ?').run(social.tiktok, social.x_handle, social.youtube, req.auth.user.id);
   // Plano de saúde: o profissional escolhe (vale para online e presencial; detalhes ele combina pelo chat)
   db.prepare('UPDATE professionals SET email = ?, accepts_insurance = ? WHERE id = ?').run(email, b.accepts_insurance ? 1 : 0, req.auth.user.id);
   res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
@@ -156,7 +150,7 @@ function wipeProfessional(me) {
   require('./chat').eraseMessagesOf('professional', me.id);
   db.prepare(`UPDATE professionals SET status = 'excluido', name = 'Profissional removido', legal_name = NULL, registry = ?, email = ?,
     phone = '', bio = '', specialties = '', photo = NULL, document_file = NULL, pix_key = '', clinic_name = '', clinic_address = '',
-    has_clinic = 0, instagram = '', gallery = '[]', maps_url = '', maps_query = '', password_hash = '!', code = ?, slug = NULL,
+    has_clinic = 0, instagram = '', tiktok = '', x_handle = '', youtube = '', gallery = '[]', maps_url = '', maps_query = '', password_hash = '!', code = ?, slug = NULL,
     packages = '[]', price_cents = NULL, session_minutes = NULL, admin_note = '', city = '', city_norm = '', state = '' WHERE id = ?`)
     .run(`excluido-${me.id}`, `excluido-${me.id}@removido.acolia`, `excluido-${me.id}`, me.id);
   db.prepare('DELETE FROM favorites WHERE professional_id = ?').run(me.id);

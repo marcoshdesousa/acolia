@@ -26,6 +26,7 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 
 **Profissional (Painel → Consultas, ícone 📅)**
 - **Minha agenda:**
+  - **Redes sociais** (Meu perfil; o admin coloca as da Acolia em Acolia): só **Instagram, TikTok, X e YouTube**. Cada campo aceita o @ ou o link do perfil **da própria rede** (link de uma rede no campo de outra é recusado; link de vídeo do YouTube também). No perfil aparece **só o símbolo** de cada rede, na cor dela (`server/social.js`);
   - **Pix manual:** a chave Pix fica em Consultas, logo abaixo do Asaas (saiu de Meu perfil). A duração da consulta também só fica em Consultas e aparece no perfil sozinha;
   - chave **"Disponível para atendimento online"** (ligada: pacientes marcam e pagam pelo Pix; desligada: ninguém marca);
   - duração da consulta e **descanso entre as consultas**;

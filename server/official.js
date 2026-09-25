@@ -49,6 +49,7 @@ function publicOfficial({ loggedIn = false } = {}) {
   const counts = followerCounts();
   return {
     id: p.id, official: true, slug: p.slug, name: NAME, photo: PHOTO, instagram: p.instagram || '',
+    social: require('./social').list(p), social_values: require('./social').values(p),
     posts_count: total,
     followers_patients: counts.patients,
     followers_professionals: counts.professionals,

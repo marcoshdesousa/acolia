@@ -29,7 +29,7 @@
               <span><b>${n(p.followers_patients)}</b> ${p.followers_patients === 1 ? 'seguidor paciente' : 'seguidores pacientes'}</span>
               <span><b>${n(p.followers_professionals)}</b> ${p.followers_professionals === 1 ? 'seguidor profissional' : 'seguidores profissionais'}</span>
             </div>
-            ${p.instagram ? `<a class="insta-btn" href="https://www.instagram.com/${encodeURIComponent(p.instagram)}/" target="_blank" rel="noopener">${ic('instagram', 18)} @${esc(p.instagram)}</a>` : ''}
+            ${window.Acolia.socialLinks(p.social)}
           </div>
           <div class="row"><button type="button" class="btn ${p.following ? 'following' : ''}" data-follow>${p.following ? 'Seguindo' : 'Seguir'}</button></div>
         </div>
@@ -225,7 +225,7 @@
             <div class="row" style="margin-top:6px;gap:6px">${p.registry ? `<span class="badge ok">${ic('badge', 15)} ${esc(p.registry)}</span>` : ''}
               ${p.session_minutes ? `<span class="badge">${ic('clock', 15)} Sessão de ${duration(p.session_minutes)}</span>` : ''}
               ${p.locked && p.has_session_minutes ? `<a class="lock-link" href="${signup}">${ic('clock', 15)} Duração: crie conta para ver</a>` : ''}</div>
-            ${p.instagram ? `<a class="insta-btn" href="https://www.instagram.com/${encodeURIComponent(p.instagram)}/" target="_blank" rel="noopener">${ic('instagram', 18)} @${esc(p.instagram)}</a>` : ''}
+            ${window.Acolia.socialLinks(p.social)}
             ${nx ? `<button type="button" class="next-chip" data-next-go>${ic('calendar', 16)} Dia disponível: <b>${esc(nx.label)}</b></button>` : ''}
             ${specialties.length ? `<div class="meta row" style="gap:6px;margin-top:10px">${window.AcoliaSpecialties ? AcoliaSpecialties.badges(p) : specialties.slice(0, 2).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
           </div>

@@ -68,7 +68,7 @@
     form.email.value = me.email || '';
     spPicker.then((sp) => sp.set(AcoliaSpecialties.list(me.specialties)));
     form.bio.value = me.bio;
-    form.instagram.value = me.instagram || '';
+    $('[data-social-fields]', form).innerHTML = window.Acolia.socialFields(me.social_values);
     form.price.value = me.price_cents != null ? (me.price_cents / 100).toFixed(2).replace('.', ',') : '';
     form.state.innerHTML = ufOptions(me.state, 'UF');
     form.city.value = me.city;

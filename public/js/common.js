@@ -673,9 +673,33 @@
     if (n) { e.preventDefault(); enableNotifications(); }
   });
 
+
+  // ---------- Redes sociais (Instagram, TikTok, X, YouTube): no perfil só o ícone com a cor da rede ----------
+  const SOCIAL = {
+    instagram: { name: 'Instagram', ph: '@seu.usuario ou link do perfil',
+      svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r="1.1" fill="currentColor" stroke="none"/></svg>' },
+    tiktok: { name: 'TikTok', ph: '@seu.usuario ou link do perfil',
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.6 3c.3 2.3 1.6 3.8 3.9 4v2.7c-1.4.1-2.6-.3-3.9-1.1v5.1c0 6.5-7.1 8.5-9.9 3.9-1.8-3-.7-8.2 5.1-8.4v2.9c-.4.1-.9.2-1.3.3-1.3.4-2 1.3-1.8 2.8.4 2.7 5.3 3.5 4.9-1.8V3h3z"/></svg>' },
+    x: { name: 'X', ph: '@seu_usuario ou link do perfil',
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.8 2.5h3.1l-6.8 7.8 8 10.6h-6.3l-4.9-6.4-5.6 6.4H2.2l7.3-8.3L1.8 2.5h6.4l4.4 5.9 5.2-5.9zm-1.1 16.5h1.7L7.4 4.2H5.5L16.7 19z"/></svg>' },
+    youtube: { name: 'YouTube', ph: '@seucanal ou link do canal',
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.6 7.8v8.4l7-4.2z"/></svg>' },
+  };
+  // Botões redondos só com o símbolo (o nome fica para leitor de tela e na dica do mouse)
+  function socialLinks(list) {
+    if (!list || !list.length) return '';
+    return `<div class="social-links">${list.map((s) => `<a class="soc soc-${esc(s.net)}" href="${esc(s.url)}" target="_blank" rel="noopener" aria-label="${esc(s.name)}" title="${esc(s.name)}">${SOCIAL[s.net]?.svg || ''}</a>`).join('')}</div>`;
+  }
+  // Campos do formulário: cada rede no seu campo (o servidor confere se o link é da rede certa)
+  function socialFields(values = {}) {
+    return `<div class="social-fields">${Object.entries(SOCIAL).map(([k, s]) => `<label class="soc-field"><span class="soc soc-${k}" aria-hidden="true">${s.svg}</span>
+      <input name="${k}" value="${esc(values[k] || '')}" maxlength="200" placeholder="${esc(s.ph)}" aria-label="${esc(s.name)}" autocomplete="off" autocapitalize="none" spellcheck="false"></label>`).join('')}</div>`;
+  }
+
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
     supportLink, pendingProBox, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
     handleForm, logout, showBlocked, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
+    SOCIAL, socialLinks, socialFields,
   };
 })();

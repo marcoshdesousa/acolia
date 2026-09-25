@@ -94,6 +94,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest 
     has_clinic: !!p.has_clinic,
     accepts_insurance: !!p.accepts_insurance,
     instagram: p.instagram || '',
+    social: require('./social').list(p), // Instagram, TikTok, X, YouTube: no perfil só o ícone
     // Próximo dia com horário livre na agenda (aparece para todos, até sem conta)
     next_available: !!p.is_test === !!viewerTest ? require('./agenda').nextAvailable(p) : null,
     // Profissional Teste visto por conta de verdade: a agenda só abre para o Paciente Teste
@@ -164,6 +165,8 @@ function ownProfessional(p) {
     pix_key: p.pix_key,
     session_minutes: p.session_minutes || null,
     instagram: p.instagram || '',
+    social: require('./social').list(p),
+    social_values: require('./social').values(p),
     gallery: parseGallery(p.gallery),
     subscription_until: p.subscription_until,
     visible: isVisible(p),

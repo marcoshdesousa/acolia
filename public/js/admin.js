@@ -433,8 +433,8 @@
             <span><b>${n(pr.followers_patients)}</b> ${pr.followers_patients === 1 ? 'seguidor paciente' : 'seguidores pacientes'}</span>
             <span><b>${n(pr.followers_professionals)}</b> ${pr.followers_professionals === 1 ? 'seguidor profissional' : 'seguidores profissionais'}</span></div>
           <small class="muted">Contam só contas ativas: paciente bloqueado ou que excluiu a conta e profissional com a licença vencida saem da contagem.</small></div></div>`;
-    const ig = $('[data-official-ig]').instagram;
-    if (document.activeElement !== ig) ig.value = pr.instagram ? '@' + pr.instagram : '';
+    const sf = $('[data-official-ig] [data-social-fields]');
+    if (!sf.contains(document.activeElement)) sf.innerHTML = window.Acolia.socialFields(pr.social_values);
     offPosts.push(...d.items);
     offOffset += d.items.length;
     offGrid.insertAdjacentHTML('beforeend', d.items.map(offTile).join(''));
@@ -520,8 +520,8 @@
     });
   });
   handleForm($('[data-official-ig]'), async (d) => {
-    await api('/api/admin/official/instagram', { method: 'POST', body: d });
-    toast('Instagram salvo!');
+    await api('/api/admin/official/social', { method: 'POST', body: d });
+    toast('Redes sociais salvas!');
     await loadOfficial();
   });
   offGrid.addEventListener('click', async (e) => {

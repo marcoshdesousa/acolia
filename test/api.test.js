@@ -695,6 +695,19 @@ test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitan
   r = await lp.put('/api/professional/profile', { ...pf, session_minutes: 51, instagram: '@lia.psi' });
   assert.equal(r.status, 400, 'duração fora da lista');
   await lp.put('/api/professional/profile', { ...pf, session_minutes: 50, instagram: '@lia.psi' });
+  // Outras redes: cada link só no campo da própria rede; o @ basta
+  r = await lp.put('/api/professional/profile', { ...pf, instagram: '@lia.psi', x: 'https://www.youtube.com/@liapsi' });
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /YouTube/);
+  r = await lp.put('/api/professional/profile', { ...pf, instagram: '@lia.psi', tiktok: 'https://www.instagram.com/lia.psi' });
+  assert.equal(r.status, 400, 'link do Instagram no TikTok');
+  r = await lp.put('/api/professional/profile', { ...pf, instagram: '@lia.psi', youtube: 'https://youtu.be/abc123' });
+  assert.equal(r.status, 400, 'link de vídeo no lugar do canal');
+  r = await lp.put('/api/professional/profile', { ...pf, instagram: '@lia.psi', tiktok: 'tiktok.com/@lia.psi', x: 'https://twitter.com/liapsi', youtube: '@liapsi' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.deepEqual(r.data.social.map((x) => x.url), ['https://www.instagram.com/lia.psi/', 'https://www.tiktok.com/@lia.psi', 'https://x.com/liapsi', 'https://www.youtube.com/@liapsi']);
+  r = await lp.put('/api/professional/profile', { ...pf, session_minutes: 50 });
+  assert.equal(r.data.social.length, 4, 'sem os campos, as redes ficam como estão');
 
   // A galeria do perfil agora são as publicações (versão 1.2)
   const upload = async (caption = '') => {

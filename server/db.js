@@ -138,6 +138,10 @@ addColumn('professionals', 'slug', 'TEXT');                        // link próp
 addColumn('professionals', 'is_test', 'INTEGER NOT NULL DEFAULT 0');  // conta de teste (o admin pode apagar)
 addColumn('professionals', 'session_minutes', 'INTEGER');          // duração de cada sessão
 addColumn('professionals', 'instagram', "TEXT NOT NULL DEFAULT ''");  // @ do Instagram (sem o link)
+// Outras redes sociais (server/social.js): @ do TikTok, @ do X e canal do YouTube
+addColumn('professionals', 'tiktok', "TEXT NOT NULL DEFAULT ''");
+addColumn('professionals', 'x_handle', "TEXT NOT NULL DEFAULT ''");
+addColumn('professionals', 'youtube', "TEXT NOT NULL DEFAULT ''");
 addColumn('professionals', 'gallery', "TEXT NOT NULL DEFAULT '[]'");  // até 6 fotos: [url|null, ...] (posições 1 a 6)
 addColumn('professionals', 'maps_url', "TEXT NOT NULL DEFAULT ''");   // link do Google Maps da clínica
 addColumn('professionals', 'maps_query', "TEXT NOT NULL DEFAULT ''"); // o que o mini mapa mostra (coordenadas/local)

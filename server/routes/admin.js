@@ -404,9 +404,11 @@ router.post('/limits', (req, res) => {
     res.json({ profile: O.publicOfficial({ loggedIn: true }), items: rows.slice(0, 24).map(postRow), has_more: rows.length > 24 });
   });
 
-  router.post('/official/instagram', (req, res) => {
-    const ig = require('./professional').cleanInstagram(req.body.instagram);
-    db.prepare('UPDATE professionals SET instagram = ? WHERE id = ?').run(ig, O.officialId());
+  // Redes sociais do perfil da Acolia (Instagram, TikTok, X, YouTube)
+  router.post(['/official/social', '/official/instagram'], (req, res) => {
+    const cur = db.prepare('SELECT * FROM professionals WHERE id = ?').get(O.officialId());
+    const v = require('../social').fromBody(req.body, cur);
+    db.prepare('UPDATE professionals SET instagram = ?, tiktok = ?, x_handle = ?, youtube = ? WHERE id = ?').run(v.instagram, v.tiktok, v.x_handle, v.youtube, O.officialId());
     res.json(O.publicOfficial({ loggedIn: true }));
   });
 
