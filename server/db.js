@@ -331,6 +331,7 @@ addColumn('calls', 'guest_joined_at', 'TEXT');
 // Versão 1.2.1: consulta presencial (no consultório do profissional) e pelo convênio (plano de saúde, sem Pix)
 addColumn('appointments', 'modality', "TEXT NOT NULL DEFAULT 'online'");  // online | presencial
 addColumn('appointments', 'billing', "TEXT NOT NULL DEFAULT 'pix'");      // pix | convenio
+addColumn('professionals', 'presencial_on', 'INTEGER NOT NULL DEFAULT 1'); // "Disponível para atendimento presencial" (Minha agenda)
 addColumn('professionals', 'price_presencial_cents', 'INTEGER'); // valor da presencial; NULL = o mesmo da online     // quando o paciente entrou (não entrou em 3 min → encerrada, sem reembolso)
 addColumn('calls', 'host_joined_at', 'TEXT');      // quando o profissional entrou (ausência → reembolso)
 db.exec(`UPDATE conversations SET patient_wrote = 1 WHERE patient_wrote = 0

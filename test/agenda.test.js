@@ -778,3 +778,37 @@ test('valor da presencial: o mesmo da online ou diferente; vitrine mostra o meno
   assert.equal(p2.price_presencial_cents, 12000);
   assert.equal(p2.price_same, true);
 });
+
+test('Minha agenda: "Disponível para atendimento presencial" e online, cada um liga/desliga a sua opção', async () => {
+  const base = { pix_key: 'w@pix.com', has_clinic: true, clinic_name: 'Clínica W', clinic_address: 'Rua W, 10', price: '100' };
+  const W = await mkPro('Wanda Duas Opcoes', 'wanda.opcoes@example.com', '11988889999', 'CRP 06/51013', base);
+  let r = await W.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true });
+  assert.equal(r.data.presencial_on, true, 'presencial começa ligado para quem tem consultório');
+  assert.equal(r.data.has_clinic, true);
+  const month = async () => (await ana.get(`/api/agenda/pro/${W.id}/month?ym=2030-03`)).data;
+  let m = await month();
+  assert.equal(m.online, true);
+  assert.ok(m.presencial);
+  // Desliga a presencial: só online
+  r = await W.cl.put('/api/agenda/settings', { presencial: false });
+  assert.equal(r.data.presencial_on, false);
+  m = await month();
+  assert.equal(m.presencial, null);
+  const sl = (await ana.get(`/api/agenda/pro/${W.id}/day?date=2030-03-05`)).data.slots;
+  r = await ana.post('/api/agenda/book', { professional_id: W.id, start: sl[0].start, accept: true, modality: 'presencial', confirm_place: true });
+  assert.equal(r.status, 400);
+  // Só presencial: online desligado
+  await W.cl.put('/api/agenda/settings', { presencial: true, online: false });
+  m = await month();
+  assert.equal(m.online, false);
+  assert.equal(m.ready, true, 'a agenda continua aberta pelo presencial');
+  assert.ok(m.presencial);
+  r = await ana.post('/api/agenda/book', { professional_id: W.id, start: sl[0].start, accept: true, modality: 'online' });
+  assert.equal(r.status, 400);
+  // Os dois desligados: sem agenda
+  r = await W.cl.put('/api/agenda/settings', { presencial: false });
+  assert.equal(r.data.ready, false);
+  m = await month();
+  assert.equal(m.ready, false);
+  assert.deepEqual(m.days, []);
+});

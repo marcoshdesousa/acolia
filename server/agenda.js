@@ -89,6 +89,8 @@ function autoPayment(proId) {
 }
 
 // Consultório (consulta presencial): só quem marcou "Atende presencialmente" e cadastrou o endereço
+// Presencial aberta para marcar: tem consultório e "Disponível para atendimento presencial" ligado
+const presencialOpen = (pro) => !!clinicOf(pro) && pro.presencial_on !== 0;
 function clinicOf(pro) {
   if (!pro || !pro.has_clinic || !String(pro.clinic_address || '').trim()) return null;
   const m = require('./serialize').clinicMap(pro);
@@ -109,12 +111,13 @@ function sendLocation(c, pro) {
 // Pode receber marcações? (horários cadastrados, valor da consulta e uma forma de receber o Pix)
 function readiness(pro) {
   const missing = [];
-  if (!pro.agenda_on) missing.push('online');
+  // Agenda aberta = online ligado OU presencial ligado (com consultório)
+  if (!pro.agenda_on && !presencialOpen(pro)) missing.push('online');
   if (!db.prepare('SELECT 1 FROM agenda_hours WHERE professional_id = ?').get(pro.id)) missing.push('horarios');
   if (!(pro.price_cents > 0)) missing.push('valor');
   const auto = !!autoPayment(pro.id);
   if (!auto && !String(pro.pix_key || '').trim()) missing.push('pix');
-  return { ok: missing.length === 0, missing, mode: auto ? 'auto' : 'manual' };
+  return { ok: missing.length === 0, missing, mode: auto ? 'auto' : 'manual', online: !!pro.agenda_on, presencial: presencialOpen(pro) };
 }
 
 // ---------- Horários livres ----------
@@ -624,7 +627,7 @@ function view(a, role) {
 module.exports = {
   RULES, CANCEL_REASONS, HOLDING, ACTIVE, OCCUPY_SQL,
   now, iso, ms, localDate, localMin, fromLocal, hhmm, parseHHMM, addDays, fmtWhen, dayLabel, dowOf,
-  getPro, getAppt, duration, readiness, clinicOf, priceFor, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
+  getPro, getAppt, duration, readiness, clinicOf, presencialOpen, priceFor, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
   ensureConversation, post, pushText, notifyBoth, setStatus, createCharge, confirmPaid, checkPayment, refund, refundLock,
   openCall, closeCall, canEndCall, finishFromCall, sweep, canDo, view, onAccountGone,
   _setNow(fn) { nowFn = fn || Date.now; touch(); },

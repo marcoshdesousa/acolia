@@ -57,7 +57,7 @@ router.get('/pro/:id/month', (req, res) => {
   res.json({
     ym, today: G.localDate(G.now()), max_date: G.addDays(G.localDate(G.now()), G.RULES.HORIZON_DAYS),
     ready: ready.ok, agenda_ok: agendaOk, mode: ready.mode, price_cents: pro.price_cents, price_presencial_cents: G.clinicOf(pro) ? G.priceFor(pro, 'presencial') : null, minutes: G.duration(pro),
-    presencial: G.clinicOf(pro), insurance: !!pro.accepts_insurance, patient,
+    presencial: G.presencialOpen(pro) ? G.clinicOf(pro) : null, online: !!pro.agenda_on, insurance: !!pro.accepts_insurance, patient,
     days: agendaOk ? G.monthDays(pro, ym, { patientId }) : [],
   });
 });
@@ -85,7 +85,8 @@ router.post('/book', async (req, res) => {
   const ready = G.readiness(pro);
   if (!ready.ok) throw new U.HttpError(409, 'Este profissional ainda não abriu a agenda.');
   const modality = req.body.modality === 'presencial' ? 'presencial' : 'online';
-  if (modality === 'presencial' && !G.clinicOf(pro)) throw new U.HttpError(400, 'Este profissional não atende presencialmente. Marque uma consulta online.');
+  if (modality === 'presencial' && !G.presencialOpen(pro)) throw new U.HttpError(400, 'Este profissional não está com a agenda presencial aberta. Marque uma consulta online.');
+  if (modality === 'online' && !pro.agenda_on) throw new U.HttpError(400, 'Este profissional não está com a agenda online aberta no momento.');
   if (modality === 'presencial' && !req.body.confirm_place) throw new U.HttpError(400, `Confirme que você consegue ir até ${pro.city} - ${pro.state} para a consulta presencial.`);
   const a = tx(() => {
     const slot = G.assertFree(pro, req.body.start, { patientId: me.id });
@@ -125,6 +126,8 @@ router.post('/propose', async (req, res) => {
   const modality = req.body.modality === 'presencial' ? 'presencial' : 'online';
   const billing = req.body.billing === 'convenio' ? 'convenio' : 'pix';
   if (modality === 'presencial' && !G.clinicOf(pro)) throw new U.HttpError(400, 'Para marcar consulta presencial, cadastre o endereço do consultório em Meu perfil ("Atendo presencialmente").');
+  if (modality === 'presencial' && !G.presencialOpen(pro)) throw new U.HttpError(400, 'Ligue "Disponível para atendimento presencial" em Consultas → Minha agenda.');
+  if (modality === 'online' && !pro.agenda_on) throw new U.HttpError(400, 'Ligue "Disponível para atendimento online" em Consultas → Minha agenda.');
   if (billing === 'convenio') {
     if (!pro.accepts_insurance) throw new U.HttpError(400, 'Para marcar pelo convênio, marque "Aceito plano de saúde" em Meu perfil.');
     if (!ready.missing.every((m) => ['valor', 'pix'].includes(m))) throw new U.HttpError(409, 'Abra a sua agenda primeiro (horários de atendimento).');
@@ -399,6 +402,8 @@ function settingsOf(pro) {
   const ready = G.readiness(pro);
   return {
     online: !!pro.agenda_on,
+    presencial_on: pro.presencial_on !== 0,
+    has_clinic: !!G.clinicOf(pro),
     starts: G.weekStarts(pro), // início de cada consulta, por dia da semana
     hours: db.prepare('SELECT dow, start_min, end_min FROM agenda_hours WHERE professional_id = ? ORDER BY dow, start_min').all(pro.id)
       .map((h) => ({ dow: h.dow, start: G.hhmm(h.start_min), end: G.hhmm(h.end_min) })),
@@ -478,6 +483,7 @@ router.put('/settings', (req, res) => {
     if (minutes) db.prepare('UPDATE professionals SET session_minutes = ? WHERE id = ?').run(minutes, pro.id);
     if (pause !== null) db.prepare('UPDATE professionals SET break_minutes = ? WHERE id = ?').run(pause, pro.id);
     if (req.body.online !== undefined) db.prepare('UPDATE professionals SET agenda_on = ? WHERE id = ?').run(req.body.online ? 1 : 0, pro.id);
+    if (req.body.presencial !== undefined) db.prepare('UPDATE professionals SET presencial_on = ? WHERE id = ?').run(req.body.presencial ? 1 : 0, pro.id);
     // Chave Pix do pagamento manual (fica em Consultas, abaixo do Asaas)
     if (req.body.pix_key !== undefined) db.prepare('UPDATE professionals SET pix_key = ? WHERE id = ?').run(U.cleanText(req.body.pix_key, 140), pro.id);
   });

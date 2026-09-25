@@ -1378,3 +1378,7 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .appt-item.needs-check { border-color: var(--accent, #8a7362); }
 .presence-q { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft, #eee8e2); }
 .presence-q svg { color: var(--accent, #8a7362); flex: none; }
+.opt-grid.one { grid-template-columns: 1fr; }
+.empty-agenda { display: grid; justify-items: center; gap: 6px; text-align: center; padding: 30px 16px; }
+.empty-agenda svg { color: var(--muted); }
+.empty-agenda p { margin: 0; max-width: 340px; }

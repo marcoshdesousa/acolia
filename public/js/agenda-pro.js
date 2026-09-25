@@ -8,7 +8,7 @@
   const DAYS = [[1, 'Segunda'], [2, 'Terça'], [3, 'Quarta'], [4, 'Quinta'], [5, 'Sexta'], [6, 'Sábado'], [0, 'Domingo']];
   const MINUTES = [30, 40, 45, 50, 60, 90, 120];
   const MISSING = {
-    online: 'Ligue <b>"Disponível para atendimento online"</b> (logo acima).',
+    online: 'Ligue <b>"Disponível para atendimento online"</b> ou <b>"presencial"</b> (logo acima).',
     horarios: 'Coloque os horários de início das consultas (abaixo) e toque em "Salvar agenda".',
     valor: 'Coloque o valor da consulta em <a href="#perfil">Meu perfil</a>.',
     pix: 'Coloque a sua chave Pix em <b>Pix manual</b> (abaixo, junto do Asaas) ou conecte o Asaas (pagamento automático).',
@@ -77,9 +77,13 @@
       : `<div class="notice warn small"><b>Os pacientes ainda não conseguem marcar.</b> Falta:<ul style="margin:6px 0 0;padding-left:18px">${s.missing.map((m) => `<li>${MISSING[m]}</li>`).join('')}</ul></div>`;
     els.agenda.innerHTML = `<h2 style="margin:0">Minha agenda</h2>
       <label class="switch-row"><span class="sw-ic">${ic('video', 22)}</span>
-        <span class="sw-text"><b>Disponível para atendimento online</b><span class="sw-state"><i class="sw-on">● Ligado</i><i class="sw-off">○ Desligado: ninguém marca</i></span>
+        <span class="sw-text"><b>Disponível para atendimento online</b><span class="sw-state"><i class="sw-on">● Ligado</i><i class="sw-off">○ Desligado: ninguém marca online</i></span>
           <span class="small muted">Pacientes marcam e pagam pelo Pix ${s.mode === 'auto' ? 'automático' : 'pela conversa'}.</span></span>
         <input type="checkbox" class="switch" role="switch" data-online ${s.online ? 'checked' : ''} aria-label="Disponível para atendimento online"></label>
+      ${s.has_clinic ? `<label class="switch-row"><span class="sw-ic">${ic('home', 22)}</span>
+        <span class="sw-text"><b>Disponível para atendimento presencial</b><span class="sw-state"><i class="sw-on">● Ligado</i><i class="sw-off">○ Desligado: ninguém marca presencial</i></span>
+          <span class="small muted">No seu consultório. Os mesmos horários da agenda.</span></span>
+        <input type="checkbox" class="switch" role="switch" data-presencial ${s.presencial_on ? 'checked' : ''} aria-label="Disponível para atendimento presencial"></label>` : ''}
       ${status}
       <div class="grid-2">
         <div class="field" style="margin:0"><label for="ag-min">Duração de cada consulta</label>
@@ -217,7 +221,16 @@
       try {
         // Ligar já salva os horários que estão na tela
         settings = await save({ online: on });
-        toast(on ? (settings.ready ? 'Agenda ligada: os pacientes já podem marcar ✓' : 'Ligado. Falta completar o que aparece no aviso.') : 'Agenda desligada: ninguém marca até você ligar de novo.', '', { top: true });
+        toast(on ? (settings.ready ? 'Atendimento online ligado: os pacientes já podem marcar ✓' : 'Ligado. Falta completar o que aparece no aviso.')
+          : settings.has_clinic && settings.presencial_on ? 'Atendimento online desligado: agora os pacientes só marcam presencial.' : 'Agenda desligada: ninguém marca até você ligar de novo.', '', { top: true });
+        renderAgenda();
+      } catch (ex) { e.target.checked = !on; toast(ex.message, 'error'); }
+    });
+    $('[data-presencial]', root)?.addEventListener('change', async (e) => {
+      const on = e.target.checked;
+      try {
+        settings = await save({ presencial: on });
+        toast(on ? 'Atendimento presencial ligado: os pacientes podem marcar no consultório ✓' : 'Atendimento presencial desligado: ninguém marca presencial até você ligar de novo.', '', { top: true });
         renderAgenda();
       } catch (ex) { e.target.checked = !on; toast(ex.message, 'error'); }
     });

@@ -125,8 +125,11 @@
         info = await api(`/api/agenda/pro/${proId}/month?${ym ? `ym=${ym}&` : ''}${extra}`);
       } catch (e) { page.body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
       ym = info.ym;
+      // Só as modalidades abertas (online e/ou presencial)
+      if (info.online === false && info.presencial) modality = 'presencial';
+      if (!info.presencial && mode !== 'reschedule') modality = 'online';
       if (!(mode === 'propose' ? info.agenda_ok : info.ready)) {
-        page.body.innerHTML = `<div class="empty">${mode === 'propose' ? 'Abra a sua agenda primeiro: em <b>Consultas</b>, cadastre os horários (e confira o valor da consulta e a forma de receber).' : 'Este profissional ainda não abriu a agenda. Mande uma mensagem para combinar.'}</div>`;
+        page.body.innerHTML = `<div class="empty-agenda">${ic('calendar', 28)}<b>Sem agenda disponível</b><p class="muted">${mode === 'propose' ? 'Abra a sua agenda primeiro: em <b>Consultas → Minha agenda</b>, ligue o atendimento online ou presencial e cadastre os horários (e confira o valor e a forma de receber).' : 'Este profissional não está com a agenda aberta no momento. Mande uma mensagem para combinar.'}</p></div>`;
         return;
       }
       renderMonth();
@@ -145,10 +148,11 @@
       const loc = info.presencial;
       const choices = mode === 'reschedule' ? '' : `
         ${loc ? `<div class="opt-label">Tipo de consulta</div>
-          <div class="opt-grid" role="radiogroup" aria-label="Tipo de consulta">
-            ${optCard({ attr: 'data-mod="online"', on: modality === 'online', icon: 'video', title: 'Online', sub: info.price_cents != null ? money(info.price_cents) : 'Videochamada' })}
+          <div class="opt-grid ${info.online === false ? 'one' : ''}" role="radiogroup" aria-label="Tipo de consulta">
+            ${info.online === false ? '' : optCard({ attr: 'data-mod="online"', on: modality === 'online', icon: 'video', title: 'Online', sub: info.price_cents != null ? money(info.price_cents) : 'Videochamada' })}
             ${optCard({ attr: 'data-mod="presencial"', on: modality === 'presencial', icon: 'home', title: 'Presencial', sub: info.price_presencial_cents != null ? money(info.price_presencial_cents) : 'No consultório' })}
           </div>
+          ${info.online === false ? '<p class="small muted opt-note">No momento, só consulta presencial.</p>' : ''}
           ${modality === 'presencial' ? `<div class="opt-place">${ic('pin', 18)}<span>${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>` : ''}` : ''}
         ${mode === 'propose' && info.insurance ? `<div class="opt-label">Pagamento</div>
           <div class="opt-grid" role="radiogroup" aria-label="Pagamento">
