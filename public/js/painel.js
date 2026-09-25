@@ -72,8 +72,8 @@
   $('[data-add-package]').addEventListener('click', () => packageRow());
   $('[data-has-clinic]').addEventListener('change', (e) => $('[data-clinic]').classList.toggle('hidden', !e.target.checked));
 
-  // Especialidades: escolhe na lista (pode acrescentar e tirar; as 3 primeiras aparecem no perfil)
-  const spPicker = AcoliaSpecialties.picker($('[data-sp-picker]', form), { name: 'specialties', hint: 'As <b>3 primeiras</b> aparecem no seu perfil; as outras ficam no botão <b>+</b>. Para mudar a ordem, tire e escolha de novo.' });
+  // Especialidades: escolhe na lista (pode acrescentar e tirar; as 2 primeiras aparecem no perfil)
+  const spPicker = AcoliaSpecialties.picker($('[data-sp-picker]', form), { name: 'specialties', hint: 'As <b>2 primeiras</b> aparecem no seu perfil; as outras ficam no botão <b>+</b>. Para mudar a ordem, tire e escolha de novo.' });
   function fillProfile() {
     form.name.value = me.name;
     form.profession.value = me.profession;

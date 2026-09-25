@@ -26,7 +26,7 @@
         ${p.registry ? `<div class="small">${ICONS.badge.replace('<svg', '<svg style="width:15px;height:15px;vertical-align:-3px"')} ${esc(p.registry)}</div>` : ''}</div>
       </div>
       ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}
-      ${p.specialties ? `<div class="meta">${window.AcoliaSpecialties ? AcoliaSpecialties.badges(p) : p.specialties.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 3).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
+      ${p.specialties ? `<div class="meta">${window.AcoliaSpecialties ? AcoliaSpecialties.badges(p) : p.specialties.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 2).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
       ${priceLine(p)}
       <div class="actions"><a class="btn ${pro ? '' : 'secondary'} sm grow" href="${profileHref(p)}">Ver perfil</a>
         ${pro ? '' : `<button class="btn sm grow" ${p.locked ? 'data-need-account' : 'data-msg'}>${ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"')} Mensagem</button>`}</div>

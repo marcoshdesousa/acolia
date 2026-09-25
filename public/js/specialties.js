@@ -1,5 +1,5 @@
 /* Especialidades do profissional: seletor com busca (cadastro, perfil, admin e filtro da vitrine)
-   e a página "todas as especialidades" do perfil (as 3 primeiras aparecem, o resto fica no "+"). */
+   e a página "todas as especialidades" do perfil (as 2 primeiras aparecem, o resto fica no "+"). */
 (function () {
   'use strict';
   const { $, $$, esc, api, ICONS, avatar } = window.Acolia;
@@ -88,9 +88,9 @@
     el.addEventListener('click', (e) => { if (e.target.closest('[data-sp-back]')) history.back(); });
   }
 
-  // As 3 primeiras + botão "+N" (abre a página com todas)
+  // As 2 primeiras + botão "+N" (abre a página com todas)
   const CACHE = new Map();
-  function badges(pro, max = 3) {
+  function badges(pro, max = 2) {
     const items = list(pro.specialties);
     if (!items.length) return '';
     CACHE.set(String(pro.id), pro);
