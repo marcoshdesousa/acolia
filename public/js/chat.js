@@ -85,7 +85,7 @@
       if (m.kind === 'location') return `${prefix}Localização do consultório`;
       if (m.kind === 'deleted') return `${prefix}🚫 Mensagem apagada`;
       if (m.kind === 'doc') return `${prefix}📄 ${String(m.body).split('|')[1] || 'Documento'}`;
-      if (m.kind === 'post') return `${prefix}📌 Publicação`;
+      if (m.kind === 'post') return `${prefix}Publicação compartilhada`;
       if (m.kind === 'booking') return prefix + (window.AcoliaAgenda ? AcoliaAgenda.previewText(m) : '📅 Consulta');
       return prefix + m.body;
     }
@@ -115,7 +115,7 @@
         <li class="conv pinned ${isSup() ? 'active' : ''}" data-support tabindex="0">
           <span class="avatar sup-avatar"><img src="/img/logo-simbolo.png" alt=""></span>
           <div class="grow">
-            <div class="top"><span class="nm">${esc(s.name)} <span class="pin-ic" title="Conversa fixada" aria-label="Conversa fixada">📌</span></span><span class="tm">${s.last_message ? fmtShort(s.last_message.created_at) : ''}</span></div>
+            <div class="top"><span class="nm">${esc(s.name)} <span class="pin-ic" title="Canal oficial da Acolia" aria-label="Canal oficial da Acolia"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.8l2.3 1.7 2.8-.2 1 2.7 2.4 1.5-.7 2.7 1.2 2.6-2 1.9-.3 2.8-2.7.8-1.5 2.4-2.7-.7L12 22.2l-1.8-2.2-2.7.7L6 18.3l-2.7-.8-.3-2.8-2-1.9 1.2-2.6-.7-2.7L3.9 6l1-2.7 2.8.2z"/><path d="m8.2 12.2 2.6 2.6 5-5.2" fill="none" class="seal-ck" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="tm">${s.last_message ? fmtShort(s.last_message.created_at) : ''}</span></div>
             <div class="row" style="gap:8px;flex-wrap:nowrap"><span class="pv grow">${esc(s.last_message ? previewOf(s.last_message) : 'Dúvidas, erros ou sugestões? Fale com a gente.')}</span>${s.unread ? `<span class="unread">${s.unread}</span>` : ''}</div>
           </div>
         </li>` : '';

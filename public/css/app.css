@@ -1285,7 +1285,8 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 /* Suporte Acolia: conversa fixa no topo */
 .conv.pinned { background: color-mix(in srgb, var(--primary-soft) 70%, transparent); }
 .conv.pinned .nm { display: inline-flex; align-items: center; gap: 6px; }
-.pin-ic { font-size: .8rem; }
+.pin-ic { display: inline-flex; vertical-align: -3px; margin-left: 2px; color: var(--primary); }
+.pin-ic svg { width: 17px; height: 17px; }
 .sup-avatar { background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; }
 .sup-avatar img { width: 72%; height: 72%; object-fit: contain; }
 .sup-note { padding: 8px 14px; background: var(--primary-soft); color: var(--text); border-bottom: 1px solid var(--line); }
@@ -1392,3 +1393,4 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
   .kv-table td { padding: 2px 2px 10px; }
   .kv-table td input, .kv-table td select, .kv-table td textarea { max-width: 100%; }
 }
+.pin-ic .seal-ck { stroke: var(--surface); }
