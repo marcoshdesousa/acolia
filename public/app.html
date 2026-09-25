@@ -69,8 +69,8 @@
         </div>
         <div class="card stack" style="margin-top:16px">
           <h2 style="margin:0;font-size:1.1rem">Falar com a Acolia</h2>
-          <p class="small muted" style="margin:0">Dúvidas sobre a plataforma? Mande uma mensagem para o administrador pelo WhatsApp ou pela conversa <b>Suporte Acolia</b>, fixada no topo das suas mensagens.</p>
-          <div class="row" style="gap:8px;flex-wrap:wrap"><a class="btn" data-admin-wa target="_blank" rel="noopener" href="#">Mandar mensagem no WhatsApp</a><a class="btn secondary" href="#chat/suporte">Abrir Suporte Acolia</a></div>
+          <p class="small muted" style="margin:0">Dúvidas sobre a plataforma? Fale com a equipe pela conversa <b>Suporte Acolia</b>, fixada no topo das suas mensagens.</p>
+          <div class="row" style="gap:8px;flex-wrap:wrap"><a class="btn" href="#chat/suporte">Falar com o Suporte Acolia</a></div>
         </div>
         <button class="btn secondary block" style="margin-top:16px" data-logout>Sair da conta</button>
         <div class="card stack" style="margin-top:24px;border-color:var(--danger)">
@@ -245,8 +245,6 @@
     $('[data-install-btn]').addEventListener('click', installApp);
     Acolia.setupNotifications($('[data-view=buscar]'));
     $('[data-logout]').addEventListener('click', () => logout('/'));
-    // Falar com a Acolia pelo WhatsApp (administrador)
-    api('/api/config').then((c) => { const a = $('[data-admin-wa]'); if (a && c.support) a.href = Acolia.supportLink(c.support, 'Olá! Sou paciente da Acolia e tenho uma dúvida.'); }).catch(() => {});
     AcoliaDeleteAccount($('[data-delete-account]'), '/api/patient/delete');
   })();
   </script>

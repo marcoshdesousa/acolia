@@ -98,7 +98,7 @@ O profissional só vê uma conversa depois que o paciente manda a primeira mensa
   - caixa do **Suporte** (só aparece quem escreveu; filtro por profissionais e pacientes), responder com texto ou foto;
   - **Mensagem para todos os profissionais** (chega na conversa de suporte de cada um; para pacientes não existe);
   - **Avisos (sininho)** para pacientes, profissionais (e secretárias) ou todos, com foto opcional (vídeo não). Aviso apagado some do sininho de todos.
-- **Paciente → Configurações:** "Falar com a Acolia" com o botão do WhatsApp do administrador e o atalho para o Suporte Acolia.
+- **Paciente** tira dúvidas só pelo **Suporte Acolia** (em Configurações, "Falar com o Suporte Acolia"). O WhatsApp fica como canal dos **profissionais** (cadastro em análise, assinatura, bloqueio). Os símbolos do Instagram e do WhatsApp saíram do rodapé do site.
 - O cadastro e a aprovação de profissionais continuam como antes (WhatsApp e painel de aprovação).
 - **Contas de teste recriadas** uma vez (Profissional Teste com agenda 02:35, 1 h + 15 min, "Disponível" ligado e Asaas simulado; Paciente Teste ativo).
 
