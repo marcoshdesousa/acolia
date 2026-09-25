@@ -2050,7 +2050,7 @@ test('especialidades: pelo menos uma no cadastro e no perfil, sem máximo, filtr
   const logged = (await otto.get(`/api/professionals/${ottoId}`)).data; // com conta vê tudo
   assert.equal(logged.specialties.split(', ').length, 4);
   assert.equal(logged.bio, longBio.trim());
-  // Reels: o visitante não vê nenhum (nem pelo link compartilhado, que vem sem o vídeo)
+  // Reels: no perfil o visitante não vê nenhum; pelo link compartilhado (WhatsApp etc.) vê normalmente
   const { db } = require('../server/db');
   const reelId = Number(db.prepare("INSERT INTO posts (professional_id, image, caption, kind, video) VALUES (?, '/uploads/capa.jpg', 'v', 'reel', '/uploads/v.mp4')").run(ottoId).lastInsertRowid);
   db.prepare("INSERT INTO posts (professional_id, image, caption, kind, video) VALUES (?, '/uploads/capa.jpg', 'v', 'reel', '/uploads/v2.mp4')").run(ottoId);
@@ -2061,8 +2061,7 @@ test('especialidades: pelo menos uma no cadastro e no perfil, sem máximo, filtr
   assert.equal(vr.items.length, 0);
   const shared = (await client().get(`/api/social/posts/${reelId}`)).data;
   assert.equal(shared.locked, true);
-  assert.equal(shared.video, undefined, 'link compartilhado sem o vídeo para quem não tem conta');
-  assert.equal((await otto.get(`/api/social/posts/${reelId}`)).data.video, '/uploads/v.mp4');
+  assert.equal(shared.video, '/uploads/v.mp4', 'link compartilhado toca o vídeo para qualquer pessoa');
 });
 
 test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {

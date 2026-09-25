@@ -1072,7 +1072,3 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 .sp-all { display: flex; flex-wrap: wrap; gap: 8px; }
 .sp-all .badge { font-size: .88rem; padding: 5px 12px; white-space: normal; }
 .meta .badge { max-width: 100%; white-space: normal; }
-/* Reels em link compartilhado, para quem não tem conta: só a capa com cadeado */
-.reel-locked { position: relative; overflow: hidden; }
-.reel-locked img { width: 100%; display: block; filter: blur(6px) brightness(.8); }
-.reel-lock { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border: 0; background: rgba(28,40,38,.35); color: #fff; font: inherit; font-weight: 800; font-size: 1rem; cursor: pointer; padding: 20px; text-align: center; }

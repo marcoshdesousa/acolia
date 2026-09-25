@@ -123,10 +123,9 @@ router.get('/posts/:id', (req, res) => {
   const logged = req.auth && ['patient', 'professional'].includes(req.auth.role);
   const p = loadPost(logged ? req : {}, req.params.id);
   if (logged) return res.json(postOut(p, who(req)));
-  const out = postOut(p, null);
-  // Vídeo (Reels) só com conta: o visitante recebe só a capa
-  if (out.kind === 'reel') { delete out.video; delete out.duration; }
-  res.json({ ...out, locked: true });
+  // Link compartilhado (WhatsApp, redes sociais): qualquer pessoa vê, inclusive vídeo (Reels).
+  // No perfil é que os Reels ficam só para quem tem conta.
+  res.json({ ...postOut(p, null), locked: true });
 });
 
 router.use(A.requireRole('patient', 'professional'));
