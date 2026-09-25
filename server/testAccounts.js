@@ -23,8 +23,8 @@ function ensureTestAccounts() {
     const name = 'Profissional Teste';
     db.prepare(`INSERT INTO professionals
       (code, name, legal_name, profession, registry, email, phone, password_hash, status, bio, price_cents,
-       state, city, city_norm, subscription_until, slug, is_test, has_clinic, clinic_name, clinic_address, maps_url, maps_query)
-      VALUES (?, ?, ?, 'Psicólogo(a)', 'TESTE', ?, '11939023938', ?, 'aprovado', ?, 10000, 'SP', 'São Paulo', ?, ?, ?, 1, 1, ?, ?, ?, ?)`)
+       state, city, city_norm, subscription_until, slug, is_test, has_clinic, clinic_name, clinic_address, maps_url, maps_query, specialties)
+      VALUES (?, ?, ?, 'Psicólogo(a)', 'TESTE', ?, '11939023938', ?, 'aprovado', ?, 10000, 'SP', 'São Paulo', ?, ?, ?, 1, 1, ?, ?, ?, ?, 'Ansiedade, Depressão, Adultos')`)
       .run(PRO.code, name, name, 'profissional@teste.acolia', U.hashPassword(PRO.password),
         'Conta de teste da plataforma.', U.norm('São Paulo'), U.addDaysISO(U.todayISO(), 3650),
         require('./slug').uniqueSlug(db, name), TEST_CLINIC.name, TEST_CLINIC.address, TEST_CLINIC.maps_url, TEST_CLINIC.maps_query);

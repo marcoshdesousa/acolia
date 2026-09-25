@@ -1049,3 +1049,26 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 .pat-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 12px; padding: 10px 14px; border-radius: var(--radius); background: var(--primary-soft); }
 .pat-summary .pat-num { font-size: .95rem; }
 .pat-summary .pat-num b { font-size: 1.25rem; color: var(--primary); }
+
+/* ===== Especialidades: seletor com busca e página "todas" ===== */
+.sp-picker { display: flex; flex-direction: column; gap: 8px; }
+.sp-chosen { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; align-items: center; }
+.sp-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 12px; border-radius: 999px; background: var(--primary); color: var(--on-primary, #fff); font-size: .82rem; font-weight: 700; }
+.sp-tag button { border: 0; background: rgba(255,255,255,.22); color: inherit; width: 22px; height: 22px; border-radius: 50%; font-size: .7rem; cursor: pointer; display: grid; place-items: center; }
+.sp-search { width: 100%; }
+.sp-box { max-height: 300px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius, 14px); padding: 10px 12px; background: var(--surface); -webkit-overflow-scrolling: touch; }
+.sp-group + .sp-group { margin-top: 12px; }
+.sp-gname { font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; }
+.sp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sp-chip { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; text-align: left; }
+.sp-chip:hover { border-color: var(--primary); }
+.sp-chip.on { background: var(--primary-soft); border-color: var(--primary); color: var(--primary-strong); font-weight: 800; }
+.sp-chip.on::before { content: '✓ '; }
+.sp-chip.hidden, .sp-group.hidden { display: none; }
+.sp-none { margin: 4px 0; }
+.sp-filter { margin-top: 4px; }
+.sp-filter .sp-box { max-height: 220px; }
+.badge.sp-more { border: 0; cursor: pointer; background: var(--primary-soft); color: var(--primary-strong); font: inherit; font-size: .78rem; font-weight: 800; }
+.sp-all { display: flex; flex-wrap: wrap; gap: 8px; }
+.sp-all .badge { font-size: .88rem; padding: 5px 12px; white-space: normal; }
+.meta .badge { max-width: 100%; white-space: normal; }

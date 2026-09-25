@@ -13,6 +13,13 @@ Plataforma que funciona como **vitrine** de profissionais de saúde mental (psic
 
 Sem conta, o visitante vê os profissionais na página inicial, mas **sem valores e sem localização**.
 
+## Especialidades do profissional
+- No **cadastro** (pelo site ou pelo admin) o profissional escolhe **pelo menos uma** especialidade, sem máximo, numa lista com busca de **236 opções** em 4 grupos: público atendido (crianças, adultos, casais, mulheres…), temas e demandas (TEA, TDAH, ansiedade, luto…), abordagens e métodos (TCC, psicanálise, ABA…) e áreas e especialidades (neuropsicologia, psiquiatria da infância…). A lista fica em `server/specialties.js`.
+- Depois, em **Meu perfil**, ele acrescenta ou tira quantas quiser (sempre fica pelo menos uma). A profissão continua sem poder ser trocada.
+- No perfil e na vitrine aparecem as **3 primeiras** escolhidas. Tendo mais, aparece o botão **+N**, que abre a página com todas (com Voltar; o voltar do celular também fecha).
+- Na busca, o texto também procura nas especialidades. Em **Filtrar**, o paciente escolhe uma ou mais especialidades, e aparecem os profissionais que têm **todas** as escolhidas.
+- Quem já tinha especialidades escritas à mão antes da lista não perde nada: elas continuam no perfil até o profissional tirar.
+
 ## Atendimento (chamada)
 
 1. O profissional cria o atendimento informando o nome (real ou fictício) do paciente — pelo painel ou direto no chat.

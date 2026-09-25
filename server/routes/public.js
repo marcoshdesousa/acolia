@@ -12,7 +12,7 @@ router.get('/config', (_req, res) => {
   if (process.env.ICE_SERVERS) {
     try { iceServers = JSON.parse(process.env.ICE_SERVERS); } catch { console.error('ICE_SERVERS inválido (JSON)'); }
   }
-  res.json({ iceServers, professions: PROFESSIONS, ufs: U.UFS, support: require('../accountState').SUPPORT_WHATSAPP });
+  res.json({ iceServers, professions: PROFESSIONS, specialties: require('../specialties').GROUPS, ufs: U.UFS, support: require('../accountState').SUPPORT_WHATSAPP });
 });
 
 // Vitrine de profissionais.
@@ -42,6 +42,12 @@ router.get('/professionals', (req, res) => {
 
   const q = U.norm(req.query.q);
   if (q) rows = rows.filter((p) => U.norm(`${p.name} ${p.specialties} ${p.profession}`).includes(q));
+  // Filtro de especialidades: mostra quem tem todas as escolhidas (vêm separadas por "|")
+  const wanted = String(req.query.specialties || '').split('|').map(U.norm).filter(Boolean).slice(0, 30);
+  if (wanted.length) {
+    const { toList } = require('../specialties');
+    rows = rows.filter((p) => { const mine = new Set(toList(p.specialties).map(U.norm)); return wanted.every((w) => mine.has(w)); });
+  }
 
   // Estado: paciente logado começa no próprio estado; "todos" libera o Brasil inteiro
   let state = U.isUf(req.query.state) ? req.query.state.toUpperCase() : '';

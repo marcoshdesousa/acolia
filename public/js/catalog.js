@@ -26,7 +26,7 @@
         ${p.registry ? `<div class="small">${ICONS.badge.replace('<svg', '<svg style="width:15px;height:15px;vertical-align:-3px"')} ${esc(p.registry)}</div>` : ''}</div>
       </div>
       ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}
-      ${p.specialties ? `<div class="meta">${p.specialties.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 4).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
+      ${p.specialties ? `<div class="meta">${window.AcoliaSpecialties ? AcoliaSpecialties.badges(p) : p.specialties.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 3).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
       ${priceLine(p)}
       <div class="actions"><a class="btn ${pro ? '' : 'secondary'} sm grow" href="${profileHref(p)}">Ver perfil</a>
         ${pro ? '' : `<button class="btn sm grow" ${p.locked ? 'data-need-account' : 'data-msg'}>${ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"')} Mensagem</button>`}</div>
@@ -70,6 +70,7 @@
                 <option value="200">Até R$ 200</option><option value="300">Até R$ 300</option>
               </select></div>
           </div>
+          <div class="field sp-filter"><label>Especialidades <span class="muted small" style="font-weight:600">(mostra quem tem todas as que você escolher)</span></label><div data-sp-filter></div></div>
           ${logged ? `<label class="check" style="margin-bottom:12px"><input type="checkbox" name="favorites" value="1"> ${ic('heart')} Só meus favoritos</label>` : ''}
           <div class="row"><button class="btn" type="submit">Aplicar filtros</button><button class="btn ghost" type="button" data-clear>Limpar filtros</button></div>
         </div>
@@ -87,6 +88,10 @@
       form.profession.insertAdjacentHTML('beforeend', c.professions.map((p) => `<option>${esc(p)}</option>`).join(''));
     }).catch(() => {});
     bindUfCity(form.state, form.city);
+    // Especialidades escolhidas no filtro (vão para a busca separadas por "|")
+    let spChosen = [];
+    const spFilter = window.AcoliaSpecialties ? AcoliaSpecialties.picker($('[data-sp-filter]', root), { onChange: (l) => { spChosen = l; } }) : null;
+    if (!spFilter) $('.sp-filter', root).remove();
 
     toggle.addEventListener('click', () => {
       const open = panel.classList.toggle('hidden') === false;
@@ -96,6 +101,8 @@
       form.reset();
       form.state.value = 'todos';
       form.city.value = '';
+      spFilter?.then((sp) => sp.set([]));
+      spChosen = [];
       load();
     });
 
@@ -108,6 +115,7 @@
       if (form.sort.value) n++;
       if (form.max_price.value) n++;
       if (form.favorites?.checked) n++;
+      n += spChosen.length;
       return n;
     }
 
@@ -134,6 +142,7 @@
         if (!v || (auto && (k === 'state' || k === 'city'))) continue;
         params.set(k, v);
       }
+      if (spChosen.length) params.set('specialties', spChosen.join('|'));
       if (auto) params.set('auto', '1');
       showCount();
       grid.innerHTML = '<div class="spinner"></div>';

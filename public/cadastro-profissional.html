@@ -31,6 +31,9 @@
         <div class="field" data-doc-field><label for="doc">Foto da carteirinha profissional</label>
           <input id="doc" name="document" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required>
           <div class="hint">Frente da carteirinha, com nome e número legíveis (JPG, PNG ou PDF, até 8 MB). Só a administração vê este arquivo.</div></div>
+        <div class="field" data-sp-field><label>Suas especialidades (escolha pelo menos uma)</label>
+          <div class="hint" style="margin:0 0 8px">Ex.: TEA, crianças, adultos, casais, ansiedade, TCC… Escolha quantas quiser. Depois dá para acrescentar ou tirar no seu perfil.</div>
+          <div data-sp-picker></div></div>
         <div class="field"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="email" required></div>
         <div class="field"><label for="phone">WhatsApp (com DDD)</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="(94) 99999-9999" required>
           <div class="hint">Obrigatório. É por ele que a equipe Acolia fala com você (aprovação e mensalidade).</div></div>
@@ -81,6 +84,7 @@
     </div>
   </main>
   <script src="/js/common.js"></script>
+  <script src="/js/specialties.js"></script>
   <script>
   (async function () {
     const { $, api, ICONS, handleForm, maskPhone, ufOptions, bindUfCity, esc, copyText } = Acolia;
@@ -118,6 +122,7 @@
       $('[data-step2]').classList.toggle('hidden', step !== 3);
       scrollTo(0, 0);
     };
+    const sp = await AcoliaSpecialties.picker($('[data-sp-picker]'), { name: 'specialties' });
     const LABELS = { name: 'Informe seu nome completo.', email: 'Informe seu e-mail.', phone: 'Informe seu WhatsApp com DDD.', state: 'Selecione o estado.', city: 'Informe o município.' };
     handleForm(form, async () => {
       if ($('#name').value.trim().split(/\s+/).length < 2) throw new Error('Informe nome e sobrenome.');
@@ -128,6 +133,7 @@
       if (!form.profession.value) throw new Error('Selecione sua profissão.');
       if (needsCard() && !form.registry.value.trim()) throw new Error(form.profession.value === 'Psiquiatra' ? 'Informe o número do seu CRM.' : 'Informe o número do seu CRP.');
       if (needsCard() && !form.document.files.length) throw new Error('Envie a foto da sua carteirinha profissional.');
+      if (!sp.value().length) throw new Error('Escolha pelo menos uma especialidade (em "Suas especialidades").');
       show(2);
     });
     const planErr = $('[data-plan-err]');

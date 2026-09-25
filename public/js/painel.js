@@ -72,6 +72,8 @@
   $('[data-add-package]').addEventListener('click', () => packageRow());
   $('[data-has-clinic]').addEventListener('change', (e) => $('[data-clinic]').classList.toggle('hidden', !e.target.checked));
 
+  // Especialidades: escolhe na lista (pode acrescentar e tirar; as 3 primeiras aparecem no perfil)
+  const spPicker = AcoliaSpecialties.picker($('[data-sp-picker]', form), { name: 'specialties', hint: 'As <b>3 primeiras</b> aparecem no seu perfil; as outras ficam no botão <b>+</b>. Para mudar a ordem, tire e escolha de novo.' });
   function fillProfile() {
     form.name.value = me.name;
     form.profession.value = me.profession;
@@ -79,7 +81,7 @@
     form.registry.closest('.field').classList.toggle('hidden', !me.registry); // psicanalista, psicoterapeuta e terapeuta: sem conselho
     form.phone.value = fmtPhone(me.phone);
     form.email.value = me.email || '';
-    form.specialties.value = me.specialties;
+    spPicker.then((sp) => sp.set(AcoliaSpecialties.list(me.specialties)));
     form.bio.value = me.bio;
     form.session_minutes.value = me.session_minutes ? String(me.session_minutes) : '';
     form.instagram.value = me.instagram || '';
@@ -102,6 +104,8 @@
 
   handleForm(form, async (d) => {
     d.has_clinic = form.has_clinic.checked;
+    d.specialties = (await spPicker).value();
+    if (!d.specialties.length) throw new Error('Escolha pelo menos uma especialidade.');
     d.accepts_insurance = form.accepts_insurance.checked;
     d.packages = $$('.row', pkBox).map((r) => ({
       sessions: $('[data-pk-sessions]', r).value, price: $('[data-pk-price]', r).value, description: $('[data-pk-desc]', r).value,

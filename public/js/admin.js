@@ -262,6 +262,7 @@
           <tr><th>E-mail</th><td>${esc(p.email)}</td></tr>
           <tr><th>WhatsApp</th><td><a href="https://wa.me/55${esc(p.phone)}" target="_blank" rel="noopener">${esc(fmtPhone(p.phone))}</a></td></tr>
           <tr><th>Local</th><td>${esc(p.city)} - ${esc(p.state)}<div class="small muted">Atende online${p.has_clinic ? ' e presencial' : ''}</div>${p.has_clinic ? `<div class="small">${esc(p.clinic_name)} — ${esc(p.clinic_address)}</div>` : ''}</td></tr>
+          <tr><th>Especialidades</th><td>${esc((p.specialties || '').split(',').map((x) => x.trim()).filter(Boolean).join(' · ') || '—')}</td></tr>
           <tr><th>Consulta</th><td>${p.price_cents != null ? money(p.price_cents) : '—'}${pk ? `<div class="small muted">${esc(pk)}</div>` : ''}</td></tr>
           <tr><th>Cadastro</th><td>${fmtDT(p.created_at)}</td></tr>
           <tr><th>Mensalidade</th><td>${subBadge(p)}</td></tr>
@@ -363,9 +364,13 @@
   };
   nf.profession.addEventListener('change', syncReg);
   syncReg();
+  const nSp = AcoliaSpecialties.picker($('[data-n-sp]', nf), { name: 'specialties' });
   handleForm(nf, async (d, f) => {
+    d.specialties = (await nSp).value();
+    if (!d.specialties.length) throw new Error('Escolha pelo menos uma especialidade.');
     const r = await api('/api/admin/professionals', { method: 'POST', body: d });
     f.reset();
+    (await nSp).set([]);
     syncReg();
     await modal({
       title: 'Profissional cadastrado',

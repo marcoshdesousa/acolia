@@ -112,18 +112,21 @@ function validateProfessionalInput(body) {
   if (!U.isValidEmail(email)) throw new HttpError(400, 'E-mail inválido.');
   if (phone.length < 10 || phone.length > 13) throw new HttpError(400, 'Informe o WhatsApp com DDD.');
   const { state, city } = validateLocation(body.state, body.city);
+  // Especialidades: pelo menos uma da lista (sem máximo)
+  const specialties = require('../specialties').parse(body.specialties);
   if (db.prepare('SELECT 1 FROM professionals WHERE email = ?').get(email)) throw new HttpError(409, 'Este e-mail já está cadastrado.');
-  return { name, profession, registry, email, phone, state, city };
+  return { name, profession, registry, email, phone, state, city, specialties };
 }
 
 function insertProfessional(d, passwordHash, status, subscriptionUntil = null) {
   const code = newProfessionalCode();
   const info = db.prepare(`INSERT INTO professionals
     (code, name, profession, registry, email, phone, password_hash, status, state, city, city_norm, subscription_until,
-     document_file, registry_verified, legal_name, slug)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+     document_file, registry_verified, legal_name, slug, specialties)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(code, d.name, d.profession, d.registry, d.email, d.phone, passwordHash, status, d.state, d.city, U.norm(d.city), subscriptionUntil,
-      d.document_file || null, d.registry_verified ? 1 : 0, d.name, require('../slug').uniqueSlug(db, d.name));
+      d.document_file || null, d.registry_verified ? 1 : 0, d.name, require('../slug').uniqueSlug(db, d.name),
+      require('../specialties').store(d.specialties || []));
   return { id: Number(info.lastInsertRowid), code };
 }
 

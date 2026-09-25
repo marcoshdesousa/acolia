@@ -54,6 +54,8 @@ router.put('/profile', async (req, res) => {
   }
   const { state, city } = validateLocation(b.state, b.city);
   const price = toCents(b.price);
+  // Especialidades: pode acrescentar e tirar à vontade, mas fica pelo menos uma
+  const specialties = require('../specialties').parse(b.specialties, req.auth.user.specialties);
 
   const packages = (Array.isArray(b.packages) ? b.packages : []).slice(0, 10).map((pk) => {
     const sessions = Number.parseInt(pk.sessions, 10);
@@ -82,7 +84,7 @@ router.put('/profile', async (req, res) => {
 
   db.prepare(`UPDATE professionals SET name=?, profession=?, registry=?, phone=?, bio=?, specialties=?, price_cents=?, packages=?,
       state=?, city=?, city_norm=?, has_clinic=?, clinic_name=?, clinic_address=?, pix_key=?, session_minutes=?, instagram=?, maps_url=?, maps_query=? WHERE id=?`)
-    .run(name, profession, registry, phone, U.cleanText(b.bio, 2000), U.cleanText(b.specialties, 300), price, JSON.stringify(packages),
+    .run(name, profession, registry, phone, U.cleanText(b.bio, 2000), require('../specialties').store(specialties), price, JSON.stringify(packages),
       state, city, U.norm(city), hasClinic, clinicName, clinicAddress, U.cleanText(b.pix_key, 140), minutes, instagram, mapsUrl, mapsQuery, req.auth.user.id);
   // Plano de saúde: o profissional escolhe (vale para online e presencial; detalhes ele combina pelo chat)
   db.prepare('UPDATE professionals SET email = ?, accepts_insurance = ? WHERE id = ?').run(email, b.accepts_insurance ? 1 : 0, req.auth.user.id);

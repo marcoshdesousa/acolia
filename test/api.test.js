@@ -22,7 +22,10 @@ let base;
 // Cliente HTTP com "cookie jar" simples
 function client() {
   let cookie = '';
+  // Cadastro e perfil de profissional exigem ao menos uma especialidade: quando o teste não manda, vai uma padrão
+  const SP_URLS = ['/api/admin/professionals', '/api/professional/profile', '/api/auth/professional/register'];
   const call = async (method, url, body) => {
+    if (body && SP_URLS.includes(url) && !('specialties' in body)) body = { ...body, specialties: ['Ansiedade'] };
     const res = await fetch(base + url, {
       method,
       headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(cookie ? { Cookie: cookie } : {}) },
@@ -34,6 +37,7 @@ function client() {
     return { status: res.status, data };
   };
   const form = async (url, fields, file) => {
+    if (SP_URLS.includes(url) && !('specialties' in fields)) fields = { ...fields, specialties: JSON.stringify(['Ansiedade']) };
     const fd = new FormData();
     for (const [k, v] of Object.entries(fields)) fd.append(k, v);
     if (file) fd.append('document', new Blob([file.data], { type: file.type }), file.name);
@@ -674,7 +678,7 @@ test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitan
   });
   const lp = client();
   await lp.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
-  const pf = { name: 'Lia Campos', phone: '11966665555', state: 'SP', city: 'Campinas', bio: '', specialties: '', price: '120' };
+  const pf = { name: 'Lia Campos', phone: '11966665555', state: 'SP', city: 'Campinas', bio: '', specialties: ['Adultos'], price: '120' };
   let r = await lp.put('/api/professional/profile', { ...pf, session_minutes: 50, instagram: 'https://www.instagram.com/lia.psi/' });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.instagram, 'lia.psi', 'guarda só o @');
@@ -1842,7 +1846,7 @@ test('feed: novidade primeiro (a mais nova no topo); as já vistas vêm misturad
 test('cadastro do profissional: escolhe o plano mensal de R$ 30 (plano inválido não passa) e o admin vê o plano', async () => {
   const mk = (plan, email, phone) => {
     const fd = new FormData();
-    for (const [k, v] of Object.entries({ name: 'Paulo Plano Silva', profession: 'Psicanalista', email, phone, state: 'SP', city: 'Campinas' })) fd.append(k, v);
+    for (const [k, v] of Object.entries({ name: 'Paulo Plano Silva', profession: 'Psicanalista', email, phone, state: 'SP', city: 'Campinas', specialties: '["Luto"]' })) fd.append(k, v);
     if (plan) fd.append('plan', plan);
     return fetch(`${base}/api/auth/professional/register`, { method: 'POST', body: fd });
   };
@@ -1988,6 +1992,49 @@ test('meus pacientes: só quem fez consulta com o profissional; filtro por nome 
 });
 
 // Por último: apaga tudo (é o que acontece uma vez só no início oficial da plataforma)
+test('especialidades: pelo menos uma no cadastro e no perfil, sem máximo, filtro e busca', async () => {
+  const { ALL } = require('../server/specialties');
+  assert.ok(ALL.length > 200, 'lista grande de especialidades');
+  const cfg = (await client().get('/api/config')).data;
+  assert.ok(cfg.specialties.length >= 4 && cfg.specialties.every((g) => g.name && g.items.length));
+  // Cadastro pelo site: sem especialidade não passa
+  const anon = client();
+  const base0 = { name: 'Nara Esp Lima', profession: 'Psicanalista', email: 'nara.esp@example.com', phone: '11917171717', state: 'SP', city: 'Campinas', plan: 'mensal-30' };
+  let r = await anon.form('/api/auth/professional/register', { ...base0, specialties: '[]' });
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /pelo menos uma especialidade/);
+  r = await anon.form('/api/auth/professional/register', { ...base0, specialties: JSON.stringify(['Inventada que não existe']) });
+  assert.equal(r.status, 400, 'só vale especialidade da lista');
+  // Admin também exige; guarda na ordem escolhida, sem repetir, com o nome certinho da lista
+  r = await admin.post('/api/admin/professionals', { name: 'Otto Esp Braga', profession: 'Psicólogo(a)', registry: 'CRP 06/30123', email: 'otto.esp@example.com', phone: '11916161616', state: 'SP', city: 'Campinas', specialties: [] });
+  assert.equal(r.status, 400);
+  const many = ['tea (transtorno do espectro autista)', 'Crianças', 'Adultos', 'Casais', 'Terapia cognitivo-comportamental (TCC)', 'Crianças'];
+  r = await admin.post('/api/admin/professionals', { name: 'Otto Esp Braga', profession: 'Psicólogo(a)', registry: 'CRP 06/30123', email: 'otto.esp@example.com', phone: '11916161616', state: 'SP', city: 'Campinas', specialties: many });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const otto = client();
+  await otto.post('/api/auth/professional/login', { login: r.data.code, password: r.data.password });
+  let me = (await otto.get('/api/professional/me')).data;
+  assert.equal(me.specialties, 'TEA (transtorno do espectro autista), Crianças, Adultos, Casais, Terapia cognitivo-comportamental (TCC)');
+  // Perfil: acrescenta e tira à vontade, mas não pode ficar sem nenhuma; profissão não muda
+  const prof = { name: 'Otto Esp Braga', phone: '11916161616', state: 'SP', city: 'Campinas', bio: '', price: '' };
+  r = await otto.put('/api/professional/profile', { ...prof, specialties: [] });
+  assert.equal(r.status, 400);
+  r = await otto.put('/api/professional/profile', { ...prof, profession: 'Psiquiatra', specialties: [...ALL.slice(0, 40), 'TEA (transtorno do espectro autista)'] });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.profession, 'Psicólogo(a)');
+  assert.equal(r.data.specialties.split(', ').length, 41, 'sem limite máximo');
+  r = await otto.put('/api/professional/profile', { ...prof, specialties: ['TEA (transtorno do espectro autista)', 'Crianças', 'Casais', 'Luto'] });
+  assert.equal(r.data.specialties, 'TEA (transtorno do espectro autista), Crianças, Casais, Luto');
+  // Filtro: mostra quem tem todas as escolhidas; a busca por texto também acha
+  const pac = client();
+  const ids = async (qs) => (await pac.get(`/api/professionals?state=todos&${qs}`)).data.items.map((p) => p.id);
+  const ottoId = me.id;
+  assert.ok((await ids(`specialties=${encodeURIComponent('Crianças|Casais')}`)).includes(ottoId));
+  assert.ok(!(await ids(`specialties=${encodeURIComponent('Crianças|Idosos')}`)).includes(ottoId), 'precisa ter todas');
+  assert.ok((await ids('q=autista')).includes(ottoId), 'busca pelo texto acha');
+  assert.ok((await ids('q=casais')).includes(ottoId));
+});
+
 test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {
   const { db } = require('../server/db');
   const R = require('../server/launchReset');

@@ -186,7 +186,7 @@
               ${p.session_minutes ? `<span class="badge">${ic('clock', 15)} Sessão de ${duration(p.session_minutes)}</span>` : ''}
               ${p.locked && p.has_session_minutes ? `<a class="lock-link" href="${signup}">${ic('clock', 15)} Duração: crie conta para ver</a>` : ''}</div>
             ${p.instagram ? `<a class="insta-btn" href="https://www.instagram.com/${encodeURIComponent(p.instagram)}/" target="_blank" rel="noopener">${ic('instagram', 18)} @${esc(p.instagram)}</a>` : ''}
-            ${specialties.length ? `<div class="meta row" style="gap:6px;margin-top:10px">${specialties.map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
+            ${specialties.length ? `<div class="meta row" style="gap:6px;margin-top:10px">${window.AcoliaSpecialties ? AcoliaSpecialties.badges(p) : specialties.slice(0, 3).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
           </div>
           <div class="row">${followBtn}${actions}</div>
         </div>
