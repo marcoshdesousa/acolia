@@ -12,13 +12,16 @@ const MIN = 60e3;
 
 const visiblePro = (id) => db.prepare(`SELECT * FROM professionals p WHERE id = ? AND ${VISIBLE_SQL}`).get(Number(id));
 const isPatient = (req) => req.auth?.role === 'patient';
+// Contas de teste só marcam entre si (Paciente Teste com Profissional Teste)
+const sameKind = (pro, patient) => !!pro?.is_test === !!patient?.is_test;
+const TEST_MSG = 'Conta de teste: as consultas de teste são só entre o Profissional Teste e o Paciente Teste.';
 const isPro = (req) => req.auth?.role === 'professional';
 
 // ---------- Público: próximo dia disponível (aparece até para quem não tem conta) ----------
 router.get('/pro/:id/next', (req, res) => {
   const pro = visiblePro(req.params.id);
   if (!pro) throw new U.HttpError(404, 'Profissional não encontrado.');
-  res.json({ next: G.nextAvailable(pro) });
+  res.json({ next: sameKind(pro, req.auth?.user) ? G.nextAvailable(pro) : null });
 });
 
 router.use(A.requireRole('patient', 'professional'));
@@ -33,8 +36,9 @@ function bookablePro(req, id) {
 router.get('/pro/:id/month', (req, res) => {
   const pro = bookablePro(req, req.params.id);
   const ym = /^\d{4}-\d{2}$/.test(req.query.ym || '') ? req.query.ym : G.localDate(G.now()).slice(0, 7);
-  const ready = G.readiness(pro);
   const patientId = isPatient(req) ? req.auth.user.id : (req.query.patient_id ? Number(req.query.patient_id) : null);
+  const pat = patientId ? db.prepare('SELECT is_test FROM patients WHERE id = ?').get(patientId) : null;
+  const ready = sameKind(pro, pat || (isPatient(req) ? req.auth.user : pro)) ? G.readiness(pro) : { ok: false, mode: 'manual' };
   res.json({
     ym, today: G.localDate(G.now()), max_date: G.addDays(G.localDate(G.now()), G.RULES.HORIZON_DAYS),
     ready: ready.ok, mode: ready.mode, price_cents: pro.price_cents, minutes: G.duration(pro),
@@ -47,8 +51,10 @@ router.get('/pro/:id/day', (req, res) => {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : null;
   if (!date) throw new U.HttpError(400, 'Escolha um dia.');
   const patientId = isPatient(req) ? req.auth.user.id : (req.query.patient_id ? Number(req.query.patient_id) : null);
+  const pat = patientId ? db.prepare('SELECT is_test FROM patients WHERE id = ?').get(patientId) : null;
   const exclude = Number(req.query.exclude) || 0;
-  res.json({ date, label: G.dayLabel(date), slots: G.readiness(pro).ok ? G.slotsForDay(pro, date, { patientId, exclude }) : [] });
+  const ok = G.readiness(pro).ok && sameKind(pro, pat || (isPatient(req) ? req.auth.user : pro));
+  res.json({ date, label: G.dayLabel(date), slots: ok ? G.slotsForDay(pro, date, { patientId, exclude }) : [] });
 });
 
 // ---------- Paciente marca ----------
@@ -57,9 +63,10 @@ router.post('/book', async (req, res) => {
   if (!req.body.accept) throw new U.HttpError(400, 'Leia e aceite a política de agendamento para continuar.');
   const pro = visiblePro(req.body.professional_id);
   if (!pro) throw new U.HttpError(404, 'Profissional não encontrado.');
+  const me = req.auth.user;
+  if (!sameKind(pro, me)) throw new U.HttpError(403, TEST_MSG);
   const ready = G.readiness(pro);
   if (!ready.ok) throw new U.HttpError(409, 'Este profissional ainda não abriu a agenda.');
-  const me = req.auth.user;
   const a = tx(() => {
     const slot = G.assertFree(pro, req.body.start, { patientId: me.id });
     const c = G.ensureConversation(me.id, pro.id);
@@ -93,6 +100,7 @@ router.post('/propose', async (req, res) => {
   if (G.refundLock(c.id)) throw new U.HttpError(403, 'Faça o reembolso pendente deste paciente antes de marcar outra consulta.');
   const pat = db.prepare("SELECT * FROM patients WHERE id = ? AND status = 'ativo'").get(c.patient_id);
   if (!pat) throw new U.HttpError(403, 'Esta conta não está mais ativa na plataforma.');
+  if (!sameKind(pro, pat)) throw new U.HttpError(403, TEST_MSG);
   const ready = G.readiness(pro);
   if (!ready.ok) throw new U.HttpError(409, 'Abra a sua agenda primeiro (horários, valor da consulta e forma de receber).');
   const a = tx(() => {
@@ -146,6 +154,16 @@ router.get('/appointments/:id', async (req, res) => {
   let a = loadMine(req, req.params.id);
   if (isPatient(req)) a = await G.checkPayment(a); // na tela do Pix: confere se já caiu
   res.json(G.view(a, role(req)));
+});
+
+// Conta de teste + Asaas simulado: "Simular pagamento" (o Pix de teste passa a constar como pago)
+router.post('/appointments/:id/simulate-pay', async (req, res) => {
+  if (!isPatient(req) || !req.auth.user.is_test) throw new U.HttpError(403, 'Só o Paciente Teste simula pagamento.');
+  const a = loadMine(req, req.params.id);
+  const env = db.prepare('SELECT env FROM pro_payment WHERE professional_id = ?').get(a.professional_id)?.env;
+  if (env !== 'simulado' || a.mode !== 'auto' || a.status !== 'aguardando_pagamento' || !a.pay_id) throw new U.HttpError(409, 'Esta consulta não está esperando um pagamento simulado.');
+  require('../asaasSim').pay(a.pay_id);
+  res.json(G.view(await G.checkPayment(a, { force: true }), 'patient'));
 });
 
 // Paciente aceita a política (consulta proposta pelo profissional) e vê o Pix
@@ -317,6 +335,7 @@ function settingsOf(pro) {
     ready: ready.ok, missing: ready.missing, mode: ready.mode,
     next: G.nextAvailable(pro),
     rules: G.RULES,
+    is_test: !!pro.is_test,
   };
 }
 
@@ -380,7 +399,7 @@ router.delete('/blocks/:id', (req, res) => {
 // ---------- Pagamento automático (Asaas) ----------
 router.post('/asaas', async (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só para profissionais.');
-  const r = await require('../asaas').check(req.body.key);
+  const r = await require('../asaas').check(req.body.key, { testAccount: !!req.auth.user.is_test });
   db.prepare(`INSERT INTO pro_payment (professional_id, provider, key_enc, env, account_name, enabled, connected_at) VALUES (?, 'asaas', ?, ?, ?, 1, datetime('now'))
     ON CONFLICT(professional_id) DO UPDATE SET key_enc = excluded.key_enc, env = excluded.env, account_name = excluded.account_name, enabled = 1, connected_at = excluded.connected_at`)
     .run(req.auth.user.id, require('../secretBox').seal(r.key), r.env, U.cleanText(r.name, 120));

@@ -258,9 +258,14 @@
         <p class="small muted" style="margin:0">Abra o app do seu banco, escolha <b>Pix → Pix copia e cola</b> (ou leia o QR Code) e pague. Depois volte aqui: a confirmação é automática.</p>
         <div class="pix-timer" data-timer></div>
         <div class="pix-wait" data-wait><span class="spinner sm"></span> Aguardando o pagamento…</div>
+        ${a.simulated ? '<button type="button" class="btn secondary block" data-simulate>🧪 Simular pagamento (conta de teste)</button>' : ''}
         <button type="button" class="link-btn small" data-giveup>Desistir desta consulta</button>
       </div>`;
     $('[data-copy-pix]', page.body).addEventListener('click', () => { copyText(a.pix_payload); toast('Código Pix copiado ✓', '', { top: true }); });
+    $('[data-simulate]', page.body)?.addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      try { await api(`/api/agenda/appointments/${a.id}/simulate-pay`, { method: 'POST' }); check(); } catch (ex) { toast(ex.message, 'error'); }
+    });
     $('[data-giveup]', page.body).addEventListener('click', async () => {
       if (!await confirmDialog('Desistir desta consulta? O horário fica livre para outra pessoa.', { okLabel: 'Desistir', danger: true })) return;
       try { await api(`/api/agenda/appointments/${a.id}/cancel`, { method: 'POST', body: {} }); page.close(); toast('Você desistiu da consulta.'); } catch (e) { toast(e.message, 'error'); }

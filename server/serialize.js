@@ -56,7 +56,9 @@ function shortBio(bio) {
   return cut.length < text.length ? { bio: `${cut.trimEnd()}…`, bio_more: true } : { bio: text, bio_more: false };
 }
 
-function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
+// viewerTest: quem está vendo é a conta de teste (o "dia disponível" de conta de teste só aparece
+// para conta de teste, e vice-versa: consultas de teste nunca se misturam com as de verdade)
+function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest = false } = {}) {
   const base = {
     id: p.id,
     slug: p.slug,
@@ -93,7 +95,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false } = {}) {
     accepts_insurance: !!p.accepts_insurance,
     instagram: p.instagram || '',
     // Próximo dia com horário livre na agenda (aparece para todos, até sem conta)
-    next_available: require('./agenda').nextAvailable(p),
+    next_available: !!p.is_test === !!viewerTest ? require('./agenda').nextAvailable(p) : null,
   };
   if (!loggedIn) {
     const { state, city, ...visible } = common; // localização só com conta

@@ -141,8 +141,9 @@
       return;
     }
     box.innerHTML = `<h2 style="margin:0">${ic('pix', 22)} Pagamento automático pelo Pix (Asaas)</h2>
-      <div class="notice ${p.key_ok ? 'ok' : 'warn'} small">${p.key_ok ? '✅ Conectado' : '⚠️ A chave guardada não abre mais: conecte de novo'}${p.account_name ? `: <b>${esc(p.account_name)}</b>` : ''} · ${p.env === 'teste' ? '<b>modo de teste</b> (Sandbox, dinheiro de mentira)' : 'conta real'}</div>
+      <div class="notice ${p.key_ok ? 'ok' : 'warn'} small">${p.key_ok ? '✅ Conectado' : '⚠️ A chave guardada não abre mais: conecte de novo'}${p.account_name && p.env !== 'simulado' ? `: <b>${esc(p.account_name)}</b>` : ''} · ${p.env === 'simulado' ? '<b>Asaas simulado</b> (conta de teste, sem dinheiro)' : p.env === 'teste' ? '<b>Asaas Sandbox</b> (teste, dinheiro de mentira)' : 'conta real'}</div>
       <label class="check"><input type="checkbox" data-enabled ${p.enabled ? 'checked' : ''}> Usar o pagamento automático nas novas consultas</label>
+      ${p.enabled ? '<p class="small" style="margin:0">As consultas pagas pelo Pix são <b>confirmadas sozinhas</b>, e os reembolsos no prazo também saem sozinhos.</p>' : ''}
       <p class="small muted" style="margin:0">Desligado, as novas consultas vão pelo Pix manual (a sua chave Pix na conversa).</p>
       <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary sm" data-connect>Trocar a chave</button><button type="button" class="btn ghost sm danger-text" data-disconnect>Desconectar</button></div>`;
     $('[data-connect]', box).addEventListener('click', wizard);
@@ -159,25 +160,31 @@
   const STEPS = [
     ['Como funciona', `<ul class="policy-list">
       <li>O paciente escolhe o dia e o horário na sua agenda e paga o <b>Pix dentro da Acolia</b> (QR Code ou "copia e cola").</li>
-      <li>Quando o Pix cai, a <b>consulta é marcada sozinha</b> e a chamada é criada automaticamente (o link aparece na conversa 10 minutos antes).</li>
-      <li>O dinheiro vai <b>direto para a sua conta no Asaas</b>. A Acolia <b>não recebe</b> o dinheiro e <b>não cobra taxa</b> sobre a consulta. A taxa do Pix é a do próprio Asaas.</li>
+      <li>Quando o Pix cai na sua conta Asaas, a <b>consulta é confirmada sozinha</b>: você não precisa conferir nada. A chamada também é criada sozinha (o link aparece na conversa 10 minutos antes).</li>
+      <li>O dinheiro vai <b>direto para a sua conta no Asaas</b>. A Acolia <b>não recebe</b> o dinheiro e <b>não cobra taxa</b> sobre a consulta. A tarifa do Pix é a do próprio Asaas.</li>
       <li>Se o paciente cancelar no prazo (até 30 minutos antes), o <b>reembolso sai automático</b> da sua conta Asaas. Deixe saldo para isso.</li>
-      <li>Só <b>Pix</b> (cai na hora). Não há cartão nem boleto.</li></ul>`],
+      <li>Só <b>Pix</b> (cai na hora). Não há cartão nem boleto.</li>
+      <li>São 4 passos: criar a conta, cadastrar uma chave Pix, gerar a chave de API e colar aqui.</li></ul>`],
     ['Passo 1 — Crie a sua conta no Asaas', `<ol class="policy-list">
-      <li>Entre no site <b>asaas.com</b> (ou baixe o app <b>Asaas</b>).</li>
-      <li>Toque em <b>Criar conta</b>. Pode ser com <b>CPF</b> (pessoa física) ou <b>CNPJ</b>.</li>
-      <li>Preencha os seus dados e envie os documentos que o Asaas pedir.</li>
-      <li>Espere a aprovação da conta pelo Asaas (eles avisam por e-mail).</li></ol>`],
+      <li>Baixe o app <b>Asaas</b> (Play Store ou App Store) ou entre no site <b>asaas.com</b> e toque em <b>Criar conta grátis</b>.</li>
+      <li>Escolha <b>pessoa física (CPF)</b> ou <b>pessoa jurídica (CNPJ)</b>. Preencha nome, e-mail e celular e crie uma senha.</li>
+      <li>Confirme o e-mail e o celular com o código que o Asaas envia.</li>
+      <li>Complete o cadastro (endereço e informações do seu trabalho: pode colocar que presta serviços de saúde/psicologia).</li>
+      <li>Envie os documentos que o Asaas pedir (normalmente um documento com foto e uma selfie).</li>
+      <li><b>Espere a aprovação da conta</b> (o Asaas avisa por e-mail; costuma levar poucos dias úteis). A conta só recebe Pix depois de aprovada.</li></ol>`],
     ['Passo 2 — Cadastre uma chave Pix no Asaas', `<ol class="policy-list">
       <li>No Asaas, abra o menu <b>Pix</b>.</li>
-      <li>Vá em <b>Minhas chaves</b> (ou "Chaves Pix") e toque em <b>Cadastrar chave</b>.</li>
-      <li>Pode ser uma <b>chave aleatória</b>. É nela que os pagamentos das consultas vão cair.</li></ol>
+      <li>Toque em <b>Minhas chaves</b> e depois em <b>Cadastrar chave</b>.</li>
+      <li>Escolha <b>Chave aleatória</b> (recomendado) ou use CPF, e-mail ou telefone, e confirme com o código de segurança.</li>
+      <li>É nessa conta que os pagamentos das consultas vão cair.</li></ol>
       <p class="small muted">Sem uma chave Pix cadastrada no Asaas, o QR Code da consulta não é gerado.</p>`],
     ['Passo 3 — Gere a sua chave de API', `<ol class="policy-list">
-      <li>No Asaas, abra o menu da sua conta (seu nome ou a engrenagem) e entre em <b>Integrações</b>.</li>
-      <li>Vá em <b>Chaves de API</b> e toque em <b>Gerar chave de API</b> (ou "Gerar nova chave").</li>
-      <li><b>Copie a chave inteira.</b> Ela começa com <code>$aact_</code>. O Asaas mostra a chave uma vez só.</li>
-      <li>Não mande essa chave para ninguém: ela dá acesso à sua conta. Aqui na Acolia ela fica guardada <b>criptografada</b> e só é usada para criar o Pix das consultas e fazer os reembolsos.</li></ol>
+      <li>Pelo <b>site do Asaas</b> (no computador é mais fácil), abra o menu e entre em <b>Integrações</b>.</li>
+      <li>Vá em <b>Chaves de API</b> e toque em <b>Gerar chave de API</b>.</li>
+      <li>Dê um nome para a chave (por exemplo, <b>Acolia</b>). Se pedir validade, escolha <b>sem validade</b> (ou a mais longa).</li>
+      <li>Confirme com o código de segurança que o Asaas manda por SMS ou e-mail.</li>
+      <li>A chave aparece na tela: ela começa com <code>$aact_prod_</code>. Toque em <b>Copiar</b>. <b>O Asaas mostra a chave uma vez só</b>: se perder, gere outra e troque aqui.</li>
+      <li>Não mande essa chave para ninguém. Aqui na Acolia ela fica guardada <b>criptografada</b> e só é usada para criar o Pix das consultas e fazer os reembolsos.</li></ol>
       <p class="small muted">Use a chave da sua <b>conta real</b> do Asaas. Chave de conta de teste (Sandbox) não é aceita, porque não recebe dinheiro de verdade.</p>`],
   ];
   function wizard() {
@@ -199,11 +206,12 @@
             $('[data-yes]', wz)?.addEventListener('click', () => { asked = false; i++; paint(); });
             return;
           }
-          wz.innerHTML = `<div class="wz-step">Tela ${STEPS.length + 1} de ${STEPS.length + 1}</div><h3 style="margin:4px 0 10px">Passo 4 — Cole a chave aqui</h3>
+          wz.innerHTML = `<div class="wz-step">Tela ${STEPS.length + 1} de ${STEPS.length + 1}</div><h3 style="margin:4px 0 10px">Passo 4 — Cole a chave e confirme</h3>
             <div class="form-error hidden" data-err></div>
-            <div class="field"><label for="wz-key">Chave de API do Asaas</label><input id="wz-key" data-key autocomplete="off" spellcheck="false" placeholder="$aact_..."></div>
-            <button type="button" class="btn block" data-save>Conectar</button>
-            <p class="small muted">A Acolia confere a chave com o Asaas na hora.</p>`;
+            <div class="field"><label for="wz-key">Chave de API do Asaas</label><input id="wz-key" data-key autocomplete="off" spellcheck="false" placeholder="$aact_prod_..."></div>
+            ${settings.is_test ? '<p class="notice info small">🧪 <b>Conta de teste:</b> digite <b>SIMULADO</b> para usar o Asaas simulado da Acolia (sem dinheiro de verdade; o Paciente Teste paga tocando em "Simular pagamento"). Também aceita uma chave do Asaas Sandbox.</p>' : ''}
+            <button type="button" class="btn block" data-save>Conectar e confirmar</button>
+            <p class="small muted">A Acolia confere a chave com o Asaas na hora. Depois de conectar, deixe marcado <b>"Usar o pagamento automático"</b>: a partir daí as consultas pagas pelo Pix são <b>confirmadas sozinhas</b>. Confira também se a sua <b>agenda</b> está aberta (horários e valor da consulta).</p>`;
           $('[data-save]', wz).addEventListener('click', async (e) => {
             const btn = e.currentTarget;
             const err = $('[data-err]', wz);
@@ -213,7 +221,7 @@
               settings = await api('/api/agenda/asaas', { method: 'POST', body: { key: $('[data-key]', wz).value } });
               dlg.close(); dlg.remove();
               render();
-              toast(`Asaas conectado ✓${settings.payment.env === 'teste' ? ' (modo de teste)' : ''}`, '', { top: true });
+              toast(`Asaas conectado ✓ Consultas confirmadas automaticamente${settings.payment.env !== 'producao' ? ' (teste)' : ''}`, '', { top: true });
             } catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); btn.disabled = false; }
           });
         };

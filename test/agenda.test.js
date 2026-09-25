@@ -399,13 +399,58 @@ test('no site de verdade só vale chave de conta real do Asaas (a de teste não 
   } finally { process.env.ALLOW_ASAAS_SANDBOX = '1'; }
 });
 
+test('contas de teste: Asaas simulado só para o Profissional Teste; teste só marca com teste', async () => {
+  delete process.env.ALLOW_ASAAS_SANDBOX; // como no site de verdade
+  try {
+    assert.equal((await admin.post('/api/admin/test-accounts')).status, 200);
+    const tp = client();
+    assert.equal((await tp.post('/api/auth/professional/login', { login: '123456789', password: '123456789' })).status, 200);
+    const tpt = client();
+    assert.equal((await tpt.post('/api/auth/patient/login', { cpf: '000.000.000-00', password: '1234' })).status, 200);
+    // Profissional de verdade não usa o simulado nem a chave de teste
+    let r = await P.cl.post('/api/agenda/asaas', { key: 'SIMULADO' });
+    assert.equal(r.status, 400);
+    r = await P.cl.post('/api/agenda/asaas', { key: '$aact_hmlg_chave_de_teste_valida_123456' });
+    assert.equal(r.status, 400);
+    // Profissional Teste: conecta o simulado e abre a agenda
+    r = await tp.post('/api/agenda/asaas', { key: 'simulado' });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.payment.env, 'simulado');
+    assert.equal(r.data.is_test, true);
+    r = await tp.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50 });
+    assert.equal(r.data.ready, true, JSON.stringify(r.data.missing));
+    assert.equal(r.data.mode, 'auto');
+    const tpId = (await tp.get('/api/professional/me')).data.id;
+    clock = Date.parse(at('2030-01-21', '09:00'));
+    // Paciente de verdade não vê o dia disponível nem marca com a conta de teste (e vice-versa)
+    assert.equal((await ana.get(`/api/professionals/${tpId}`)).data.next_available, null);
+    assert.equal((await ana.post('/api/agenda/book', { professional_id: tpId, start: at('2030-01-22', '08:00'), accept: true })).status, 403);
+    assert.equal((await tpt.post('/api/agenda/book', { professional_id: P.id, start: at('2030-01-22', '08:00'), accept: true })).status, 403);
+    assert.ok((await tpt.get(`/api/professionals/${tpId}`)).data.next_available, 'o paciente de teste vê');
+    // Paciente Teste marca, "paga" pelo simulado e a consulta é confirmada sozinha
+    r = await tpt.post('/api/agenda/book', { professional_id: tpId, start: at('2030-01-22', '08:00'), accept: true });
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    const a = r.data;
+    assert.equal(a.simulated, true);
+    assert.ok(a.pix_image && a.pix_payload.startsWith('SIMULADO'));
+    assert.equal((await ana.post(`/api/agenda/appointments/${a.id}/simulate-pay`)).status, 403, 'outro paciente não mexe');
+    r = await tpt.post(`/api/agenda/appointments/${a.id}/simulate-pay`);
+    assert.equal(r.data.status, 'confirmada');
+    const m = await msgs(tp, a.conversation_id);
+    assert.equal(m.at(-1).event, 'agendada');
+    // Cancela e o reembolso simulado sai sozinho
+    r = await tpt.post(`/api/agenda/appointments/${a.id}/cancel`, { reason: 'nao_preciso' });
+    assert.equal(r.data.status, 'reembolsada');
+  } finally { process.env.ALLOW_ASAAS_SANDBOX = '1'; }
+});
+
 test('conta apagada: consultas futuras são canceladas', async () => {
   const cl = await mkPatient('Caio Some Dias', '274.658.193-00');
-  let r = await cl.post('/api/agenda/book', { professional_id: P.id, start: at('2030-01-17', '08:00'), accept: true });
+  let r = await cl.post('/api/agenda/book', { professional_id: P.id, start: at('2030-01-24', '08:00'), accept: true });
   assert.equal(r.status, 201, JSON.stringify(r.data));
   const id = r.data.id;
   r = await cl.post('/api/patient/delete', { password: 'senha123' });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(G.getAppt(id).status, 'cancelada');
-  assert.ok((await ana.get(`/api/agenda/pro/${P.id}/day?date=2030-01-17`)).data.slots.some((s) => s.label === '08:00'), 'horário liberado');
+  assert.ok((await ana.get(`/api/agenda/pro/${P.id}/day?date=2030-01-24`)).data.slots.some((s) => s.label === '08:00'), 'horário liberado');
 });

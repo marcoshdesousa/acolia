@@ -82,7 +82,8 @@ const duration = (pro) => pro.session_minutes || RULES.DEFAULT_MINUTES;
 function autoPayment(proId) {
   const row = db.prepare('SELECT * FROM pro_payment WHERE professional_id = ? AND enabled = 1').get(proId);
   if (!row) return null;
-  if (row.env === 'teste' && process.env.ALLOW_ASAAS_SANDBOX !== '1') return null; // conta de teste não recebe dinheiro
+  // Chave de teste (Sandbox) ou Asaas simulado: só vale para o Profissional Teste (não recebe dinheiro)
+  if (row.env !== 'producao' && process.env.ALLOW_ASAAS_SANDBOX !== '1' && !getPro(proId)?.is_test) return null;
   const key = require('./secretBox').open(row.key_enc);
   return key ? { env: row.env, key, name: row.account_name } : null;
 }
@@ -480,6 +481,8 @@ function view(a, role) {
     pix_payload: role === 'patient' || a.mode === 'manual' ? a.pix_payload : null,
     pix_image: role === 'patient' && a.mode === 'auto' && a.status === 'aguardando_pagamento' ? a.pix_image : null,
     call_code: call && call.status === 'ativo' ? call.patient_code : null,
+    // Conta de teste com o Asaas simulado: o paciente de teste vê o botão "Simular pagamento"
+    simulated: role === 'patient' && a.mode === 'auto' && db.prepare('SELECT env FROM pro_payment WHERE professional_id = ?').get(a.professional_id)?.env === 'simulado',
     can: canDo(a, role),
     now: iso(now()),
   };

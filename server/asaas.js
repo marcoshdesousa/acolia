@@ -15,6 +15,7 @@ const PAID = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
 const REFUNDED = ['REFUNDED', 'REFUND_REQUESTED', 'REFUND_IN_PROGRESS'];
 
 async function call(env, key, method, path, body) {
+  if (env === 'simulado') return require('./asaasSim').handle(method, path, body); // só contas de teste
   let res;
   try {
     res = await fetch(baseFor(env) + path, {
@@ -42,11 +43,18 @@ async function call(env, key, method, path, body) {
 const sandboxAllowed = () => process.env.ALLOW_ASAAS_SANDBOX === '1';
 const SANDBOX_MSG = 'Essa é uma chave de TESTE do Asaas (Sandbox), que não recebe dinheiro de verdade. Use a chave de API da sua conta real do Asaas.';
 
-async function check(key) {
+// testAccount: é o Profissional Teste (conta de teste da plataforma). Só ele pode usar a chave de
+// teste do Asaas (Sandbox) ou o Asaas simulado da Acolia (digitando SIMULADO no lugar da chave).
+async function check(key, { testAccount = false } = {}) {
   key = String(key || '').trim();
+  const testOk = testAccount || sandboxAllowed();
+  if (/^simulado$/i.test(key)) {
+    if (!testAccount) throw new U.HttpError(400, 'O Asaas simulado é só para a conta de teste. Cole a chave de API da sua conta real do Asaas.');
+    return { env: 'simulado', name: 'Asaas simulado (conta de teste)', key: 'SIMULADO' };
+  }
   if (key.length < 20) throw new U.HttpError(400, 'Cole a chave de API completa do Asaas (começa com $aact_).');
-  if (/_hmlg_/.test(key) && !sandboxAllowed()) throw new U.HttpError(400, SANDBOX_MSG);
-  const envs = /_hmlg_/.test(key) ? ['teste'] : /_prod_/.test(key) ? ['producao'] : sandboxAllowed() ? ['producao', 'teste'] : ['producao'];
+  if (/_hmlg_/.test(key) && !testOk) throw new U.HttpError(400, SANDBOX_MSG);
+  const envs = /_hmlg_/.test(key) ? ['teste'] : /_prod_/.test(key) ? ['producao'] : testOk ? ['producao', 'teste'] : ['producao'];
   let last;
   for (const env of envs) {
     try {
@@ -61,7 +69,9 @@ async function check(key) {
 }
 
 async function ensureCustomer(env, key, patient) {
-  const cpf = String(patient.cpf || '').replace(/\D/g, '');
+  let cpf = String(patient.cpf || '').replace(/\D/g, '');
+  // Paciente Teste (CPF 000.000.000-00) no Asaas de teste: usa um CPF válido de exemplo
+  if (env !== 'producao' && !U.isValidCpf(cpf)) cpf = '24971563792';
   const found = await call(env, key, 'GET', `/customers?cpfCnpj=${cpf}`);
   if (found?.data?.length) return found.data[0].id;
   const c = await call(env, key, 'POST', '/customers', { name: patient.name, cpfCnpj: cpf, notificationDisabled: true });

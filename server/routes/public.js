@@ -98,8 +98,8 @@ router.get('/professionals', (req, res) => {
     my_state: me ? me.state : null,
     my_city: me ? me.city : null,
     items: rows.map((p) => (me
-      ? { ...publicProfessional(p, { loggedIn: true, favorite: favSet.has(p.id) }), near: near(p) === 0 }
-      : publicProfessional(p, { loggedIn: viewerIsPro }))),
+      ? { ...publicProfessional(p, { loggedIn: true, favorite: favSet.has(p.id), viewerTest: !!me.is_test }), near: near(p) === 0 }
+      : publicProfessional(p, { loggedIn: viewerIsPro, viewerTest: !!req.auth?.user?.is_test }))),
   });
 });
 
@@ -117,7 +117,7 @@ router.get('/professionals/:id', (req, res) => {
   const isPatient = role === 'patient';
   const logged = isPatient || role === 'professional'; // profissionais também veem o perfil completo
   const favorite = isPatient && !!db.prepare('SELECT 1 FROM favorites WHERE patient_id = ? AND professional_id = ?').get(req.auth.user.id, p.id);
-  const out = publicProfessional(p, { loggedIn: logged, favorite });
+  const out = publicProfessional(p, { loggedIn: logged, favorite, viewerTest: !!(logged && req.auth.user.is_test) });
   if (logged) {
     out.following = !!db.prepare('SELECT 1 FROM follows WHERE follower_role = ? AND follower_id = ? AND professional_id = ?').get(role, req.auth.user.id, p.id);
     out.is_self = role === 'professional' && req.auth.user.id === p.id;
