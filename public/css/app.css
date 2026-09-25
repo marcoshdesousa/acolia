@@ -417,15 +417,14 @@ a.soc:active { transform: scale(.94); }
 .soc-tiktok { background: #000; }
 .soc-tiktok svg { filter: drop-shadow(-1.2px -1px 0 #25f4ee) drop-shadow(1.2px 1px 0 #fe2c55); }
 .soc-x { background: #000; }
-.soc-x svg { width: 17px; height: 17px; }
-.soc-youtube { background: #ff0000; border-radius: 12px; width: 44px; }
-.soc-youtube svg { width: 24px; height: 24px; }
+.soc-x svg { width: 18px; height: 18px; }
+.soc-youtube { background: #ff0000; }
+.soc-youtube svg { width: 21px; height: 21px; }
 .soc-tiktok, .soc-x { box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
 .social-fields { display: flex; flex-direction: column; gap: 8px; }
 .soc-field { display: flex; align-items: center; gap: 10px; margin: 0; font-weight: 400; }
 .soc-field input { flex: 1; min-width: 0; }
 .soc-field .soc { width: 40px; height: 40px; }
-.soc-field .soc-youtube { width: 40px; border-radius: 12px; }
 .gallery-edit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 @media (max-width: 560px) { .gallery-edit { grid-template-columns: repeat(2, 1fr); } }
 .gallery-slot { border: 1.5px dashed var(--line); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 6px; align-items: stretch; text-align: center; }

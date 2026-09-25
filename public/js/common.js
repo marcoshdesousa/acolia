@@ -687,7 +687,7 @@
     x: { name: 'X', ph: '@seu_usuario ou link do perfil',
       svg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.8 2.5h3.1l-6.8 7.8 8 10.6h-6.3l-4.9-6.4-5.6 6.4H2.2l7.3-8.3L1.8 2.5h6.4l4.4 5.9 5.2-5.9zm-1.1 16.5h1.7L7.4 4.2H5.5L16.7 19z"/></svg>' },
     youtube: { name: 'YouTube', ph: '@seucanal ou link do canal',
-      svg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.6 7.8v8.4l7-4.2z"/></svg>' },
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="1.5" y="5" width="21" height="14" rx="4.2"/><path d="M10 8.9v6.2l5.3-3.1z" fill="#ff0000"/></svg>' },
   };
   // Botões redondos só com o símbolo (o nome fica para leitor de tela e na dica do mouse)
   function socialLinks(list) {
