@@ -1932,7 +1932,7 @@ test('mensagem a partir de um post: o paciente envia a publicação só para que
   assert.equal(after.post, null);
 });
 
-test('meus pacientes: só quem fez consulta com o profissional; filtro por nome ou CPF; PDF e planilha', async () => {
+test('meus pacientes: quem está no histórico de chamadas entra sozinho; adicionar presencial/online; lixeira; filtros; PDF', async () => {
   const { db } = require('../server/db');
   const mkPro = async (name, email, phone) => {
     const c = await admin.post('/api/admin/professionals', { name, profession: 'Psicanalista', registry: '', email, phone, state: 'SP', city: 'Campinas' });
@@ -1962,11 +1962,12 @@ test('meus pacientes: só quem fez consulta com o profissional; filtro por nome 
     await pro.cl.post(`/api/calls/${r.data.id}/end`);
   };
   await call(A, await conv(P1, A), 'Renata', true);
-  await call(A, await conv(P2, A), 'Tiago', false); // código gerado, mas a consulta não aconteceu
   await call(B, await conv(P2, B), 'Tiago', true);   // consulta com outro profissional
   let list = (await A.cl.get('/api/professional/patients')).data.items;
   assert.deepEqual(list.map((p) => p.name), ['Renata Consulta Dias'], 'só quem fez consulta com ela');
   assert.equal(list[0].consultas, 1);
+  assert.equal(list[0].kind, 'acolia');
+  assert.equal(list[0].modality, 'online', 'consulta pela Acolia é online');
   assert.equal(list[0].birth_date, '15/04/1990');
   assert.match(list[0].cpf, /^\d{3}\.\d{3}\.\d{3}-\d{2}$/);
   assert.equal((await B.cl.get('/api/professional/patients')).data.items[0].name, 'Tiago Semconsulta Lopes', 'cada um vê só os seus');
@@ -1976,11 +1977,9 @@ test('meus pacientes: só quem fez consulta com o profissional; filtro por nome 
   assert.equal((await A.cl.get(`/api/professional/patients?q=${P1.cpf.slice(0, 6)}`)).data.items.length, 1);
   assert.equal((await A.cl.get(`/api/professional/patients?q=${encodeURIComponent(list[0].cpf)}`)).data.items.length, 1);
   assert.equal((await A.cl.get('/api/professional/patients?q=fulano')).data.items.length, 0);
-  // planilha e PDF
+  // Só PDF (a planilha saiu)
   let r = await fetch(`${base}/api/professional/patients.csv`, { headers: { Cookie: A.cl.cookie } });
-  const csvText = await r.text();
-  assert.match(r.headers.get('content-type'), /text\/csv/);
-  assert.ok(csvText.includes('Renata Consulta Dias') && !csvText.includes('Tiago'));
+  assert.equal(r.status, 404);
   // o PDF é montado na hora e enviado: nenhum arquivo novo fica gravado no servidor
   const listFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true }).sort() : []);
   const dataDir = require('../server/paths').DATA_DIR;
@@ -2011,9 +2010,48 @@ test('meus pacientes: só quem fez consulta com o profissional; filtro por nome 
   assert.equal(d.items.length, 0, 'fevereiro sem consultas');
   d = (await A.cl.get('/api/professional/patients')).data;
   assert.equal(d.totals.consultations, 3, 'tudo: 3 consultas');
-  r = await fetch(`${base}/api/professional/patients.csv?from=2026-01-01&to=2026-01-31`, { headers: { Cookie: A.cl.cookie } });
-  const csvJan = await r.text();
-  assert.ok(csvJan.includes('"Total de consultas";"2"') && csvJan.includes('de 01/01/2026 a 31/01/2026'));
+  // Chamada que está no histórico (sem o paciente ter entrado) também entra na lista
+  const c2 = await conv(P2, A);
+  await call(A, c2, 'Tiago', false);
+  assert.ok((await A.cl.get('/api/professional/patients')).data.items.some((p) => p.name === 'Tiago Semconsulta Lopes'));
+  // Lixeira: tira da lista (consulta de teste); volta se houver uma nova consulta
+  const tiago = (await A.cl.get('/api/professional/patients')).data.items.find((p) => p.name === 'Tiago Semconsulta Lopes');
+  assert.equal((await A.cl.post(`/api/professional/patients/${tiago.id}/hide`)).status, 200);
+  assert.ok(!(await A.cl.get('/api/professional/patients')).data.items.some((p) => p.name === 'Tiago Semconsulta Lopes'));
+  assert.equal((await B.cl.post(`/api/professional/patients/${list[0].id}/hide`)).status, 404, 'só pacientes dele');
+  // (a chamada escondida ficou antes do "apagar"; a nova vem depois)
+  db.prepare("UPDATE calls SET created_at = datetime('now', '-2 minutes') WHERE conversation_id = ?").run(c2);
+  db.prepare("UPDATE pro_patient_hidden SET hidden_at = datetime('now', '-1 minute')").run();
+  await call(A, c2, 'Tiago', true);
+  const back = (await A.cl.get('/api/professional/patients')).data.items.find((p) => p.name === 'Tiago Semconsulta Lopes');
+  assert.equal(back.consultas, 1, 'voltou com a consulta nova (a de antes continua fora)');
+  // Adicionar paciente atendido fora da Acolia (presencial ou online)
+  r = await A.cl.post('/api/professional/patients', { name: 'Lúcia Presencial Souza', cpf: '123.456.789-00', birth_date: '1980-02-03', state: 'SP', city: 'Campinas', modality: 'presencial', consultas: 4, last_date: '2026-01-20' });
+  assert.equal(r.status, 400, 'CPF inválido');
+  r = await A.cl.post('/api/professional/patients', { name: 'Lúcia Presencial Souza', cpf: cpfOf([8, 2, 4, 3, 9, 5, 1, 6, 3]), birth_date: '1980-02-03', state: 'SP', city: 'Campinas', modality: 'presencial', consultas: 4, last_date: '2026-01-20' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const manualId = r.data.id;
+  assert.equal((await A.cl.post('/api/professional/patients', { name: 'Sem Modalidade', cpf: cpfOf([8, 2, 4, 3, 9, 5, 1, 6, 4]), birth_date: '1980-02-03', state: 'SP', city: 'Campinas', consultas: 1, last_date: '2026-01-20' })).status, 400);
+  d = (await A.cl.get('/api/professional/patients?modality=presencial')).data;
+  assert.deepEqual(d.items.map((p) => p.name), ['Lúcia Presencial Souza']);
+  assert.equal(d.items[0].kind, 'manual');
+  assert.equal(d.items[0].ultima, '20/01/2026');
+  assert.deepEqual(d.totals, { patients: 1, consultations: 4 });
+  d = (await A.cl.get('/api/professional/patients?modality=online')).data;
+  assert.ok(d.items.every((p) => p.modality === 'online') && d.items.length === 2);
+  d = (await A.cl.get('/api/professional/patients?from=2026-01-01&to=2026-01-31')).data;
+  assert.ok(d.items.some((p) => p.name === 'Lúcia Presencial Souza'), 'período usa a data da última consulta');
+  assert.equal((await B.cl.get('/api/professional/patients')).data.items.some((p) => p.kind === 'manual'), false, 'cada um vê só os seus');
+  // editar e apagar
+  r = await A.cl.put(`/api/professional/patients/manual/${manualId}`, { name: 'Lúcia Online Souza', cpf: cpfOf([8, 2, 4, 3, 9, 5, 1, 6, 3]), birth_date: '1980-02-03', state: 'SP', city: 'Campinas', modality: 'online', consultas: 5, last_date: '2026-01-22' });
+  assert.equal(r.status, 200);
+  assert.equal((await B.cl.put(`/api/professional/patients/manual/${manualId}`, { name: 'Outro Nome Aqui', cpf: cpfOf([8, 2, 4, 3, 9, 5, 1, 6, 3]), birth_date: '1980-02-03', state: 'SP', city: 'Campinas', modality: 'online', consultas: 5, last_date: '2026-01-22' })).status, 404);
+  const pdfM = Buffer.from(await (await fetch(`${base}/api/professional/patients.pdf?modality=online`, { headers: { Cookie: A.cl.cookie } })).arrayBuffer()).toString('latin1');
+  assert.ok(pdfM.includes('Online') && pdfM.includes('Souza') && pdfM.includes('Modalidade'));
+  await B.cl.del(`/api/professional/patients/manual/${manualId}`);
+  assert.ok((await A.cl.get('/api/professional/patients')).data.items.some((p) => p.id === manualId && p.kind === 'manual'), 'outro profissional não apaga');
+  await A.cl.del(`/api/professional/patients/manual/${manualId}`);
+  assert.ok(!(await A.cl.get('/api/professional/patients')).data.items.some((p) => p.kind === 'manual'));
   // paciente não acessa
   assert.ok((await P1.cl.get('/api/professional/patients')).status >= 401, 'paciente não acessa');
 });

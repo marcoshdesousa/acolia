@@ -71,6 +71,7 @@ function wipePatient(me) {
   require('./support').purge('patient', me.id);
   require('../agenda').onAccountGone('patient', me.id);
   require('./chat').eraseMessagesOf('patient', me.id);
+  db.prepare('DELETE FROM pro_patient_hidden WHERE patient_id = ?').run(me.id);
   removePhoto(me.photo);
   db.prepare("DELETE FROM favorites WHERE patient_id = ?").run(me.id);
   db.prepare(`UPDATE patients SET status = 'excluido', name = 'Conta excluída', display_name = '', handle = NULL, cpf = ?, cpf_name_verified = 0, birth_date = NULL,

@@ -170,12 +170,16 @@
       <td>${h.status === 'ativo' ? '<span class="badge ok">Ativo</span>' : '<span class="badge">Finalizado</span>'}</td></tr>`).join('')
       : '<tr><td colspan="4" class="muted center">Nenhum atendimento ainda.</td></tr>';
   }
-  // Meus pacientes: quem já fez consulta; filtro por nome/CPF e por período; baixar em PDF ou planilha
+  // Meus pacientes: os da Acolia entram sozinhos (consulta online); os de fora ele adiciona (presencial ou online).
+  // Filtro por nome/CPF, modalidade e período; lixeira tira da lista; baixar em PDF.
   let patTimer = null;
+  let patMod = '';
+  let patItems = [];
   const patQuery = () => {
     const qs = new URLSearchParams();
     const q = $('[data-pat-q]').value.trim();
     if (q) qs.set('q', q);
+    if (patMod) qs.set('modality', patMod);
     if ($('[data-pat-from]').value) qs.set('from', $('[data-pat-from]').value);
     if ($('[data-pat-to]').value) qs.set('to', $('[data-pat-to]').value);
     return qs.toString();
@@ -183,10 +187,14 @@
   async function loadMyPatients() {
     const filtered = !!patQuery();
     const { items, totals, period } = await api(`/api/professional/patients?${patQuery()}`);
+    patItems = items;
     $('[data-pat-list]').innerHTML = items.length ? items.map((p) => `<tr>
-      <td><b>${esc(p.name)}</b></td><td style="white-space:nowrap">${esc(p.cpf)}</td><td>${esc(p.birth_date)}</td>
-      <td>${esc(p.place)}</td><td class="center">${p.consultas}</td><td>${esc(p.ultima)}</td></tr>`).join('')
-      : `<tr><td colspan="6" class="muted center">${filtered ? 'Nenhum paciente encontrado com esse filtro.' : 'Quando você fizer consultas pela Acolia, seus pacientes aparecem aqui.'}</td></tr>`;
+      <td><b>${esc(p.name)}</b>${p.kind === 'manual' ? '<div class="small muted">Adicionado por você</div>' : '<div class="small muted">Pela Acolia</div>'}</td>
+      <td style="white-space:nowrap">${esc(p.cpf)}</td><td>${esc(p.birth_date)}</td>
+      <td>${esc(p.place)}</td><td><span class="badge ${p.modality === 'online' ? 'ok' : ''}">${p.modality === 'online' ? 'Online' : 'Presencial'}</span></td>
+      <td class="center">${p.consultas}</td><td>${esc(p.ultima)}</td>
+      <td style="white-space:nowrap">${p.kind === 'manual' ? `<button type="button" class="icon-btn" data-pat-edit="${esc(p.key)}" aria-label="Editar ${esc(p.name)}" title="Editar">${ICONS.edit}</button>` : ''}<button type="button" class="icon-btn" data-pat-del="${esc(p.key)}" aria-label="Tirar ${esc(p.name)} da lista" title="Tirar da lista">${ICONS.trash}</button></td></tr>`).join('')
+      : `<tr><td colspan="8" class="muted center">${filtered ? 'Nenhum paciente encontrado com esse filtro.' : 'Quando você fizer consultas pela Acolia, seus pacientes aparecem aqui. Atendeu fora? Toque em "Adicionar paciente".'}</td></tr>`;
     $('[data-pat-summary]').innerHTML = `<span class="small muted">Período: <b>${esc(period)}</b></span>
       <span class="pat-num"><b>${totals.patients}</b> paciente${totals.patients === 1 ? '' : 's'}</span>
       <span class="pat-num"><b>${totals.consultations}</b> consulta${totals.consultations === 1 ? '' : 's'}</span>`;
@@ -195,6 +203,11 @@
   $('[data-pat-q]').addEventListener('input', reloadPatients);
   $('[data-pat-from]').addEventListener('change', reloadPatients);
   $('[data-pat-to]').addEventListener('change', reloadPatients);
+  $$('[data-pat-mod]').forEach((b) => b.addEventListener('click', () => {
+    patMod = b.dataset.patMod;
+    $$('[data-pat-mod]').forEach((x) => x.classList.toggle('on', x === b));
+    reloadPatients();
+  }));
   // Atalhos de período (datas do aparelho)
   const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   $$('[data-pat-range]').forEach((b) => b.addEventListener('click', () => {
@@ -212,8 +225,72 @@
   $$('[data-pat-export]').forEach((a) => a.addEventListener('click', (e) => {
     e.preventDefault();
     const qs = patQuery();
-    location.href = `/api/professional/patients.${a.dataset.patExport}${qs ? `?${qs}` : ''}`;
+    location.href = `/api/professional/patients.pdf${qs ? `?${qs}` : ''}`;
   }));
+  // Adicionar / editar paciente atendido fora da Acolia
+  async function patientForm(p) {
+    const v = p?.raw || { modality: 'presencial', consultas: 1 };
+    const today = ymd(new Date());
+    await modal({
+      title: p ? 'Editar paciente' : 'Adicionar paciente',
+      html: `<p class="small muted" style="margin-top:0">Para pacientes que você atendeu fora da Acolia. Quem faz consulta pela Acolia entra na lista sozinho.</p>
+        <div class="form-error hidden" data-err></div>
+        <form class="stack" data-pf novalidate>
+          <div class="field"><label>Nome completo</label><input name="name" required maxlength="120" value="${esc(v.name || '')}" autocomplete="off"></div>
+          <div class="grid-2">
+            <div class="field"><label>CPF</label><input name="cpf" required inputmode="numeric" placeholder="000.000.000-00" value="${esc(v.cpf || '')}"></div>
+            <div class="field"><label>Data de nascimento</label><input name="birth_date" type="date" required max="${today}" value="${esc(v.birth_date || '')}"></div>
+          </div>
+          <div class="field"><label>Município</label><div class="grid-uf"><select name="state" aria-label="Estado" required>${Acolia.ufOptions(v.state || '')}</select><input name="city" required placeholder="Município" value="${esc(v.city || '')}"></div></div>
+          <div class="field"><label>Atendimento</label><div class="row" style="gap:8px" role="radiogroup">
+            <label class="chip-radio"><input type="radio" name="modality" value="presencial" ${v.modality !== 'online' ? 'checked' : ''}> Presencial</label>
+            <label class="chip-radio"><input type="radio" name="modality" value="online" ${v.modality === 'online' ? 'checked' : ''}> Online</label></div></div>
+          <div class="grid-2">
+            <div class="field"><label>Consultas feitas</label><input name="consultas" type="number" min="1" max="9999" required value="${esc(String(v.consultas || 1))}"></div>
+            <div class="field"><label>Data da última consulta</label><input name="last_date" type="date" required max="${today}" value="${esc(v.last_date || today)}"></div>
+          </div>
+        </form>`,
+      onOpen: (dlg) => {
+        const f = $('[data-pf]', dlg);
+        Acolia.maskCpf(f.cpf);
+        Acolia.bindUfCity(f.state, f.city);
+        if (v.city) f.city.value = v.city;
+        f.name.focus();
+      },
+      actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
+        label: p ? 'Salvar' : 'Adicionar',
+        handler: async (dlg) => {
+          const f = $('[data-pf]', dlg);
+          const body = Object.fromEntries(new FormData(f));
+          const err = $('[data-err]', dlg);
+          try {
+            await api(p ? `/api/professional/patients/manual/${p.id}` : '/api/professional/patients', { method: p ? 'PUT' : 'POST', body });
+            toast(p ? 'Paciente atualizado ✓' : 'Paciente adicionado ✓');
+            loadMyPatients();
+            return true;
+          } catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); return false; }
+        },
+      }],
+    });
+  }
+  $('[data-pat-add]').addEventListener('click', () => patientForm(null));
+  $('[data-pat-list]').addEventListener('click', async (e) => {
+    const ed = e.target.closest('[data-pat-edit]');
+    if (ed) { patientForm(patItems.find((x) => x.key === ed.dataset.patEdit)); return; }
+    const del = e.target.closest('[data-pat-del]');
+    if (!del) return;
+    const p = patItems.find((x) => x.key === del.dataset.patDel);
+    if (!p) return;
+    const msg = p.kind === 'manual'
+      ? `Apagar ${p.name} da sua lista de pacientes?`
+      : `Tirar ${p.name} da sua lista? Use para consultas de teste, por exemplo. Se você fizer uma nova consulta com ele(a) pela Acolia, ele(a) volta a aparecer.`;
+    if (!await confirmDialog(msg, { okLabel: p.kind === 'manual' ? 'Apagar' : 'Tirar da lista', danger: true })) return;
+    try {
+      await api(p.kind === 'manual' ? `/api/professional/patients/manual/${p.id}` : `/api/professional/patients/${p.id}/hide`, { method: p.kind === 'manual' ? 'DELETE' : 'POST' });
+      toast('Pronto ✓');
+      loadMyPatients();
+    } catch (ex) { toast(ex.message, 'error'); }
+  });
 
 
   // ---------- Chat ----------

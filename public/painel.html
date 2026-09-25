@@ -67,12 +67,17 @@
           <div class="row between" style="flex-wrap:wrap;gap:10px">
             <h2 style="margin:0">Meus pacientes</h2>
             <div class="row" style="gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn sm" data-pat-add>+ Adicionar paciente</button>
               <a class="btn secondary sm" href="#" data-pat-export="pdf">Baixar PDF</a>
-              <a class="btn secondary sm" href="#" data-pat-export="csv">Baixar planilha (Excel)</a>
             </div>
           </div>
-          <p class="small muted" style="margin:6px 0 12px">Pacientes com quem você já fez consulta pela Acolia. Filtre pelo nome, pelo CPF ou pelo período das consultas.</p>
+          <p class="small muted" style="margin:6px 0 12px">Quem fez consulta com você pela Acolia aparece aqui sozinho, com os dados completos do cadastro (consulta online). Atendeu fora da Acolia? Toque em <b>Adicionar paciente</b> e marque se foi presencial ou online. A lixeira tira o paciente da lista (ex.: uma consulta de teste).</p>
           <input type="search" data-pat-q placeholder="Buscar por nome ou CPF" aria-label="Buscar paciente por nome ou CPF" autocomplete="off">
+          <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px" role="group" aria-label="Modalidade">
+            <button type="button" class="chip-btn on" data-pat-mod="">Todos</button>
+            <button type="button" class="chip-btn" data-pat-mod="online">Online</button>
+            <button type="button" class="chip-btn" data-pat-mod="presencial">Presencial</button>
+          </div>
           <div class="pat-period">
             <div class="field"><label for="pat-from">De</label><input type="date" id="pat-from" data-pat-from></div>
             <div class="field"><label for="pat-to">Até</label><input type="date" id="pat-to" data-pat-to></div>
@@ -84,7 +89,7 @@
             <button type="button" class="chip-btn" data-pat-range="all">Tudo</button>
           </div>
           <div class="pat-summary" data-pat-summary></div>
-          <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Nome completo</th><th>CPF</th><th>Nascimento</th><th>Município</th><th>Consultas</th><th>Última</th></tr></thead><tbody data-pat-list></tbody></table></div>
+          <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Nome completo</th><th>CPF</th><th>Nascimento</th><th>Município</th><th>Modalidade</th><th>Consultas</th><th>Última</th><th aria-label="Ações"></th></tr></thead><tbody data-pat-list></tbody></table></div>
         </div>
         <h2 style="margin-top:24px">Histórico de chamadas</h2>
         <div class="table-wrap"><table><thead><tr><th>Paciente</th><th>Código</th><th>Criado</th><th>Situação</th></tr></thead><tbody data-history></tbody></table></div>

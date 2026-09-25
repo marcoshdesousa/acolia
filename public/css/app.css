@@ -1308,3 +1308,8 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 /* @ do paciente */
 .hd-line { font-size: .74rem; color: var(--muted); margin-top: -2px; }
 .handle-line { color: var(--primary); font-weight: 700; }
+
+/* Meus pacientes: adicionar paciente (presencial/online) */
+.chip-radio { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; font-weight: 600; }
+.chip-radio:has(input:checked) { background: var(--primary-soft); border-color: var(--primary); }
+[data-my-patients] td:first-child { min-width: 180px; }

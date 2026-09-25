@@ -198,6 +198,8 @@ function wipeProfessional(me) {
     .run(`excluido-${me.id}`, `excluido-${me.id}@removido.acolia`, `excluido-${me.id}`, me.id);
   db.prepare('DELETE FROM favorites WHERE professional_id = ?').run(me.id);
   db.prepare("DELETE FROM calls WHERE professional_id = ? AND status <> 'ativo'").run(me.id); // histórico de atendimentos some junto
+  db.prepare('DELETE FROM pro_manual_patients WHERE professional_id = ?').run(me.id); // "Meus pacientes" adicionados à mão
+  db.prepare('DELETE FROM pro_patient_hidden WHERE professional_id = ?').run(me.id);
   for (const c of db.prepare('SELECT id, patient_id FROM conversations WHERE professional_id = ?').all(me.id)) {
     rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });
   }
@@ -220,76 +222,153 @@ router.post('/password', (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- Meus pacientes: quem já fez consulta (chamada iniciada) com este profissional ----------
-// Filtro por nome completo ou CPF; dá para baixar em PDF ou planilha (Excel). Só os pacientes dele.
-// Período (datas do Brasil, AAAA-MM-DD): conta só as consultas feitas entre "de" e "até".
-// As consultas ficam gravadas em UTC; o Brasil (Brasília) está 3 h atrás.
+// ---------- Meus pacientes ----------
+// 1) Automáticos: quem teve consulta (chamada) com este profissional pela Acolia. Vêm completos do cadastro
+//    (nome, CPF, nascimento, município) e são sempre "online".
+// 2) Adicionados por ele: pacientes presenciais ou online atendidos fora da Acolia (preenche tudo à mão).
+// A lixeira tira da lista: o adicionado é apagado; o da Acolia fica escondido até uma nova consulta
+// (serve para as consultas de teste). Filtros: nome/CPF, online/presencial e período. Baixar só em PDF.
+// As datas das chamadas ficam em UTC; o Brasil (Brasília) está 3 h atrás.
+db.exec(`
+CREATE TABLE IF NOT EXISTS pro_manual_patients (
+  id INTEGER PRIMARY KEY,
+  professional_id INTEGER NOT NULL REFERENCES professionals(id),
+  name TEXT NOT NULL,
+  cpf TEXT NOT NULL,
+  birth_date TEXT,
+  city TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL DEFAULT '',
+  modality TEXT NOT NULL DEFAULT 'presencial',   -- presencial | online
+  consultas INTEGER NOT NULL DEFAULT 1,
+  last_date TEXT NOT NULL,                         -- AAAA-MM-DD (data da última consulta)
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_manual_patients_pro ON pro_manual_patients(professional_id);
+CREATE TABLE IF NOT EXISTS pro_patient_hidden (
+  professional_id INTEGER NOT NULL,
+  patient_id INTEGER NOT NULL,
+  hidden_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (professional_id, patient_id)
+);
+`);
 const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
-function attendedPatients(proId, { q = '', from = '', to = '' } = {}) {
+const brDate = (d) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '');
+function myPatients(proId, { q = '', from = '', to = '', modality = '' } = {}) {
   const f = isDate(from) ? from : null;
   const t = isDate(to) ? to : null;
-  const rows = db.prepare(`
-    WITH att AS (
-      SELECT COALESCE(ca.conversation_id,
-        (SELECT m.conversation_id FROM messages m WHERE m.kind = 'call' AND m.body = ca.patient_code LIMIT 1)) AS conv,
-        datetime(ca.started_at, '-3 hours') AS at
-      FROM calls ca WHERE ca.professional_id = ? AND ca.started_at IS NOT NULL
-        AND (? IS NULL OR ca.started_at >= datetime(? || ' 00:00:00', '+3 hours'))
-        AND (? IS NULL OR ca.started_at <= datetime(? || ' 23:59:59', '+3 hours')))
-    SELECT pa.id, pa.name, pa.cpf, pa.birth_date, pa.city, pa.state, COUNT(*) AS consultas, MIN(att.at) AS primeira, MAX(att.at) AS ultima
-    FROM att JOIN conversations c ON c.id = att.conv AND c.professional_id = ?
-    JOIN patients pa ON pa.id = c.patient_id AND pa.status <> 'excluido'
-    GROUP BY pa.id ORDER BY ultima DESC`).all(proId, f, f, t, t, proId);
+  const mod = modality === 'online' || modality === 'presencial' ? modality : '';
+  let rows = [];
+  if (mod !== 'presencial') {
+    // Toda chamada do histórico ligada a um paciente conta (depois do horário de "apagar", se ele apagou)
+    rows = db.prepare(`
+      WITH att AS (
+        SELECT COALESCE(ca.conversation_id,
+          (SELECT m.conversation_id FROM messages m WHERE m.kind = 'call' AND m.body = ca.patient_code LIMIT 1)) AS conv,
+          COALESCE(ca.started_at, ca.host_joined_at, ca.guest_joined_at, ca.created_at) AS ts
+        FROM calls ca WHERE ca.professional_id = ?
+          AND (ca.started_at IS NOT NULL OR ca.host_joined_at IS NOT NULL OR ca.guest_joined_at IS NOT NULL OR ca.status <> 'ativo'))
+      SELECT pa.id, pa.name, pa.cpf, pa.birth_date, pa.city, pa.state, COUNT(*) AS consultas,
+        MIN(date(att.ts, '-3 hours')) AS primeira, MAX(date(att.ts, '-3 hours')) AS ultima
+      FROM att JOIN conversations c ON c.id = att.conv AND c.professional_id = ?
+      JOIN patients pa ON pa.id = c.patient_id AND pa.status <> 'excluido'
+      LEFT JOIN pro_patient_hidden h ON h.professional_id = ? AND h.patient_id = pa.id
+      WHERE (h.patient_id IS NULL OR att.ts > h.hidden_at)
+        AND (? IS NULL OR att.ts >= datetime(? || ' 00:00:00', '+3 hours'))
+        AND (? IS NULL OR att.ts <= datetime(? || ' 23:59:59', '+3 hours'))
+      GROUP BY pa.id`).all(proId, proId, proId, f, f, t, t)
+      .map((r) => ({ ...r, kind: 'acolia', modality: 'online' }));
+  }
+  const manual = db.prepare(`SELECT * FROM pro_manual_patients WHERE professional_id = ?
+      AND (? = '' OR modality = ?) AND (? IS NULL OR last_date >= ?) AND (? IS NULL OR last_date <= ?)`)
+    .all(proId, mod, mod, f, f, t, t)
+    .map((r) => ({ ...r, kind: 'manual', primeira: null, ultima: r.last_date }));
+  rows = rows.concat(manual).sort((x, y) => String(y.ultima).localeCompare(String(x.ultima)));
   const text = U.norm(q || '').trim();
   const digits = U.onlyDigits(q || '');
   const list = !text ? rows : rows.filter((r) => U.norm(r.name).includes(text) || (digits.length >= 3 && r.cpf.includes(digits)));
-  const br = (d) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '');
   return list.map((r) => ({
-    id: r.id, name: r.name, cpf: U.formatCpf(r.cpf), birth_date: br(r.birth_date), place: `${r.city} - ${r.state}`,
-    consultas: r.consultas, primeira: br(r.primeira), ultima: br(r.ultima),
+    key: `${r.kind === 'manual' ? 'm' : 'a'}${r.id}`, id: r.id, kind: r.kind, modality: r.modality,
+    name: r.name, cpf: U.formatCpf(r.cpf), birth_date: brDate(r.birth_date), place: [r.city, r.state].filter(Boolean).join(' - '),
+    consultas: r.consultas, primeira: brDate(r.primeira), ultima: brDate(r.ultima),
+    modalidade: r.modality === 'online' ? 'Online' : 'Presencial', origem: r.kind === 'manual' ? 'Adicionado' : 'Acolia',
+    raw: r.kind === 'manual' ? { name: r.name, cpf: U.formatCpf(r.cpf), birth_date: r.birth_date || '', city: r.city, state: r.state, modality: r.modality, consultas: r.consultas, last_date: r.last_date } : undefined,
   }));
 }
-const filtersOf = (query) => ({ q: query.q, from: query.from, to: query.to });
+const filtersOf = (query) => ({ q: query.q, from: query.from, to: query.to, modality: query.modality });
 function periodText({ from, to }) {
-  const br = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
-  if (isDate(from) && isDate(to)) return `de ${br(from)} a ${br(to)}`;
-  if (isDate(from)) return `a partir de ${br(from)}`;
-  if (isDate(to)) return `até ${br(to)}`;
+  if (isDate(from) && isDate(to)) return `de ${brDate(from)} a ${brDate(to)}`;
+  if (isDate(from)) return `a partir de ${brDate(from)}`;
+  if (isDate(to)) return `até ${brDate(to)}`;
   return 'todo o período';
 }
+const modalityText = (m) => (m === 'online' ? 'só online' : m === 'presencial' ? 'só presencial' : 'online e presencial');
 const totalsOf = (rows) => ({ patients: rows.length, consultations: rows.reduce((a, r) => a + r.consultas, 0) });
 
-const PATIENT_COLS = [['Nome completo', 'name', 30], ['CPF', 'cpf', 13], ['Nascimento', 'birth_date', 10], ['Município', 'place', 20], ['Consultas', 'consultas', 8], ['Primeira', 'primeira', 10], ['Última', 'ultima', 10]];
+const PATIENT_COLS = [['Nome completo', 'name', 27], ['CPF', 'cpf', 13], ['Nascimento', 'birth_date', 10], ['Município', 'place', 18], ['Modalidade', 'modalidade', 10], ['Consultas', 'consultas', 8], ['Última', 'ultima', 10]];
 
 router.get('/patients', (req, res) => {
-  const items = attendedPatients(req.auth.user.id, filtersOf(req.query));
+  const items = myPatients(req.auth.user.id, filtersOf(req.query));
   res.json({ items, totals: totalsOf(items), period: periodText(req.query) });
 });
-router.get('/patients.csv', (req, res) => {
-  const rows = attendedPatients(req.auth.user.id, filtersOf(req.query));
-  const tot = totalsOf(rows);
-  const e = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const lines = [PATIENT_COLS.map((c) => e(c[0])).join(';'), ...rows.map((r) => PATIENT_COLS.map((c) => e(r[c[1]])).join(';')),
-    '', e(`Período: ${periodText(req.query)}`),
-    `${e('Total de pacientes')};${e(tot.patients)}`, `${e('Total de consultas')};${e(tot.consultations)}`];
-  const body = '﻿' + lines.join('\r\n');
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="meus-pacientes.csv"');
-  res.send(body);
+// Adicionar / editar paciente atendido fora da Acolia (presencial ou online)
+function manualBody(body) {
+  const name = U.cleanText(body.name, 120);
+  if (name.length < 3) throw new U.HttpError(400, 'Informe o nome completo do paciente.');
+  const cpf = U.onlyDigits(body.cpf);
+  if (!U.isValidCpf(cpf)) throw new U.HttpError(400, 'CPF inválido. Confira os números.');
+  const birth = isDate(body.birth_date) ? body.birth_date : null;
+  if (!birth || birth > new Date().toISOString().slice(0, 10)) throw new U.HttpError(400, 'Informe a data de nascimento.');
+  const state = String(body.state || '').toUpperCase();
+  if (!U.isUf(state)) throw new U.HttpError(400, 'Escolha o estado (UF).');
+  const city = U.cleanText(body.city, 80);
+  if (city.length < 2) throw new U.HttpError(400, 'Informe o município.');
+  const modality = body.modality === 'online' ? 'online' : body.modality === 'presencial' ? 'presencial' : null;
+  if (!modality) throw new U.HttpError(400, 'Escolha se o atendimento foi presencial ou online.');
+  const consultas = Math.round(Number(body.consultas));
+  if (!(consultas >= 1 && consultas <= 9999)) throw new U.HttpError(400, 'Informe quantas consultas foram feitas (pelo menos 1).');
+  const last = isDate(body.last_date) ? body.last_date : null;
+  if (!last) throw new U.HttpError(400, 'Informe a data da última consulta.');
+  return { name, cpf, birth, state, city, modality, consultas, last };
+}
+router.post('/patients', (req, res) => {
+  const v = manualBody(req.body);
+  const info = db.prepare(`INSERT INTO pro_manual_patients (professional_id, name, cpf, birth_date, city, state, modality, consultas, last_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(req.auth.user.id, v.name, v.cpf, v.birth, v.city, v.state, v.modality, v.consultas, v.last);
+  res.status(201).json({ ok: true, id: Number(info.lastInsertRowid) });
+});
+router.put('/patients/manual/:id', (req, res) => {
+  const v = manualBody(req.body);
+  const r = db.prepare(`UPDATE pro_manual_patients SET name = ?, cpf = ?, birth_date = ?, city = ?, state = ?, modality = ?, consultas = ?, last_date = ?
+    WHERE id = ? AND professional_id = ?`).run(v.name, v.cpf, v.birth, v.city, v.state, v.modality, v.consultas, v.last, Number(req.params.id), req.auth.user.id);
+  if (!r.changes) throw new U.HttpError(404, 'Paciente não encontrado.');
+  res.json({ ok: true });
+});
+router.delete('/patients/manual/:id', (req, res) => {
+  db.prepare('DELETE FROM pro_manual_patients WHERE id = ? AND professional_id = ?').run(Number(req.params.id), req.auth.user.id);
+  res.json({ ok: true });
+});
+// Paciente da Acolia: sai da lista (ex.: consulta de teste). Volta sozinho se houver uma nova consulta.
+router.post('/patients/:patientId/hide', (req, res) => {
+  const pid = Number(req.params.patientId);
+  const mine = db.prepare('SELECT 1 FROM conversations WHERE professional_id = ? AND patient_id = ?').get(req.auth.user.id, pid);
+  if (!mine) throw new U.HttpError(404, 'Paciente não encontrado.');
+  db.prepare(`INSERT INTO pro_patient_hidden (professional_id, patient_id) VALUES (?, ?)
+    ON CONFLICT(professional_id, patient_id) DO UPDATE SET hidden_at = datetime('now')`).run(req.auth.user.id, pid);
+  res.json({ ok: true });
 });
 // PDF montado na hora e enviado direto (não fica salvo no servidor); sem limite de páginas
 router.get('/patients.pdf', (req, res) => {
   const me = req.auth.user;
-  const rows = attendedPatients(me.id, filtersOf(req.query));
+  const rows = myPatients(me.id, filtersOf(req.query));
   const tot = totalsOf(rows);
   const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
   const pdf = require('../pdfTable').makeTablePdf({
     title: 'Meus pacientes',
-    subtitle: `${me.legal_name || me.name} · ${me.profession}${me.registry ? ` · ${me.registry}` : ''} · Período: ${periodText(req.query)} · ${tot.patients} paciente${tot.patients === 1 ? '' : 's'} · ${tot.consultations} consulta${tot.consultations === 1 ? '' : 's'}${req.query.q ? ` · busca: "${String(req.query.q).slice(0, 40)}"` : ''}`,
+    subtitle: `${me.legal_name || me.name} · ${me.profession}${me.registry ? ` · ${me.registry}` : ''} · Período: ${periodText(req.query)} · ${modalityText(req.query.modality)} · ${tot.patients} paciente${tot.patients === 1 ? '' : 's'} · ${tot.consultations} consulta${tot.consultations === 1 ? '' : 's'}${req.query.q ? ` · busca: "${String(req.query.q).slice(0, 40)}"` : ''}`,
     columns: PATIENT_COLS.map(([label, key, width]) => ({ label, key, width })),
     rows,
     footer: `Gerado pela plataforma Acolia em ${now}. Documento confidencial: contém dados pessoais de pacientes (LGPD).`,
-    summary: `Total: ${tot.patients} paciente${tot.patients === 1 ? '' : 's'} · ${tot.consultations} consulta${tot.consultations === 1 ? '' : 's'} · Período: ${periodText(req.query)}`,
+    summary: `Total: ${tot.patients} paciente${tot.patients === 1 ? '' : 's'} · ${tot.consultations} consulta${tot.consultations === 1 ? '' : 's'} · Período: ${periodText(req.query)} · ${modalityText(req.query.modality)}`,
   });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'attachment; filename="meus-pacientes.pdf"');
