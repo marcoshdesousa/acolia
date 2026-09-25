@@ -334,6 +334,7 @@ function settingsOf(pro) {
     break_minutes: pro.break_minutes || 0,
     price_cents: pro.price_cents,
     has_pix_key: !!String(pro.pix_key || '').trim(),
+    pix_key: pro.pix_key || '',
     payment: pay ? { connected: true, env: pay.env, account_name: pay.account_name, enabled: !!pay.enabled, connected_at: pay.connected_at, key_ok: !!require('../secretBox').open(pay.key_enc) } : { connected: false },
     ready: ready.ok, missing: ready.missing, mode: ready.mode,
     next: G.nextAvailable(pro),
@@ -403,6 +404,8 @@ router.put('/settings', (req, res) => {
     if (minutes) db.prepare('UPDATE professionals SET session_minutes = ? WHERE id = ?').run(minutes, pro.id);
     if (pause !== null) db.prepare('UPDATE professionals SET break_minutes = ? WHERE id = ?').run(pause, pro.id);
     if (req.body.online !== undefined) db.prepare('UPDATE professionals SET agenda_on = ? WHERE id = ?').run(req.body.online ? 1 : 0, pro.id);
+    // Chave Pix do pagamento manual (fica em Consultas, abaixo do Asaas)
+    if (req.body.pix_key !== undefined) db.prepare('UPDATE professionals SET pix_key = ? WHERE id = ?').run(U.cleanText(req.body.pix_key, 140), pro.id);
   });
   G.touch();
   res.json(settingsOf(G.getPro(pro.id)));

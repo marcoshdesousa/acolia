@@ -133,11 +133,6 @@
           <div class="field"><label>Especialidades (pelo menos uma)</label><div data-sp-picker></div></div>
           <div class="field"><label for="bio">Sobre você</label><textarea id="bio" name="bio" maxlength="2000" rows="5" placeholder="Conte sua formação, experiência e como é o seu atendimento."></textarea></div>
           <div class="grid-2">
-            <div class="field"><label for="session_minutes">Duração de cada sessão</label>
-              <select id="session_minutes" name="session_minutes">
-                <option value="">Não informar</option><option value="30">30 min</option><option value="40">40 min</option><option value="45">45 min</option>
-                <option value="50">50 min</option><option value="60">1 hora</option><option value="90">1h30</option><option value="120">2 horas</option>
-              </select></div>
             <div class="field"><label for="instagram">Instagram</label>
               <div class="slug-input"><span>instagram.com/</span><input id="instagram" name="instagram" maxlength="60" placeholder="seu.usuario" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
               <div class="hint">Digite só o seu @. O botão do Instagram aparece no seu perfil para pacientes com conta.</div></div>
@@ -146,14 +141,14 @@
           <h2 style="margin-top:24px">Valores</h2>
           <div class="grid-2">
             <div class="field"><label for="price">Valor da consulta online (R$)</label><input id="price" name="price" inputmode="decimal" placeholder="Ex.: 150,00"></div>
-            <div class="field"><label for="pix">Chave Pix (para enviar no chat)</label><input id="pix" name="pix_key" maxlength="140" placeholder="CPF, e-mail, telefone ou chave aleatória">
-              <div class="hint">Usada no pagamento manual das consultas (quando o pagamento automático pelo Asaas não está ligado).</div></div>
           </div>
           <p class="small muted" style="margin:0">A consulta marcada pela agenda é sempre avulsa (uma sessão). Pacotes, se quiser oferecer, combine com o paciente pelo chat.</p>
 
           <h2 style="margin-top:24px">Plano de saúde</h2>
-          <label class="switch-row"><span class="grow"><b>Aceito plano de saúde</b><span class="hint" style="display:block">Aparece no seu perfil e na vitrine. Como funciona (quais planos, autorização) você combina com o paciente pelo chat.</span></span>
-            <input type="checkbox" class="switch" name="accepts_insurance" role="switch"></label>
+          <label class="switch-row"><span class="sw-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span>
+            <span class="sw-text"><b>Aceito plano de saúde</b><span class="sw-state"><i class="sw-on">● Sim</i><i class="sw-off">○ Não</i></span>
+              <span class="small muted">Aparece no seu perfil. Os detalhes você combina pelo chat.</span></span>
+            <input type="checkbox" class="switch" name="accepts_insurance" role="switch" aria-label="Aceito plano de saúde"></label>
 
           <h2 style="margin-top:24px">Localização</h2>
           <div class="field"><label>Estado e município onde você trabalha</label>

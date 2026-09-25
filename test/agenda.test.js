@@ -178,6 +178,16 @@ test('agenda nova: liga/desliga "Disponível para atendimento online" e cada hor
   assert.equal(r.data.ready, true);
   r = await ana.get(`/api/agenda/pro/${Y.id}/day?date=2030-01-08`);
   assert.deepEqual(r.data.slots.map((x) => x.label), ['08:00', '09:00', '12:00'], 'almoço: pulou das 09:50 para as 12:00');
+  // Chave Pix do pagamento manual agora fica em Consultas; salvar o perfil (sem os campos) não apaga nem ela nem a duração
+  r = await Y.cl.put('/api/agenda/settings', { pix_key: 'yara.nova@pix.com' });
+  assert.equal(r.data.pix_key, 'yara.nova@pix.com');
+  const me = (await Y.cl.get('/api/professional/me')).data;
+  const body = { name: me.name, phone: me.phone, email: me.email, bio: me.bio, specialties: me.specialties, state: me.state, city: me.city, price: '150,00' };
+  r = await Y.cl.put('/api/professional/profile', body);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const after = (await Y.cl.get('/api/professional/me')).data;
+  assert.equal(after.pix_key, 'yara.nova@pix.com');
+  assert.equal(after.session_minutes, 50);
   r = await Y.cl.put('/api/agenda/settings', { online: false });
   assert.equal((await ana.get(`/api/agenda/pro/${Y.id}/day?date=2030-01-08`)).data.slots.length, 0, 'desligou: ninguém marca');
 });

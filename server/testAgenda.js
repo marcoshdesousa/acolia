@@ -14,7 +14,7 @@ const START_MIN = 2 * 60 + 35;
 const SESSION = 60;
 const BREAK = 15;
 
-// withHours: também monta a agenda (02:35, 1 h + 15 min). O botão do admin não mexe nos horários.
+// withHours: também monta a agenda (02:35, 1 h + 15 min). O botão do admin só monta se não tiver nenhum horário.
 function provision({ withHours = true } = {}) {
   const T = require('./testAccounts');
   T.ensureTestAccounts();
@@ -24,7 +24,8 @@ function provision({ withHours = true } = {}) {
     session_minutes = ?, break_minutes = ?, agenda_on = 1, specialties = CASE WHEN specialties = '' THEN 'Ansiedade, Adultos' ELSE specialties END WHERE id = ?`)
     .run(U.addDaysISO(U.todayISO(), 3650), SESSION, BREAK, pro.id);
   // Agenda aberta todos os dias, das 02:35 até o fim do dia
-  if (withHours) {
+  const hasHours = db.prepare('SELECT 1 FROM agenda_hours WHERE professional_id = ?').get(pro.id);
+  if (withHours || !hasHours) {
     db.prepare('DELETE FROM agenda_hours WHERE professional_id = ?').run(pro.id);
     const ins = db.prepare('INSERT INTO agenda_hours (professional_id, dow, start_min, end_min) VALUES (?, ?, ?, 1439)');
     for (let d = 0; d <= 6; d++) ins.run(pro.id, d, START_MIN);

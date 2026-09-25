@@ -26,6 +26,7 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 
 **Profissional (Painel → Consultas, ícone 📅)**
 - **Minha agenda:**
+  - **Pix manual:** a chave Pix fica em Consultas, logo abaixo do Asaas (saiu de Meu perfil). A duração da consulta também só fica em Consultas e aparece no perfil sozinha;
   - chave **"Disponível para atendimento online"** (ligada: pacientes marcam e pagam pelo Pix; desligada: ninguém marca);
   - duração da consulta e **descanso entre as consultas**;
   - em cada dia, o profissional coloca a **hora de início** de cada consulta, e o fim aparece sozinho (início + duração). "+ adicionar horário" sugere o próximo (fim do anterior + descanso). Dá para mudar para mais tarde (almoço, pausa), nunca para antes; o servidor confere a mesma regra;

@@ -68,10 +68,8 @@
     form.email.value = me.email || '';
     spPicker.then((sp) => sp.set(AcoliaSpecialties.list(me.specialties)));
     form.bio.value = me.bio;
-    form.session_minutes.value = me.session_minutes ? String(me.session_minutes) : '';
     form.instagram.value = me.instagram || '';
     form.price.value = me.price_cents != null ? (me.price_cents / 100).toFixed(2).replace('.', ',') : '';
-    form.pix_key.value = me.pix_key;
     form.state.innerHTML = ufOptions(me.state, 'UF');
     form.city.value = me.city;
     form.has_clinic.checked = me.has_clinic;

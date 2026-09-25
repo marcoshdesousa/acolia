@@ -11,7 +11,7 @@
     online: 'Ligue <b>"Disponível para atendimento online"</b> (logo acima).',
     horarios: 'Coloque os horários de início das consultas (abaixo) e toque em "Salvar agenda".',
     valor: 'Coloque o valor da consulta em <a href="#perfil">Meu perfil</a>.',
-    pix: 'Cadastre a sua chave Pix em <a href="#perfil">Meu perfil</a> (pagamento manual) ou conecte o Asaas (pagamento automático, abaixo).',
+    pix: 'Coloque a sua chave Pix em <b>Pix manual</b> (abaixo, junto do Asaas) ou conecte o Asaas (pagamento automático).',
   };
 
   let els = null;
@@ -58,8 +58,10 @@
       ? `<div class="notice ok small">✅ Pacientes já podem marcar. ${s.next ? `Próximo horário livre: <b>${esc(s.next.label)} às ${esc(s.next.first)}</b>.` : 'Não há horário livre nos próximos 60 dias.'} Pagamento: <b>${s.mode === 'auto' ? 'Pix automático (Asaas)' : 'Pix manual pelo chat'}</b>.</div>`
       : `<div class="notice warn small"><b>Os pacientes ainda não conseguem marcar.</b> Falta:<ul style="margin:6px 0 0;padding-left:18px">${s.missing.map((m) => `<li>${MISSING[m]}</li>`).join('')}</ul></div>`;
     els.agenda.innerHTML = `<h2 style="margin:0">Minha agenda</h2>
-      <label class="switch-row"><span><b>Disponível para atendimento online</b><span class="small muted">Ligado, os pacientes marcam nos seus horários e pagam pelo Pix ${s.mode === 'auto' ? '(automático)' : '(pela conversa)'}. Desligado, ninguém marca.</span></span>
-        <input type="checkbox" class="switch" data-online ${s.online ? 'checked' : ''} aria-label="Disponível para atendimento online"></label>
+      <label class="switch-row"><span class="sw-ic">${ic('video', 22)}</span>
+        <span class="sw-text"><b>Disponível para atendimento online</b><span class="sw-state"><i class="sw-on">● Ligado</i><i class="sw-off">○ Desligado: ninguém marca</i></span>
+          <span class="small muted">Pacientes marcam e pagam pelo Pix ${s.mode === 'auto' ? 'automático' : 'pela conversa'}.</span></span>
+        <input type="checkbox" class="switch" role="switch" data-online ${s.online ? 'checked' : ''} aria-label="Disponível para atendimento online"></label>
       ${status}
       <div class="grid-2">
         <div class="field" style="margin:0"><label for="ag-min">Duração de cada consulta</label>
@@ -216,6 +218,32 @@
     }));
   }
 
+  // ---------- Pix manual (fica abaixo do Asaas): usado quando o pagamento automático não está ligado ----------
+  function pixManualHtml() {
+    const p = settings.payment;
+    const auto = p.connected && p.enabled && p.key_ok;
+    return `<div class="pix-manual">
+        <h3 style="margin:0">Pix manual (pela conversa)</h3>
+        <p class="small muted" style="margin:0">${auto
+          ? 'Hoje as consultas usam o pagamento automático. A chave abaixo só é usada se você desligar o automático.'
+          : 'É o que está valendo agora: o paciente pede a consulta, a Acolia manda esta chave na conversa e você confirma quando o dinheiro cair.'}</p>
+        <div class="field" style="margin:0"><label for="ag-pix">Sua chave Pix</label>
+          <div class="row" style="gap:8px;flex-wrap:nowrap"><input id="ag-pix" data-pixkey maxlength="140" value="${esc(settings.pix_key || '')}" placeholder="CPF, e-mail, telefone ou chave aleatória" autocomplete="off" style="min-width:0;flex:1">
+          <button type="button" class="btn sm" data-pixsave>Salvar</button></div></div>
+      </div>`;
+  }
+  function bindPixManual(box) {
+    $('[data-pixsave]', box).addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        settings = await api('/api/agenda/settings', { method: 'PUT', body: { pix_key: $('[data-pixkey]', box).value } });
+        toast('Chave Pix salva ✓', '', { top: true });
+        render();
+      } catch (ex) { toast(ex.message, 'error'); btn.disabled = false; }
+    });
+  }
+
   // ---------- Pagamento automático (Asaas) ----------
   function renderAsaas() {
     const p = settings.payment;
@@ -224,8 +252,10 @@
       box.innerHTML = `<h2 style="margin:0">${ic('pix', 22)} Pagamento automático pelo Pix (Asaas)</h2>
         <p style="margin:0">O paciente paga o Pix <b>dentro da Acolia</b> e a consulta é marcada sozinha. Se ele cancelar no prazo, o reembolso também é automático. O dinheiro cai <b>direto na sua conta Asaas</b>: a Acolia não recebe nem cobra taxa.</p>
         <p class="small muted" style="margin:0">Sem o Asaas, o pagamento é manual: o paciente pede a consulta, você manda a sua chave Pix na conversa e confirma quando o dinheiro cair.</p>
-        <button type="button" class="btn" data-connect>Conectar meu Asaas (passo a passo)</button>`;
+        <button type="button" class="btn" data-connect>Conectar meu Asaas (passo a passo)</button>
+        ${pixManualHtml()}`;
       $('[data-connect]', box).addEventListener('click', wizard);
+      bindPixManual(box);
       return;
     }
     box.innerHTML = `<h2 style="margin:0">${ic('pix', 22)} Pagamento automático pelo Pix (Asaas)</h2>
@@ -233,8 +263,10 @@
       <label class="check"><input type="checkbox" data-enabled ${p.enabled ? 'checked' : ''}> Usar o pagamento automático nas novas consultas</label>
       ${p.enabled ? '<p class="small" style="margin:0">As consultas pagas pelo Pix são <b>confirmadas sozinhas</b>, e os reembolsos no prazo também saem sozinhos.</p>' : ''}
       <p class="small muted" style="margin:0">Desligado, as novas consultas vão pelo Pix manual (a sua chave Pix na conversa).</p>
-      <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary sm" data-connect>Trocar a chave</button><button type="button" class="btn ghost sm danger-text" data-disconnect>Desconectar</button></div>`;
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary sm" data-connect>Trocar a chave</button><button type="button" class="btn ghost sm danger-text" data-disconnect>Desconectar</button></div>
+      ${pixManualHtml()}`;
     $('[data-connect]', box).addEventListener('click', wizard);
+    bindPixManual(box);
     $('[data-enabled]', box).addEventListener('change', async (e) => {
       try { settings = await api('/api/agenda/asaas', { method: 'PUT', body: { enabled: e.target.checked } }); render(); toast(e.target.checked ? 'Pagamento automático ligado ✓' : 'Pagamento automático desligado'); } catch (ex) { toast(ex.message, 'error'); }
     });

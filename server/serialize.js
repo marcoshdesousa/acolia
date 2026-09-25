@@ -96,6 +96,8 @@ function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest 
     instagram: p.instagram || '',
     // Próximo dia com horário livre na agenda (aparece para todos, até sem conta)
     next_available: !!p.is_test === !!viewerTest ? require('./agenda').nextAvailable(p) : null,
+    // Profissional Teste visto por conta de verdade: a agenda só abre para o Paciente Teste
+    test_only: !!p.is_test && !viewerTest,
   };
   if (!loggedIn) {
     const { state, city, ...visible } = common; // localização só com conta

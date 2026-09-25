@@ -72,14 +72,16 @@ router.put('/profile', async (req, res) => {
     mapsQuery = prev.maps_url === mapsUrl && prev.maps_query ? prev.maps_query : maps.mapQuery(await maps.resolveShort(mapsUrl));
   }
 
-  const minutes = b.session_minutes ? Number(b.session_minutes) : null;
+  // Duração e chave Pix agora ficam em Consultas (a tela do perfil não manda mais; mantém o que já tem)
+  const minutes = b.session_minutes === undefined ? req.auth.user.session_minutes : (b.session_minutes ? Number(b.session_minutes) : null);
   if (minutes !== null && !SESSION_MINUTES.includes(minutes)) throw new U.HttpError(400, 'Escolha a duração da sessão.');
+  const pixKey = b.pix_key === undefined ? req.auth.user.pix_key : U.cleanText(b.pix_key, 140);
   const instagram = cleanInstagram(b.instagram);
 
   db.prepare(`UPDATE professionals SET name=?, profession=?, registry=?, phone=?, bio=?, specialties=?, price_cents=?, packages=?,
       state=?, city=?, city_norm=?, has_clinic=?, clinic_name=?, clinic_address=?, pix_key=?, session_minutes=?, instagram=?, maps_url=?, maps_query=? WHERE id=?`)
     .run(name, profession, registry, phone, U.cleanText(b.bio, 2000), require('../specialties').store(specialties), price, JSON.stringify(packages),
-      state, city, U.norm(city), hasClinic, clinicName, clinicAddress, U.cleanText(b.pix_key, 140), minutes, instagram, mapsUrl, mapsQuery, req.auth.user.id);
+      state, city, U.norm(city), hasClinic, clinicName, clinicAddress, pixKey, minutes, instagram, mapsUrl, mapsQuery, req.auth.user.id);
   // Plano de saúde: o profissional escolhe (vale para online e presencial; detalhes ele combina pelo chat)
   db.prepare('UPDATE professionals SET email = ?, accepts_insurance = ? WHERE id = ?').run(email, b.accepts_insurance ? 1 : 0, req.auth.user.id);
   res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));

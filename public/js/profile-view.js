@@ -119,6 +119,8 @@
       ? `<div class="agenda-box"><div>${ic('calendar', 18)} Próximo horário livre: <b>${esc(nx.label)} às ${esc(nx.first)}</b></div>
           ${canBook ? `<button type="button" class="btn block" data-book="${p.id}">${ic('calendar', 18)} Agendar consulta</button>
           <span class="small muted">Escolha o dia e o horário e pague pelo Pix para confirmar. Pacotes: combine pelo chat.</span>` : ''}</div>`
+      : p.test_only
+        ? `<div class="small muted">🧪 Conta de teste: a agenda deste profissional só abre para o <b>Paciente Teste</b>. Entre com o Paciente Teste para marcar e pagar (pagamento simulado).</div>`
       : `<div class="small muted">A agenda online deste profissional está fechada no momento. ${canBook ? 'Mande uma mensagem para combinar.' : ''}</div>`;
     let values;
     if (p.locked) {
@@ -139,9 +141,9 @@
 
     // ---------- Localização (cidade, endereço e mapa só com conta) ----------
     // Todos atendem online; alguns também presencial — as duas opções aparecem
-    const modes = `<div class="row" style="gap:6px"><span class="badge ok">${ic('video', 15)} Atende online</span>
-        ${p.has_clinic ? `<span class="badge ok">${ic('clinic', 15)} Atende presencial</span>` : ''}
-        ${p.accepts_insurance ? `<span class="badge ok">${ic('shield', 15)} Aceita plano de saúde</span>` : ''}</div>`;
+    const modes = `<div class="feat-pills"><span class="feat online"><i>${ic('video', 15)}</i>Atende online</span>
+        ${p.has_clinic ? `<span class="feat clinic"><i>${ic('clinic', 15)}</i>Atende presencial</span>` : ''}
+        ${p.accepts_insurance ? `<span class="feat plan"><i>${ic('shield', 15)}</i>Aceita plano de saúde</span>` : ''}</div>`;
     let clinic = '';
     if (p.locked) clinic = '';
     else if (p.has_clinic) {
