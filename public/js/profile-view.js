@@ -133,7 +133,10 @@
     } else {
       values = `<div class="card flat stack">
           <h3>${ic('calendar')} Valores</h3>
-          <div><span class="price" style="font-size:1.5rem;font-weight:800">${p.price_cents != null ? money(p.price_cents) : 'A combinar'}</span> <span class="muted">por sessão online</span></div>
+          ${p.price_presencial_cents != null && !p.price_same
+            ? `<div class="price-rows"><div class="row between"><span>${ic('video', 16)} Sessão online</span><b class="price">${p.price_cents != null ? money(p.price_cents) : 'A combinar'}</b></div>
+                <div class="row between"><span>📍 Sessão presencial</span><b class="price">${money(p.price_presencial_cents)}</b></div></div>`
+            : `<div><span class="price" style="font-size:1.5rem;font-weight:800">${p.price_cents != null ? money(p.price_cents) : 'A combinar'}</span> <span class="muted">por sessão ${p.price_presencial_cents != null ? 'online e presencial' : 'online'}</span></div>`}
           ${agendaBox}
           ${insurance}
         </div>`;

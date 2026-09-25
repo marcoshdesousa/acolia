@@ -11,7 +11,10 @@
       return `<div class="locked">${ICONS.lock.replace('<svg', '<svg style="width:18px;height:18px"')} Valores e localização: crie sua conta grátis para ver</div>${where}`;
     }
     const bits = [];
-    if (p.price_cents != null) bits.push(`<span class="price">${money(p.price_cents)}</span> <span class="muted small">/ sessão online</span>`);
+    // Sempre o menor valor (online ou presencial); os dois aparecem no perfil
+    const min = p.price_min_cents != null ? p.price_min_cents : p.price_cents;
+    if (min != null) bits.push(p.price_same === false ? `<span class="muted small">a partir de</span> <span class="price">${money(min)}</span> <span class="muted small">/ sessão</span>`
+      : `<span class="price">${money(min)}</span> <span class="muted small">/ sessão${p.price_presencial_cents != null ? ' online e presencial' : ' online'}</span>`);
     else bits.push('<span class="muted small">Valor a combinar</span>');
     return `<div>${bits.join(' ')}</div>${where}`;
   }

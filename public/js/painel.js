@@ -59,6 +59,9 @@
   form.profession.innerHTML = cfg.professions.map((p) => `<option>${esc(p)}</option>`).join('');
   maskPhone(form.phone);
   $('[data-has-clinic]').addEventListener('change', (e) => $('[data-clinic]').classList.toggle('hidden', !e.target.checked));
+  // Valor da presencial: o mesmo da online ou diferente (aí o campo do valor aparece)
+  const syncPres = () => $('[data-pres-diff]').classList.toggle('hidden', form.presencial_price.value !== 'diff');
+  $$('input[name="presencial_price"]', form).forEach((r) => r.addEventListener('change', syncPres));
 
   // Especialidades: escolhe na lista (pode acrescentar e tirar; as 2 primeiras aparecem no perfil)
   const spPicker = AcoliaSpecialties.picker($('[data-sp-picker]', form), { name: 'specialties', hint: 'As <b>2 primeiras</b> aparecem no seu perfil; as outras ficam no botão <b>+</b>. Para mudar a ordem, tire e escolha de novo.' });
@@ -81,6 +84,9 @@
     form.clinic_name.value = me.clinic_name;
     form.clinic_address.value = me.clinic_address;
     form.maps_url.value = me.maps_url || '';
+    form.presencial_price.value = me.presencial_price || 'same';
+    form.price_presencial.value = me.price_presencial_cents != null ? (me.price_presencial_cents / 100).toFixed(2).replace('.', ',') : '';
+    syncPres();
   }
   fillProfile();
   // Secretária (só o profissional cria; fica logo depois da Localização)

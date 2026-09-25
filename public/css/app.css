@@ -1327,3 +1327,7 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .loc-map-link { position: absolute; inset: 0; }
 .loc-card { min-width: min(280px, 70vw); }
 .loc-box .btn { justify-self: start; }
+.price-rows { display: grid; gap: 6px; }
+.price-rows .price { font-size: 1.2rem; font-weight: 800; }
+.seg button small { font-weight: 600; opacity: .85; }
+.chip-radio input { width: auto; height: auto; margin: 0; padding: 0; flex: none; }

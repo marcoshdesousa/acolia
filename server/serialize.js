@@ -2,6 +2,15 @@
 const { todayISO, addDaysISO } = require('./util');
 const maps = require('./maps');
 
+// Valores (versão 1.2.1): online e presencial (a presencial pode ser o mesmo valor da online)
+function prices(p) {
+  const online = p.price_cents;
+  const pres = p.has_clinic ? (p.price_presencial_cents != null ? p.price_presencial_cents : online) : null;
+  const all = [online, pres].filter((v) => v != null);
+  return { price_cents: online, price_presencial_cents: pres, price_min_cents: all.length ? Math.min(...all) : null,
+    price_same: pres == null || pres === online };
+}
+
 // Mapa da clínica (só para quem tem conta): usa o link do Google Maps ou, sem link, o endereço
 function clinicMap(p) {
   if (!p.has_clinic) return { maps_url: '', map_embed: '' };
@@ -129,7 +138,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest 
     ...common,
     ...social,
     session_minutes: p.session_minutes || null,
-    price_cents: p.price_cents,
+    ...prices(p),
     clinic_name: p.has_clinic ? p.clinic_name : '',
     clinic_address: p.has_clinic ? p.clinic_address : '',
     ...clinicMap(p),
@@ -155,6 +164,8 @@ function ownProfessional(p) {
     specialties: p.specialties,
     photo: p.photo,
     price_cents: p.price_cents,
+    price_presencial_cents: p.price_presencial_cents,
+    presencial_price: p.price_presencial_cents != null ? 'diff' : 'same',
     state: p.state,
     city: p.city,
     has_clinic: !!p.has_clinic,
@@ -189,4 +200,4 @@ function ownPatient(p) {
   };
 }
 
-module.exports = { clinicMap, PROFILE_POSTS, freeGalleryCount, VISIBLE_SQL, isVisible, parsePackages, parseGallery, GALLERY_SLOTS, publicProfessional, ownProfessional, ownPatient };
+module.exports = { prices, clinicMap, PROFILE_POSTS, freeGalleryCount, VISIBLE_SQL, isVisible, parsePackages, parseGallery, GALLERY_SLOTS, publicProfessional, ownProfessional, ownPatient };

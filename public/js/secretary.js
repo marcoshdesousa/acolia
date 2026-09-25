@@ -73,9 +73,11 @@
     // e-mail, especialidades, "Sobre você" e valor só o profissional (o servidor também confere).
     const form = $('[data-profile-form]');
     if (form) {
-      ['name', 'phone', 'email', 'bio', 'price'].forEach((n) => { if (form[n]) { form[n].disabled = true; form[n].closest('.field')?.classList.add('sec-locked'); } });
+      ['name', 'phone', 'email', 'bio', 'price', 'price_presencial'].forEach((n) => { if (form[n]) { form[n].disabled = true; form[n].closest('.field')?.classList.add('sec-locked'); } });
       $('[data-sp-picker]', form)?.closest('.field')?.classList.add('sec-locked', 'sec-locked-box');
-      form.insertAdjacentHTML('afterbegin', '<div class="notice small" style="margin-bottom:12px">🔒 Nome, WhatsApp, e-mail, especialidades, "Sobre você" e valor só o profissional muda. Você pode mudar as <b>redes sociais</b>, o <b>plano de saúde</b>, a <b>localização</b> e a <b>clínica</b>.</div>');
+      $$('input[name="presencial_price"]', form).forEach((r) => { r.disabled = true; });
+      $('[data-pres-price]', form)?.classList.add('sec-locked');
+      form.insertAdjacentHTML('afterbegin', '<div class="notice small" style="margin-bottom:12px">🔒 Nome, WhatsApp, e-mail, especialidades, "Sobre você" e valores só o profissional muda. Você pode mudar as <b>redes sociais</b>, o <b>plano de saúde</b>, a <b>localização</b> e a <b>clínica</b>.</div>');
     }
     $('[data-slug-form]')?.remove();
     $('[data-photo-input]')?.closest('label')?.remove();

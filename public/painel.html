@@ -166,6 +166,12 @@
           <div data-clinic class="hidden" style="margin-top:12px">
             <div class="field"><label for="cname">Nome da clínica</label><input id="cname" name="clinic_name" maxlength="120"></div>
             <div class="field"><label for="caddr">Endereço completo</label><input id="caddr" name="clinic_address" maxlength="250" placeholder="Rua, número, bairro"></div>
+            <div class="field" data-pres-price><label>Valor da consulta presencial</label>
+              <div class="row" style="gap:8px;flex-wrap:wrap" role="radiogroup" aria-label="Valor da consulta presencial">
+                <label class="chip-radio"><input type="radio" name="presencial_price" value="same" checked> Mesmo valor da online</label>
+                <label class="chip-radio"><input type="radio" name="presencial_price" value="diff"> Valor diferente</label></div>
+              <div data-pres-diff class="hidden" style="margin-top:10px"><input name="price_presencial" inputmode="decimal" placeholder="Valor da presencial. Ex.: 200,00" aria-label="Valor da consulta presencial (R$)"></div>
+              <div class="hint">Na vitrine aparece o <b>menor valor</b>; no seu perfil, os dois. Ao agendar, o paciente paga o valor da opção escolhida.</div></div>
             <div class="field"><label for="cmaps">Link do Google Maps (opcional)</label><input id="cmaps" name="maps_url" maxlength="1000" inputmode="url" placeholder="https://maps.app.goo.gl/…">
               <div class="hint">No Google Maps, abra o local da clínica → <b>Compartilhar</b> → <b>Copiar link</b> e cole aqui. Aparece um mini mapa no seu perfil (só para pacientes com conta), e o paciente toca para ir até lá.</div></div>
           </div>

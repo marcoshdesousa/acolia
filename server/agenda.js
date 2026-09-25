@@ -95,6 +95,10 @@ function clinicOf(pro) {
   return { name: pro.clinic_name || '', address: pro.clinic_address, city: pro.city || '', state: pro.state || '',
     place: [pro.city, pro.state].filter(Boolean).join(' - '), maps_url: m.maps_url, map_embed: m.map_embed };
 }
+// Valor da consulta conforme a modalidade (presencial pode ter valor diferente)
+function priceFor(pro, modality) {
+  return modality === 'presencial' && pro.price_presencial_cents != null ? pro.price_presencial_cents : pro.price_cents;
+}
 // Mensagem automática com o local da consulta (nome, endereço e mapa)
 function sendLocation(c, pro) {
   const loc = clinicOf(pro);
@@ -331,7 +335,7 @@ async function createCharge(a) {
   }
   const pro = getPro(a.professional_id);
   const pix = await asaas.createPix(pay.env, pay.key, {
-    customer: cust, cents: a.price_cents, description: `Consulta online com ${pro.name} — ${fmtWhen(ms(a.start_at))} (Acolia)`, ref: `acolia-consulta-${a.id}`,
+    customer: cust, cents: a.price_cents, description: `Consulta ${a.modality === 'presencial' ? 'presencial' : 'online'} com ${pro.name} — ${fmtWhen(ms(a.start_at))} (Acolia)`, ref: `acolia-consulta-${a.id}`,
   });
   return setStatus(a.id, { pay_id: pix.id, pix_payload: pix.payload, pix_image: pix.image });
 }
@@ -617,7 +621,7 @@ function view(a, role) {
 module.exports = {
   RULES, CANCEL_REASONS, HOLDING, ACTIVE, OCCUPY_SQL,
   now, iso, ms, localDate, localMin, fromLocal, hhmm, parseHHMM, addDays, fmtWhen, dayLabel, dowOf,
-  getPro, getAppt, duration, readiness, clinicOf, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
+  getPro, getAppt, duration, readiness, clinicOf, priceFor, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
   ensureConversation, post, pushText, notifyBoth, setStatus, createCharge, confirmPaid, checkPayment, refund, refundLock,
   openCall, closeCall, canEndCall, finishFromCall, sweep, canDo, view, onAccountGone,
   _setNow(fn) { nowFn = fn || Date.now; touch(); },

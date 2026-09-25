@@ -56,7 +56,7 @@ router.get('/pro/:id/month', (req, res) => {
   }
   res.json({
     ym, today: G.localDate(G.now()), max_date: G.addDays(G.localDate(G.now()), G.RULES.HORIZON_DAYS),
-    ready: ready.ok, agenda_ok: agendaOk, mode: ready.mode, price_cents: pro.price_cents, minutes: G.duration(pro),
+    ready: ready.ok, agenda_ok: agendaOk, mode: ready.mode, price_cents: pro.price_cents, price_presencial_cents: G.clinicOf(pro) ? G.priceFor(pro, 'presencial') : null, minutes: G.duration(pro),
     presencial: G.clinicOf(pro), insurance: !!pro.accepts_insurance, patient,
     days: agendaOk ? G.monthDays(pro, ym, { patientId }) : [],
   });
@@ -93,7 +93,7 @@ router.post('/book', async (req, res) => {
     const t = G.now();
     const auto = ready.mode === 'auto';
     const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, hold_until, accepted_policy_at, modality)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'paciente', ?, ?, ?, ?)`).run(pro.id, me.id, c.id, G.iso(slot.start), G.iso(slot.end), pro.price_cents, ready.mode,
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'paciente', ?, ?, ?, ?)`).run(pro.id, me.id, c.id, G.iso(slot.start), G.iso(slot.end), G.priceFor(pro, modality), ready.mode,
       auto ? 'aguardando_pagamento' : 'aguardando_pix', G.iso(t + (auto ? G.RULES.PAY_MIN : G.RULES.PRO_PIX_MIN) * MIN), G.iso(t), modality);
     return G.getAppt(Number(info.lastInsertRowid));
   });
@@ -144,7 +144,7 @@ router.post('/propose', async (req, res) => {
     const slot = G.assertFree(pro, req.body.start, { patientId: pat.id, who: 'pro' });
     const t = G.now();
     const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, hold_until, pix_payload, modality)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'profissional', 'aguardando_pagamento', ?, ?, ?)`).run(pro.id, pat.id, c.id, G.iso(slot.start), G.iso(slot.end), pro.price_cents,
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'profissional', 'aguardando_pagamento', ?, ?, ?)`).run(pro.id, pat.id, c.id, G.iso(slot.start), G.iso(slot.end), G.priceFor(pro, modality),
       ready.mode, G.iso(t + G.RULES.PAY_MIN * MIN), ready.mode === 'manual' ? pro.pix_key : null, modality);
     return G.getAppt(Number(info.lastInsertRowid));
   });

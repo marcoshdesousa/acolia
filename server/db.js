@@ -330,7 +330,8 @@ addColumn('calls', 'appointment_id', 'INTEGER');   // chamada criada sozinha par
 addColumn('calls', 'guest_joined_at', 'TEXT');
 // Versão 1.2.1: consulta presencial (no consultório do profissional) e pelo convênio (plano de saúde, sem Pix)
 addColumn('appointments', 'modality', "TEXT NOT NULL DEFAULT 'online'");  // online | presencial
-addColumn('appointments', 'billing', "TEXT NOT NULL DEFAULT 'pix'");      // pix | convenio     // quando o paciente entrou (não entrou em 3 min → encerrada, sem reembolso)
+addColumn('appointments', 'billing', "TEXT NOT NULL DEFAULT 'pix'");      // pix | convenio
+addColumn('professionals', 'price_presencial_cents', 'INTEGER'); // valor da presencial; NULL = o mesmo da online     // quando o paciente entrou (não entrou em 3 min → encerrada, sem reembolso)
 addColumn('calls', 'host_joined_at', 'TEXT');      // quando o profissional entrou (ausência → reembolso)
 db.exec(`UPDATE conversations SET patient_wrote = 1 WHERE patient_wrote = 0
   AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = conversations.id AND m.sender_role = 'patient')`);

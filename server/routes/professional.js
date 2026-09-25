@@ -66,7 +66,9 @@ router.put('/profile', async (req, res) => {
   if (req.auth.secretary) {
     const u = req.auth.user;
     b = { ...b, name: u.name, phone: u.phone, email: u.email, bio: u.bio, specialties: u.specialties,
-      price: u.price_cents != null ? (u.price_cents / 100).toFixed(2).replace('.', ',') : '' };
+      price: u.price_cents != null ? (u.price_cents / 100).toFixed(2).replace('.', ',') : '',
+      presencial_price: u.price_presencial_cents != null ? 'diff' : 'same',
+      price_presencial: u.price_presencial_cents != null ? (u.price_presencial_cents / 100).toFixed(2).replace('.', ',') : '' };
   }
   const name = U.cleanText(b.name, 120);
   if (!U.isFullName(name)) throw new U.HttpError(400, 'Informe nome e sobrenome.');
@@ -96,6 +98,12 @@ router.put('/profile', async (req, res) => {
   const clinicName = hasClinic ? U.cleanText(b.clinic_name, 120) : '';
   const clinicAddress = hasClinic ? U.cleanText(b.clinic_address, 250) : '';
   if (hasClinic && clinicAddress.length < 5) throw new U.HttpError(400, 'Informe o endereço da clínica.');
+  // Valor da presencial: o mesmo da online ou um valor diferente (obrigatório escolher quando atende presencial)
+  let pricePres = null;
+  if (hasClinic && b.presencial_price === 'diff') {
+    pricePres = toCents(b.price_presencial);
+    if (!(pricePres > 0)) throw new U.HttpError(400, 'Informe o valor da consulta presencial (ou marque "Mesmo valor da online").');
+  }
   const maps = require('../maps');
   let mapsUrl = hasClinic ? maps.cleanMapsUrl(b.maps_url) : '';
   let mapsQuery = '';
@@ -116,7 +124,7 @@ router.put('/profile', async (req, res) => {
       state=?, city=?, city_norm=?, has_clinic=?, clinic_name=?, clinic_address=?, pix_key=?, session_minutes=?, instagram=?, maps_url=?, maps_query=? WHERE id=?`)
     .run(name, profession, registry, phone, U.cleanText(b.bio, 2000), require('../specialties').store(specialties), price, JSON.stringify(packages),
       state, city, U.norm(city), hasClinic, clinicName, clinicAddress, pixKey, minutes, social.instagram, mapsUrl, mapsQuery, req.auth.user.id);
-  db.prepare('UPDATE professionals SET tiktok = ?, x_handle = ?, youtube = ? WHERE id = ?').run(social.tiktok, social.x_handle, social.youtube, req.auth.user.id);
+  db.prepare('UPDATE professionals SET tiktok = ?, x_handle = ?, youtube = ?, price_presencial_cents = ? WHERE id = ?').run(social.tiktok, social.x_handle, social.youtube, pricePres, req.auth.user.id);
   // Plano de saúde: o profissional escolhe (vale para online e presencial; detalhes ele combina pelo chat)
   db.prepare('UPDATE professionals SET email = ?, accepts_insurance = ? WHERE id = ?').run(email, b.accepts_insurance ? 1 : 0, req.auth.user.id);
   res.json(ownProfessional(db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));

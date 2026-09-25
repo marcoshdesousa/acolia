@@ -110,6 +110,8 @@
     let modality = opts.appt?.modality || 'online';
     let billing = 'pix';
     let placeChecked = false;
+    // Valor conforme a modalidade (a presencial pode custar diferente)
+    const priceNow = () => (modality === 'presencial' && info?.price_presencial_cents != null ? info.price_presencial_cents : info?.price_cents);
 
     async function loadMonth() {
       page.body.innerHTML = '<div class="spinner"></div>';
@@ -137,8 +139,8 @@
       const loc = info.presencial;
       const choices = mode === 'reschedule' ? '' : `
         ${loc ? `<div class="seg" role="group" aria-label="Tipo de consulta">
-            <button type="button" class="${modality === 'online' ? 'on' : ''}" data-mod="online">${ic('video', 18)} Online</button>
-            <button type="button" class="${modality === 'presencial' ? 'on' : ''}" data-mod="presencial">📍 Presencial</button></div>
+            <button type="button" class="${modality === 'online' ? 'on' : ''}" data-mod="online">${ic('video', 18)} Online${info.price_cents != null && info.price_presencial_cents !== info.price_cents ? ` <small>${money(info.price_cents)}</small>` : ''}</button>
+            <button type="button" class="${modality === 'presencial' ? 'on' : ''}" data-mod="presencial">📍 Presencial${info.price_presencial_cents != null && info.price_presencial_cents !== info.price_cents ? ` <small>${money(info.price_presencial_cents)}</small>` : ''}</button></div>
           ${modality === 'presencial' ? `<p class="small muted seg-note">Consultório${loc.name ? ` ${esc(loc.name)}` : ''}: ${esc(loc.address)} · <b>${esc(loc.place)}</b></p>` : ''}` : ''}
         ${mode === 'propose' && info.insurance ? `<div class="seg" role="group" aria-label="Pagamento">
             <button type="button" class="${billing === 'pix' ? 'on' : ''}" data-bill="pix">${ic('pix', 18)} Pix</button>
@@ -158,7 +160,7 @@
             if (d.taken) return `<button type="button" class="cal-day taken ${sel?.date === d.date ? 'sel' : ''}" data-taken="${d.date}" aria-label="${n}, já tem consulta neste dia">${n}</button>`;
             return `<button type="button" class="cal-day ${on ? 'on' : ''} ${d.date === info.today ? 'today' : ''} ${sel?.date === d.date ? 'sel' : ''}" data-day="${d.date}" ${on ? '' : 'disabled'} aria-label="${n}${on ? `, ${d.free} horário(s) livre(s)` : ', sem horário'}">${n}</button>`;
           }).join('')}</div>
-          <p class="small muted cal-legend"><span class="cal-dot"></span> dias com horário livre · ${info.minutes} min por consulta · ${info.price_cents != null ? money(info.price_cents) : ''}</p>
+          <p class="small muted cal-legend"><span class="cal-dot"></span> dias com horário livre · ${info.minutes} min por consulta · ${billing === 'convenio' ? 'convênio' : priceNow() != null ? money(priceNow()) : ''}</p>
           ${info.days.some((d) => d.taken) ? `<p class="small cal-taken-note"><span class="cal-dot taken"></span> ${mode === 'propose' ? 'Este paciente já tem consulta neste dia' : 'Você já tem consulta neste dia'}: cada paciente marca <b>uma consulta por dia</b>.</p>` : ''}
         </div>
         <div data-slots></div>
@@ -209,7 +211,7 @@
       const foot = $('[data-foot]', page.body);
       if (!foot) return;
       foot.innerHTML = sel?.start
-        ? `<div class="ag-sum"><b>${esc(sel.dayLabel)} às ${esc(sel.label)}</b><span class="muted small">${info.minutes} min · ${billing === 'convenio' ? 'convênio' : info.price_cents != null ? money(info.price_cents) : ''} · ${modality}</span></div>
+        ? `<div class="ag-sum"><b>${esc(sel.dayLabel)} às ${esc(sel.label)}</b><span class="muted small">${info.minutes} min · ${billing === 'convenio' ? 'convênio' : priceNow() != null ? money(priceNow()) : ''} · ${modality}</span></div>
            <button type="button" class="btn" data-go>Avançar</button>`
         : '<span class="muted small">Escolha um dia e um horário.</span>';
       $('[data-go]', foot)?.addEventListener('click', confirmStep);
@@ -224,7 +226,7 @@
           <div class="row" style="gap:12px">${ic('calendar', 26)}<div><b style="font-size:1.1rem">${esc(when)}</b><div class="muted small">${esc(proName)} · ${info.minutes} min · consulta ${modality === 'presencial' ? 'presencial' : 'online'}</div></div></div>
           ${loc ? `<div class="small">📍 ${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)} · ${esc(loc.place)}</div>` : ''}
           ${mode === 'reschedule' ? `<p class="small" style="margin:0">${opts.appt.billing === 'convenio' ? 'A consulta continua pelo convênio.' : 'O valor que você já pagou continua valendo para o novo horário.'}</p>`
-            : billing === 'convenio' ? '<div class="row between"><span>Pagamento</span><b>Convênio (plano de saúde)</b></div>' : `<div class="row between"><span>Valor da consulta</span><b>${money(info.price_cents)}</b></div>`}
+            : billing === 'convenio' ? '<div class="row between"><span>Pagamento</span><b>Convênio (plano de saúde)</b></div>' : `<div class="row between"><span>Valor da consulta ${modality}</span><b>${money(priceNow())}</b></div>`}
         </div>
         ${mode === 'book' ? `<h3 style="margin:18px 0 6px">Política de agendamento</h3>${policyHtml(rules)}
         <label class="check" style="margin:14px 0"><input type="checkbox" data-accept> Li e aceito a política de agendamento e cancelamento</label>` : ''}

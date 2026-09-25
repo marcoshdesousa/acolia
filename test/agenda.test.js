@@ -722,3 +722,41 @@ test('versão 1.2.1: consulta presencial (confirma a cidade, localização com m
   clock = keep;
   assert.ok(list.some((p) => p.name === 'Carla Presencial Reis' && p.kind === 'acolia'));
 });
+
+test('valor da presencial: o mesmo da online ou diferente; vitrine mostra o menor e o agendamento cobra o da opção', async () => {
+  const base = { pix_key: 'v@pix.com', has_clinic: true, clinic_name: 'Clínica Valor', clinic_address: 'Av. Brasil, 500', price: '120' };
+  // Presencial marcada sem valor: não salva
+  let r;
+  const V = await mkPro('Vera Valor Dias', 'vera.valor@example.com', '11977778888', 'CRP 06/51012', base);
+  r = await V.cl.put('/api/professional/profile', { name: 'Vera Valor Dias', phone: '11977778888', state: 'SP', city: 'Campinas', bio: '', specialties: ['Ansiedade'], ...base, presencial_price: 'diff', price_presencial: '' });
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /presencial/);
+  r = await V.cl.put('/api/professional/profile', { name: 'Vera Valor Dias', phone: '11977778888', state: 'SP', city: 'Campinas', bio: '', specialties: ['Ansiedade'], ...base, presencial_price: 'diff', price_presencial: '200,00' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.price_presencial_cents, 20000);
+  assert.equal(r.data.presencial_price, 'diff');
+  await V.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true });
+  // Perfil (com conta): os dois valores; vitrine: o menor
+  const prof = (await ana.get(`/api/professionals/${V.id}`)).data;
+  assert.equal(prof.price_cents, 12000);
+  assert.equal(prof.price_presencial_cents, 20000);
+  assert.equal(prof.price_min_cents, 12000);
+  assert.equal(prof.price_same, false);
+  // Agendamento: cobra o valor da opção escolhida
+  r = await ana.get(`/api/agenda/pro/${V.id}/month?ym=2030-02`);
+  assert.equal(r.data.price_presencial_cents, 20000);
+  const sl = (await ana.get(`/api/agenda/pro/${V.id}/day?date=2030-02-12`)).data.slots;
+  r = await ana.post('/api/agenda/book', { professional_id: V.id, start: sl[0].start, accept: true, modality: 'presencial', confirm_place: true });
+  assert.equal(r.data.price_cents, 20000);
+  await ana.post(`/api/agenda/appointments/${r.data.id}/cancel`, {});
+  const sl2 = (await ana.get(`/api/agenda/pro/${V.id}/day?date=2030-02-13`)).data.slots;
+  r = await ana.post('/api/agenda/book', { professional_id: V.id, start: sl2[0].start, accept: true, modality: 'online' });
+  assert.equal(r.data.price_cents, 12000);
+  await ana.post(`/api/agenda/appointments/${r.data.id}/cancel`, {});
+  // "Mesmo valor": a presencial usa o da online
+  r = await V.cl.put('/api/professional/profile', { name: 'Vera Valor Dias', phone: '11977778888', state: 'SP', city: 'Campinas', bio: '', specialties: ['Ansiedade'], ...base, presencial_price: 'same', price_presencial: '200,00' });
+  assert.equal(r.data.price_presencial_cents, null);
+  const p2 = (await ana.get(`/api/professionals/${V.id}`)).data;
+  assert.equal(p2.price_presencial_cents, 12000);
+  assert.equal(p2.price_same, true);
+});
