@@ -91,6 +91,7 @@ function autoPayment(proId) {
 // Pode receber marcações? (horários cadastrados, valor da consulta e uma forma de receber o Pix)
 function readiness(pro) {
   const missing = [];
+  if (!pro.agenda_on) missing.push('online');
   if (!db.prepare('SELECT 1 FROM agenda_hours WHERE professional_id = ?').get(pro.id)) missing.push('horarios');
   if (!(pro.price_cents > 0)) missing.push('valor');
   const auto = !!autoPayment(pro.id);
@@ -113,7 +114,7 @@ function loadBusy(proId, fromMs, toMs, { patientId = null, exclude = 0 } = {}) {
 function slotsForDay(pro, date, opts = {}) {
   const dur = duration(pro);
   const step = dur + (pro.break_minutes || 0); // consulta + descanso até a próxima
-  const ranges = db.prepare('SELECT start_min, end_min FROM agenda_hours WHERE professional_id = ? AND dow = ? ORDER BY start_min').all(pro.id, dowOf(date));
+  const ranges = db.prepare('SELECT start_min, end_min, single FROM agenda_hours WHERE professional_id = ? AND dow = ? ORDER BY start_min').all(pro.id, dowOf(date));
   if (!ranges.length) return [];
   const t0 = now();
   // Conta de teste: dá para marcar até em cima da hora (para o dono testar na hora)
@@ -124,7 +125,9 @@ function slotsForDay(pro, date, opts = {}) {
   const out = [];
   const seen = new Set();
   for (const r of ranges) {
-    for (let m = r.start_min; m + dur <= r.end_min; m += step) {
+    // single: a linha é o início de UMA consulta; senão é uma faixa (formato antigo) dividida em consultas
+    const last = r.single ? Math.min(r.start_min, 1440 - dur) : r.end_min - dur;
+    for (let m = r.start_min; m <= last; m += step) {
       const s = fromLocal(date, m);
       const e = s + dur * MIN;
       if (s < earliest || s > latest || seen.has(s)) continue;
@@ -134,6 +137,20 @@ function slotsForDay(pro, date, opts = {}) {
     }
   }
   return out.sort((a, b) => ms(a.start) - ms(b.start));
+}
+
+// Inícios das consultas de cada dia da semana, como a tela mostra ({ 1: ['08:00', '09:00'], ... })
+function weekStarts(pro) {
+  const dur = duration(pro);
+  const step = dur + (pro.break_minutes || 0);
+  const out = {};
+  for (const r of db.prepare('SELECT dow, start_min, end_min, single FROM agenda_hours WHERE professional_id = ? ORDER BY dow, start_min').all(pro.id)) {
+    const list = (out[r.dow] ||= []);
+    if (r.single) list.push(r.start_min);
+    else for (let m = r.start_min; m + dur <= r.end_min; m += step) list.push(m);
+  }
+  for (const d of Object.keys(out)) out[d] = [...new Set(out[d])].sort((a, b) => a - b).map(hhmm);
+  return out;
 }
 
 // Dias de um mês ("2026-10") com quantos horários livres cada um tem
@@ -493,7 +510,7 @@ function view(a, role) {
 module.exports = {
   RULES, CANCEL_REASONS, HOLDING, ACTIVE, OCCUPY_SQL,
   now, iso, ms, localDate, localMin, fromLocal, hhmm, parseHHMM, addDays, fmtWhen, dayLabel, dowOf,
-  getPro, getAppt, duration, readiness, autoPayment, slotsForDay, monthDays, nextAvailable, assertFree, touch,
+  getPro, getAppt, duration, readiness, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, assertFree, touch,
   ensureConversation, post, pushText, notifyBoth, setStatus, createCharge, confirmPaid, checkPayment, refund, refundLock,
   openCall, closeCall, sweep, canDo, view, onAccountGone,
   _setNow(fn) { nowFn = fn || Date.now; touch(); },

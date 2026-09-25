@@ -8,7 +8,8 @@
   const DAYS = [[1, 'Segunda'], [2, 'Terça'], [3, 'Quarta'], [4, 'Quinta'], [5, 'Sexta'], [6, 'Sábado'], [0, 'Domingo']];
   const MINUTES = [30, 40, 45, 50, 60, 90, 120];
   const MISSING = {
-    horarios: 'Cadastre os dias e horários em que você atende (abaixo).',
+    online: 'Ligue <b>"Disponível para atendimento online"</b> (logo acima).',
+    horarios: 'Coloque os horários de início das consultas (abaixo) e toque em "Salvar agenda".',
     valor: 'Coloque o valor da consulta em <a href="#perfil">Meu perfil</a>.',
     pix: 'Cadastre a sua chave Pix em <a href="#perfil">Meu perfil</a> (pagamento manual) ou conecte o Asaas (pagamento automático, abaixo).',
   };
@@ -42,18 +43,23 @@
   }
 
   // ---------- Minha agenda ----------
-  function rangeRow(dow, r = { start: '08:00', end: '12:00' }) {
-    return `<div class="range-row" data-range data-dow="${dow}"><input type="time" data-s value="${esc(r.start)}" aria-label="Começa"><span>às</span><input type="time" data-e value="${esc(r.end)}" aria-label="Termina">
+  // ---------- Minha agenda ----------
+  // Cada horário é o INÍCIO de uma consulta; o fim aparece sozinho (início + duração). "+ adicionar
+  // horário" já sugere o próximo contando o descanso. Dá para empurrar para mais tarde (almoço, pausa),
+  // mas nunca para antes do fim da anterior + descanso.
+  const toMin = (t) => { const [h, m] = String(t || '').split(':').map(Number); return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null; };
+  const toHHMM = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const startRow = (t) => `<div class="start-row" data-start-row><input type="time" data-start value="${esc(t)}" aria-label="Começa às" step="300"><span class="small muted">até <b data-end></b></span>
       <button type="button" class="icon-btn" data-rm aria-label="Tirar este horário" title="Tirar">✕</button></div>`;
-  }
 
   function renderAgenda() {
     const s = settings;
-    const byDay = (d) => s.hours.filter((h) => h.dow === d);
     const status = s.ready
-      ? `<div class="notice ok small">✅ Sua agenda está <b>aberta</b>. ${s.next ? `Próximo horário livre: <b>${esc(s.next.label)} às ${esc(s.next.first)}</b>.` : 'Não há horário livre nos próximos 60 dias.'} Pagamento: <b>${s.mode === 'auto' ? 'Pix automático (Asaas)' : 'Pix manual pelo chat'}</b>.</div>`
-      : `<div class="notice warn small"><b>Sua agenda ainda não aparece para os pacientes.</b> Falta:<ul style="margin:6px 0 0;padding-left:18px">${s.missing.map((m) => `<li>${MISSING[m]}</li>`).join('')}</ul></div>`;
+      ? `<div class="notice ok small">✅ Pacientes já podem marcar. ${s.next ? `Próximo horário livre: <b>${esc(s.next.label)} às ${esc(s.next.first)}</b>.` : 'Não há horário livre nos próximos 60 dias.'} Pagamento: <b>${s.mode === 'auto' ? 'Pix automático (Asaas)' : 'Pix manual pelo chat'}</b>.</div>`
+      : `<div class="notice warn small"><b>Os pacientes ainda não conseguem marcar.</b> Falta:<ul style="margin:6px 0 0;padding-left:18px">${s.missing.map((m) => `<li>${MISSING[m]}</li>`).join('')}</ul></div>`;
     els.agenda.innerHTML = `<h2 style="margin:0">Minha agenda</h2>
+      <label class="switch-row"><span><b>Disponível para atendimento online</b><span class="small muted">Ligado, os pacientes marcam nos seus horários e pagam pelo Pix ${s.mode === 'auto' ? '(automático)' : '(pela conversa)'}. Desligado, ninguém marca.</span></span>
+        <input type="checkbox" class="switch" data-online ${s.online ? 'checked' : ''} aria-label="Disponível para atendimento online"></label>
       ${status}
       <div class="grid-2">
         <div class="field" style="margin:0"><label for="ag-min">Duração de cada consulta</label>
@@ -61,13 +67,16 @@
         <div class="field" style="margin:0"><label for="ag-break">Descanso entre as consultas</label>
           <select id="ag-break" data-break>${[0, 5, 10, 15, 20, 30].map((m) => `<option value="${m}" ${m === (s.break_minutes || 0) ? 'selected' : ''}>${m ? `${m} minutos` : 'Sem descanso'}</option>`).join('')}</select></div>
       </div>
-      <div><b>Dias e horários em que você atende online</b><div class="small muted">Os horários de consulta são criados do começo ao fim de cada faixa: uma consulta, o descanso, a próxima consulta… Quem marca precisa de pelo menos ${s.rules.MIN_ADVANCE_MIN} minutos de antecedência.</div></div>
-      <div class="week">${DAYS.map(([d, name]) => `<div class="week-day" data-day="${d}">
-          <label class="check"><input type="checkbox" data-on ${byDay(d).length ? 'checked' : ''}> <b>${name}</b></label>
-          <div class="ranges" data-ranges>${byDay(d).map((r) => rangeRow(d, r)).join('')}</div>
-          <button type="button" class="btn sm ghost ${byDay(d).length ? '' : 'hidden'}" data-add>+ outro horário</button>
-        </div>`).join('')}</div>
-      <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn" data-save>Salvar agenda</button><button type="button" class="btn secondary sm" data-copy-mon>Copiar segunda para os dias úteis</button></div>
+      <div><b>Horários de início das consultas</b><div class="small muted">Coloque a hora em que <b>começa</b> cada consulta; o fim aparece sozinho. Em "+ adicionar horário" o próximo já vem contando o descanso. Você pode deixar para mais tarde (almoço, pausa), mas não para antes.</div></div>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary sm" data-commercial>Preencher horário comercial (seg. a sex.)</button><button type="button" class="btn secondary sm" data-copy-mon>Copiar segunda para os dias úteis</button></div>
+      <div class="week">${DAYS.map(([d, name]) => { const list = s.starts[d] || []; return `<div class="week-day ${list.length ? 'closed' : ''}" data-day="${d}">
+          <div class="wd-head"><label class="check"><input type="checkbox" data-on ${list.length ? 'checked' : ''}> <b>${name}</b></label>
+            <button type="button" class="link-btn small wd-sum" data-toggle-day></button></div>
+          <div class="ranges" data-ranges>${list.map(startRow).join('')}</div>
+          <button type="button" class="btn sm ghost ${list.length ? '' : 'hidden'}" data-add>+ adicionar horário</button>
+        </div>`; }).join('')}</div>
+      <div class="form-error hidden" data-agerr></div>
+      <button type="button" class="btn" data-save>Salvar agenda</button>
       <hr>
       <div><b>Fechar um horário</b><div class="small muted">Tem consulta presencial ou um compromisso? Feche o horário <b>antes</b> que alguém marque. Consulta já paga continua valendo: você precisa atender.</div></div>
       <div class="block-form">
@@ -80,42 +89,117 @@
       ${s.blocks.length ? `<ul class="block-list">${s.blocks.map((b) => `<li><span>${b.date.split('-').reverse().join('/')} · ${b.from === '00:00' && (b.to === '00:00' || b.to === '24:00') ? 'dia inteiro' : `${b.from} às ${b.to}`}${b.note ? ` · <span class="muted">${esc(b.note)}</span>` : ''}</span><button type="button" class="icon-btn" data-bdel="${b.id}" aria-label="Reabrir este horário" title="Reabrir">✕</button></li>`).join('')}</ul>` : ''}`;
 
     const root = els.agenda;
-    $$('.week-day', root).forEach((day) => {
-      const dow = Number(day.dataset.day);
+    const dur = () => Number($('[data-min]', root).value);
+    const brk = () => Number($('[data-break]', root).value);
+    // Atualiza o "até" de cada linha e empurra para frente o que ficou cedo demais
+    const fix = (day, changed) => {
+      const rows = $$('[data-start-row]', day);
+      let prevEnd = null;
+      let pushed = false;
+      rows.forEach((row) => {
+        const input = $('[data-start]', row);
+        let m = toMin(input.value);
+        if (m === null) m = prevEnd !== null ? prevEnd + brk() : 8 * 60;
+        const min = prevEnd !== null ? prevEnd + brk() : 0;
+        if (m < min) { m = min; pushed = true; }
+        if (m + dur() > 1440) m = Math.max(min, 1440 - dur());
+        input.value = toHHMM(m);
+        input.min = prevEnd !== null ? toHHMM(min) : '';
+        $('[data-end]', row).textContent = toHHMM(m + dur());
+        prevEnd = m + dur();
+      });
+      if (pushed && changed) toast(`Não dá para começar antes do fim da consulta anterior + descanso. Ajustei para ${changed.value}.`);
+      // Resumo do dia (aparece com o dia fechado): "8 horários · 08:00 às 17:50 ▾"
+      const sum = $('[data-toggle-day]', day);
+      if (sum) {
+        const starts = rows.map((r) => $('[data-start]', r).value);
+        sum.textContent = starts.length ? `${starts.length} horário${starts.length > 1 ? 's' : ''} · ${starts[0]} às ${toHHMM(prevEnd)} ${day.classList.contains('closed') ? '▾ ver' : '▴ fechar'}` : '';
+      }
+    };
+    const days = $$('.week-day', root);
+    days.forEach((day) => {
       const ranges = $('[data-ranges]', day);
       const add = $('[data-add]', day);
+      const addNext = () => {
+        const last = [...$$('[data-start]', day)].pop();
+        const next = last ? toMin(last.value) + dur() + brk() : 8 * 60;
+        if (next + dur() > 1440) { toast('Não cabe outra consulta neste dia.', 'error'); return; }
+        ranges.insertAdjacentHTML('beforeend', startRow(toHHMM(next)));
+        fix(day);
+      };
       $('[data-on]', day).addEventListener('change', (e) => {
-        if (e.target.checked && !ranges.children.length) ranges.insertAdjacentHTML('beforeend', rangeRow(dow) + rangeRow(dow, { start: '14:00', end: '18:00' }));
+        day.classList.remove('closed');
+        if (e.target.checked && !ranges.children.length) addNext();
         if (!e.target.checked) ranges.innerHTML = '';
         add.classList.toggle('hidden', !e.target.checked);
       });
-      add.addEventListener('click', () => ranges.insertAdjacentHTML('beforeend', rangeRow(dow, { start: '18:00', end: '20:00' })));
+      add.addEventListener('click', () => { day.classList.remove('closed'); addNext(); });
+      $('[data-toggle-day]', day).addEventListener('click', () => { day.classList.toggle('closed'); fix(day); });
       ranges.addEventListener('click', (e) => {
         if (!e.target.closest('[data-rm]')) return;
-        e.target.closest('[data-range]').remove();
+        e.target.closest('[data-start-row]').remove();
         if (!ranges.children.length) { $('[data-on]', day).checked = false; add.classList.add('hidden'); }
+        fix(day);
       });
+      ranges.addEventListener('change', (e) => { if (e.target.matches('[data-start]')) fix(day, e.target); });
+      fix(day);
     });
-    $('[data-copy-mon]', root).addEventListener('click', () => {
-      const mon = $('.week-day[data-day="1"] [data-ranges]', root);
-      if (!mon.children.length) { toast('Preencha a segunda-feira primeiro.', 'error'); return; }
-      for (const d of [2, 3, 4, 5]) {
+    [$('[data-min]', root), $('[data-break]', root)].forEach((sel) => sel.addEventListener('change', () => days.forEach((d) => fix(d))));
+    // Horário comercial: seg. a sex., das 08:00 ao meio-dia e das 14:00 às 18:00
+    $('[data-commercial]', root).addEventListener('click', () => {
+      for (const d of [1, 2, 3, 4, 5]) {
         const day = $(`.week-day[data-day="${d}"]`, root);
-        $('[data-ranges]', day).innerHTML = [...$$('[data-range]', mon)].map((r) => rangeRow(d, { start: $('[data-s]', r).value, end: $('[data-e]', r).value })).join('');
+        const list = [];
+        for (const [from, to] of [[480, 720], [840, 1080]]) {
+          const first = list.length ? Math.max(from, list[list.length - 1] + dur() + brk()) : from;
+          for (let m = first; m + dur() <= to; m += dur() + brk()) list.push(m);
+        }
+        $('[data-ranges]', day).innerHTML = list.map((m) => startRow(toHHMM(m))).join('');
         $('[data-on]', day).checked = true;
         $('[data-add]', day).classList.remove('hidden');
+        day.classList.add('closed');
+        fix(day);
+      }
+      toast('Horário comercial preenchido. Confira e toque em "Salvar agenda".');
+    });
+    $('[data-copy-mon]', root).addEventListener('click', () => {
+      const mon = $('.week-day[data-day="1"]', root);
+      const list = $$('[data-start]', mon).map((x) => x.value);
+      if (!list.length) { toast('Preencha a segunda-feira primeiro.', 'error'); return; }
+      for (const d of [2, 3, 4, 5]) {
+        const day = $(`.week-day[data-day="${d}"]`, root);
+        $('[data-ranges]', day).innerHTML = list.map(startRow).join('');
+        $('[data-on]', day).checked = true;
+        $('[data-add]', day).classList.remove('hidden');
+        day.classList.add('closed');
+        fix(day);
       }
       toast('Copiado para terça a sexta. Toque em "Salvar agenda".');
     });
+    const save = async (extra = {}) => {
+      const starts = {};
+      days.forEach((day) => { const list = $$('[data-start]', day).map((x) => x.value).filter(Boolean); if (list.length) starts[day.dataset.day] = list; });
+      return api('/api/agenda/settings', { method: 'PUT', body: { starts, session_minutes: dur(), break_minutes: brk(), ...extra } });
+    };
     $('[data-save]', root).addEventListener('click', async (e) => {
       const btn = e.currentTarget; // (depois do await o evento já não guarda o botão)
-      const hours = $$('[data-range]', root).map((r) => ({ dow: Number(r.dataset.dow), start: $('[data-s]', r).value, end: $('[data-e]', r).value }));
+      const err = $('[data-agerr]', root);
+      err.classList.add('hidden');
       btn.disabled = true;
       try {
-        settings = await api('/api/agenda/settings', { method: 'PUT', body: { hours, session_minutes: Number($('[data-min]', root).value), break_minutes: Number($('[data-break]', root).value) } });
+        settings = await save();
         toast('Agenda salva ✓', '', { top: true });
         renderAgenda();
-      } catch (ex) { toast(ex.message, 'error'); btn.disabled = false; }
+      } catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); btn.disabled = false; }
+    });
+    $('[data-online]', root).addEventListener('change', async (e) => {
+      const on = e.target.checked;
+      try {
+        // Ligar já salva os horários que estão na tela
+        settings = await save({ online: on });
+        toast(on ? (settings.ready ? 'Agenda ligada: os pacientes já podem marcar ✓' : 'Ligado. Falta completar o que aparece no aviso.') : 'Agenda desligada: ninguém marca até você ligar de novo.', '', { top: true });
+        renderAgenda();
+      } catch (ex) { e.target.checked = !on; toast(ex.message, 'error'); }
     });
     $('[data-ball]', root).addEventListener('change', (e) => $('[data-btimes]', root).classList.toggle('hidden', e.target.checked));
     $('[data-badd]', root).addEventListener('click', async () => {

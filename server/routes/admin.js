@@ -257,6 +257,13 @@ router.post('/test-accounts', (_req, res) => {
   res.json({ created, professional: { login: T.PRO.code, password: T.PRO.password }, patient: { cpf: U.formatCpf(T.PATIENT.cpf), password: T.PATIENT.password } });
 });
 
+// Teste da agenda do dono: ver o que está pronto e preparar de novo (não mexe nos horários)
+router.get('/test-agenda', (_req, res) => res.json(require('../testAgenda').status()));
+router.post('/test-agenda/prepare', (_req, res) => {
+  require('../testAgenda').provision({ withHours: false });
+  res.json(require('../testAgenda').status());
+});
+
 router.post('/professionals/:id/delete-test', (req, res) => {
   const p = db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');

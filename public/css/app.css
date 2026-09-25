@@ -1160,3 +1160,18 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .range-row .icon-btn { flex: none; }
 .block-form input[type=time] { width: 132px; flex: none; }
 .block-form [data-btimes] { flex-wrap: nowrap; }
+/* Agenda: interruptor "Disponível" e horários de início */
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); cursor: pointer; }
+.switch-row > span { display: flex; flex-direction: column; gap: 2px; }
+.switch { appearance: none; -webkit-appearance: none; flex: none; width: 50px; height: 30px; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; transition: background .2s; margin: 0; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s; }
+.switch:checked { background: var(--primary); }
+.switch:checked::after { transform: translateX(20px); }
+.start-row { display: flex; align-items: center; gap: 8px; }
+.start-row input[type=time] { flex: 0 1 140px; min-width: 0; width: auto; }
+.start-row .icon-btn { flex: none; margin-left: auto; }
+.wd-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; grid-column: 1 / -1; }
+.week-day { grid-template-columns: 1fr; }
+.week-day [data-add] { grid-column: 1; }
+.week-day.closed .ranges, .week-day.closed [data-add] { display: none; }
+.wd-sum { color: var(--primary-strong); font-weight: 700; }

@@ -133,7 +133,7 @@ test('agenda: profissional abre a agenda e aparece o próximo dia disponível (a
   assert.equal(r.status, 400, 'fim antes do início');
   r = await P.cl.put('/api/agenda/settings', { hours: [{ dow: 1, start: '08:00', end: '12:00' }, { dow: 1, start: '11:00', end: '13:00' }] });
   assert.equal(r.status, 400, 'horários sobrepostos');
-  r = await P.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50 });
+  r = await P.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.ready, true);
   assert.equal(r.data.mode, 'manual');
@@ -153,11 +153,33 @@ test('agenda: profissional abre a agenda e aparece o próximo dia disponível (a
 
 test('descanso entre as consultas: 1 hora de consulta + 15 minutos de descanso', async () => {
   const X = await mkPro('Xavier Pausa Lima', 'xavier.pausa@example.com', '11922223333', 'CRP 06/51003', { pix_key: 'x@pix.com' });
-  let r = await X.cl.put('/api/agenda/settings', { hours: [{ dow: 2, start: '08:00', end: '12:00' }], session_minutes: 60, break_minutes: 15 });
+  let r = await X.cl.put('/api/agenda/settings', { hours: [{ dow: 2, start: '08:00', end: '12:00' }], session_minutes: 60, break_minutes: 15, online: true });
   assert.equal(r.data.break_minutes, 15);
   assert.equal((await X.cl.put('/api/agenda/settings', { hours: [], break_minutes: 7 })).status, 400);
   r = await ana.get(`/api/agenda/pro/${X.id}/day?date=2030-01-08`);
   assert.deepEqual(r.data.slots.map((s) => s.label), ['08:00', '09:15', '10:30'], '11:45 terminaria 12:45');
+});
+
+test('agenda nova: liga/desliga "Disponível para atendimento online" e cada horário é o início de uma consulta', async () => {
+  const Y = await mkPro('Yara Inicio Souza', 'yara.inicio@example.com', '11944445555', 'CRP 06/51004', { pix_key: 'y@pix.com' });
+  // 50 min + 10 de descanso: depois das 08:00 o próximo só pode começar às 09:00
+  let r = await Y.cl.put('/api/agenda/settings', { session_minutes: 50, break_minutes: 10, starts: { 2: ['08:00', '08:55'] } });
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /09:00/);
+  r = await Y.cl.put('/api/agenda/settings', { session_minutes: 50, break_minutes: 10, starts: { 2: ['08:00', '09:00', '12:00', '23:30'] } });
+  assert.equal(r.status, 400, 'terminaria depois da meia-noite');
+  r = await Y.cl.put('/api/agenda/settings', { session_minutes: 50, break_minutes: 10, starts: { 2: ['08:00', '09:00', '12:00'], 4: ['14:00'] } });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.deepEqual(r.data.starts, { 2: ['08:00', '09:00', '12:00'], 4: ['14:00'] });
+  assert.equal(r.data.ready, false, 'ainda desligada');
+  assert.ok(r.data.missing.includes('online'));
+  assert.equal((await anon.get(`/api/agenda/pro/${Y.id}/next`)).data.next, null);
+  r = await Y.cl.put('/api/agenda/settings', { online: true });
+  assert.equal(r.data.ready, true);
+  r = await ana.get(`/api/agenda/pro/${Y.id}/day?date=2030-01-08`);
+  assert.deepEqual(r.data.slots.map((x) => x.label), ['08:00', '09:00', '12:00'], 'almoço: pulou das 09:50 para as 12:00');
+  r = await Y.cl.put('/api/agenda/settings', { online: false });
+  assert.equal((await ana.get(`/api/agenda/pro/${Y.id}/day?date=2030-01-08`)).data.slots.length, 0, 'desligou: ninguém marca');
 });
 
 test('manual: paciente marca, profissional manda a chave Pix, aprova e a consulta fica marcada', async () => {
@@ -190,7 +212,7 @@ test('manual: paciente marca, profissional manda a chave Pix, aprova e a consult
   assert.equal(r.data.items[0].can.cancel, true);
   // O mesmo paciente não marca outro horário que bata com essa consulta (nem com outro profissional)
   Q = await mkPro('Quiteria Auto Melo', 'quiteria.auto@example.com', '11933334444', 'CRP 06/51002', { session_minutes: 50 });
-  await Q.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50 });
+  await Q.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true });
   r = await ana.post('/api/agenda/book', { professional_id: Q.id, start: at('2030-01-08', '08:00'), accept: true });
   assert.equal(r.status, 409, 'Quitéria ainda não abriu (sem forma de receber)');
 });

@@ -324,6 +324,8 @@ function settingsOf(pro) {
   const pay = db.prepare('SELECT env, account_name, enabled, connected_at, key_enc FROM pro_payment WHERE professional_id = ?').get(pro.id);
   const ready = G.readiness(pro);
   return {
+    online: !!pro.agenda_on,
+    starts: G.weekStarts(pro), // início de cada consulta, por dia da semana
     hours: db.prepare('SELECT dow, start_min, end_min FROM agenda_hours WHERE professional_id = ? ORDER BY dow, start_min').all(pro.id)
       .map((h) => ({ dow: h.dow, start: G.hhmm(h.start_min), end: G.hhmm(h.end_min) })),
     blocks: db.prepare('SELECT id, start_at, end_at, note FROM agenda_blocks WHERE professional_id = ? AND end_at > ? ORDER BY start_at').all(pro.id, G.iso(G.now()))
@@ -345,31 +347,62 @@ router.get('/settings', (req, res) => {
   res.json(settingsOf(req.auth.user));
 });
 
+// Salvar a agenda. Formato novo: starts = { 1: ['08:00', '09:00'], ... } — cada horário é o INÍCIO de
+// uma consulta; o fim é início + duração. O próximo não pode começar antes do fim do anterior + descanso.
+// (Formato antigo, hours = [{ dow, start, end }], continua aceito: faixas divididas em consultas.)
+// online: liga/desliga "Disponível para atendimento online".
+const DOW_NAME = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 router.put('/settings', (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só para profissionais.');
   const pro = req.auth.user;
-  const hours = (Array.isArray(req.body.hours) ? req.body.hours : []).slice(0, 70).map((h) => {
-    const dow = Number(h.dow);
-    const s = G.parseHHMM(h.start);
-    const e = G.parseHHMM(h.end);
-    if (!(dow >= 0 && dow <= 6) || s === null || e === null) throw new U.HttpError(400, 'Confira os horários (formato 08:00).');
-    if (e <= s) throw new U.HttpError(400, `Em ${['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][dow]}, o horário final precisa ser depois do inicial.`);
-    return { dow, s, e };
-  });
-  for (const d of [0, 1, 2, 3, 4, 5, 6]) {
-    const list = hours.filter((h) => h.dow === d).sort((a, b) => a.s - b.s);
-    for (let i = 1; i < list.length; i++) if (list[i].s < list[i - 1].e) throw new U.HttpError(400, 'Há horários que se sobrepõem no mesmo dia.');
-  }
   const minutes = req.body.session_minutes ? Number(req.body.session_minutes) : null;
   if (minutes !== null && ![30, 40, 45, 50, 60, 90, 120].includes(minutes)) throw new U.HttpError(400, 'Escolha a duração da sessão.');
   const pause = req.body.break_minutes === undefined ? null : Number(req.body.break_minutes);
-  if (pause !== null && ![0, 5, 10, 15, 20, 30].includes(pause)) throw new U.HttpError(400, 'Escolha o intervalo entre as consultas.');
+  if (pause !== null && ![0, 5, 10, 15, 20, 30].includes(pause)) throw new U.HttpError(400, 'Escolha o descanso entre as consultas.');
+  const dur = minutes || G.duration(pro);
+  const brk = pause !== null ? pause : (pro.break_minutes || 0);
+  let rows = null; // { dow, s, e, single }
+  if (req.body.starts && typeof req.body.starts === 'object') {
+    rows = [];
+    for (const [k, list] of Object.entries(req.body.starts)) {
+      const dow = Number(k);
+      if (!(dow >= 0 && dow <= 6) || !Array.isArray(list)) throw new U.HttpError(400, 'Confira os horários.');
+      const mins = list.slice(0, 40).map((t) => {
+        const m = G.parseHHMM(t);
+        if (m === null || m >= 1440) throw new U.HttpError(400, `Confira os horários de ${DOW_NAME[dow]} (formato 08:00).`);
+        return m;
+      }).sort((a, b) => a - b);
+      for (let n = 0; n < mins.length; n++) {
+        if (mins[n] + dur > 1440) throw new U.HttpError(400, `Em ${DOW_NAME[dow]}, a consulta das ${G.hhmm(mins[n])} terminaria depois da meia-noite.`);
+        if (n && mins[n] < mins[n - 1] + dur + brk) {
+          throw new U.HttpError(400, `Em ${DOW_NAME[dow]}, o horário das ${G.hhmm(mins[n])} não pode começar antes das ${G.hhmm(mins[n - 1] + dur + brk)} (fim da consulta anterior + descanso).`);
+        }
+        rows.push({ dow, s: mins[n], e: mins[n] + dur, single: 1 });
+      }
+    }
+  } else if (Array.isArray(req.body.hours)) {
+    rows = req.body.hours.slice(0, 70).map((h) => {
+      const dow = Number(h.dow);
+      const s0 = G.parseHHMM(h.start);
+      const e0 = G.parseHHMM(h.end);
+      if (!(dow >= 0 && dow <= 6) || s0 === null || e0 === null) throw new U.HttpError(400, 'Confira os horários (formato 08:00).');
+      if (e0 <= s0) throw new U.HttpError(400, `Em ${DOW_NAME[dow]}, o horário final precisa ser depois do inicial.`);
+      return { dow, s: s0, e: e0, single: 0 };
+    });
+    for (const d of [0, 1, 2, 3, 4, 5, 6]) {
+      const list = rows.filter((h) => h.dow === d).sort((a, b) => a.s - b.s);
+      for (let n = 1; n < list.length; n++) if (list[n].s < list[n - 1].e) throw new U.HttpError(400, 'Há horários que se sobrepõem no mesmo dia.');
+    }
+  }
   tx(() => {
-    db.prepare('DELETE FROM agenda_hours WHERE professional_id = ?').run(pro.id);
-    const ins = db.prepare('INSERT INTO agenda_hours (professional_id, dow, start_min, end_min) VALUES (?, ?, ?, ?)');
-    for (const h of hours) ins.run(pro.id, h.dow, h.s, h.e);
+    if (rows) {
+      db.prepare('DELETE FROM agenda_hours WHERE professional_id = ?').run(pro.id);
+      const ins = db.prepare('INSERT INTO agenda_hours (professional_id, dow, start_min, end_min, single) VALUES (?, ?, ?, ?, ?)');
+      for (const h of rows) ins.run(pro.id, h.dow, h.s, h.e, h.single);
+    }
     if (minutes) db.prepare('UPDATE professionals SET session_minutes = ? WHERE id = ?').run(minutes, pro.id);
     if (pause !== null) db.prepare('UPDATE professionals SET break_minutes = ? WHERE id = ?').run(pause, pro.id);
+    if (req.body.online !== undefined) db.prepare('UPDATE professionals SET agenda_on = ? WHERE id = ?').run(req.body.online ? 1 : 0, pro.id);
   });
   G.touch();
   res.json(settingsOf(G.getPro(pro.id)));

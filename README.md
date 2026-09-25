@@ -25,8 +25,14 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 **O dinheiro vai sempre direto para a conta do profissional.** A Acolia não recebe, não repassa e não cobra taxa sobre as consultas. Só Pix. As regras ficam em `server/agenda.js` e a página pública é `/politica-agendamento`.
 
 **Profissional (Painel → Consultas, ícone 📅)**
-- **Minha agenda:** duração da consulta e **descanso entre as consultas** (ex.: 1 hora + 15 minutos → 08:00, 09:15, 10:30…), dias e horários da semana (várias faixas por dia; "copiar segunda para os dias úteis"), duração da consulta e **Fechar um horário** (consulta presencial ou compromisso). Consulta já paga continua valendo.
-- A agenda aparece para os pacientes quando tem **horários + valor da consulta + forma de receber**.
+- **Minha agenda:**
+  - chave **"Disponível para atendimento online"** (ligada: pacientes marcam e pagam pelo Pix; desligada: ninguém marca);
+  - duração da consulta e **descanso entre as consultas**;
+  - em cada dia, o profissional coloca a **hora de início** de cada consulta, e o fim aparece sozinho (início + duração). "+ adicionar horário" sugere o próximo (fim do anterior + descanso). Dá para mudar para mais tarde (almoço, pausa), nunca para antes; o servidor confere a mesma regra;
+  - botões "Preencher horário comercial" (seg. a sex., 08:00–12:00 e 14:00–18:00) e "copiar segunda para os dias úteis"; cada dia fica recolhido com o resumo ("8 horários · 08:00 às 17:50") e abre ao tocar;
+  - **Fechar um horário** (consulta presencial ou compromisso). Consulta já paga continua valendo.
+- A agenda aparece para os pacientes quando está **ligada** e tem **horários + valor da consulta + forma de receber**.
+- **Painel do admin → Início:** o quadro "Teste da agenda e do Pix automático" mostra com ✅/❌ o que falta para o teste funcionar, com o botão "Preparar o teste de novo".
 - **Forma de receber:**
   - **Pix automático pelo Asaas:** o profissional cria a conta no Asaas (CPF ou CNPJ), cadastra uma chave Pix lá e cola a **chave de API** na Acolia, com um passo a passo em telas; cada tela pede um print e só avança com "Sim".
   - **Pix manual:** a chave Pix do perfil vai pelo chat.

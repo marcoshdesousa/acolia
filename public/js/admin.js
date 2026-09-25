@@ -106,6 +106,32 @@
       : '<p class="muted">Nenhum cadastro pendente. 🎉</p>';
   }
 
+  // ---------- Teste da agenda (Profissional Teste + Paciente Teste, com o Asaas simulado) ----------
+  async function loadTestAgenda() {
+    const box = $('[data-test-agenda]');
+    if (!box) return;
+    let st;
+    try { st = await api('/api/admin/test-agenda'); } catch (e) { box.innerHTML = `<p class="small muted">${esc(e.message)}</p>`; return; }
+    const ok = (v) => (v ? '✅' : '❌');
+    const p = st.pro;
+    const lines = p.exists ? [
+      [p.status === 'aprovado' && p.visible, `Profissional Teste ativo e aparecendo (${esc(p.status)})`],
+      [p.payment?.env === 'simulado' && p.payment.enabled, 'Pagamento: Asaas simulado conectado (o Paciente Teste paga em "Simular pagamento")'],
+      [p.online, '"Disponível para atendimento online" ligado (o Profissional Teste liga em Consultas)'],
+      [p.starts > 0, `Horários de início cadastrados: ${p.starts} (o Profissional Teste coloca em Consultas → Minha agenda)`],
+      [p.price_cents > 0, `Valor da consulta: ${p.price_cents ? money(p.price_cents) : 'sem valor (Meu perfil)'}`],
+      [!!p.next, p.next ? `Próximo horário livre: ${esc(p.next.label)} às ${esc(p.next.first)}` : 'Nenhum horário livre agora'],
+    ] : [[false, 'Profissional Teste não existe (toque em "Preparar o teste de novo")']];
+    lines.push([st.patient.exists && st.patient.active, 'Paciente Teste ativo']);
+    box.innerHTML = `<b>Teste da agenda e do Pix automático</b>
+      <ul class="small" style="list-style:none;padding:0;margin:6px 0 10px;display:grid;gap:4px">${lines.map(([v, t]) => `<li>${ok(v)} ${t}</li>`).join('')}</ul>
+      <p class="small muted" style="margin:0 0 8px">Só a conta de teste usa o Asaas simulado. Quando apagar a conta de teste, ele some junto.</p>
+      <button type="button" class="btn secondary sm" data-prep-test>Preparar o teste de novo</button>`;
+    $('[data-prep-test]', box).addEventListener('click', async () => {
+      try { await api('/api/admin/test-agenda/prepare', { method: 'POST' }); toast('Teste preparado ✓'); loadTestAgenda(); } catch (e) { toast(e.message, 'error'); }
+    });
+  }
+
   // ---------- Limite de publicações por profissional ----------
   const limForm = $('[data-limits-form]');
   async function loadLimits() {
@@ -547,6 +573,7 @@
   async function reloadAll() {
     await loadLocations().catch(() => {});
     await loadStats().catch(() => {});
+    loadTestAgenda();
     const v = (location.hash.slice(1) || 'inicio').split('/')[0];
     if (v === 'profissionais') loadList('professionals');
     if (v === 'pacientes') loadList('patients');
@@ -559,7 +586,7 @@
     $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
     $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === v));
     try {
-      if (v === 'inicio') await loadStats();
+      if (v === 'inicio') { await loadStats(); loadTestAgenda(); }
       if (v === 'profissionais') {
         const f = $('[data-filter="professionals"]');
         if (arg !== undefined) f.status.value = arg;
