@@ -471,7 +471,9 @@
       }
       const menu = mine && m.kind !== 'deleted' && m.kind !== 'booking'
         ? `<button type="button" class="msg-menu" data-msg-menu="${m.id}" aria-label="Opções da mensagem" title="Opções">⋮</button>` : '';
-      return `<div class="msg ${mine ? 'me' : ''} ${m.kind === 'audio' ? 'is-audio' : ''}" data-mid="${m.id}">${menu}${inner}<span class="when">${fmtTime(m.created_at)}${ticks}</span></div>`;
+      // Mandada pela secretária (só o profissional e a secretária veem este selo)
+      const sec = m.secretary_id && role === 'professional' ? '<span class="sec-tag">Secretária</span>' : '';
+      return `<div class="msg ${mine ? 'me' : ''} ${m.kind === 'audio' ? 'is-audio' : ''}" data-mid="${m.id}">${menu}${inner}<span class="when">${sec}${fmtTime(m.created_at)}${ticks}</span></div>`;
     }
 
     // Publicação enviada pelo paciente (a partir do botão "Mensagem" do post)

@@ -174,6 +174,20 @@ router.post('/professional/login', (req, res) => {
   const login = U.cleanText(req.body.login, 160);
   const key = `pro:${req.ip}:${login.toLowerCase()}`;
   A.checkLoginRate(key);
+  // Secretária (versão 1.1.3): entra no mesmo lugar, com o login e a senha que o profissional gerou
+  const sec = require('../secretary').byLogin(login);
+  if (sec) {
+    if (!U.verifyPassword(req.body.password || '', sec.password_hash)) {
+      A.registerLoginFailure(key);
+      throw new HttpError(401, 'Código/e-mail ou senha incorretos.');
+    }
+    const owner = db.prepare('SELECT status FROM professionals WHERE id = ?').get(sec.professional_id);
+    if (!owner || !['aprovado', 'restrito', 'bloqueado'].includes(owner.status)) throw new HttpError(403, 'A conta do profissional desta secretária não está ativa.');
+    A.clearLoginFailures(key);
+    db.prepare("UPDATE secretaries SET last_login_at = datetime('now') WHERE id = ?").run(sec.id);
+    A.createSession(res, 'professional', sec.professional_id, sec.id);
+    return res.json({ ok: true, secretary: true });
+  }
   const p = db.prepare("SELECT * FROM professionals WHERE (code = ? OR email = ?) AND status <> 'oficial'").get(login.toUpperCase(), login.toLowerCase());
   // Cadastro em análise: ainda não tem senha — mostra o aviso com o WhatsApp de atendimento
   if (p && p.status === 'pendente') {
@@ -222,7 +236,15 @@ router.get('/me', (req, res) => {
   if (role === 'admin') return res.json({ role, user: { id: user.id, username: user.username } });
   // account: bloqueio e aviso de renovação (+ WhatsApp do atendimento da Acolia)
   const account = { ...require('../accountState').stateOf(role, user), support: require('../accountState').SUPPORT_WHATSAPP };
-  if (role === 'professional') return res.json({ role, user: ownProfessional(user), account });
+  if (role === 'professional') {
+    // Secretária: usa o painel do profissional, sem o código único (e a tela sabe que é ela)
+    if (req.auth.secretary) {
+      const u = ownProfessional(user);
+      delete u.code; delete u.pix_key;
+      return res.json({ role, user: u, account, secretary: { login: req.auth.secretary.login } });
+    }
+    return res.json({ role, user: ownProfessional(user), account });
+  }
   return res.json({ role, user: ownPatient(user), account });
 });
 

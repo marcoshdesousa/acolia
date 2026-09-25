@@ -460,7 +460,8 @@
     tentar: ['🔁 Nova tentativa de pagamento', (a, r) => (r === 'professional' ? 'Mande a chave Pix de novo em até 5 minutos.' : 'O profissional vai mandar a chave Pix de novo.')],
     pro_cancelou: ['⚠️ O profissional não poderá atender', (a, r) => `${a.cancel_detail ? `“${a.cancel_detail}” · ` : ''}${r === 'patient' ? 'Escolha entre o reembolso e remarcar para outro horário.' : 'O paciente vai escolher entre o reembolso e remarcar.'}`],
     ausente: ['⚠️ O profissional não compareceu', (a) => `A chamada foi fechada. ${a.mode === 'auto' ? 'O dinheiro será reembolsado automaticamente (100%).' : 'O dinheiro será reembolsado (100%) pelo profissional.'}`],
-    chamada: ['🎥 Sua consulta vai começar', (a) => (a.can?.enter_call ? 'Toque em "Entrar na chamada". Não saia da tela durante a consulta.' : 'A chamada desta consulta foi encerrada.')],
+    chamada: ['🎥 Sua consulta vai começar', (a) => (a.can?.enter_call ? 'Toque em "Entrar na chamada". Não saia da tela durante a consulta.'
+      : a.secretary ? 'A chamada desta consulta foi aberta. Só o profissional entra nela.' : 'A chamada desta consulta foi encerrada.')],
     expirada: ['⏱️ Tempo para pagar acabou', () => 'O horário foi liberado.'],
     sem_resposta: ['⏱️ A chave Pix não chegou a tempo', (a, r) => (r === 'patient' ? 'O profissional não mandou a chave Pix em 5 minutos e o horário foi liberado. Escolha outro horário ou mande uma mensagem.' : 'Você não mandou a chave Pix em 5 minutos e o horário foi liberado.')],
   };

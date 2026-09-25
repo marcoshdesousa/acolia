@@ -25,6 +25,13 @@ router.get('/pro/:id/next', (req, res) => {
 });
 
 router.use(A.requireRole('patient', 'professional'));
+// Secretária (versão 1.1.3): não vê a chave Pix do profissional
+router.use((req, res, next) => {
+  if (!req.auth.secretary) return next();
+  const send = res.json.bind(res);
+  res.json = (b) => send(b && typeof b === 'object' && 'pix_key' in b ? { ...b, pix_key: '' } : b);
+  next();
+});
 
 // ---------- Calendário (paciente escolhe; profissional usa para propor no chat) ----------
 function bookablePro(req, id) {
@@ -121,7 +128,7 @@ router.post('/propose', async (req, res) => {
   }
   G.post(out, 'professional', 'proposta');
   G.notifyBoth(out);
-  res.status(201).json(G.view(out, 'professional'));
+  res.status(201).json(G.view(out, role(req)));
 });
 
 // ---------- Consultas ----------
@@ -131,7 +138,7 @@ function loadMine(req, id) {
   if (!mine) throw new U.HttpError(404, 'Consulta não encontrada.');
   return a;
 }
-const role = (req) => req.auth.role;
+const role = (req) => (req.auth.secretary ? 'secretary' : req.auth.role);
 
 router.get('/appointments', (req, res) => {
   const col = isPatient(req) ? 'patient_id' : 'professional_id';
@@ -280,7 +287,7 @@ router.post('/appointments/:id/send-pix', (req, res) => {
   const c = db.prepare('SELECT * FROM conversations WHERE id = ?').get(a.conversation_id);
   require('./chat').sendMessage(c, 'professional', req.auth.user.name, 'pix', key);
   G.notifyBoth(upd);
-  res.json(G.view(upd, 'professional'));
+  res.json(G.view(upd, role(req)));
 });
 
 router.post('/appointments/:id/manual-result', (req, res) => {
@@ -290,12 +297,12 @@ router.post('/appointments/:id/manual-result', (req, res) => {
   if (req.body.approved) {
     const upd = G.confirmPaid(a);
     if (upd.status !== 'confirmada') throw new U.HttpError(409, 'Esse horário já foi ocupado por outra pessoa. Devolva o Pix ao paciente e combine outro horário pelo chat.');
-    return res.json(G.view(upd, 'professional'));
+    return res.json(G.view(upd, role(req)));
   }
   const upd = G.setStatus(a.id, { status: 'pagamento_recusado', hold_until: G.iso(G.now() + G.RULES.ANSWER_MIN * MIN) });
   G.post(upd, 'professional', 'recusado');
   G.notifyBoth(upd);
-  res.json(G.view(upd, 'professional'));
+  res.json(G.view(upd, role(req)));
 });
 
 // Não vou poder atender (até 24 horas antes): o paciente escolhe entre reembolso e remarcar
@@ -306,7 +313,7 @@ router.post('/appointments/:id/pro-cancel', (req, res) => {
   const upd = G.setStatus(a.id, { status: 'aguardando_paciente', cancel_detail: U.cleanText(req.body.detail, 500) || null });
   G.post(upd, 'professional', 'pro_cancelou');
   G.notifyBoth(upd);
-  res.json(G.view(upd, 'professional'));
+  res.json(G.view(upd, role(req)));
 });
 
 router.post('/appointments/:id/refund-done', (req, res) => {
@@ -316,7 +323,7 @@ router.post('/appointments/:id/refund-done', (req, res) => {
   const upd = G.setStatus(a.id, { refund_status: 'feito' });
   G.post(upd, 'professional', 'reembolso_feito');
   G.notifyBoth(upd);
-  res.json(G.view(upd, 'professional'));
+  res.json(G.view(upd, role(req)));
 });
 
 // ---------- Configurações da agenda (profissional) ----------

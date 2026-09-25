@@ -1224,3 +1224,21 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .week-day [data-add] { grid-column: 1; }
 .week-day.closed .ranges, .week-day.closed [data-add] { display: none; }
 .wd-sum { color: var(--primary-strong); font-weight: 700; }
+
+/* Versão 1.1.3 — secretária e chamadas */
+.sec-tag { font-size: .66rem; font-weight: 800; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 1px 7px; margin-right: 6px; letter-spacing: .02em; }
+.sec-banner { display: flex; align-items: center; gap: 8px; background: var(--accent-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 12px; padding: 8px 12px; margin-bottom: 14px; font-size: .9rem; }
+.sec-banner svg { color: var(--accent); flex: none; }
+.sec-rules { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.sec-creds { display: grid; gap: 8px; background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
+.sec-creds > div { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+.sec-creds b { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.05rem; letter-spacing: .02em; word-break: break-all; }
+.call-next { display: flex; flex-direction: column; gap: 12px; border: 1.5px solid color-mix(in srgb, var(--primary) 45%, transparent); background: linear-gradient(180deg, var(--primary-soft), var(--surface) 70%); }
+.call-enter { min-height: 52px; font-size: 1.05rem; }
+.call-rest { display: flex; flex-direction: column; gap: 6px; }
+.call-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; cursor: pointer; }
+.call-row .grow { display: flex; flex-direction: column; min-width: 0; }
+.call-row:hover { background: var(--surface-2); }
+.empty-calls { text-align: center; padding: 28px 16px; color: var(--muted); }
+/* Na conversa o aviso da secretária sai (a conversa usa a tela toda) */
+.panel-main:has([data-view="conversas"]:not(.hidden)) .sec-banner { display: none; }

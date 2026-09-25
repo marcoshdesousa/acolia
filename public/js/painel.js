@@ -9,6 +9,8 @@
   if (auth.role !== 'professional') { location.replace(location.hash ? '/entrar?next=' + encodeURIComponent('/painel' + location.hash) + '#profissional' : '/'); return; }
   if (auth.account?.blocked) { Acolia.showBlocked(auth); return; } // bloqueado (admin ou assinatura vencida)
   let me = auth.user;
+  // Versão 1.1.3: secretária usa este mesmo painel, com limites (ver js/secretary.js)
+  const isSec = !!auth.secretary;
   const cfg = await api('/api/config');
 
   $('[data-logo]').innerHTML = ICONS.logo;
@@ -38,8 +40,8 @@
     renderLink();
     $('[data-me-avatar]').innerHTML = `<a href="#perfil" aria-label="Meu perfil">${avatar(me.name, me.photo, 'sm')}</a>`;
     $('[data-photo]').innerHTML = avatar(me.name, me.photo, 'lg');
-    $('[data-my-code]').textContent = me.code;
-    $('[data-my-code2]').textContent = me.code;
+    if ($('[data-my-code]')) $('[data-my-code]').textContent = me.code || '';
+    if ($('[data-my-code2]')) $('[data-my-code2]').textContent = me.code || '';
     $('[data-sub]').textContent = fmtDate(me.subscription_until);
     $('[data-visibility]').innerHTML = me.visible ? '<span class="badge ok">Visível para pacientes</span>'
       : me.status === 'restrito' ? '<span class="badge danger">Restrito pela administração</span>'
@@ -80,6 +82,8 @@
     form.maps_url.value = me.maps_url || '';
   }
   fillProfile();
+  // Secretária (só o profissional cria; fica logo depois da Localização)
+  if (!isSec) window.AcoliaSecretary?.card($('[data-secretary-card]'));
   // Mensagens prontas (até 10), usadas no chat pelo "+"
   window.AcoliaQuick?.editor($('[data-quick-card]'));
   bindUfCity(form.state, form.city);
@@ -148,10 +152,10 @@
     const actives = data.actives || [];
     box.innerHTML = actives.map((c) => `<div class="card stack" style="border-color:var(--primary);margin-bottom:16px" data-call="${c.id}">
         <div class="row between"><h2 style="margin:0">Chamada com ${esc(c.patient_label)}</h2><span class="badge ok">Aberta</span></div>
-        <div class="row">
+        ${isSec ? '<p class="small muted" style="margin:0">Só o profissional entra na chamada.</p>' : `<div class="row">
           <a class="btn" href="/atendimento?codigo=${encodeURIComponent(c.patient_code)}" target="_blank" rel="noopener">${ICONS.video.replace('<svg', '<svg style="width:20px;height:20px"')} Entrar na chamada</a>
           <button class="btn danger" data-end-call="${c.id}">Finalizar atendimento</button>
-        </div>
+        </div>`}
       </div>`).join('');
     $$('[data-end-call]', box).forEach((b) => b.addEventListener('click', async () => {
       if (!await confirmDialog('Finalizar este atendimento? O código do paciente deixará de funcionar.', { okLabel: 'Finalizar', danger: true })) return;
@@ -160,7 +164,7 @@
       loadCalls();
     }));
     $('[data-history]').innerHTML = data.items.length ? data.items.map((h) => `<tr>
-      <td>${esc(h.patient_label)}</td><td><code>${esc(h.patient_code)}</code></td>
+      <td>${esc(h.patient_label)}</td><td>${h.patient_code ? `<code>${esc(h.patient_code)}</code>` : '—'}</td>
       <td>${parseDate(h.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</td>
       <td>${h.status === 'ativo' ? '<span class="badge ok">Ativo</span>' : '<span class="badge">Finalizado</span>'}</td></tr>`).join('')
       : '<tr><td colspan="4" class="muted center">Nenhum atendimento ainda.</td></tr>';
@@ -218,7 +222,9 @@
   // Consultas: aviso fixo da próxima consulta ("Ver" abre a página Consultas) e a agenda
   AcoliaAgenda.setContext({ role: 'professional', onGoChat: (id) => { location.hash = `conversas/${id}`; } });
   AcoliaAgenda.mountBar({ role: 'professional', socket, onSee: () => { location.hash = 'atendimento'; } });
-  const agendaPro = AcoliaAgendaPro.mount({ appts: $('[data-appts]'), agenda: $('[data-agenda-card]'), asaas: $('[data-asaas-card]') });
+  const agendaPro = AcoliaAgendaPro.mount({ appts: $('[data-appts]'), agenda: $('[data-agenda-card]'), asaas: $('[data-asaas-card]'), secretary: isSec });
+  // Chamadas (câmera): só o profissional
+  const callsPage = isSec ? null : AcoliaSecretary.mountCalls($('[data-calls-list]'));
   const chat = AcoliaChat.mount($('[data-chat]'), {
     role: 'professional', me: () => me, socket, onUnreadChange: setUnread,
     onNavigate: (id) => { const h = id ? `#conversas/${id}` : '#conversas'; if (location.hash.startsWith('#conversas') && location.hash !== h) history.replaceState(null, '', h); },
@@ -244,7 +250,8 @@
   // ---------- Rotas ----------
   function route() {
     const [view, arg] = (location.hash.slice(1) || 'inicio').split('/');
-    const v = ['inicio', 'profissionais', 'verpro', 'posts', 'conversas', 'atendimento', 'perfil', 'conta'].includes(view) ? view : 'inicio';
+    const views = ['inicio', 'profissionais', 'verpro', 'posts', 'conversas', 'atendimento', 'perfil', 'conta', ...(isSec ? [] : ['chamadas'])];
+    const v = views.includes(view) ? view : 'inicio';
     $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
     $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'verpro' || v === 'posts' ? 'profissionais' : v)));
     if (v === 'posts' && arg) AcoliaSocial.mountPostsPage($('[data-posts-page]'), Number(arg), { onBack: (id) => openPro(id) });
@@ -261,6 +268,7 @@
       AcoliaCatalog.mount($('[data-catalog]'), { loggedIn: false, viewerRole: 'professional', excludeId: me.id, profileHref: (p) => `#verpro/${p.id}` });
     }
     if (v === 'verpro' && arg) showPro(Number(arg));
+    if (v === 'chamadas') callsPage?.load();
     if (v === 'perfil') loadMyPosts(); // sempre atualizada (inclusive depois de publicar no Início)
     if (v === 'atendimento') { agendaPro.load(); loadCalls().catch((e) => toast(e.message, 'error')); loadMyPatients().catch((e) => toast(e.message, 'error')); }
     if (v === 'conversas') {
@@ -275,5 +283,6 @@
   }));
   window.addEventListener('hashchange', route);
   renderMe();
+  if (isSec) AcoliaSecretary.lockPanel(me);
   route();
 })();

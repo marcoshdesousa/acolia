@@ -23,7 +23,25 @@ function toCents(v) {
   return Math.round(n * 100);
 }
 
-router.get('/me', (req, res) => res.json(ownProfessional(req.auth.user)));
+router.get('/me', (req, res) => {
+  const me = ownProfessional(req.auth.user);
+  // Secretária: sem o código único e sem a chave Pix
+  if (req.auth.secretary) { delete me.code; delete me.pix_key; me.secretary = { login: req.auth.secretary.login }; }
+  res.json(me);
+});
+
+// ---------- Secretária (versão 1.1.3): uma por profissional; login e senha gerados pelo sistema ----------
+const SEC = require('../secretary');
+router.get('/secretary', (req, res) => res.json({ secretary: SEC.ofPro(req.auth.user.id) }));
+router.post('/secretary', (req, res) => {
+  const creds = SEC.create(req.auth.user.id);
+  res.status(201).json({ secretary: SEC.ofPro(req.auth.user.id), ...creds });
+});
+router.post('/secretary/password', (req, res) => {
+  const creds = SEC.resetPassword(req.auth.user.id);
+  res.json({ secretary: SEC.ofPro(req.auth.user.id), ...creds });
+});
+router.delete('/secretary', (req, res) => { SEC.remove(req.auth.user.id); res.json({ secretary: null }); });
 
 // ---------- Mensagens prontas (até 10): no chat, o "+" ao lado do campo de digitar coloca a mensagem inteira ----------
 const QUICK_MAX = 10;
@@ -158,6 +176,7 @@ function wipeProfessional(me) {
   // Apaga tudo: publicações, reels, stories, curtidas, comentários, seguidores e o conteúdo das
   // mensagens que ele mandou. E-mail, registro, código e link ficam livres para um cadastro novo.
   require('./social').purgeUserSocial('professional', me.id);
+  require('../secretary').remove(me.id);
   require('../agenda').onAccountGone('professional', me.id);
   // Agenda e pagamento automático saem junto (inclusive o Asaas simulado da conta de teste)
   db.prepare('DELETE FROM pro_payment WHERE professional_id = ?').run(me.id);

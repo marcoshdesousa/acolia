@@ -248,6 +248,14 @@
   function renderAsaas() {
     const p = settings.payment;
     const box = els.asaas;
+    // Secretária (versão 1.1.3): só vê se o pagamento automático está ligado; não mexe em nada
+    if (els.secretary) {
+      const on = p.connected && p.enabled && p.key_ok;
+      box.innerHTML = `<h2 style="margin:0">${ic('pix', 22)} Pagamento pelo Pix</h2>
+        <div class="notice ${on ? 'ok' : ''} small">${on ? '✅ Pagamento automático ligado: as consultas pagas são confirmadas sozinhas.' : 'Pagamento manual: a chave Pix do profissional vai pela conversa e a consulta é confirmada quando o dinheiro cair.'}</div>
+        <p class="small muted" style="margin:0">🔒 Só o profissional muda a forma de pagamento, o Asaas e a chave Pix.</p>`;
+      return;
+    }
     if (!p.connected) {
       box.innerHTML = `<h2 style="margin:0">${ic('pix', 22)} Pagamento automático pelo Pix (Asaas)</h2>
         <p style="margin:0">O paciente paga o Pix <b>dentro da Acolia</b> e a consulta é marcada sozinha. Se ele cancelar no prazo, o reembolso também é automático. O dinheiro cai <b>direto na sua conta Asaas</b>: a Acolia não recebe nem cobra taxa.</p>

@@ -10,6 +10,9 @@ const router = express.Router();
 router.use(A.requireRole('patient', 'professional'));
 
 const MSG_COLS = 'id, conversation_id, sender_role, kind, body, read_at, created_at';
+// O profissional (e a secretária) também veem quais mensagens a secretária mandou; o paciente não
+const colsFor = (role) => (role === 'professional' ? `${MSG_COLS}, secretary_id` : MSG_COLS);
+const viewRole = (req) => (req.auth.secretary ? 'secretary' : req.auth.role);
 
 // O profissional só enxerga a conversa depois que o paciente manda a primeira mensagem
 // (o profissional nunca inicia conversa nem vê quem só abriu o chat).
@@ -149,8 +152,8 @@ router.get('/conversations/:id/messages', (req, res) => {
   const c = loadConversation(req, req.params.id);
   const before = Number(req.query.before) || Number.MAX_SAFE_INTEGER;
   const limit = Math.min(Number(req.query.limit) || 60, 200);
-  const rows = db.prepare(`SELECT ${MSG_COLS} FROM messages WHERE conversation_id = ? AND id < ? AND ${hideCol(req.auth.role)} = 0 ORDER BY id DESC LIMIT ?`).all(c.id, before, limit);
-  res.json({ items: rows.reverse().map((m) => withBooking(withPost(m), req.auth.role)), has_more: rows.length === limit });
+  const rows = db.prepare(`SELECT ${colsFor(req.auth.role)} FROM messages WHERE conversation_id = ? AND id < ? AND ${hideCol(req.auth.role)} = 0 ORDER BY id DESC LIMIT ?`).all(c.id, before, limit);
+  res.json({ items: rows.reverse().map((m) => withBooking(withPost(m), viewRole(req))), has_more: rows.length === limit });
 });
 
 // Publicação enviada no chat (paciente toca em "Mensagem" num post): a mensagem guarda só o id
@@ -184,11 +187,14 @@ function postMessage(req, c, kind, body) {
 // Mensagem da conversa sem a checagem de bloqueio (usada também pelos avisos automáticos das
 // consultas: "consulta agendada", "pagamento aprovado", link da chamada...)
 function sendMessage(c, role, from, kind, body) {
-  const info = db.prepare('INSERT INTO messages (conversation_id, sender_role, kind, body) VALUES (?, ?, ?, ?)').run(c.id, role, kind, body);
-  const msg = withPost(db.prepare(`SELECT ${MSG_COLS} FROM messages WHERE id = ?`).get(Number(info.lastInsertRowid)));
+  // Mandada pela secretária (versão 1.1.3): fica marcada para o profissional e a secretária
+  const secId = role === 'professional' ? require('../secretary').current() : null;
+  const info = db.prepare('INSERT INTO messages (conversation_id, sender_role, kind, body, secretary_id) VALUES (?, ?, ?, ?, ?)').run(c.id, role, kind, body, secId);
+  const full = withPost(db.prepare(`SELECT ${MSG_COLS}, secretary_id FROM messages WHERE id = ?`).get(Number(info.lastInsertRowid)));
+  const { secretary_id: _sec, ...msg } = full;
   db.prepare(`UPDATE conversations SET last_message_at = ?${role === 'patient' ? ', patient_wrote = 1' : ''} WHERE id = ?`).run(msg.created_at, c.id);
   rt.emit(`patient:${c.patient_id}`, 'message:new', msg);
-  rt.emit(`professional:${c.professional_id}`, 'message:new', msg);
+  rt.emit(`professional:${c.professional_id}`, 'message:new', full);
   // Notificação no aparelho de quem recebe
   const to = role === 'patient' ? ['professional', c.professional_id, `/painel#conversas/${c.id}`] : ['patient', c.patient_id, `/app#chat/${c.id}`];
   const text = kind === 'booking' ? require('../agenda').pushText(body) : kind === 'pix' ? 'Enviou a chave Pix para pagamento' : kind === 'call' ? 'Enviou um código de atendimento'
@@ -196,7 +202,7 @@ function sendMessage(c, role, from, kind, body) {
   require('../push').notify(to[0], to[1], {
     title: from, body: text.length > 140 ? `${text.slice(0, 137)}…` : text, url: to[2], tag: `conversa-${c.id}`,
   });
-  return msg;
+  return role === 'professional' ? full : msg;
 }
 
 router.post('/conversations/:id/messages', (req, res) => {

@@ -15,10 +15,11 @@ function parseCookies(header) {
   return out;
 }
 
-function createSession(res, role, userId) {
+// secretaryId: a secretária entra como o profissional dela, com a sessão marcada (versão 1.1.3)
+function createSession(res, role, userId, secretaryId = null) {
   const token = crypto.randomBytes(32).toString('hex');
   const expires = Date.now() + SESSION_DAYS * 864e5;
-  db.prepare('INSERT INTO sessions (token, role, user_id, expires_at) VALUES (?, ?, ?, ?)').run(token, role, userId, expires);
+  db.prepare('INSERT INTO sessions (token, role, user_id, expires_at, secretary_id) VALUES (?, ?, ?, ?, ?)').run(token, role, userId, expires, secretaryId);
   const secure = process.env.COOKIE_SECURE === 'true' ? '; Secure' : '';
   res.setHeader('Set-Cookie', `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure}`);
   return token;
@@ -56,9 +57,15 @@ function sessionFromCookie(cookieHeader, { allowBlocked = false } = {}) {
     if (user && !['ativo', 'bloqueado'].includes(user.status)) user = null;
   }
   if (!user) return null;
+  // Secretária: a conta dela precisa continuar existindo (o profissional pode apagar ou trocar a senha)
+  let secretary = null;
+  if (s.secretary_id) {
+    secretary = db.prepare('SELECT id, login FROM secretaries WHERE id = ? AND professional_id = ?').get(s.secretary_id, s.user_id);
+    if (!secretary) { db.prepare('DELETE FROM sessions WHERE token = ?').run(token); return null; }
+  }
   const blocked = require('./accountState').stateOf(s.role, user).blocked || null;
   if (blocked && !allowBlocked) return null;
-  return { role: s.role, user, token, blocked };
+  return { role: s.role, user, token, blocked, secretary };
 }
 
 function attachSession(req, _res, next) {

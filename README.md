@@ -89,6 +89,23 @@ No chat, paciente e profissional podem mandar **mensagens de voz** no estilo Wha
 
 O profissional só vê uma conversa depois que o paciente manda a primeira mensagem. A única exceção é a da versão 1.1.2, abaixo.
 
+**Versão 1.1.3 — secretária e chamadas** (`server/secretary.js`, `public/js/secretary.js`):
+- **Criar:** em **Meu perfil**, logo depois da Localização, o profissional cria **uma** secretária. O sistema gera o **login** (`secretaria.xxxxxx`) e a **senha**, que só aparece nessa hora. Há os botões "Copiar login e senha", "Gerar nova senha" e "Apagar secretária". Gerar nova senha ou apagar derruba a secretária do painel na hora.
+- **Entrar:** a secretária entra no mesmo lugar do profissional (Entrar → Sou profissional) e usa o painel dele, com o aviso "Você está no painel como secretária de …".
+- **Pode:**
+  - responder as conversas no lugar do profissional (a mensagem sai como do profissional; o profissional e ela veem o selo **Secretária**, o paciente não);
+  - usar as mensagens prontas;
+  - publicar;
+  - ver e organizar as consultas e a agenda;
+  - ver os pacientes e o histórico de chamadas (sem os códigos).
+- **Não pode** (conferido no servidor):
+  - entrar nas chamadas de vídeo;
+  - mudar o perfil, a foto, o link, a senha ou a conta, nem criar ou apagar a secretária;
+  - mexer no pagamento automático (Asaas) ou na chave Pix;
+  - ver o código único.
+  Na engrenagem ela só instala o app, ativa as notificações e sai.
+- **Chamadas (câmera, só o profissional):** nova aba com a **próxima chamada** em destaque ("Entrar na chamada" aparece 10 minutos antes) e as outras, menores, embaixo.
+
 **Versão 1.1.2 — tocar em quem comentou:**
 - O **profissional dono da publicação** (foto, vídeo ou texto) toca no **paciente** que comentou (no nome, na foto ou no botão "Mensagem") e vai direto para a conversa com ele. O paciente só vê a conversa quando chega a primeira mensagem.
 - **Outro profissional** que vê o mesmo comentário **não** consegue tocar no paciente.

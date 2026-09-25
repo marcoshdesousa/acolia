@@ -2136,6 +2136,70 @@ test('versão 1.1.2: dono da publicação manda mensagem para o paciente que com
   assert.equal((await A.cl.post('/api/chat/conversations', { comment_id: cPat.id })).data.id, conv.id);
 });
 
+test('versão 1.1.3: secretária do profissional — login gerado, responde no lugar dele, com limites', async () => {
+  const r0 = await admin.post('/api/admin/professionals', { name: 'Sara Secretaria Lima', profession: 'Psicólogo(a)', registry: 'CRP 06/40333', email: 'sara.sec@example.com', phone: '11913131313', state: 'SP', city: 'Campinas' });
+  assert.equal(r0.status, 201, JSON.stringify(r0.data));
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: r0.data.code, password: r0.data.password });
+  // Cria: login e senha aleatórios, uma por profissional
+  let r = await pro.post('/api/professional/secretary');
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const { login, password } = r.data;
+  assert.match(login, /^secretaria\.[a-z0-9]{6}$/);
+  assert.ok(password.length >= 10);
+  assert.equal(r.data.secretary.login, login, 'já volta com a secretária criada');
+  assert.equal((await pro.post('/api/professional/secretary')).status, 409, 'só uma secretária');
+  assert.equal((await pro.get('/api/professional/secretary')).data.secretary.login, login);
+  // Entra no mesmo lugar do profissional
+  const sec = client();
+  assert.equal((await sec.post('/api/auth/professional/login', { login, password: 'errada123' })).status, 401);
+  r = await sec.post('/api/auth/professional/login', { login: login.toUpperCase(), password });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const me = (await sec.get('/api/auth/me')).data;
+  assert.equal(me.role, 'professional');
+  assert.equal(me.user.id, r0.data.id);
+  assert.ok(me.secretary && !me.user.code, 'secretária não vê o código único');
+  assert.equal((await sec.get('/api/professional/me')).data.code, undefined);
+  // Paciente escreve; a secretária responde; o profissional vê o selo, o paciente não
+  const pt = client();
+  assert.equal((await pt.post('/api/auth/patient/register', { name: 'Paula Paciente Rocha', cpf: '862.883.667-57', state: 'SP', city: 'Campinas', birth_date: '1990-01-02', password: '123456' })).status, 201);
+  const conv = (await pt.post('/api/chat/conversations', { professional_id: r0.data.id })).data;
+  await pt.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Oi, tem horário?' });
+  assert.ok((await sec.get('/api/chat/conversations')).data.items.some((c) => c.id === conv.id), 'secretária vê as conversas dele');
+  r = await sec.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Olá! Sou a secretária, vou verificar.' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.sender_role, 'professional');
+  const proMsgs = (await pro.get(`/api/chat/conversations/${conv.id}/messages`)).data.items;
+  assert.ok(proMsgs.at(-1).secretary_id, 'profissional vê que foi a secretária');
+  const patMsgs = (await pt.get(`/api/chat/conversations/${conv.id}/messages`)).data.items;
+  assert.equal(patMsgs.at(-1).body, 'Olá! Sou a secretária, vou verificar.');
+  assert.equal(patMsgs.at(-1).secretary_id, undefined, 'paciente não vê diferença');
+  // Pode: publicar e ver a agenda (sem a chave Pix)
+  assert.equal((await sec.post('/api/social/texts', { text: 'Aviso do consultório.', font: 'padrao' })).status, 201);
+  r = await sec.get('/api/agenda/settings');
+  assert.equal(r.status, 200);
+  assert.equal(r.data.pix_key, '');
+  // Não pode: perfil, senha, conta, secretária, Asaas, chave Pix, chamadas
+  const pf = { name: 'Outro Nome Qualquer', phone: '11913131313', state: 'SP', city: 'Campinas', bio: '', specialties: ['Adultos'], price: '120' };
+  for (const [m, url, body] of [['put', '/api/professional/profile', pf], ['post', '/api/professional/password', { current: 'x', password: 'nova123' }],
+    ['post', '/api/professional/delete', {}], ['post', '/api/professional/secretary', {}], ['del', '/api/professional/secretary'],
+    ['put', '/api/agenda/asaas', { enabled: false }], ['post', '/api/agenda/asaas', { key: 'x' }], ['put', '/api/agenda/settings', { pix_key: 'minha@pix' }],
+    ['post', '/api/calls', { patient_label: 'Teste' }]]) {
+    const x = await sec[m](url, body);
+    assert.equal(x.status, 403, `${m} ${url} → ${x.status}`);
+  }
+  assert.equal((await pro.get('/api/professional/me')).data.name, 'Sara Secretaria Lima', 'perfil intacto');
+  // Nova senha: a secretária sai na hora
+  r = await pro.post('/api/professional/secretary/password');
+  assert.equal(r.status, 200);
+  assert.equal((await sec.get('/api/auth/me')).data.role, null, 'sessão antiga caiu');
+  assert.equal((await sec.post('/api/auth/professional/login', { login, password: r.data.password })).status, 200);
+  // Apagar: sai de novo e o login deixa de existir
+  assert.equal((await pro.del('/api/professional/secretary')).status, 200);
+  assert.equal((await sec.get('/api/auth/me')).data.role, null);
+  assert.equal((await sec.post('/api/auth/professional/login', { login, password: r.data.password })).status, 401);
+});
+
 test('início oficial: apaga contas e conteúdo uma vez só; admin e Acolia Brasil ficam; CPF fica livre', async () => {
   const { db } = require('../server/db');
   const R = require('../server/launchReset');

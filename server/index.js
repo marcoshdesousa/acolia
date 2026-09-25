@@ -65,6 +65,11 @@ function createApp() {
     }
     next();
   });
+  // Secretária (versão 1.1.3): o que ela não pode fazer é barrado aqui; e as mensagens que ela manda
+  // ficam marcadas (o pedido inteiro "sabe" que foi ela)
+  const SEC = require('./secretary');
+  app.use(SEC.guard);
+  app.use((req, _res, next) => SEC.ctx.run({ secretaryId: req.auth?.secretary?.id || null }, next));
   require('./blocklist'); // lista de bloqueados (cria a tabela e inclui quem já estava bloqueado)
   app.use('/api/auth', require('./routes/auth').router);
   app.use('/api', require('./routes/public').router);

@@ -470,7 +470,12 @@ function canDo(a, role) {
   return c;
 }
 
+// role 'secretary' (versão 1.1.3): vê como o profissional, mas sem entrar na chamada
 function view(a, role) {
+  if (role === 'secretary') {
+    const v = view(a, 'professional');
+    return { ...v, call_code: null, can: { ...v.can, enter_call: false }, secretary: true };
+  }
   const pro = getPro(a.professional_id);
   const pat = db.prepare('SELECT id, name, display_name, photo FROM patients WHERE id = ?').get(a.patient_id);
   const call = a.call_id ? db.prepare('SELECT patient_code, status FROM calls WHERE id = ?').get(a.call_id) : null;

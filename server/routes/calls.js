@@ -53,6 +53,8 @@ function resolveCode(code, auth) {
   const call = db.prepare("SELECT * FROM calls WHERE patient_code = ? AND status = 'ativo'").get(code);
   if (!call) throw new U.HttpError(404, 'Código inválido ou atendimento já finalizado. Peça um novo código ao profissional.');
   const p = db.prepare('SELECT * FROM professionals WHERE id = ?').get(call.professional_id);
+  // Secretária (versão 1.1.3): não entra nas chamadas — nem como profissional, nem como convidada
+  if (auth?.secretary) throw new U.HttpError(403, 'A secretária não entra nas chamadas de vídeo. Só o profissional.');
   // O próprio profissional, logado, entra no atendimento dele pelo código do paciente (como anfitrião)
   if (auth?.role === 'professional' && auth.user.id === p.id) return { role: 'host', call, pro: p };
   return { role: 'guest', call, pro: p };
@@ -71,8 +73,15 @@ router.use(A.requireRole('professional'));
 
 router.get('/', (req, res) => {
   const rows = db.prepare('SELECT * FROM calls WHERE professional_id = ? ORDER BY id DESC LIMIT 50').all(req.auth.user.id);
-  const actives = activeCalls(req.auth.user.id);
-  res.json({ active: actives[0] || null, actives, max_active: MAX_ACTIVE_CALLS, items: rows });
+  let actives = activeCalls(req.auth.user.id);
+  let items = rows;
+  // Secretária vê o histórico, mas sem os códigos das chamadas (ela não entra)
+  if (req.auth.secretary) {
+    const strip = (c) => ({ ...c, patient_code: null });
+    actives = actives.map(strip);
+    items = items.map(strip);
+  }
+  res.json({ active: actives[0] || null, actives, max_active: MAX_ACTIVE_CALLS, items });
 });
 
 router.post('/', (req, res) => {
