@@ -1122,7 +1122,7 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 .appt-item { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: grid; gap: 8px; }
 .appt-left b { color: var(--primary-strong); }
 /* Aviso fixo da próxima consulta (embaixo, pequeno) */
-.appt-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 90px; z-index: 40; width: min(560px, calc(100vw - 24px)); display: flex; align-items: center; gap: 8px; padding: 7px 8px 7px 12px; border-radius: 16px;
+.appt-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); z-index: 40; width: min(560px, calc(100vw - 24px)); display: flex; align-items: center; gap: 8px; padding: 7px 8px 7px 12px; border-radius: 16px;
   background: color-mix(in srgb, var(--surface) 94%, transparent); border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--line)); box-shadow: 0 6px 20px rgba(0,0,0,.12); backdrop-filter: blur(8px); transition: bottom .2s ease, opacity .2s; }
 .appt-bar.hidden, .appt-bar.gone { display: none; }
 .appt-bar .ab-ic { color: var(--primary); display: flex; }

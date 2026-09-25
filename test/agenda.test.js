@@ -14,6 +14,7 @@ process.env.ADMIN_USER = 'admin';
 process.env.ADMIN_PASSWORD = 'senha-admin-123';
 process.env.TEST_ACCOUNTS = '0';
 delete process.env.PAYMENT_SECRET;
+process.env.ALLOW_ASAAS_SANDBOX = '1'; // o Asaas falso usa chave de teste
 
 // ---------- Asaas falso ----------
 const fake = { keys: new Set(['$aact_hmlg_chave_de_teste_valida_123456']), payments: new Map(), customers: [], seq: 0, failRefund: false, calls: [] };
@@ -387,6 +388,15 @@ test('profissional entra na chamada: sem reembolso e a consulta fica concluída 
   r = await bia.get(`/api/agenda/appointments/${a.id}`);
   assert.equal(r.data.status, 'concluida');
   assert.equal(r.data.call_code, null, 'chamada fechada');
+});
+
+test('no site de verdade só vale chave de conta real do Asaas (a de teste não recebe dinheiro)', async () => {
+  delete process.env.ALLOW_ASAAS_SANDBOX;
+  try {
+    const r = await P.cl.post('/api/agenda/asaas', { key: '$aact_hmlg_chave_de_teste_valida_123456' });
+    assert.equal(r.status, 400);
+    assert.match(r.data.error, /TESTE/);
+  } finally { process.env.ALLOW_ASAAS_SANDBOX = '1'; }
 });
 
 test('conta apagada: consultas futuras são canceladas', async () => {

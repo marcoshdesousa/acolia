@@ -36,12 +36,17 @@ async function call(env, key, method, path, body) {
   return data;
 }
 
-// Confere a chave. A chave de teste (sandbox) e a de produção vão para endereços diferentes:
-// pelo começo da chave dá para saber; se não der, tenta produção e depois teste.
+// Confere a chave com o Asaas (produção e teste ficam em endereços diferentes; pelo começo da chave
+// dá para saber qual é). Só chave de conta REAL (produção): a de teste (Sandbox) não recebe dinheiro de verdade.
+// ALLOW_ASAAS_SANDBOX=1 libera a de teste (só para os testes automáticos / desenvolvimento).
+const sandboxAllowed = () => process.env.ALLOW_ASAAS_SANDBOX === '1';
+const SANDBOX_MSG = 'Essa é uma chave de TESTE do Asaas (Sandbox), que não recebe dinheiro de verdade. Use a chave de API da sua conta real do Asaas.';
+
 async function check(key) {
   key = String(key || '').trim();
   if (key.length < 20) throw new U.HttpError(400, 'Cole a chave de API completa do Asaas (começa com $aact_).');
-  const envs = /_hmlg_/.test(key) ? ['teste'] : /_prod_/.test(key) ? ['producao'] : ['producao', 'teste'];
+  if (/_hmlg_/.test(key) && !sandboxAllowed()) throw new U.HttpError(400, SANDBOX_MSG);
+  const envs = /_hmlg_/.test(key) ? ['teste'] : /_prod_/.test(key) ? ['producao'] : sandboxAllowed() ? ['producao', 'teste'] : ['producao'];
   let last;
   for (const env of envs) {
     try {
@@ -51,7 +56,7 @@ async function check(key) {
       return { env, name, key };
     } catch (e) { last = e; }
   }
-  if (last?.asaasStatus === 401) throw new U.HttpError(400, 'Chave do Asaas inválida. Confira se copiou a chave inteira.');
+  if (last?.asaasStatus === 401) throw new U.HttpError(400, 'Chave do Asaas inválida. Confira se copiou a chave inteira (e se é a da sua conta real, não a de teste).');
   throw last;
 }
 

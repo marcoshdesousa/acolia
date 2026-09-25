@@ -31,7 +31,7 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
   - **Pix automático pelo Asaas:** o profissional cria a conta no Asaas (CPF ou CNPJ), cadastra uma chave Pix lá e cola a **chave de API** na Acolia, com um passo a passo em telas; cada tela pede um print e só avança com "Sim".
   - **Pix manual:** a chave Pix do perfil vai pelo chat.
 - A chave do Asaas fica **criptografada** com a senha do administrador que já está no Render (`ADMIN_PASSWORD`; dá para usar `PAYMENT_SECRET` no lugar). Se essa senha mudar, cada profissional precisa conectar o Asaas de novo.
-- A Acolia reconhece sozinha a chave de **teste** (Sandbox) e a **real**.
+- Só vale a chave da **conta real** do Asaas. A de teste (Sandbox) é recusada, porque não recebe dinheiro de verdade. `ALLOW_ASAAS_SANDBOX=1` libera a de teste só para os testes automáticos.
 - **Próximas consultas:** lista com contagem regressiva, "Não vou poder atender", "Fiz o reembolso" e histórico.
 - **Pelo chat** (ícone 📅 da conversa), o profissional **propõe uma consulta** ao paciente. O paciente aceita a política e paga.
 

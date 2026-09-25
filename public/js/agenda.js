@@ -559,10 +559,11 @@
     const shown = (el) => { const r = el.getBoundingClientRect(); return r.height > 0 && r.width > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('.hidden'); };
     const composer = [...$$('.composer')].find(shown);
     const nav = [...$$('.bottom-nav')].find(shown);
-    let bottom = 12;
+    // Sempre acima do menu de baixo (casinha, profissionais, mensagens…) ou do campo de mensagem
+    let bottom = null;
     if (composer) bottom = window.innerHeight - composer.getBoundingClientRect().top + 8;
     else if (nav) bottom = window.innerHeight - nav.getBoundingClientRect().top + 8;
-    bar.style.bottom = `${Math.max(8, Math.round(bottom))}px`;
+    bar.style.bottom = bottom === null ? '' : `${Math.max(8, Math.round(bottom))}px`;
     document.documentElement.style.setProperty('--appt-bar-space', `${bar.offsetHeight + 12}px`);
   }
   async function refreshBar() {

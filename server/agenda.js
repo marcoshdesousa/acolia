@@ -82,6 +82,7 @@ const duration = (pro) => pro.session_minutes || RULES.DEFAULT_MINUTES;
 function autoPayment(proId) {
   const row = db.prepare('SELECT * FROM pro_payment WHERE professional_id = ? AND enabled = 1').get(proId);
   if (!row) return null;
+  if (row.env === 'teste' && process.env.ALLOW_ASAAS_SANDBOX !== '1') return null; // conta de teste não recebe dinheiro
   const key = require('./secretBox').open(row.key_enc);
   return key ? { env: row.env, key, name: row.account_name } : null;
 }

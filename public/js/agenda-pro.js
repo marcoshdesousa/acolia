@@ -178,7 +178,7 @@
       <li>Vá em <b>Chaves de API</b> e toque em <b>Gerar chave de API</b> (ou "Gerar nova chave").</li>
       <li><b>Copie a chave inteira.</b> Ela começa com <code>$aact_</code>. O Asaas mostra a chave uma vez só.</li>
       <li>Não mande essa chave para ninguém: ela dá acesso à sua conta. Aqui na Acolia ela fica guardada <b>criptografada</b> e só é usada para criar o Pix das consultas e fazer os reembolsos.</li></ol>
-      <p class="small muted">Quer testar antes, sem dinheiro de verdade? Crie uma conta no <b>Asaas Sandbox</b> (ambiente de testes do Asaas) e use a chave de lá. A Acolia reconhece sozinha se a chave é de teste ou real.</p>`],
+      <p class="small muted">Use a chave da sua <b>conta real</b> do Asaas. Chave de conta de teste (Sandbox) não é aceita, porque não recebe dinheiro de verdade.</p>`],
   ];
   function wizard() {
     let i = 0;
