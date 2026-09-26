@@ -171,6 +171,9 @@ async function start(port = Number(process.env.PORT) || 3000) {
   // …e recriadas depois, a pedido do dono (uma vez), com a agenda e o Asaas simulado de antes
   if (process.env.TEST_ACCOUNTS !== '0') require('./testAgenda').recreateOnce();
   if (process.env.TEST_ACCOUNTS !== '0') require('./testAgenda').reactivateOnce(); // pedido do dono: contas de teste ativas de novo
+  // Pedido do dono (depois de testar): apaga de novo, UMA vez, o Profissional Teste e o Paciente Teste (com a secretária
+  // de teste, conversas, consultas e o Asaas simulado). Voltam só pelo botão do admin "Preparar o teste de novo".
+  require('./testAccounts').removeTestAccountsOnce('test_accounts_removed_v2');
   require('./handles').backfill(); // todo paciente tem um @ (o Paciente Teste é @pacienteteste)
   // Stories somem depois de 24 h
   const { cleanupStories } = require('./routes/social');

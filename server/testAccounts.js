@@ -60,8 +60,8 @@ function seedOnce() {
 // Pedido do dono (depois dos testes da versão 1.1.3): apaga UMA vez as contas de teste (Profissional
 // Teste, Paciente Teste) e a secretária de teste, com tudo delas (conversas, consultas, Asaas simulado).
 // Não voltam sozinhas: só se o admin tocar em "Preparar o teste de novo".
-function removeTestAccountsOnce() {
-  const KEY = 'test_accounts_removed_v1';
+// key: cada pedido de apagar é uma chave nova (v1: depois da versão 1.1.3; v2: depois dos testes da troca de tipo)
+function removeTestAccountsOnce(KEY = 'test_accounts_removed_v1') {
   if (db.prepare('SELECT 1 FROM settings WHERE key = ?').get(KEY)) return null;
   const out = { professionals: 0, patients: 0 };
   for (const p of db.prepare("SELECT * FROM professionals WHERE is_test = 1 AND status <> 'excluido'").all()) {
