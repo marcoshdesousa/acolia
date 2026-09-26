@@ -50,6 +50,25 @@ function recreateOnce() {
   return ok;
 }
 
+// Pedido do dono (depois da troca online ↔ presencial): ativa de novo, UMA vez, as contas de teste —
+// Profissional Teste (aprovado, agenda online e presencial ligadas, Asaas simulado conectado, mesmo
+// valor no online e no presencial para dar para testar a troca de tipo) e o Paciente Teste ativo.
+// Se não existirem mais, são criadas de novo. Não mexe nos horários que já estiverem cadastrados.
+function reactivateOnce() {
+  const KEY3 = 'test_accounts_reactivated_v2';
+  if (db.prepare('SELECT 1 FROM settings WHERE key = ?').get(KEY3)) return false;
+  const ok = provision({ withHours: false });
+  if (ok) {
+    const T = require('./testAccounts');
+    db.prepare(`UPDATE professionals SET presencial_on = 1, price_presencial_cents = NULL, subscription_until = ? WHERE code = ? AND is_test = 1`)
+      .run(U.addDaysISO(U.todayISO(), 3650), T.PRO.code);
+    require('./agenda').touch();
+  }
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(KEY3, new Date().toISOString());
+  if (ok) console.log('[teste] contas de teste ativas de novo (Asaas simulado conectado)');
+  return ok;
+}
+
 function runOnce() {
   if (db.prepare('SELECT 1 FROM settings WHERE key = ?').get(KEY)) return;
   const ok = provision();
@@ -75,4 +94,4 @@ function status() {
   return out;
 }
 
-module.exports = { runOnce, recreateOnce, provision, status };
+module.exports = { runOnce, recreateOnce, reactivateOnce, provision, status };
