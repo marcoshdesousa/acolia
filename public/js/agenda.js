@@ -714,6 +714,7 @@
       html: `<div class="row" style="gap:10px;align-items:center">${avatar(other.name, other.photo, 'sm')}<div><b>${esc(other.name)}</b><div class="small muted">${esc(a.when)} · ${a.minutes} min</div></div></div>
         <div style="margin:10px 0">${badge(a)} <span class="small muted">· ${a.billing === 'convenio' ? 'Convênio (plano de saúde)' : a.price_cents != null ? `${money(a.price_cents)} · Pix` : ''}</span></div>
         ${a.modality === 'presencial' ? locationHtml(a.location) : '<p class="small muted">O link da chamada aparece na conversa 5 minutos antes.</p>'}
+        ${role === 'patient' && a.can?.switch_note ? `<p class="small muted" style="margin:10px 0 0">${esc(a.can.switch_note)}</p>` : ''}
         <div class="bk-actions" style="margin-top:12px">${buttons(a, role)}</div>`,
       actions: [{ label: 'Fechar' }],
       onOpen: (dlg) => bindActions(dlg, (id) => { if (id === a.id) { dlg.close(); dlg.remove(); } return id === a.id ? a : findAppt(id); }),
@@ -742,6 +743,7 @@
         ${a.modality === 'presencial' && ['confirmada', 'aguardando_paciente'].includes(a.status) ? locationHtml(a.location, { map: false }) : ''}
         ${a.status === 'confirmada' ? `<div class="small appt-left">Faltam <b data-cd="${esc(a.start_at)}">${countdown(Date.parse(a.start_at) - now())}</b></div>` : ''}
         ${a.status === 'confirmada' && role === 'patient' && !a.can.reschedule && !a.can.cancel ? `<div class="small muted">${a.reschedules >= a.max_reschedules ? 'Você já remarcou uma vez.' : ''} ${Date.parse(a.start_at) - now() <= 30 * 60000 ? 'Faltam 30 minutos ou menos: não dá mais para remarcar nem pedir reembolso.' : ''}</div>` : ''}
+        ${role === 'patient' && a.can?.switch_note ? `<div class="small muted">${esc(a.can.switch_note)}</div>` : ''}
         <div class="bk-actions">${buttons(a, role)}${a.conversation_id ? `<button type="button" class="btn sm ghost" data-ag-act="chat" data-ag-id="${a.id}">${ic('chat', 16)} Conversa</button>` : ''}</div>
       </div>`;
     }).join('') : `<p class="muted">Você não tem consultas marcadas.</p>`;
