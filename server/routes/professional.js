@@ -272,14 +272,19 @@ function myPatients(proId, { q = '', from = '', to = '', modality = '' } = {}) {
   const mod = modality === 'online' || modality === 'presencial' ? modality : '';
   let rows = [];
   if (mod !== 'presencial') {
-    // Toda chamada do histórico ligada a um paciente conta (depois do horário de "apagar", se ele apagou)
+    // Só as consultas online que ACONTECERAM (depois do horário de "apagar", se ele apagou):
+    // - chamada de consulta marcada: a consulta ficou "concluída" (o profissional finalizou a chamada);
+    //   profissional ou paciente que não entrou (reembolso ou sem reembolso) NÃO conta
+    // - chamada criada à mão: os dois entraram (started_at) e ela foi finalizada
     rows = db.prepare(`
       WITH att AS (
         SELECT COALESCE(ca.conversation_id,
           (SELECT m.conversation_id FROM messages m WHERE m.kind = 'call' AND m.body = ca.patient_code LIMIT 1)) AS conv,
           COALESCE(ca.started_at, ca.host_joined_at, ca.guest_joined_at, ca.created_at) AS ts
         FROM calls ca WHERE ca.professional_id = ?
-          AND (ca.started_at IS NOT NULL OR ca.host_joined_at IS NOT NULL OR ca.guest_joined_at IS NOT NULL OR ca.status <> 'ativo'))
+          AND CASE WHEN ca.appointment_id IS NOT NULL
+            THEN EXISTS (SELECT 1 FROM appointments ap WHERE ap.id = ca.appointment_id AND ap.status = 'concluida')
+            ELSE ca.status = 'finalizado' AND ca.started_at IS NOT NULL END)
       SELECT pa.id, pa.name, pa.cpf, pa.birth_date, pa.city, pa.state, COUNT(*) AS consultas,
         MIN(date(att.ts, '-3 hours')) AS primeira, MAX(date(att.ts, '-3 hours')) AS ultima
       FROM att JOIN conversations c ON c.id = att.conv AND c.professional_id = ?

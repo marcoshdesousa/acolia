@@ -195,10 +195,18 @@
       toast('Atendimento finalizado');
       loadCalls();
     }));
+    // Situação de cada chamada: só "Consulta realizada" quando aconteceu de verdade
+    const OUTCOME = {
+      ativo: '<span class="badge ok">Aberta</span>',
+      realizada: '<span class="badge ok">Consulta realizada</span>',
+      profissional_ausente: '<span class="badge warn">Não aconteceu: profissional não entrou (reembolso)</span>',
+      paciente_ausente: '<span class="badge warn">Não aconteceu: paciente não entrou</span>',
+      nao_realizada: '<span class="badge">Não aconteceu</span>',
+    };
     $('[data-history]').innerHTML = data.items.length ? data.items.map((h) => `<tr>
       <td>${esc(h.patient_label)}</td><td>${h.patient_code ? `<code>${esc(h.patient_code)}</code>` : '—'}</td>
       <td>${parseDate(h.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</td>
-      <td>${h.status === 'ativo' ? '<span class="badge ok">Ativo</span>' : '<span class="badge">Finalizado</span>'}</td></tr>`).join('')
+      <td>${OUTCOME[h.outcome] || OUTCOME[h.status === 'ativo' ? 'ativo' : 'nao_realizada']}</td></tr>`).join('')
       : '<tr><td colspan="4" class="muted center">Nenhum atendimento ainda.</td></tr>';
   }
   // Meus pacientes: os da Acolia entram sozinhos (consulta online); os de fora ele adiciona (presencial ou online).

@@ -72,7 +72,18 @@ router.post('/resolve', (req, res) => {
 router.use(A.requireRole('professional'));
 
 router.get('/', (req, res) => {
-  const rows = db.prepare('SELECT * FROM calls WHERE professional_id = ? ORDER BY id DESC LIMIT 50').all(req.auth.user.id);
+  // outcome: como terminou (o histórico não mostra "finalizado" para consulta que não aconteceu)
+  const rows = db.prepare(`SELECT ca.*, CASE
+      WHEN ca.status = 'ativo' THEN 'ativo'
+      WHEN ca.appointment_id IS NOT NULL THEN CASE
+        WHEN ap.status = 'concluida' THEN 'realizada'
+        WHEN ap.status = 'paciente_ausente' THEN 'paciente_ausente'
+        WHEN ap.cancel_reason = 'profissional_ausente' THEN 'profissional_ausente'
+        ELSE 'nao_realizada' END
+      WHEN ca.started_at IS NOT NULL THEN 'realizada'
+      ELSE 'nao_realizada' END AS outcome
+    FROM calls ca LEFT JOIN appointments ap ON ap.id = ca.appointment_id
+    WHERE ca.professional_id = ? ORDER BY ca.id DESC LIMIT 50`).all(req.auth.user.id);
   let actives = activeCalls(req.auth.user.id);
   let items = rows;
   // Secretária vê o histórico, mas sem os códigos das chamadas (ela não entra)

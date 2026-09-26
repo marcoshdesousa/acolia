@@ -367,6 +367,11 @@ test('chamada automática: abre 5 min antes (com aviso na conversa); profissiona
   assert.equal(r.data.call_code, null, 'chamada fechada');
   m = await msgs(bia, b.conversation_id);
   assert.ok(m.some((x) => x.event === 'ausente'));
+  // Não aconteceu: no histórico não aparece como realizada e a paciente não entra em Meus pacientes por ela
+  const h = (await P.cl.get('/api/calls')).data.items.find((x) => x.appointment_id === b.id);
+  assert.equal(h.outcome, 'profissional_ausente');
+  const pats = (await P.cl.get('/api/professional/patients')).data.items;
+  assert.ok(!pats.some((x) => x.name === b.patient.name && x.modality === 'online'), 'consulta que não aconteceu não conta');
 });
 
 test('automático (Asaas): conecta a chave, paciente paga o Pix dentro da Acolia, cancela e o estorno sai sozinho', async () => {

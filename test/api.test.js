@@ -2014,9 +2014,14 @@ test('meus pacientes: quem está no histórico de chamadas entra sozinho; adicio
   assert.equal(d.items.length, 0, 'fevereiro sem consultas');
   d = (await A.cl.get('/api/professional/patients')).data;
   assert.equal(d.totals.consultations, 3, 'tudo: 3 consultas');
-  // Chamada que está no histórico (sem o paciente ter entrado) também entra na lista
+  // Chamada que não aconteceu (o paciente não entrou) NÃO entra na lista; a que aconteceu entra
   const c2 = await conv(P2, A);
   await call(A, c2, 'Tiago', false);
+  assert.ok(!(await A.cl.get('/api/professional/patients')).data.items.some((p) => p.name === 'Tiago Semconsulta Lopes'), 'chamada que não aconteceu não conta');
+  const hist = (await A.cl.get('/api/calls')).data.items;
+  assert.equal(hist[0].outcome, 'nao_realizada', 'o histórico não mostra como realizada');
+  await call(A, c2, 'Tiago', true);
+  assert.equal((await A.cl.get('/api/calls')).data.items[0].outcome, 'realizada');
   assert.ok((await A.cl.get('/api/professional/patients')).data.items.some((p) => p.name === 'Tiago Semconsulta Lopes'));
   // Lixeira: tira da lista (consulta de teste); volta se houver uma nova consulta
   const tiago = (await A.cl.get('/api/professional/patients')).data.items.find((p) => p.name === 'Tiago Semconsulta Lopes');
@@ -2024,7 +2029,7 @@ test('meus pacientes: quem está no histórico de chamadas entra sozinho; adicio
   assert.ok(!(await A.cl.get('/api/professional/patients')).data.items.some((p) => p.name === 'Tiago Semconsulta Lopes'));
   assert.equal((await B.cl.post(`/api/professional/patients/${list[0].id}/hide`)).status, 404, 'só pacientes dele');
   // (a chamada escondida ficou antes do "apagar"; a nova vem depois)
-  db.prepare("UPDATE calls SET created_at = datetime('now', '-2 minutes') WHERE conversation_id = ?").run(c2);
+  db.prepare("UPDATE calls SET created_at = datetime('now', '-2 minutes'), started_at = CASE WHEN started_at IS NULL THEN NULL ELSE datetime('now', '-2 minutes') END WHERE conversation_id = ?").run(c2);
   db.prepare("UPDATE pro_patient_hidden SET hidden_at = datetime('now', '-1 minute')").run();
   await call(A, c2, 'Tiago', true);
   const back = (await A.cl.get('/api/professional/patients')).data.items.find((p) => p.name === 'Tiago Semconsulta Lopes');
