@@ -117,7 +117,14 @@
     let billing = 'pix';
     let placeChecked = false;
     // Valor conforme a modalidade (a presencial pode custar diferente)
-    const priceNow = () => (modality === 'presencial' && info?.price_presencial_cents != null ? info.price_presencial_cents : info?.price_cents);
+    const priceOf = (m) => (m === 'presencial' && info?.price_presencial_cents != null ? info.price_presencial_cents : info?.price_cents);
+    const priceNow = () => priceOf(modality);
+    // Opção indisponível: sem agenda ou (ao remarcar trocando o tipo) com valor diferente do já pago
+    const modOff = (m) => {
+      if (m === 'online' ? info.online === false : !info.presencial_open) return mode === 'reschedule' && m === opts.appt.modality ? '' : 'Sem agenda';
+      if (mode === 'reschedule' && m !== opts.appt.modality && opts.appt.billing !== 'convenio' && priceOf(m) !== opts.appt.price_cents) return 'Valor diferente';
+      return '';
+    };
 
     async function loadMonth() {
       page.body.innerHTML = '<div class="spinner"></div>';
@@ -142,15 +149,17 @@
       const pt = info.patient;
       const head = mode === 'propose' ? `<div class="card flat pat-data"><div class="small muted" style="font-weight:700">PACIENTE</div><b>${esc(pt?.name || opts.peerName || 'Paciente')}</b>
             ${pt ? `<div class="small muted">CPF ${esc(pt.cpf)}${pt.birth_date ? ` · nascimento ${esc(pt.birth_date)}` : ''}${pt.place ? ` · ${esc(pt.place)}` : ''}</div>` : ''}</div>`
-        : mode === 'reschedule' ? `<p class="muted" style="margin-top:0">Consulta atual: <b>${esc(opts.appt.when)}</b>. Escolha o novo dia e horário.${opts.appt.status === 'confirmada' ? ' <b>Você só pode remarcar uma vez.</b>' : ''}</p>`
+        : mode === 'reschedule' ? `<p class="muted" style="margin-top:0">Consulta atual: <b>${esc(opts.appt.when)}</b> (${opts.appt.modality === 'presencial' ? 'presencial' : 'online'}). Escolha o novo dia e horário${info.presencial ? ' e, se quiser, troque entre online e presencial' : ''}.${opts.appt.status === 'confirmada' ? ' <b>Você só pode remarcar uma vez.</b>' : ''}</p>`
           : `<div class="row" style="gap:12px;margin-bottom:12px">${avatar(proName, opts.pro.photo, 'md')}<div><b>${esc(proName)}</b><div class="muted small">${esc(opts.pro.profession || '')}</div></div></div>`;
       const loc = info.presencial;
-      const choices = mode === 'reschedule' ? '' : `
+      const off = { online: modOff('online'), presencial: modOff('presencial') };
+      const choices = `
         ${loc ? `<div class="opt-label">Tipo de consulta</div>
           <div class="opt-grid" role="radiogroup" aria-label="Tipo de consulta">
-            ${optCard({ attr: 'data-mod="online"', on: modality === 'online', off: info.online === false, icon: 'video', title: 'Online', sub: info.online === false ? 'Sem agenda' : info.price_cents != null ? money(info.price_cents) : 'Videochamada' })}
-            ${optCard({ attr: 'data-mod="presencial"', on: modality === 'presencial', off: !info.presencial_open, icon: 'home', title: 'Presencial', sub: !info.presencial_open ? 'Sem agenda' : info.price_presencial_cents != null ? money(info.price_presencial_cents) : 'No consultório' })}
+            ${optCard({ attr: 'data-mod="online"', on: modality === 'online', off: !!off.online, icon: 'video', title: 'Online', sub: off.online || (info.price_cents != null ? money(info.price_cents) : 'Videochamada') })}
+            ${optCard({ attr: 'data-mod="presencial"', on: modality === 'presencial', off: !!off.presencial, icon: 'home', title: 'Presencial', sub: off.presencial || (priceOf('presencial') != null ? money(priceOf('presencial')) : 'No consultório') })}
           </div>
+          ${mode === 'reschedule' && (off.online === 'Valor diferente' || off.presencial === 'Valor diferente') ? '<p class="small muted opt-note">A outra opção tem outro valor. Para trocar para ela, cancele esta consulta e marque de novo.</p>' : ''}
           ${modality === 'presencial' && info.presencial_open ? `<div class="opt-place">${ic('pin', 18)}<span>${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>` : ''}` : ''}
         ${mode === 'propose' && info.insurance ? `<div class="opt-label">Pagamento</div>
           <div class="opt-grid" role="radiogroup" aria-label="Pagamento">
@@ -246,7 +255,7 @@
       page.body.innerHTML = `<div class="card stack">
           <div class="row" style="gap:12px">${ic(modality === 'presencial' ? 'home' : 'video', 26)}<div><b style="font-size:1.1rem">${esc(when)}</b><div class="muted small">${esc(proName)} · ${info.minutes} min · consulta ${modality === 'presencial' ? 'presencial' : 'online'}</div></div></div>
           ${loc ? `<div class="opt-place">${ic('pin', 18)}<span>${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>` : ''}
-          ${mode === 'reschedule' ? `<p class="small" style="margin:0">${opts.appt.billing === 'convenio' ? 'A consulta continua pelo convênio.' : 'O valor que você já pagou continua valendo para o novo horário.'}</p>`
+          ${mode === 'reschedule' ? `<p class="small" style="margin:0">${modality !== opts.appt.modality ? `<b>A consulta passa a ser ${modality}.</b> ` : ''}${opts.appt.billing === 'convenio' ? 'A consulta continua pelo convênio.' : 'O valor que você já pagou continua valendo para o novo horário.'}</p>`
             : billing === 'convenio' ? '<div class="row between"><span>Pagamento</span><b>Convênio (plano de saúde)</b></div>' : `<div class="row between"><span>Valor da consulta ${modality}</span><b>${money(priceNow())}</b></div>`}
         </div>
         ${mode === 'book' ? `<h3 style="margin:18px 0 6px">Política de agendamento</h3>${policyHtml(rules)}
@@ -264,8 +273,27 @@
         btn.disabled = true;
         err.classList.add('hidden');
         try {
+          // Presencial: confirma que a pessoa consegue ir até a cidade do consultório (o município do
+          // cadastro pode estar desatualizado). "Não" → a consulta vira online.
+          if (modality === 'presencial' && !placeChecked && (mode === 'book' || (mode === 'reschedule' && opts.appt.modality !== 'presencial'))) {
+            const loc2 = info.presencial;
+            const v = await modal({
+              title: 'Consulta presencial',
+              html: `<p>A consulta presencial é no consultório em <b>${esc(loc2.place)}</b>:</p><div class="opt-place">${ic('pin', 18)}<span>${loc2.name ? `<b>${esc(loc2.name)}</b> · ` : ''}${esc(loc2.address)}</span></div>
+                <p style="margin-bottom:0"><b>Você consegue ir até ${esc(loc2.place)} no dia da consulta?</b></p>`,
+              actions: [{ label: mode === 'reschedule' ? 'Não, manter online' : 'Não, marcar online', value: 'online', class: 'secondary' }, { label: mode === 'reschedule' ? 'Sim, trocar para presencial' : 'Sim, marcar presencial', value: 'presencial' }],
+            });
+            if (!v) { btn.disabled = false; return; }
+            placeChecked = true;
+            if (v === 'online') {
+              modality = 'online';
+              toast('Ok! A consulta vai ser online.', '', { top: true });
+              await confirmStep();
+              return;
+            }
+          }
           if (mode === 'reschedule') {
-            const a = await api(`/api/agenda/appointments/${opts.appt.id}/reschedule`, { method: 'POST', body: { start: sel.start } });
+            const a = await api(`/api/agenda/appointments/${opts.appt.id}/reschedule`, { method: 'POST', body: { start: sel.start, modality, confirm_place: modality === 'presencial' } });
             toast('Consulta remarcada ✓', '', { top: true });
             page.close();
             opts.onDone?.(a);
@@ -277,25 +305,6 @@
             page.close();
             opts.onDone?.(a);
             return;
-          }
-          // Presencial: confirma que a pessoa consegue ir até a cidade do consultório (o município do
-          // cadastro pode estar desatualizado). "Não" → a consulta vira online.
-          if (modality === 'presencial' && !placeChecked) {
-            const loc2 = info.presencial;
-            const v = await modal({
-              title: 'Consulta presencial',
-              html: `<p>A consulta presencial é no consultório em <b>${esc(loc2.place)}</b>:</p><div class="opt-place">${ic('pin', 18)}<span>${loc2.name ? `<b>${esc(loc2.name)}</b> · ` : ''}${esc(loc2.address)}</span></div>
-                <p style="margin-bottom:0"><b>Você consegue ir até ${esc(loc2.place)} no dia da consulta?</b></p>`,
-              actions: [{ label: 'Não, marcar online', value: 'online', class: 'secondary' }, { label: `Sim, marcar presencial`, value: 'presencial' }],
-            });
-            if (!v) { btn.disabled = false; return; }
-            placeChecked = true;
-            if (v === 'online') {
-              modality = 'online';
-              toast('Ok! A consulta vai ser online.', '', { top: true });
-              await confirmStep();
-              return;
-            }
           }
           const a = await api('/api/agenda/book', { method: 'POST', body: { professional_id: proId, start: sel.start, accept: true, modality, confirm_place: modality === 'presencial' } });
           if (a.mode === 'auto') payScreen(page, a);
@@ -464,12 +473,31 @@
     toast(conv ? 'Consulta cancelada.' : a.mode === 'auto' ? 'Consulta cancelada. O reembolso foi pedido ao Pix ✓' : 'Consulta cancelada. Pedido de reembolso enviado ao profissional.', '', { top: true });
   }
 
+  // Trocar o tipo (online ↔ presencial) no mesmo dia e horário — só o paciente
+  async function switchType(a) {
+    const to = a.modality === 'presencial' ? 'online' : 'presencial';
+    const loc = a.switch_location;
+    const ok = await modal({
+      title: to === 'presencial' ? 'Trocar para presencial' : 'Trocar para online',
+      html: to === 'presencial'
+        ? `<p>A consulta de <b>${esc(a.when)}</b> passa a ser <b>no consultório</b>, no mesmo dia e horário.</p>
+           ${loc ? `<div class="opt-place">${ic('pin', 18)}<span>${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>
+           <p style="margin-bottom:0"><b>Você consegue ir até ${esc(loc.place)} no dia da consulta?</b></p>` : ''}`
+        : `<p>A consulta de <b>${esc(a.when)}</b> passa a ser <b>online, por videochamada</b>, no mesmo dia e horário.</p><p class="small muted" style="margin-bottom:0">O link da chamada aparece na conversa 5 minutos antes.</p>`,
+      actions: [{ label: 'Voltar', value: false, class: 'secondary' }, { label: to === 'presencial' ? 'Sim, trocar para presencial' : 'Trocar para online', value: true }],
+    });
+    if (!ok) return;
+    await api(`/api/agenda/appointments/${a.id}/modality`, { method: 'POST', body: { modality: to, confirm_place: to === 'presencial' } });
+    toast(to === 'presencial' ? 'Pronto! A consulta agora é presencial.' : 'Pronto! A consulta agora é online.', '', { top: true });
+  }
+
   async function act(a, action) {
     try {
       switch (action) {
         case 'pay': payScreen(null, a); return;
         case 'accept': await acceptAndPay(a); return;
         case 'reschedule': openBooking({ mode: 'reschedule', appt: a, onDone: refreshAll }); return;
+        case 'switch_type': await switchType(a); break;
         case 'choose': {
           const v = await modal({
             title: 'O profissional não poderá atender', html: `<p>${esc(a.professional.name)} avisou que não poderá atender <b>${esc(a.when)}</b>${a.cancel_detail ? ` (“${esc(a.cancel_detail)}”)` : ''}. O que você prefere?</p>`,
@@ -555,6 +583,7 @@
       if (c.choose) out.push(b('choose', a.billing === 'convenio' ? 'Escolher: cancelar ou remarcar' : 'Escolher: reembolso ou remarcar', ''));
       if (c.retry) { out.push(b('retry_yes', 'Sim, quero tentar de novo', '')); out.push(b('retry_no', 'Não')); }
       if (c.reschedule) out.push(b('reschedule', 'Remarcar'));
+      if (c.switch_type) out.push(b('switch_type', a.modality === 'presencial' ? `${ic('video', 16)} Trocar para online` : `${ic('home', 16)} Trocar para presencial`));
       if (c.cancel) out.push(b('cancel', 'Cancelar consulta', 'ghost danger-text'));
       if (c.give_up && !c.retry) out.push(b('give_up', 'Cancelar agendamento', 'ghost tiny-link'));
     } else {
@@ -587,7 +616,14 @@
         : `Sua consulta de ${a.when} está quase pronta! Toque em "Copiar Pix", pague ${money(a.price_cents)} no app do seu banco em até 10 minutos e o profissional confirma aqui.`)
       : (a.mode === 'auto' ? 'Enviada ao paciente. Ele tem 10 minutos para pagar o Pix; a confirmação é automática.' : 'Enviada ao paciente com a sua chave Pix e o valor. Ele tem 10 minutos para pagar; confirme em cima do campo de mensagem quando o Pix cair.'))],
     agendada: ['✅ Consulta agendada', () => 'Pagamento aprovado. O link da chamada aparece aqui 5 minutos antes.'],
-    remarcada: ['🔁 Consulta remarcada', (a, r, m) => (m.extra ? `Novo horário (antes era ${fmtIso(m.extra)}).` : 'Novo horário.')],
+    remarcada: ['🔁 Consulta remarcada', (a, r, m) => {
+      const [was, prevMod] = String(m.extra || '').split(';');
+      return `${was ? `Novo horário (antes era ${fmtIso(was)}).` : 'Novo horário.'}${prevMod ? ` Agora a consulta é ${prevMod === 'online' ? 'presencial' : 'online'}.` : ''}`;
+    }],
+    tipo_trocado: ['🔁 Tipo da consulta trocado', (a, r, m) => {
+      const to = m.extra === 'online' ? 'presencial' : 'online';
+      return `${r === 'patient' ? 'Você trocou' : 'O paciente trocou'} a consulta para ${to}, no mesmo dia e horário. ${to === 'presencial' ? (r === 'patient' ? 'O endereço e o mapa estão logo abaixo e em "Ver".' : 'Ele recebeu o endereço e o mapa do consultório.') : 'O link da chamada aparece aqui 5 minutos antes.'}`;
+    }],
     cancelada: ['Consulta cancelada', (a, r, m) => (m?.extra === 'pro_antes_pagar' ? (r === 'patient' ? 'O profissional cancelou este agendamento antes do pagamento. Nada foi cobrado.' : 'Agendamento cancelado antes do pagamento. O horário foi liberado.') : 'O horário foi liberado.')],
     reembolso_pedido: ['↩️ Pedido de reembolso', (a, r, m) => `${a.cancel_reason_label ? `Motivo: ${a.cancel_reason_label}${a.cancel_detail && a.cancel_reason === 'outros' ? ` — “${a.cancel_detail}”` : ''}. ` : ''}${a.mode === 'auto' && m.extra !== 'erro_auto' ? 'O reembolso automático foi pedido ao Pix.' : (r === 'professional' ? 'Devolva o valor pelo Pix, toque em "Fiz o reembolso" e mande a foto do comprovante aqui na conversa.' : 'O profissional vai devolver o valor pelo Pix e mandar o comprovante aqui na conversa.')}`],
     reembolso_feito: ['✅ Reembolso feito', (a, r) => (r === 'patient' ? 'O profissional informou que devolveu o valor pelo Pix. O comprovante vem aqui na conversa, em foto. Se o dinheiro não chegou, fale com o Suporte Acolia.' : 'Agora mande a foto do comprovante do Pix aqui na conversa (botão de funções → Enviar foto). Sem o comprovante, o paciente pode denunciar ao Suporte Acolia.')],
@@ -616,7 +652,8 @@
   // Ícone de cada cartão (desenhado, no lugar de emoji) e a cor dele
   const noEmoji = (t) => String(t).replace(/^(\p{Extended_Pictographic}|\uFE0F|\s)+/u, '');
   function cardIcon(ev, a) {
-    if (['agendada', 'concluida'].includes(ev) && a?.modality === 'presencial') return 'home';
+    if (['agendada', 'concluida', 'tipo_trocado'].includes(ev) && a?.modality === 'presencial') return 'home';
+    if (ev === 'tipo_trocado') return 'video';
     if (['chamada', 'finalizada', 'paciente_ausente', 'ausente'].includes(ev)) return 'video';
     if (['reembolso_pedido', 'reembolso_feito', 'reembolso_nao', 'reembolsada', 'recusado', 'tentar'].includes(ev)) return 'pix';
     if (['expirada', 'sem_resposta'].includes(ev)) return 'clock';
@@ -644,7 +681,8 @@
     // Cartões antigos da mesma consulta: só o registro (título e horário); a situação atual e os
     // botões ficam no cartão mais recente
     if (!latest) {
-      const when = m.event === 'remarcada' && m.extra ? `Remarcada (antes: ${fmtIso(m.extra)})` : m.event === 'remarcada' ? a.when : '';
+      const when = m.event === 'remarcada' && m.extra ? `Remarcada (antes: ${fmtIso(String(m.extra).split(';')[0])})` : m.event === 'remarcada' ? a.when
+        : m.event === 'tipo_trocado' ? `Trocada para ${m.extra === 'online' ? 'presencial' : 'online'}` : '';
       return `<div class="msg-card booking-card old" data-booking="${a.id}"><strong class="bk-title"><span class="bk-ic ${cardTone(m.event)}">${ic(cardIcon(m.event, a), 16)}</span>${esc(noEmoji(title))}</strong>${when ? `<span class="small muted">${esc(when)}</span>` : ''}</div>`;
     }
     return `<div class="msg-card booking-card" data-booking="${a.id}">

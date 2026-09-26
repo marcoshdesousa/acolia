@@ -101,6 +101,21 @@ function clinicOf(pro) {
 function priceFor(pro, modality) {
   return modality === 'presencial' && pro.price_presencial_cents != null ? pro.price_presencial_cents : pro.price_cents;
 }
+// Trocar o tipo de uma consulta já marcada (online ↔ presencial) — só o paciente.
+// A outra opção precisa estar aberta na agenda do profissional e ter o mesmo valor já pago
+// (pelo convênio não tem valor). Valores diferentes: cancelar e marcar de novo.
+const brl = (c) => `R$ ${(c / 100).toFixed(2).replace('.', ',')}`;
+function modalityChange(a, to) {
+  const pro = getPro(a.professional_id);
+  if (to !== 'online' && to !== 'presencial') return { ok: false, why: 'Escolha online ou presencial.' };
+  if (to === 'presencial' && !presencialOpen(pro)) return { ok: false, why: 'Este profissional não está com a agenda presencial aberta.' };
+  if (to === 'online' && !pro.agenda_on) return { ok: false, why: 'Este profissional não está com a agenda online aberta.' };
+  const price = priceFor(pro, to);
+  if (a.billing !== 'convenio' && price !== a.price_cents) {
+    return { ok: false, why: `A consulta ${to} tem outro valor${price != null ? ` (${brl(price)})` : ''}. Para trocar, cancele esta consulta e marque de novo, ou fale com o profissional pelo chat.` };
+  }
+  return { ok: true };
+}
 // Mensagem automática com o local da consulta (nome, endereço e mapa)
 function sendLocation(c, pro) {
   const loc = clinicOf(pro);
@@ -280,6 +295,7 @@ const PUSH = {
   proposta: '📅 Sua consulta está quase pronta: faça o pagamento',
   agendada: '✅ Consulta agendada',
   remarcada: '🔁 Consulta remarcada',
+  tipo_trocado: 'O tipo da consulta foi trocado',
   cancelada: 'Consulta cancelada',
   reembolso_pedido: 'Pediu o reembolso da consulta',
   reembolso_feito: 'Informou que fez o reembolso',
@@ -297,6 +313,10 @@ const PUSH = {
 };
 function pushText(body) {
   const [id, event] = String(body).split('|');
+  if (event === 'tipo_trocado') {
+    const a = getAppt(Number(id));
+    if (a) return `${a.modality === 'presencial' ? 'Consulta trocada para presencial' : 'Consulta trocada para online'}: ${fmtWhen(ms(a.start_at))}`;
+  }
   if (event === 'agendada') {
     const a = getAppt(id);
     if (a?.modality === 'presencial') return `📍 Consulta presencial agendada: ${fmtWhen(ms(a.start_at))}`;
@@ -560,6 +580,8 @@ function canDo(a, role) {
     c.reschedule = a.status === 'confirmada' && beforeCutoff && a.reschedules < RULES.MAX_RESCHEDULES;
     c.cancel = a.status === 'confirmada' && beforeCutoff;
     c.give_up = HOLDING.includes(a.status);
+    // Trocar o tipo (online ↔ presencial) mantendo o dia e o horário, até 30 minutos antes
+    c.switch_type = a.status === 'confirmada' && beforeCutoff && modalityChange(a, a.modality === 'presencial' ? 'online' : 'presencial').ok;
     // Pix manual: a chave e o valor já vêm no cartão ("Copiar Pix")
     c.copy_pix = a.mode === 'manual' && a.status === 'aguardando_pagamento' && !!a.pix_payload && ms(a.hold_until) > t;
     c.choose = a.status === 'aguardando_paciente' && t < start;
@@ -605,6 +627,8 @@ function view(a, role) {
     modality: a.modality || 'online',
     billing: a.billing || 'pix',
     location: a.modality === 'presencial' ? clinicOf(pro) : null,
+    // Para a troca online → presencial: o paciente vê o endereço antes de confirmar
+    switch_location: role === 'patient' && a.modality !== 'presencial' && a.status === 'confirmada' ? clinicOf(pro) : null,
     origin: a.origin,
     status: a.status,
     hold_until: a.hold_until,
@@ -627,7 +651,7 @@ function view(a, role) {
 module.exports = {
   RULES, CANCEL_REASONS, HOLDING, ACTIVE, OCCUPY_SQL,
   now, iso, ms, localDate, localMin, fromLocal, hhmm, parseHHMM, addDays, fmtWhen, dayLabel, dowOf,
-  getPro, getAppt, duration, readiness, clinicOf, presencialOpen, priceFor, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
+  getPro, getAppt, duration, readiness, clinicOf, presencialOpen, priceFor, modalityChange, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
   ensureConversation, post, pushText, notifyBoth, setStatus, createCharge, confirmPaid, checkPayment, refund, refundLock,
   openCall, closeCall, canEndCall, finishFromCall, sweep, canDo, view, onAccountGone,
   _setNow(fn) { nowFn = fn || Date.now; touch(); },

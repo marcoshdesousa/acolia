@@ -232,14 +232,46 @@ router.post('/appointments/:id/reschedule', (req, res) => {
   if (byPro && !c.choose) throw new U.HttpError(403, 'O horário desta consulta já passou.');
   const pro = G.getPro(a.professional_id);
   const old = a.start_at;
+  // Pode remarcar trocando também o tipo (online ↔ presencial), se a outra opção estiver aberta e com o mesmo valor
+  const to = req.body.modality === 'presencial' || req.body.modality === 'online' ? req.body.modality : a.modality;
+  const changed = to !== a.modality;
+  if (changed) {
+    const chk = G.modalityChange(a, to);
+    if (!chk.ok) throw new U.HttpError(409, chk.why);
+    if (to === 'presencial' && !req.body.confirm_place) throw new U.HttpError(400, `Confirme que você consegue ir até ${pro.city} - ${pro.state} para a consulta presencial.`);
+  }
+  G.closeCall(a);
   const upd = tx(() => {
     const slot = G.assertFree(pro, req.body.start, { patientId: a.patient_id, exclude: a.id });
     return G.setStatus(a.id, {
       start_at: G.iso(slot.start), end_at: G.iso(slot.end), status: 'confirmada',
-      reschedules: byPro ? a.reschedules : a.reschedules + 1, call_id: null,
+      reschedules: byPro ? a.reschedules : a.reschedules + 1, call_id: null, modality: to,
     });
   });
-  G.post(upd, 'patient', 'remarcada', old);
+  // extra: horário antigo e, se trocou, o tipo antigo ("2026-10-01T12:00:00.000Z;online")
+  G.post(upd, 'patient', 'remarcada', changed ? `${old};${a.modality}` : old);
+  if (changed && to === 'presencial') G.sendLocation(db.prepare('SELECT * FROM conversations WHERE id = ?').get(upd.conversation_id), pro);
+  G.notifyBoth(upd);
+  res.json(G.view(upd, 'patient'));
+});
+
+// Paciente troca o tipo da consulta (online ↔ presencial) no mesmo dia e horário, até 30 minutos antes.
+// O profissional não troca (ele usa "Não vou poder atender": o paciente escolhe reembolso ou remarcar).
+router.post('/appointments/:id/modality', (req, res) => {
+  if (!isPatient(req)) throw new U.HttpError(403, 'Só o paciente troca o tipo da consulta.');
+  const a = loadMine(req, req.params.id);
+  const to = req.body.modality;
+  if (a.status !== 'confirmada') throw new U.HttpError(409, 'Só dá para trocar o tipo de uma consulta marcada.');
+  if (G.now() >= G.ms(a.start_at) - G.RULES.CUTOFF_MIN * MIN) throw new U.HttpError(403, `Só dá para trocar o tipo até ${G.RULES.CUTOFF_MIN} minutos antes da consulta.`);
+  if (to === a.modality) throw new U.HttpError(400, `Esta consulta já é ${to}.`);
+  const chk = G.modalityChange(a, to);
+  if (!chk.ok) throw new U.HttpError(409, chk.why);
+  const pro = G.getPro(a.professional_id);
+  if (to === 'presencial' && !req.body.confirm_place) throw new U.HttpError(400, `Confirme que você consegue ir até ${pro.city} - ${pro.state} para a consulta presencial.`);
+  G.closeCall(a);
+  const upd = G.setStatus(a.id, { modality: to, call_id: null });
+  G.post(upd, 'patient', 'tipo_trocado', a.modality);
+  if (to === 'presencial') G.sendLocation(db.prepare('SELECT * FROM conversations WHERE id = ?').get(upd.conversation_id), pro);
   G.notifyBoth(upd);
   res.json(G.view(upd, 'patient'));
 });
