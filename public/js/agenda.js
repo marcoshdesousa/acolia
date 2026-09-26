@@ -46,14 +46,14 @@
 
   // ---------- Política (aparece antes de pagar, com "Li e aceito") ----------
   function policyHtml(rules) {
-    const r = { SWITCH_MIN: 15, ...(rules || { CUTOFF_MIN: 30, PAY_MIN: 10, PRO_PIX_MIN: 5, PRO_GRACE_MIN: 3, PRO_CANCEL_H: 24 }) };
+    const r = { SWITCH_MIN: 15, PRO_CANCEL_PRES_MIN: 30, PRO_CANCEL_ONLINE_MIN: 15, ...(rules || { CUTOFF_MIN: 30, PAY_MIN: 10, PRO_PIX_MIN: 5, PRO_GRACE_MIN: 3 }) };
     return `<ul class="policy-list">
       <li>O pagamento é <b>só por Pix</b> e confirma a consulta. Você tem <b>${r.PAY_MIN} minutos</b> para pagar; depois disso o horário é liberado.</li>
       <li>Cada paciente marca <b>uma consulta por dia</b>.</li>
       <li>Você pode <b>remarcar uma vez</b> ou <b>cancelar com reembolso</b> até <b>${r.CUTOFF_MIN} minutos antes</b>. Com ${r.CUTOFF_MIN} minutos ou menos, não dá mais para remarcar nem pedir reembolso.</li>
       <li>Se o profissional atende online e presencial, você pode <b>trocar o tipo</b> da consulta (online ↔ presencial), no mesmo dia e horário, até <b>${r.SWITCH_MIN} minutos antes</b>.</li>
       <li>Se você <b>não entrar na chamada</b> até ${r.PRO_GRACE_MIN} minutos depois do horário, a chamada é encerrada e o valor <b>não é devolvido</b>.</li>
-      <li>Se o profissional não puder atender, ele avisa até ${r.PRO_CANCEL_H} horas antes e <b>você escolhe</b>: reembolso ou remarcar.</li>
+      <li>Se o profissional não puder atender, ele avisa com o motivo até ${r.PRO_CANCEL_PRES_MIN} minutos antes (presencial) ou ${r.PRO_CANCEL_ONLINE_MIN} minutos antes (online) e <b>você escolhe</b>: reembolso ou remarcar.</li>
       <li>Se o profissional <b>não entrar na chamada</b> até ${r.PRO_GRACE_MIN} minutos depois do horário, você recebe <b>100% de volta</b>.</li>
       <li>O dinheiro vai direto para a conta do profissional. A Acolia não recebe nem cobra taxa sobre a consulta.</li>
       <li><b>Consulta presencial:</b> é no consultório do profissional (o endereço e o mapa vão na conversa). As regras de pagamento, remarcar e cancelar são as mesmas; não há chamada de vídeo.</li>
@@ -540,8 +540,14 @@
           const detail = await modal({
             title: 'Não vou poder atender',
             html: `<p><b>${esc(a.when)}</b> com ${esc(a.patient.name)}</p><p class="small muted">Você não remarca sozinho: o paciente escolhe entre o <b>reembolso</b> e <b>remarcar</b> para outro horário livre.</p>
-              <textarea data-d rows="2" maxlength="500" placeholder="Explique rapidinho para o paciente (opcional)"></textarea>`,
-            actions: [{ label: 'Voltar', value: null, class: 'secondary' }, { label: 'Avisar o paciente', class: 'danger', handler: (dlg) => ({ detail: $('[data-d]', dlg).value.trim() }) }],
+              <label class="small" style="font-weight:700;display:block;margin-bottom:4px" for="pc-motivo">Motivo do cancelamento (obrigatório)</label>
+              <textarea id="pc-motivo" data-d rows="3" maxlength="500" required aria-describedby="pc-err" placeholder="Ex.: tive um imprevisto de saúde e não vou conseguir atender neste horário."></textarea>
+              <div class="form-error hidden" id="pc-err" role="alert">Escreva o motivo do cancelamento para o paciente.</div>`,
+            actions: [{ label: 'Voltar', value: null, class: 'secondary' }, { label: 'Avisar o paciente', class: 'danger', handler: (dlg) => {
+              const d = $('[data-d]', dlg).value.trim();
+              if (d.length < 5) { $('#pc-err', dlg).classList.remove('hidden'); $('[data-d]', dlg).focus(); return false; }
+              return { detail: d };
+            } }],
           });
           if (!detail) return;
           await api(`/api/agenda/appointments/${a.id}/pro-cancel`, { method: 'POST', body: detail });

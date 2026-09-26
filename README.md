@@ -66,7 +66,7 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 
 **Regras**
 - **Paciente remarca 1 vez** e **cancela com reembolso** (motivo obrigatório) até **30 minutos antes**. Com 30 minutos ou menos, não remarca nem pede reembolso. Se não comparecer, o valor não volta.
-- **Profissional não remarca sozinho:** até **24 horas antes**, toca em "Não vou poder atender" e o **paciente escolhe** entre reembolso e remarcar. Essa remarcação não gasta a dele. Se o paciente não escolher até o horário, recebe o reembolso.
+- **Profissional não remarca sozinho:** até **30 minutos antes** (presencial) ou **15 minutos antes** (online), toca em "Não vou poder atender" e **escreve o motivo (obrigatório)**, e o **paciente escolhe** entre reembolso e remarcar. Essa remarcação não gasta a dele. Se o paciente não escolher até o horário, recebe o reembolso.
 - **Reembolso:**
   - **Automático** pelo Asaas do profissional. Se falhar, por exemplo por falta de saldo, vira pedido manual.
   - **Manual:** o profissional devolve pelo Pix, toca em **"Fiz o reembolso"** (a consulta fica reembolsada na hora) e manda a **foto do comprovante** na conversa. O chat **não trava** e o paciente não precisa confirmar; sem comprovante, o paciente pode denunciar ao Suporte Acolia. Enquanto o reembolso não for feito, o profissional não marca outra consulta com esse paciente.

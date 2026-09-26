@@ -395,12 +395,14 @@ router.post('/appointments/:id/withdraw', async (req, res) => {
   res.json(G.view(upd, role(req)));
 });
 
-// Não vou poder atender (até 24 horas antes): o paciente escolhe entre reembolso e remarcar
+// Não vou poder atender (até 30 min antes na presencial, 15 na online, com motivo): o paciente escolhe entre reembolso e remarcar
 router.post('/appointments/:id/pro-cancel', (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só o profissional usa esta opção.');
   const a = loadMine(req, req.params.id);
-  if (!G.canDo(a, 'professional').pro_cancel) throw new U.HttpError(403, `Só dá para avisar que não vai atender até ${G.RULES.PRO_CANCEL_H} horas antes da consulta.`);
-  const upd = G.setStatus(a.id, { status: 'aguardando_paciente', cancel_detail: U.cleanText(req.body.detail, 500) || null });
+  if (!G.canDo(a, 'professional').pro_cancel) throw new U.HttpError(403, `Só dá para avisar que não vai atender até ${G.proCancelMin(a)} minutos antes da consulta ${a.modality === 'presencial' ? 'presencial' : 'online'}.`);
+  const detail = U.cleanText(req.body.detail, 500);
+  if (detail.length < 5) throw new U.HttpError(400, 'Escreva o motivo do cancelamento para o paciente.');
+  const upd = G.setStatus(a.id, { status: 'aguardando_paciente', cancel_detail: detail });
   G.post(upd, 'professional', 'pro_cancelou');
   G.notifyBoth(upd);
   res.json(G.view(upd, role(req)));

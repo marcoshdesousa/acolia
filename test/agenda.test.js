@@ -311,9 +311,11 @@ test('remarcar: só uma vez e até 30 minutos antes; cancelar pede motivo; reemb
   assert.equal((await fetch(`${base}/api/chat/photo/${up.data.body}`, { headers: { Cookie: ana.cookie } })).status, 404);
 });
 
-test('prazo de 30 minutos e "não vou poder atender" do profissional (até 24 horas antes)', async () => {
+test('prazo de 30 minutos e "não vou poder atender" do profissional (motivo obrigatório; até 30 min na presencial e 15 na online)', async () => {
   const b = (await bia.get('/api/agenda/appointments')).data.items.find((x) => x.status === 'confirmada'); // 08/01 09:40
   // Hoje é 07/01 ~09:06: faltam mais de 24 h → o profissional pode avisar
+  assert.equal((await P.cl.post(`/api/agenda/appointments/${b.id}/pro-cancel`, {})).status, 400, 'motivo obrigatório');
+  assert.equal((await P.cl.post(`/api/agenda/appointments/${b.id}/pro-cancel`, { detail: ' ' })).status, 400);
   let r = await P.cl.post(`/api/agenda/appointments/${b.id}/pro-cancel`, { detail: 'Imprevisto de saúde' });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.status, 'aguardando_paciente');
@@ -327,15 +329,21 @@ test('prazo de 30 minutos e "não vou poder atender" do profissional (até 24 ho
   assert.equal(r.data.status, 'confirmada');
   assert.equal(r.data.reschedules, 0);
   assert.equal(r.data.can.reschedule, true);
-  // Menos de 24 h: o profissional não pode mais avisar
-  assert.equal((await P.cl.post(`/api/agenda/appointments/${b.id}/pro-cancel`)).status, 403);
-  // 13:31 (29 min antes): paciente não remarca nem cancela
+  // 13:31 (29 min antes): paciente não remarca nem cancela; o profissional ainda avisa (online: até 15 min)
   clock = Date.parse(at('2030-01-07', '13:31'));
+  assert.equal((await P.cl.get(`/api/agenda/appointments/${b.id}`)).data.can.pro_cancel, true);
+  assert.equal(G.proCancelMin({ modality: 'presencial' }), 30);
+  assert.equal(G.proCancelMin({ modality: 'online' }), 15);
   r = await bia.get(`/api/agenda/appointments/${b.id}`);
   assert.equal(r.data.can.reschedule, false);
   assert.equal(r.data.can.cancel, false);
   assert.equal((await bia.post(`/api/agenda/appointments/${b.id}/cancel`, { reason: 'horario' })).status, 403);
   assert.equal((await bia.post(`/api/agenda/appointments/${b.id}/reschedule`, { start: at('2030-01-10', '08:00') })).status, 403);
+  // 13:46 (14 min antes, online): o profissional não pode mais avisar
+  clock = Date.parse(at('2030-01-07', '13:46'));
+  assert.equal((await P.cl.get(`/api/agenda/appointments/${b.id}`)).data.can.pro_cancel, false);
+  assert.equal((await P.cl.post(`/api/agenda/appointments/${b.id}/pro-cancel`, { detail: 'Imprevisto de saúde' })).status, 403);
+  clock = Date.parse(at('2030-01-07', '13:31'));
 });
 
 test('chamada automática: abre 5 min antes (com aviso na conversa); profissional não entrou em 3 min → reembolso e chamada fechada', async () => {

@@ -8,7 +8,7 @@
 //   mandar a chave Pix e o paciente tem 10 minutos para pagar depois que ela chega.
 // - Paciente remarca 1 vez e cancela (com motivo e reembolso) até 30 minutos antes. Com 30 minutos ou
 //   menos, não remarca nem pede reembolso; se não comparecer, o valor não volta.
-// - Profissional não remarca sozinho: até 24 horas antes ele avisa que não pode atender e o paciente
+// - Profissional não remarca sozinho: até 30 min antes (presencial) ou 15 (online) ele avisa, com o motivo, que não pode atender e o paciente
 //   escolhe entre o reembolso e remarcar (essa remarcação não conta).
 // - Profissional que não entra na chamada até 3 minutos depois do horário: reembolso de 100% e a
 //   chamada é fechada.
@@ -24,7 +24,8 @@ const RULES = {
   CUTOFF_MIN: 30,         // paciente remarca/cancela só com MAIS de 30 minutos de antecedência
   SWITCH_MIN: 15,         // paciente troca o tipo (online ↔ presencial) só com MAIS de 15 minutos de antecedência
   MIN_ADVANCE_MIN: 30,    // horário marcado precisa começar daqui a pelo menos 30 minutos
-  PRO_CANCEL_H: 24,       // profissional avisa que não pode atender até 24 horas antes
+  PRO_CANCEL_PRES_MIN: 30,   // profissional avisa que não pode atender: presencial até 30 minutos antes
+  PRO_CANCEL_ONLINE_MIN: 15, // …e online até 15 minutos antes (com o motivo, obrigatório)
   PRO_GRACE_MIN: 3,       // profissional tem até 3 minutos depois do horário para entrar
   CALL_BEFORE_MIN: 5,     // a chamada é aberta (e o paciente avisado) 5 minutos antes
   DONE_AFTER_MIN: 30,     // 30 minutos depois do fim, a consulta vira "concluída"
@@ -102,6 +103,8 @@ function clinicOf(pro) {
 function priceFor(pro, modality) {
   return modality === 'presencial' && pro.price_presencial_cents != null ? pro.price_presencial_cents : pro.price_cents;
 }
+// "Não vou poder atender": até 30 minutos antes (presencial) ou 15 (online)
+const proCancelMin = (a) => (a.modality === 'presencial' ? RULES.PRO_CANCEL_PRES_MIN : RULES.PRO_CANCEL_ONLINE_MIN);
 // Trocar o tipo de uma consulta já marcada (online ↔ presencial) — só o paciente, qualquer paciente,
 // inclusive nas consultas marcadas antes desta função. Continua o valor já pago (ou o convênio).
 // Para presencial, o profissional precisa ter o endereço do consultório cadastrado.
@@ -591,7 +594,7 @@ function canDo(a, role) {
   } else {
     c.send_pix = a.mode === 'manual' && a.status === 'aguardando_pix' && ms(a.hold_until) > t;
     c.approve = a.mode === 'manual' && !!a.pix_payload && (a.status === 'aguardando_pagamento' || (a.status === 'expirada' && ms(a.start_at) > t));
-    c.pro_cancel = a.status === 'confirmada' && t < start - RULES.PRO_CANCEL_H * 60 * MIN;
+    c.pro_cancel = a.status === 'confirmada' && t < start - proCancelMin(a) * MIN;
     c.refund_done = a.status === 'reembolso_pendente' && a.refund_status === 'pedido';
     // "Cancelar agendamento" antes do pagamento (profissional ou secretária)
     c.withdraw = HOLDING.includes(a.status);
@@ -652,7 +655,7 @@ function view(a, role) {
 module.exports = {
   RULES, CANCEL_REASONS, HOLDING, ACTIVE, OCCUPY_SQL,
   now, iso, ms, localDate, localMin, fromLocal, hhmm, parseHHMM, addDays, fmtWhen, dayLabel, dowOf,
-  getPro, getAppt, duration, readiness, clinicOf, presencialOpen, priceFor, modalityChange, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
+  getPro, getAppt, duration, readiness, clinicOf, presencialOpen, priceFor, modalityChange, proCancelMin, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
   ensureConversation, post, pushText, notifyBoth, setStatus, createCharge, confirmPaid, checkPayment, refund, refundLock,
   openCall, closeCall, canEndCall, finishFromCall, sweep, canDo, view, onAccountGone,
   _setNow(fn) { nowFn = fn || Date.now; touch(); },
