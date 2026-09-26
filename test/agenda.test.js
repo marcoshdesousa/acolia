@@ -878,18 +878,27 @@ test('paciente troca o tipo (online ↔ presencial) no mesmo horário e remarca 
   assert.match(r.data.can.switch_note, /15 minutos/);
   assert.equal((await sofia.post(`/api/agenda/appointments/${b.id}/modality`, { modality: 'presencial', confirm_place: true })).status, 403);
   clock = saved;
-  // Valor diferente: não troca (nem remarcando)
+  // Valor diferente: troca mesmo assim e continua o valor já pago (inclusive consulta marcada antes)
   const D = await mkPro('Dora Dois Valores', 'dora.valores@example.com', '11955553333', 'CRP 06/51021', { ...clinic, presencial_price: 'diff', price_presencial: '220,00' });
   await D.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true });
   const c = await confirmed(D, sofia, '2030-04-04');
+  // O profissional muda o valor e desliga a agenda presencial depois: a consulta já marcada troca do mesmo jeito
+  await D.cl.put('/api/agenda/settings', { presencial: false });
   r = await sofia.get(`/api/agenda/appointments/${c.id}`);
-  assert.equal(r.data.can.switch_type, false);
+  assert.equal(r.data.can.switch_type, true);
   r = await sofia.post(`/api/agenda/appointments/${c.id}/modality`, { modality: 'presencial', confirm_place: true });
-  assert.equal(r.status, 409);
-  assert.match(r.data.error, /outro valor/);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.modality, 'presencial');
+  assert.equal(r.data.price_cents, c.price_cents, 'continua o valor já pago');
   const sl3 = (await sofia.get(`/api/agenda/pro/${D.id}/day?date=2030-04-05&exclude=${c.id}`)).data.slots;
-  assert.equal((await sofia.post(`/api/agenda/appointments/${c.id}/reschedule`, { start: sl3[0].start, modality: 'presencial', confirm_place: true })).status, 409);
-  r = await sofia.post(`/api/agenda/appointments/${c.id}/reschedule`, { start: sl3[0].start });
-  assert.equal(r.status, 200, 'remarcar mantendo o tipo continua valendo');
+  r = await sofia.post(`/api/agenda/appointments/${c.id}/reschedule`, { start: sl3[0].start, modality: 'online' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.modality, 'online');
+  // Sem consultório: não vira presencial
+  const N = await mkPro('Nina Sem Consultorio', 'nina.semcons@example.com', '11955551111', 'CRP 06/51023', { pix_key: 'n@pix.com' });
+  await N.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true });
+  const e = await confirmed(N, sofia, '2030-04-09');
+  r = await sofia.get(`/api/agenda/appointments/${e.id}`);
+  assert.equal(r.data.can.switch_type, false);
+  assert.equal((await sofia.post(`/api/agenda/appointments/${e.id}/modality`, { modality: 'presencial', confirm_place: true })).status, 409);
 });

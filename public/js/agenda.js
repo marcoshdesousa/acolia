@@ -121,10 +121,10 @@
     const priceOf = (m) => (m === 'presencial' && info?.price_presencial_cents != null ? info.price_presencial_cents : info?.price_cents);
     const priceNow = () => priceOf(modality);
     // Opção indisponível: sem agenda ou (ao remarcar trocando o tipo) com valor diferente do já pago
+    // Ao remarcar, o paciente pode ir para qualquer um dos dois (continua o valor já pago)
     const modOff = (m) => {
-      if (m === 'online' ? info.online === false : !info.presencial_open) return mode === 'reschedule' && m === opts.appt.modality ? '' : 'Sem agenda';
-      if (mode === 'reschedule' && m !== opts.appt.modality && opts.appt.billing !== 'convenio' && priceOf(m) !== opts.appt.price_cents) return 'Valor diferente';
-      return '';
+      if (mode === 'reschedule') return '';
+      return (m === 'online' ? info.online === false : !info.presencial_open) ? 'Sem agenda' : '';
     };
 
     async function loadMonth() {
@@ -157,10 +157,10 @@
       const choices = `
         ${loc ? `<div class="opt-label">Tipo de consulta</div>
           <div class="opt-grid" role="radiogroup" aria-label="Tipo de consulta">
-            ${optCard({ attr: 'data-mod="online"', on: modality === 'online', off: !!off.online, icon: 'video', title: 'Online', sub: off.online || (info.price_cents != null ? money(info.price_cents) : 'Videochamada') })}
-            ${optCard({ attr: 'data-mod="presencial"', on: modality === 'presencial', off: !!off.presencial, icon: 'home', title: 'Presencial', sub: off.presencial || (priceOf('presencial') != null ? money(priceOf('presencial')) : 'No consultório') })}
+            ${optCard({ attr: 'data-mod="online"', on: modality === 'online', off: !!off.online, icon: 'video', title: 'Online', sub: off.online || (mode === 'reschedule' ? 'Videochamada' : info.price_cents != null ? money(info.price_cents) : 'Videochamada') })}
+            ${optCard({ attr: 'data-mod="presencial"', on: modality === 'presencial', off: !!off.presencial, icon: 'home', title: 'Presencial', sub: off.presencial || (mode === 'reschedule' ? 'No consultório' : priceOf('presencial') != null ? money(priceOf('presencial')) : 'No consultório') })}
           </div>
-          ${mode === 'reschedule' && (off.online === 'Valor diferente' || off.presencial === 'Valor diferente') ? '<p class="small muted opt-note">A outra opção tem outro valor. Para trocar para ela, cancele esta consulta e marque de novo.</p>' : ''}
+
           ${modality === 'presencial' && info.presencial_open ? `<div class="opt-place">${ic('pin', 18)}<span>${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>` : ''}` : ''}
         ${mode === 'propose' && info.insurance ? `<div class="opt-label">Pagamento</div>
           <div class="opt-grid" role="radiogroup" aria-label="Pagamento">

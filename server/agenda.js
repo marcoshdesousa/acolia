@@ -102,19 +102,13 @@ function clinicOf(pro) {
 function priceFor(pro, modality) {
   return modality === 'presencial' && pro.price_presencial_cents != null ? pro.price_presencial_cents : pro.price_cents;
 }
-// Trocar o tipo de uma consulta já marcada (online ↔ presencial) — só o paciente.
-// A outra opção precisa estar aberta na agenda do profissional e ter o mesmo valor já pago
-// (pelo convênio não tem valor). Valores diferentes: cancelar e marcar de novo.
-const brl = (c) => `R$ ${(c / 100).toFixed(2).replace('.', ',')}`;
+// Trocar o tipo de uma consulta já marcada (online ↔ presencial) — só o paciente, qualquer paciente,
+// inclusive nas consultas marcadas antes desta função. Continua o valor já pago (ou o convênio).
+// Para presencial, o profissional precisa ter o endereço do consultório cadastrado.
 function modalityChange(a, to) {
   const pro = getPro(a.professional_id);
   if (to !== 'online' && to !== 'presencial') return { ok: false, why: 'Escolha online ou presencial.' };
-  if (to === 'presencial' && !presencialOpen(pro)) return { ok: false, why: 'Este profissional não está com a agenda presencial aberta.' };
-  if (to === 'online' && !pro.agenda_on) return { ok: false, why: 'Este profissional não está com a agenda online aberta.' };
-  const price = priceFor(pro, to);
-  if (a.billing !== 'convenio' && price !== a.price_cents) {
-    return { ok: false, why: `A consulta ${to} tem outro valor${price != null ? ` (${brl(price)})` : ''}. Para trocar, cancele esta consulta e marque de novo, ou fale com o profissional pelo chat.` };
-  }
+  if (to === 'presencial' && !clinicOf(pro)) return { ok: false, why: 'Este profissional não tem consultório cadastrado: a consulta só pode ser online.' };
   return { ok: true };
 }
 // Mensagem automática com o local da consulta (nome, endereço e mapa)
@@ -586,7 +580,7 @@ function canDo(a, role) {
     const sw = modalityChange(a, a.modality === 'presencial' ? 'online' : 'presencial');
     c.switch_type = a.status === 'confirmada' && beforeSwitch && sw.ok;
     // Por que não dá para trocar (a tela explica em vez de só sumir com o botão)
-    if (a.status === 'confirmada' && !c.switch_type && clinicOf(getPro(a.professional_id))) {
+    if (a.status === 'confirmada' && !c.switch_type && (a.modality === 'presencial' || clinicOf(getPro(a.professional_id)))) {
       c.switch_note = !beforeSwitch ? `Faltam ${RULES.SWITCH_MIN} minutos ou menos: não dá mais para trocar entre online e presencial.` : sw.why;
     }
     // Pix manual: a chave e o valor já vêm no cartão ("Copiar Pix")
