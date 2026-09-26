@@ -646,7 +646,7 @@ test('uma consulta por dia por paciente; marcar pelo chat com "Copiar Pix"; canc
 test('versão 1.2.1: consulta presencial (confirma a cidade, localização com mapa, sem chamada) e pelo convênio (sem Pix)', async () => {
   const cpfOf = (d) => { const dv = (a) => { const s = a.reduce((x, n, i) => x + n * (a.length + 1 - i), 0); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; d.push(dv(d)); d.push(dv(d)); return d.join(''); };
   const K = await mkPro('Karina Consultorio Reis', 'karina.consultorio@example.com', '11966667777', 'CRP 06/51011',
-    { pix_key: 'karina@pix.com', has_clinic: true, clinic_name: 'Espaço Acolher', clinic_address: 'Rua das Flores, 100 - Centro', accepts_insurance: true });
+    { pix_key: 'karina@pix.com', has_clinic: true, maps_url: 'https://www.google.com/maps/place/Campinas/@-22.9056,-47.0608,17z', clinic_name: 'Espaço Acolher', clinic_address: 'Rua das Flores, 100 - Centro', accepts_insurance: true });
   let r = await K.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true });
   assert.equal(r.data.ready, true);
   const carla = await mkPatient('Carla Presencial Reis', cpfOf([3, 1, 4, 1, 5, 9, 2, 6, 5]));
@@ -750,7 +750,7 @@ test('versão 1.2.1: consulta presencial (confirma a cidade, localização com m
 });
 
 test('valor da presencial: o mesmo da online ou diferente; vitrine mostra o menor e o agendamento cobra o da opção', async () => {
-  const base = { pix_key: 'v@pix.com', has_clinic: true, clinic_name: 'Clínica Valor', clinic_address: 'Av. Brasil, 500', price: '120' };
+  const base = { pix_key: 'v@pix.com', has_clinic: true, maps_url: 'https://www.google.com/maps/place/Campinas/@-22.9056,-47.0608,17z', clinic_name: 'Clínica Valor', clinic_address: 'Av. Brasil, 500', price: '120' };
   // Presencial marcada sem valor: não salva
   let r;
   const V = await mkPro('Vera Valor Dias', 'vera.valor@example.com', '11977778888', 'CRP 06/51012', base);
@@ -788,7 +788,7 @@ test('valor da presencial: o mesmo da online ou diferente; vitrine mostra o meno
 });
 
 test('Minha agenda: "Disponível para atendimento presencial" e online, cada um liga/desliga a sua opção', async () => {
-  const base = { pix_key: 'w@pix.com', has_clinic: true, clinic_name: 'Clínica W', clinic_address: 'Rua W, 10', price: '100' };
+  const base = { pix_key: 'w@pix.com', has_clinic: true, maps_url: 'https://www.google.com/maps/place/Campinas/@-22.9056,-47.0608,17z', clinic_name: 'Clínica W', clinic_address: 'Rua W, 10', price: '100' };
   const W = await mkPro('Wanda Duas Opcoes', 'wanda.opcoes@example.com', '11988889999', 'CRP 06/51013', base);
   let r = await W.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true });
   assert.equal(r.data.presencial_on, true, 'presencial começa ligado para quem tem consultório');
@@ -824,7 +824,7 @@ test('Minha agenda: "Disponível para atendimento presencial" e online, cada um 
 
 test('paciente troca o tipo (online ↔ presencial) no mesmo horário e remarca trocando o tipo; valor diferente não troca; profissional não troca', async () => {
   const cpfOf = (d) => { const dv = (a) => { const s = a.reduce((x, n, i) => x + n * (a.length + 1 - i), 0); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; d.push(dv(d)); d.push(dv(d)); return d.join(''); };
-  const clinic = { pix_key: 't@pix.com', has_clinic: true, clinic_name: 'Espaço Troca', clinic_address: 'Rua da Troca, 5' };
+  const clinic = { pix_key: 't@pix.com', has_clinic: true, maps_url: 'https://www.google.com/maps/place/Campinas/@-22.9056,-47.0608,17z', clinic_name: 'Espaço Troca', clinic_address: 'Rua da Troca, 5' };
   const T = await mkPro('Tales Troca Lima', 'tales.troca@example.com', '11955554444', 'CRP 06/51020', clinic);
   await T.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true });
   const sofia = await mkPatient('Sofia Troca Alves', cpfOf([2, 7, 1, 8, 2, 8, 1, 8, 2]));

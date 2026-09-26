@@ -58,7 +58,27 @@
   const form = $('[data-profile-form]');
   form.profession.innerHTML = cfg.professions.map((p) => `<option>${esc(p)}</option>`).join('');
   maskPhone(form.phone);
-  $('[data-has-clinic]').addEventListener('change', (e) => $('[data-clinic]').classList.toggle('hidden', !e.target.checked));
+  // Consultório: com a opção marcada, nome, endereço e link do Google Maps são obrigatórios
+  const syncClinic = () => {
+    const on = form.has_clinic.checked;
+    $('[data-clinic]').classList.toggle('hidden', !on);
+    [form.clinic_name, form.clinic_address, form.maps_url].forEach((i) => { i.required = on; });
+  };
+  $('[data-has-clinic]').addEventListener('change', syncClinic);
+  // Saiu do Meu perfil sem salvar: a parte do consultório volta a ser o que está salvo (a caixinha fecha)
+  let lastHash = location.hash;
+  window.addEventListener('hashchange', () => {
+    const was = lastHash; lastHash = location.hash;
+    if (!/^#perfil/.test(was) || /^#perfil/.test(location.hash)) return;
+    const changed = form.has_clinic.checked !== !!me.has_clinic || (form.has_clinic.checked && (form.clinic_name.value !== (me.clinic_name || '') || form.clinic_address.value !== (me.clinic_address || '') || form.maps_url.value !== (me.maps_url || '')));
+    if (!changed) return;
+    form.has_clinic.checked = !!me.has_clinic;
+    form.clinic_name.value = me.clinic_name || '';
+    form.clinic_address.value = me.clinic_address || '';
+    form.maps_url.value = me.maps_url || '';
+    syncClinic();
+    toast(me.has_clinic ? 'Os dados do consultório não foram salvos: voltaram para os anteriores.' : 'O consultório não foi salvo: a opção presencial ficou desmarcada. Para atender presencial, preencha tudo e toque em "Salvar perfil".');
+  });
   // Valor da presencial: o mesmo da online ou diferente (aí o campo do valor aparece)
   const syncPres = () => $('[data-pres-diff]').classList.toggle('hidden', form.presencial_price.value !== 'diff');
   $$('input[name="presencial_price"]', form).forEach((r) => r.addEventListener('change', syncPres));
@@ -80,13 +100,13 @@
     form.city.value = me.city;
     form.has_clinic.checked = me.has_clinic;
     form.accepts_insurance.checked = me.accepts_insurance;
-    $('[data-clinic]').classList.toggle('hidden', !me.has_clinic);
     form.clinic_name.value = me.clinic_name;
     form.clinic_address.value = me.clinic_address;
     form.maps_url.value = me.maps_url || '';
     form.presencial_price.value = me.presencial_price || 'same';
     form.price_presencial.value = me.price_presencial_cents != null ? (me.price_presencial_cents / 100).toFixed(2).replace('.', ',') : '';
     syncPres();
+    syncClinic();
   }
   fillProfile();
   // Secretária (só o profissional cria; fica logo depois da Localização)
@@ -98,6 +118,11 @@
 
   handleForm(form, async (d) => {
     d.has_clinic = form.has_clinic.checked;
+    if (d.has_clinic) {
+      if (form.clinic_name.value.trim().length < 2) { form.clinic_name.focus(); throw new Error('Informe o nome da clínica (ou desmarque "Tenho consultório/clínica presencial").'); }
+      if (form.clinic_address.value.trim().length < 5) { form.clinic_address.focus(); throw new Error('Informe o endereço completo da clínica (ou desmarque "Tenho consultório/clínica presencial").'); }
+      if (!form.maps_url.value.trim()) { form.maps_url.focus(); throw new Error('Cole o link do Google Maps da clínica (no Google Maps: Compartilhar → Copiar link), ou desmarque "Tenho consultório/clínica presencial".'); }
+    }
     d.specialties = (await spPicker).value();
     if (!d.specialties.length) throw new Error('Escolha pelo menos uma especialidade.');
     d.accepts_insurance = form.accepts_insurance.checked;

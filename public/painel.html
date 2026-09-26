@@ -164,15 +164,16 @@
             <div class="grid-uf"><select name="state" aria-label="Estado"></select><input name="city" placeholder="Município" aria-label="Município"></div></div>
           <label class="check"><input type="checkbox" name="has_clinic" data-has-clinic> Tenho consultório/clínica presencial</label>
           <div data-clinic class="hidden" style="margin-top:12px">
-            <div class="field"><label for="cname">Nome da clínica</label><input id="cname" name="clinic_name" maxlength="120"></div>
-            <div class="field"><label for="caddr">Endereço completo</label><input id="caddr" name="clinic_address" maxlength="250" placeholder="Rua, número, bairro"></div>
+            <p class="small muted" style="margin-top:0">Para atender presencial, preencha o <b>nome da clínica</b>, o <b>endereço</b> e o <b>link do Google Maps</b> e toque em <b>Salvar perfil</b>. Sem salvar, a opção volta a ficar desmarcada.</p>
+            <div class="field"><label for="cname">Nome da clínica <span class="req">(obrigatório)</span></label><input id="cname" name="clinic_name" maxlength="120"></div>
+            <div class="field"><label for="caddr">Endereço completo <span class="req">(obrigatório)</span></label><input id="caddr" name="clinic_address" maxlength="250" placeholder="Rua, número, bairro"></div>
             <div class="field" data-pres-price><label>Valor da consulta presencial</label>
               <div class="row" style="gap:8px;flex-wrap:wrap" role="radiogroup" aria-label="Valor da consulta presencial">
                 <label class="chip-radio"><input type="radio" name="presencial_price" value="same" checked> Mesmo valor da online</label>
                 <label class="chip-radio"><input type="radio" name="presencial_price" value="diff"> Valor diferente</label></div>
               <div data-pres-diff class="hidden" style="margin-top:10px"><input name="price_presencial" inputmode="decimal" placeholder="Valor da presencial. Ex.: 200,00" aria-label="Valor da consulta presencial (R$)"></div>
               <div class="hint">Na vitrine aparece o <b>menor valor</b>; no seu perfil, os dois. Ao agendar, o paciente paga o valor da opção escolhida.</div></div>
-            <div class="field"><label for="cmaps">Link do Google Maps (opcional)</label><input id="cmaps" name="maps_url" maxlength="1000" inputmode="url" placeholder="https://maps.app.goo.gl/…">
+            <div class="field"><label for="cmaps">Link do Google Maps <span class="req">(obrigatório)</span></label><input id="cmaps" name="maps_url" maxlength="1000" inputmode="url" placeholder="https://maps.app.goo.gl/…">
               <div class="hint">No Google Maps, abra o local da clínica → <b>Compartilhar</b> → <b>Copiar link</b> e cole aqui. Aparece um mini mapa no seu perfil (só para pacientes com conta), e o paciente toca para ir até lá.</div></div>
           </div>
           <button class="btn" type="submit" style="margin-top:16px">Salvar perfil</button>

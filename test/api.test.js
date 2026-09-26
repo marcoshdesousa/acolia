@@ -186,7 +186,7 @@ test('profissional entra (código ou e-mail) e edita o perfil', async () => {
     name: 'João Pereira', profession: 'Psicólogo(a)', registry: 'CRP 10/12345', phone: '94999990000',
     bio: 'Atendo adultos.', specialties: 'Ansiedade, TCC', price: '150,00',
     packages: [{ sessions: 4, price: '520', description: 'Mensal' }], state: 'PA', city: 'Parauapebas',
-    has_clinic: true, clinic_name: 'Clínica Bem', clinic_address: 'Rua A, 100, Centro', pix_key: 'joao@example.com',
+    has_clinic: true, maps_url: 'https://www.google.com/maps/place/Campinas/@-22.9056,-47.0608,17z', clinic_name: 'Clínica Bem', clinic_address: 'Rua A, 100, Centro', pix_key: 'joao@example.com',
   });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.price_cents, 15000);
@@ -759,7 +759,7 @@ test('clínica: link do Google Maps vira mini mapa, só para quem tem conta', as
   });
   const dp = client();
   await dp.post('/api/auth/professional/login', { login: created.data.code, password: created.data.password });
-  const pf = { name: 'Davi Nunes', phone: '11955554444', state: 'SP', city: 'Campinas', has_clinic: true, clinic_name: 'Espaço Davi', clinic_address: 'Rua B, 200, Centro' };
+  const pf = { name: 'Davi Nunes', phone: '11955554444', state: 'SP', city: 'Campinas', has_clinic: true, maps_url: 'https://www.google.com/maps/place/Campinas/@-22.9056,-47.0608,17z', clinic_name: 'Espaço Davi', clinic_address: 'Rua B, 200, Centro' };
   let r = await dp.put('/api/professional/profile', { ...pf, maps_url: 'https://site-estranho.com/maps' });
   assert.equal(r.status, 400, 'só aceita link do Google Maps');
   r = await dp.put('/api/professional/profile', { ...pf, maps_url: 'https://www.google.com/maps/place/Espa%C3%A7o/@-22.9056,-47.0608,17z' });
@@ -776,9 +776,13 @@ test('clínica: link do Google Maps vira mini mapa, só para quem tem conta', as
   assert.ok(v.maps_url.startsWith('https://www.google.com/maps/place/'));
   assert.ok(v.map_embed.includes('-22.9056%2C-47.0608') && v.map_embed.includes('output=embed'), v.map_embed);
 
-  // Sem link, o mapa usa o endereço; sem clínica, não tem mapa
-  await dp.put('/api/professional/profile', { ...pf, maps_url: '' });
-  assert.ok((await pt.get(`/api/professionals/${created.data.id}`)).data.map_embed.includes('Rua%20B'));
+  // Com consultório, nome, endereço e link do Google Maps são obrigatórios; sem clínica, não tem mapa
+  r = await dp.put('/api/professional/profile', { ...pf, maps_url: '' });
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /Google Maps/);
+  assert.equal((await dp.put('/api/professional/profile', { ...pf, clinic_name: '' })).status, 400, 'nome da clínica obrigatório');
+  assert.equal((await dp.put('/api/professional/profile', { ...pf, clinic_address: '' })).status, 400, 'endereço obrigatório');
+  assert.ok((await pt.get(`/api/professionals/${created.data.id}`)).data.map_embed.includes('-22.9056'), 'continua o que estava salvo');
   await dp.put('/api/professional/profile', { ...pf, has_clinic: false, maps_url: 'https://www.google.com/maps/@1,1,1z' });
   const none = (await pt.get(`/api/professionals/${created.data.id}`)).data;
   assert.equal(none.map_embed, '');
@@ -2221,7 +2225,7 @@ test('versão 1.1.3: secretária do profissional — login gerado, responde no l
   const pf = { name: 'Outro Nome Qualquer', phone: '11913131313', state: 'SP', city: 'Campinas', bio: '', specialties: ['Adultos'], price: '120' };
   // Perfil: muda redes sociais, plano de saúde, localização e clínica; nome, contato, especialidades, "Sobre" e valor ficam
   r = await sec.put('/api/professional/profile', { ...pf, bio: 'Texto novo', specialties: ['Adultos', 'Casais'], price: '999', email: 'outro@example.com',
-    instagram: '@sara.consultorio', accepts_insurance: true, state: 'RJ', city: 'Niterói', has_clinic: true, clinic_name: 'Clínica Sara', clinic_address: 'Rua das Flores, 10', pix_key: 'secretaria@pix' });
+    instagram: '@sara.consultorio', accepts_insurance: true, state: 'RJ', city: 'Niterói', has_clinic: true, maps_url: 'https://www.google.com/maps/place/Campinas/@-22.9056,-47.0608,17z', clinic_name: 'Clínica Sara', clinic_address: 'Rua das Flores, 10', pix_key: 'secretaria@pix' });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.ok(!('code' in r.data) && !('pix_key' in r.data), 'resposta do perfil sem o código único e sem a chave Pix');
   const after = (await pro.get('/api/professional/me')).data;

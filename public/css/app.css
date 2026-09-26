@@ -1394,3 +1394,4 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
   .kv-table td input, .kv-table td select, .kv-table td textarea { max-width: 100%; }
 }
 .pin-ic .seal-ck { stroke: var(--surface); }
+.req { font-weight: 400; color: var(--muted); font-size: .85em; }

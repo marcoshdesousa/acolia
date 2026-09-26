@@ -99,7 +99,10 @@ router.put('/profile', async (req, res) => {
   const hasClinic = b.has_clinic ? 1 : 0;
   const clinicName = hasClinic ? U.cleanText(b.clinic_name, 120) : '';
   const clinicAddress = hasClinic ? U.cleanText(b.clinic_address, 250) : '';
-  if (hasClinic && clinicAddress.length < 5) throw new U.HttpError(400, 'Informe o endereço da clínica.');
+  // Consultório presencial: nome, endereço e link do Google Maps são obrigatórios (ou desmarque a opção)
+  if (hasClinic && clinicName.length < 2) throw new U.HttpError(400, 'Informe o nome da clínica (ou desmarque "Tenho consultório/clínica presencial").');
+  if (hasClinic && clinicAddress.length < 5) throw new U.HttpError(400, 'Informe o endereço completo da clínica (ou desmarque "Tenho consultório/clínica presencial").');
+  if (hasClinic && !String(b.maps_url || '').trim()) throw new U.HttpError(400, 'Cole o link do Google Maps da clínica (no Google Maps: Compartilhar → Copiar link), ou desmarque "Tenho consultório/clínica presencial".');
   // Valor da presencial: o mesmo da online ou um valor diferente (obrigatório escolher quando atende presencial)
   let pricePres = null;
   if (hasClinic && b.presencial_price === 'diff') {
