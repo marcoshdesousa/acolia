@@ -1401,3 +1401,16 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .help-wa b{color:var(--primary)}
 .help-wa:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,.08)}
 .help-wa-ic{flex:none;display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#25d366;color:#fff}
+/* Plano do profissional: tudo o que está incluso */
+.plan-card { position: relative; }
+.plan-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.plan-tag { font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; background: var(--primary); color: #fff; padding: 4px 10px; border-radius: 999px; }
+.plan-hero { display: block; margin: 8px 0 4px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--primary) 10%, var(--surface)); font-size: .92rem; line-height: 1.45; }
+.plan-groups { display: grid; gap: 12px; margin-top: 10px; }
+.pb-group { display: grid; gap: 7px; }
+.pb-title { font-size: .74rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+.pb-item { display: flex; gap: 9px; align-items: flex-start; font-size: .9rem; line-height: 1.4; }
+.pb-item svg { flex: none; margin-top: 1px; color: var(--primary); }
+@media (min-width: 620px) { .plan-groups { grid-template-columns: 1fr 1fr; column-gap: 20px; } }
+.plan-card { font-weight: 400; }
+.plan-card b { font-weight: 800; }

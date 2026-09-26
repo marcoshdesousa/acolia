@@ -51,12 +51,12 @@
   }
   // Profissional com cadastro em análise: aviso + botão para o WhatsApp de atendimento
   function pendingProBox({ support, name = '', code = '' }) {
-    const msg = `Olá! Sou ${name}${code ? ` (código ${code})` : ''} e acabei de me cadastrar como profissional na Acolia. Gostaria de agilizar a análise do meu cadastro.`;
+    const msg = `Olá, Acolia! Já fiz meu pré-cadastro pelo site e quero terminar o meu cadastro.${code ? ` Meu código é ${code}.` : ''}`;
     return `<div class="notice info" style="text-align:left">
-        <b>Seus dados estão sendo analisados pela nossa equipe.</b><br>
-        Para agilizar a aprovação, mande uma mensagem para o nosso canal de atendimento no WhatsApp. É por lá que conferimos sua carteirinha e combinamos a mensalidade.
+        <b>Seu pré-cadastro foi feito!</b><br>
+        A equipe Acolia vai falar com você pelo WhatsApp para terminar o seu cadastro. <b>Para agilizar, mande uma mensagem para nós agora.</b>
       </div>
-      <a class="btn block" href="${esc(supportLink(support, msg))}" target="_blank" rel="noopener" style="margin-top:12px">${ICONS.send} Falar com o atendimento no WhatsApp</a>`;
+      <a class="btn block" href="${esc(supportLink(support, msg))}" target="_blank" rel="noopener" style="margin-top:12px">${ICONS.send} Mandar mensagem no WhatsApp</a>`;
   }
   function showBlocked(me) {
     const a = me.account || {};
