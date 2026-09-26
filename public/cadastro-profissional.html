@@ -174,7 +174,7 @@
     const guide = document.createElement('div');
     guide.className = 'guide-view hidden'; guide.setAttribute('role', 'dialog'); guide.setAttribute('aria-modal', 'true'); guide.setAttribute('aria-label', 'Guia completo para profissionais');
     guide.innerHTML = `<div class="guide-top"><b>Tudo o que você, profissional, terá na Acolia</b>
-        <a class="btn sm secondary" href="/guia-profissionais.pdf" download>Baixar PDF</a>
+
         <button type="button" class="icon-btn" data-guide-close aria-label="Fechar">✕</button></div>
       <div class="guide-pages">${Array.from({ length: 28 }, (_, i) => `<img src="/img/guia/${String(i + 1).padStart(2, '0')}.jpg" width="1000" height="1414" loading="${i < 2 ? 'eager' : 'lazy'}" alt="Página ${i + 1} do guia">`).join('')}
         <button type="button" class="btn block" data-guide-close style="margin:16px auto 24px;max-width:420px">Voltar para o cadastro</button></div>`;
