@@ -98,16 +98,11 @@
     bindUfCity(form.state, form.city);
     maskPhone(form.phone);
     const cfg = await api('/api/config');
-    // "Tem alguma dúvida?": abre o WhatsApp da Acolia com a mensagem pronta (com o nome e o plano, se já escolheu)
+    // "Alguma dúvida?": abre o WhatsApp da Acolia com a mensagem pronta (com o plano, se já escolheu)
     const WA_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-3.2-.8-2.7-1.1-4.4-3.9-4.5-4.1-.1-.2-1.1-1.4-1.1-2.7s.7-1.9.9-2.2c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.6c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.2z"/></svg>';
     const helpText = (where) => {
-      const nm = (form.name.value || '').trim();
-      const who = nm.split(/\s+/).length >= 2 ? ` Meu nome é ${nm}.` : '';
-      if (where === 'plano') {
-        const chosen = document.querySelector('[data-plan]:checked');
-        return chosen ? `Olá, Acolia!${who} Escolhi o Plano Mensal (R$ 30,00 a cada 30 dias) e tenho uma dúvida.` : `Olá, Acolia!${who} Estou vendo o plano para profissionais e tenho uma dúvida.`;
-      }
-      return `Olá, Acolia!${who} Estou fazendo o meu cadastro de profissional e tenho uma dúvida.`;
+      if (where === 'plano' && document.querySelector('[data-plan]:checked')) return 'Olá, Acolia! Escolhi o Plano Mensal (R$ 30,00 a cada 30 dias) e tenho uma dúvida.';
+      return 'Olá, Acolia! Tenho uma dúvida.';
     };
     document.querySelectorAll('[data-help]').forEach((a) => {
       a.querySelector('.help-wa-ic').innerHTML = WA_ICON;
