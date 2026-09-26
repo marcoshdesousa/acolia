@@ -51,13 +51,14 @@
       <p class="center muted">Um plano simples, sem comissão sobre as suas consultas.</p>
       <div class="help-wa-row"><a class="help-wa" data-help="plano" href="#" target="_blank" rel="noopener"><span class="help-wa-ic" aria-hidden="true"></span><span>Alguma dúvida? <b>Fale no WhatsApp</b></span></a></div>
       <div class="card">
-        <label class="plan-card" data-plan-card>
+        <label class="plan-card collapsed" data-plan-card>
           <input type="radio" name="plan" value="mensal-30" data-plan>
           <span class="plan-check" aria-hidden="true"></span>
           <span class="plan-body">
             <span class="plan-top"><span class="plan-name">Plano Mensal</span><span class="plan-tag">Tudo incluso</span></span>
             <span class="plan-price"><b>R$ 30,00</b> <small>a cada 30 dias</small></span>
             <span class="plan-hero">Você fica com <b>100% do valor das consultas</b>. Sem comissão, sem taxa por paciente e com <b>pacientes ilimitados</b>.</span>
+            <span class="pb-short"><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Vitrine para todo o Brasil</b>, primeiro na sua cidade</span></span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Agenda 24h</b> e <b>Pix direto na sua conta</b></span></span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Online e presencial</b>, vídeo e documentos</span></span></span>
             <span class="plan-groups">
               <span class="pb-group"><span class="pb-title">Seja encontrado</span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Vitrine para todo o Brasil</b>, aparecendo primeiro para pacientes da sua cidade e do seu estado</span></span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Link próprio</b> com o seu nome para a bio do Instagram e o WhatsApp</span></span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Feed, Reels e Stories</b> para divulgar o seu trabalho</span></span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Quem comentou no seu post? <b>Você chama na conversa</b></span></span></span>
               <span class="pb-group"><span class="pb-title">Atenda do seu jeito</span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Agenda online 24 horas</b>: o paciente marca sozinho</span></span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Online, presencial ou os dois</b>, com endereço e mapa do consultório</span></span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Videochamada</b> pelo navegador, no celular ou no computador</span></span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Convênio</b>: agende pelo plano de saúde, sem cobrança</span></span></span>
@@ -66,6 +67,7 @@
             </span>
           </span>
         </label>
+        <button type="button" class="btn ghost sm plan-more" data-plan-more aria-expanded="false">Ver todas as vantagens <span data-more-n></span></button>
         <div class="form-error hidden" data-plan-err style="margin-top:12px"></div>
         <div class="row" style="gap:10px;margin-top:16px">
           <button class="btn secondary" type="button" data-plan-back>Voltar</button>
@@ -153,6 +155,16 @@
       if (needsCard() && !form.document.files.length) throw new Error('Envie a foto da sua carteirinha profissional.');
       if (!sp.value().length) throw new Error('Escolha pelo menos uma especialidade (em "Suas especialidades").');
       show(2);
+    });
+    // Vantagens: mostra as primeiras; "Ver todas as vantagens" abre o resto
+    const card = $('[data-plan-card]'), more = $('[data-plan-more]');
+    const extra = card.querySelectorAll('.plan-groups .pb-item').length;
+    $('[data-more-n]').textContent = `(${extra})`;
+    more.addEventListener('click', () => {
+      const open = card.classList.toggle('collapsed') === false;
+      more.setAttribute('aria-expanded', String(open));
+      more.innerHTML = open ? 'Ver menos' : `Ver todas as vantagens <span data-more-n>(${extra})</span>`;
+      if (!open) card.scrollIntoView({ block: 'nearest' });
     });
     const planErr = $('[data-plan-err]');
     $('[data-plan]').addEventListener('change', () => { planErr.classList.add('hidden'); $('[data-plan-card]').classList.add('on'); });

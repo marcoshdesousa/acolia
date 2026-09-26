@@ -1414,3 +1414,7 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 @media (min-width: 620px) { .plan-groups { grid-template-columns: 1fr 1fr; column-gap: 20px; } }
 .plan-card { font-weight: 400; }
 .plan-card b { font-weight: 800; }
+.plan-card.collapsed .plan-groups { display: none; }
+.plan-card:not(.collapsed) .pb-short { display: none; }
+.pb-short { display: grid; gap: 7px; margin-top: 10px; }
+.plan-more { display: block; margin: 8px auto 0; font-weight: 700; color: var(--primary); }
