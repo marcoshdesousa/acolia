@@ -1395,3 +1395,9 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 }
 .pin-ic .seal-ck { stroke: var(--surface); }
 .req { font-weight: 400; color: var(--muted); font-size: .85em; }
+/* "Tem alguma dúvida? Fale no WhatsApp" (cadastro do profissional) */
+.help-wa-row{display:flex;justify-content:center;margin:12px 0}
+.help-wa{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;max-width:100%;padding:6px 14px 6px 8px;border-radius:999px;background:var(--surface);border:1px solid var(--line);color:var(--text);font-size:.82rem;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.05);transition:transform .15s,box-shadow .15s}
+.help-wa b{color:var(--primary)}
+.help-wa:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,.08)}
+.help-wa-ic{flex:none;display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#25d366;color:#fff}
