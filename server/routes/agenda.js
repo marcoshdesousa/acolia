@@ -255,14 +255,14 @@ router.post('/appointments/:id/reschedule', (req, res) => {
   res.json(G.view(upd, 'patient'));
 });
 
-// Paciente troca o tipo da consulta (online ↔ presencial) no mesmo dia e horário, até 30 minutos antes.
+// Paciente troca o tipo da consulta (online ↔ presencial) no mesmo dia e horário, até 15 minutos antes.
 // O profissional não troca (ele usa "Não vou poder atender": o paciente escolhe reembolso ou remarcar).
 router.post('/appointments/:id/modality', (req, res) => {
   if (!isPatient(req)) throw new U.HttpError(403, 'Só o paciente troca o tipo da consulta.');
   const a = loadMine(req, req.params.id);
   const to = req.body.modality;
   if (a.status !== 'confirmada') throw new U.HttpError(409, 'Só dá para trocar o tipo de uma consulta marcada.');
-  if (G.now() >= G.ms(a.start_at) - G.cutoffOf(a) * MIN) throw new U.HttpError(403, `Só dá para trocar o tipo até ${G.cutoffOf(a)} minutos antes da consulta.`);
+  if (G.now() >= G.ms(a.start_at) - G.RULES.SWITCH_MIN * MIN) throw new U.HttpError(403, `Só dá para trocar o tipo até ${G.RULES.SWITCH_MIN} minutos antes da consulta.`);
   if (to === a.modality) throw new U.HttpError(400, `Esta consulta já é ${to}.`);
   const chk = G.modalityChange(a, to);
   if (!chk.ok) throw new U.HttpError(409, chk.why);

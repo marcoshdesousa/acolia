@@ -868,7 +868,14 @@ test('paciente troca o tipo (online ↔ presencial) no mesmo horário e remarca 
   // Até 30 minutos antes
   const b = await confirmed(T, sofia, '2030-04-08');
   const saved = clock;
-  clock = Date.parse(b.start_at) - 20 * 60e3;
+  clock = Date.parse(b.start_at) - 20 * 60e3; // faltam 20 min: troca o tipo (até 15), mas não remarca (até 30)
+  r = await sofia.get(`/api/agenda/appointments/${b.id}`);
+  assert.equal(r.data.can.switch_type, true);
+  assert.equal(r.data.can.reschedule, false);
+  clock = Date.parse(b.start_at) - 10 * 60e3; // faltam 10 min: não troca mais
+  r = await sofia.get(`/api/agenda/appointments/${b.id}`);
+  assert.equal(r.data.can.switch_type, false);
+  assert.match(r.data.can.switch_note, /15 minutos/);
   assert.equal((await sofia.post(`/api/agenda/appointments/${b.id}/modality`, { modality: 'presencial', confirm_place: true })).status, 403);
   clock = saved;
   // Valor diferente: não troca (nem remarcando)
@@ -885,32 +892,4 @@ test('paciente troca o tipo (online ↔ presencial) no mesmo horário e remarca 
   r = await sofia.post(`/api/agenda/appointments/${c.id}/reschedule`, { start: sl3[0].start });
   assert.equal(r.status, 200, 'remarcar mantendo o tipo continua valendo');
   assert.equal(r.data.modality, 'online');
-});
-
-test('conta de teste: troca de tipo e remarcação liberadas até 1 minuto antes, sem limite e mesmo com valor diferente', async () => {
-  const { db } = require('../server/db');
-  const cpfOf = (d) => { const dv = (a) => { const s = a.reduce((x, n, i) => x + n * (a.length + 1 - i), 0); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; d.push(dv(d)); d.push(dv(d)); return d.join(''); };
-  const X = await mkPro('Xavier Teste Lima', 'xavier.teste@example.com', '11955552222', 'CRP 06/51022',
-    { pix_key: 'x@pix.com', has_clinic: true, clinic_name: 'Clínica X', clinic_address: 'Rua X, 1', presencial_price: 'diff', price_presencial: '300,00' });
-  await X.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true });
-  const pat = await mkPatient('Paula Teste Souza', cpfOf([5, 5, 5, 1, 2, 3, 4, 7, 8]));
-  db.prepare('UPDATE professionals SET is_test = 1 WHERE id = ?').run(X.id);
-  db.prepare("UPDATE patients SET is_test = 1 WHERE name = 'Paula Teste Souza'").run();
-  G.touch();
-  const sl = (await pat.get(`/api/agenda/pro/${X.id}/day?date=2030-03-12`)).data.slots;
-  const bk = await pat.post('/api/agenda/book', { professional_id: X.id, start: sl[0].start, accept: true, modality: 'online' });
-  assert.equal(bk.status, 201, JSON.stringify(bk.data));
-  await X.cl.post(`/api/agenda/appointments/${bk.data.id}/send-pix`);
-  assert.equal((await X.cl.post(`/api/agenda/appointments/${bk.data.id}/manual-result`, { approved: true })).data.status, 'confirmada');
-  const saved = clock;
-  clock = Date.parse(sl[0].start) - 10 * 60e3; // faltam 10 minutos
-  let r = await pat.get(`/api/agenda/appointments/${bk.data.id}`);
-  assert.equal(r.data.can.switch_type, true, 'teste: troca mesmo faltando menos de 30 min e com valor diferente');
-  r = await pat.post(`/api/agenda/appointments/${bk.data.id}/modality`, { modality: 'presencial', confirm_place: true });
-  assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.equal(r.data.modality, 'presencial');
-  clock = saved;
-  const sl2 = (await pat.get(`/api/agenda/pro/${X.id}/day?date=2030-03-13&exclude=${bk.data.id}`)).data.slots;
-  assert.equal((await pat.post(`/api/agenda/appointments/${bk.data.id}/reschedule`, { start: sl2[0].start, modality: 'online' })).status, 200);
-  assert.equal((await pat.post(`/api/agenda/appointments/${bk.data.id}/reschedule`, { start: sl2[1].start })).status, 200, 'teste: remarca mais de uma vez');
 });

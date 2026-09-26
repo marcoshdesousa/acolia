@@ -22,6 +22,7 @@ const RULES = {
   PRO_PIX_MIN: 5,         // manual: minutos para o profissional mandar a chave Pix
   ANSWER_MIN: 5,          // manual: minutos para o paciente responder "quer tentar de novo?"
   CUTOFF_MIN: 30,         // paciente remarca/cancela só com MAIS de 30 minutos de antecedência
+  SWITCH_MIN: 15,         // paciente troca o tipo (online ↔ presencial) só com MAIS de 15 minutos de antecedência
   MIN_ADVANCE_MIN: 30,    // horário marcado precisa começar daqui a pelo menos 30 minutos
   PRO_CANCEL_H: 24,       // profissional avisa que não pode atender até 24 horas antes
   PRO_GRACE_MIN: 3,       // profissional tem até 3 minutos depois do horário para entrar
@@ -105,16 +106,13 @@ function priceFor(pro, modality) {
 // A outra opção precisa estar aberta na agenda do profissional e ter o mesmo valor já pago
 // (pelo convênio não tem valor). Valores diferentes: cancelar e marcar de novo.
 const brl = (c) => `R$ ${(c / 100).toFixed(2).replace('.', ',')}`;
-// Contas de teste: tudo liberado para testar (até 1 minuto antes, sem limite de remarcações)
-const isTestAppt = (a) => !!getPro(a.professional_id)?.is_test;
-const cutoffOf = (a) => (isTestAppt(a) ? 1 : RULES.CUTOFF_MIN);
 function modalityChange(a, to) {
   const pro = getPro(a.professional_id);
   if (to !== 'online' && to !== 'presencial') return { ok: false, why: 'Escolha online ou presencial.' };
   if (to === 'presencial' && !presencialOpen(pro)) return { ok: false, why: 'Este profissional não está com a agenda presencial aberta.' };
   if (to === 'online' && !pro.agenda_on) return { ok: false, why: 'Este profissional não está com a agenda online aberta.' };
   const price = priceFor(pro, to);
-  if (a.billing !== 'convenio' && price !== a.price_cents && !pro.is_test) {
+  if (a.billing !== 'convenio' && price !== a.price_cents) {
     return { ok: false, why: `A consulta ${to} tem outro valor${price != null ? ` (${brl(price)})` : ''}. Para trocar, cancele esta consulta e marque de novo, ou fale com o profissional pelo chat.` };
   }
   return { ok: true };
@@ -575,20 +573,21 @@ function onAccountGone(role, id) {
 function canDo(a, role) {
   const t = now();
   const start = ms(a.start_at);
-  const beforeCutoff = t < start - cutoffOf(a) * MIN;
+  const beforeCutoff = t < start - RULES.CUTOFF_MIN * MIN;
+  const beforeSwitch = t < start - RULES.SWITCH_MIN * MIN;
   const c = {};
   if (role === 'patient') {
     c.pay = a.status === 'aguardando_pagamento' && a.mode === 'auto' && ms(a.hold_until) > t;
     c.accept = a.origin === 'profissional' && !a.accepted_policy_at && a.status === 'aguardando_pagamento' && ms(a.hold_until) > t;
-    c.reschedule = a.status === 'confirmada' && beforeCutoff && (a.reschedules < RULES.MAX_RESCHEDULES || isTestAppt(a));
+    c.reschedule = a.status === 'confirmada' && beforeCutoff && a.reschedules < RULES.MAX_RESCHEDULES;
     c.cancel = a.status === 'confirmada' && beforeCutoff;
     c.give_up = HOLDING.includes(a.status);
     // Trocar o tipo (online ↔ presencial) mantendo o dia e o horário, até 30 minutos antes
     const sw = modalityChange(a, a.modality === 'presencial' ? 'online' : 'presencial');
-    c.switch_type = a.status === 'confirmada' && beforeCutoff && sw.ok;
+    c.switch_type = a.status === 'confirmada' && beforeSwitch && sw.ok;
     // Por que não dá para trocar (a tela explica em vez de só sumir com o botão)
     if (a.status === 'confirmada' && !c.switch_type && clinicOf(getPro(a.professional_id))) {
-      c.switch_note = !beforeCutoff ? `Faltam ${cutoffOf(a)} minutos ou menos: não dá mais para trocar entre online e presencial.` : sw.why;
+      c.switch_note = !beforeSwitch ? `Faltam ${RULES.SWITCH_MIN} minutos ou menos: não dá mais para trocar entre online e presencial.` : sw.why;
     }
     // Pix manual: a chave e o valor já vêm no cartão ("Copiar Pix")
     c.copy_pix = a.mode === 'manual' && a.status === 'aguardando_pagamento' && !!a.pix_payload && ms(a.hold_until) > t;
@@ -659,7 +658,7 @@ function view(a, role) {
 module.exports = {
   RULES, CANCEL_REASONS, HOLDING, ACTIVE, OCCUPY_SQL,
   now, iso, ms, localDate, localMin, fromLocal, hhmm, parseHHMM, addDays, fmtWhen, dayLabel, dowOf,
-  getPro, getAppt, duration, readiness, clinicOf, presencialOpen, priceFor, modalityChange, cutoffOf, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
+  getPro, getAppt, duration, readiness, clinicOf, presencialOpen, priceFor, modalityChange, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
   ensureConversation, post, pushText, notifyBoth, setStatus, createCharge, confirmPaid, checkPayment, refund, refundLock,
   openCall, closeCall, canEndCall, finishFromCall, sweep, canDo, view, onAccountGone,
   _setNow(fn) { nowFn = fn || Date.now; touch(); },

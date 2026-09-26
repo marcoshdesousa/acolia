@@ -46,11 +46,12 @@
 
   // ---------- Política (aparece antes de pagar, com "Li e aceito") ----------
   function policyHtml(rules) {
-    const r = rules || { CUTOFF_MIN: 30, PAY_MIN: 10, PRO_PIX_MIN: 5, PRO_GRACE_MIN: 3, PRO_CANCEL_H: 24 };
+    const r = { SWITCH_MIN: 15, ...(rules || { CUTOFF_MIN: 30, PAY_MIN: 10, PRO_PIX_MIN: 5, PRO_GRACE_MIN: 3, PRO_CANCEL_H: 24 }) };
     return `<ul class="policy-list">
       <li>O pagamento é <b>só por Pix</b> e confirma a consulta. Você tem <b>${r.PAY_MIN} minutos</b> para pagar; depois disso o horário é liberado.</li>
       <li>Cada paciente marca <b>uma consulta por dia</b>.</li>
       <li>Você pode <b>remarcar uma vez</b> ou <b>cancelar com reembolso</b> até <b>${r.CUTOFF_MIN} minutos antes</b>. Com ${r.CUTOFF_MIN} minutos ou menos, não dá mais para remarcar nem pedir reembolso.</li>
+      <li>Se o profissional atende online e presencial, você pode <b>trocar o tipo</b> da consulta (online ↔ presencial), no mesmo dia e horário, até <b>${r.SWITCH_MIN} minutos antes</b>.</li>
       <li>Se você <b>não entrar na chamada</b> até ${r.PRO_GRACE_MIN} minutos depois do horário, a chamada é encerrada e o valor <b>não é devolvido</b>.</li>
       <li>Se o profissional não puder atender, ele avisa até ${r.PRO_CANCEL_H} horas antes e <b>você escolhe</b>: reembolso ou remarcar.</li>
       <li>Se o profissional <b>não entrar na chamada</b> até ${r.PRO_GRACE_MIN} minutos depois do horário, você recebe <b>100% de volta</b>.</li>
