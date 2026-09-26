@@ -20,6 +20,7 @@
     <div data-step1>
       <h1 class="center">Cadastro de profissional</h1>
       <p class="center muted">Psicólogos, neuropsicólogos, psiquiatras, psicanalistas, psicoterapeutas e terapeutas. Seu cadastro será analisado pela administração antes de aparecer na vitrine.</p>
+      <div class="help-wa-row know-row"><button type="button" class="know-btn" data-guide-open><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M8 7h7"/></svg> Saiba tudo sobre a Acolia</button></div>
       <div class="help-wa-row"><a class="help-wa" data-help="dados" href="#" target="_blank" rel="noopener"><span class="help-wa-ic" aria-hidden="true"></span><span>Alguma dúvida? <b>Fale no WhatsApp</b></span></a></div>
       <form class="card" data-form novalidate>
         <div class="field"><label for="name">Nome completo (igual ao da carteirinha)</label><input id="name" name="name" autocomplete="name" required maxlength="120"></div>
@@ -42,7 +43,8 @@
           <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
         <p class="small notice info" style="margin:0 0 14px">Você não precisa criar senha agora: assim que o cadastro for aprovado, a equipe Acolia manda a sua senha pelo WhatsApp. Depois de entrar, você pode trocá-la em <b>Conta</b>.</p>
         <button class="btn block" type="submit">Próximo</button>
-        <div class="help-wa-row"><a class="help-wa" data-help="dados" href="#" target="_blank" rel="noopener"><span class="help-wa-ic" aria-hidden="true"></span><span>Alguma dúvida? <b>Fale no WhatsApp</b></span></a></div>
+        <div class="help-wa-row know-row"><button type="button" class="know-btn" data-guide-open><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M8 7h7"/></svg> Saiba tudo sobre a Acolia</button></div>
+      <div class="help-wa-row"><a class="help-wa" data-help="dados" href="#" target="_blank" rel="noopener"><span class="help-wa-ic" aria-hidden="true"></span><span>Alguma dúvida? <b>Fale no WhatsApp</b></span></a></div>
         <p class="center small" style="margin:16px 0 0">Já tem cadastro? <a href="/entrar#profissional">Entrar</a></p>
       </form>
     </div>
@@ -183,11 +185,12 @@
         <button type="button" class="btn block" data-guide-close style="margin:16px auto 24px;max-width:420px">Voltar para o cadastro</button></div>`;
     document.body.appendChild(guide);
     let guideOpen = false;
-    function closeGuide() { if (!guideOpen) return; guideOpen = false; guide.classList.add('hidden'); document.documentElement.style.overflow = ''; $('[data-guide-open]').focus(); }
-    $('[data-guide-open]').addEventListener('click', () => {
-      hideTip(); guideOpen = true; guide.classList.remove('hidden'); document.documentElement.style.overflow = 'hidden';
+    let guideFrom = null;
+    function closeGuide() { if (!guideOpen) return; guideOpen = false; guide.classList.add('hidden'); document.documentElement.style.overflow = ''; guideFrom?.focus(); }
+    document.querySelectorAll('[data-guide-open]').forEach((btn) => btn.addEventListener('click', () => {
+      hideTip(); guideOpen = true; guideFrom = btn; guide.classList.remove('hidden'); document.documentElement.style.overflow = 'hidden';
       guide.querySelector('.guide-pages').scrollTop = 0; guide.querySelector('[data-guide-close]').focus();
-    });
+    }));
     guide.querySelectorAll('[data-guide-close]').forEach((b) => b.addEventListener('click', closeGuide));
     const planErr = $('[data-plan-err]');
     $('[data-plan]').addEventListener('change', () => { planErr.classList.add('hidden'); $('[data-plan-card]').classList.add('on'); });
@@ -202,13 +205,27 @@
         fd.append('plan', plan.value);
         const r = await api('/api/auth/professional/register', { method: 'POST', form: fd });
         $('[data-code]').textContent = r.code;
-        const msg = `Olá, Acolia! Já fiz meu pré-cadastro pelo site e quero terminar o meu cadastro. Meu código é ${r.code}.`;
+        // Mensagem pronta com os dados do cadastro (a pessoa só aperta enviar)
+        const val = (n) => (form.elements[n]?.value || '').trim();
+        const spec = sp.value();
+        const lines = [
+          'Olá, Acolia! Quero finalizar o meu cadastro.', '',
+          `Nome completo: ${val('name')}`,
+          `Profissão: ${val('profession')}`,
+          val('registry') ? `Carteirinha: ${val('registry')}` : '',
+          spec.length ? `Especialidades: ${spec.join(', ')}` : '',
+          `Estado e município: ${val('city')} - ${val('state')}`,
+          `E-mail: ${val('email')}`,
+          `WhatsApp: ${val('phone')}`,
+          'Plano escolhido: Plano Mensal (R$ 30,00 a cada 30 dias)',
+          `Código: ${r.code}`,
+        ].filter((l, i) => l || i === 1);
+        const msg = lines.join('\n');
         $('[data-pending-box]').innerHTML = r.blocked
           ? `<div class="notice danger" style="text-align:left"><b>Este cadastro está bloqueado.</b><br>Os dados informados pertencem a uma conta bloqueada pela administração. Para liberar, fale com o nosso atendimento.</div>
              <a class="btn block" href="${esc(Acolia.supportLink(r.support, 'Olá! Meu cadastro de profissional na Acolia (código ' + r.code + ') está bloqueado. Gostaria de falar sobre a liberação.'))}" target="_blank" rel="noopener" style="margin-top:12px">Falar com o atendimento no WhatsApp</a>`
-          : `<p style="margin:4px 0 0">Em breve alguém da equipe Acolia vai falar com você pelo <b>WhatsApp</b> para terminar o seu cadastro e enviar a sua senha.</p>
-             <div class="notice info" style="text-align:left"><b>Para agilizar, mande uma mensagem para nós agora.</b></div>
-             <a class="btn block" href="${esc(Acolia.supportLink(r.support, msg))}" target="_blank" rel="noopener">${ICONS.send} Mandar mensagem no WhatsApp</a>`;
+          : `<div class="notice info" style="text-align:left"><b>Agora, para terminar o seu cadastro, toque em "Finalizar cadastro".</b><br>Você vai para o nosso WhatsApp com a mensagem pronta e os seus dados: é só enviar.</div>
+             <a class="btn block" href="${esc(Acolia.supportLink(r.support, msg))}" target="_blank" rel="noopener">${ICONS.send} Finalizar cadastro</a>`;
         $('[data-copy]').onclick = () => copyText(r.code);
         show(3);
       } catch (e) {
