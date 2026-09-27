@@ -69,6 +69,22 @@ function reactivateOnce() {
   return ok;
 }
 
+// Pedido do dono (depois de apagar de novo): recria UMA vez (por chave) o Profissional Teste e o Paciente Teste,
+// prontos para testar marcar → pagar pelo Asaas SIMULADO → consulta confirmada (online e presencial).
+function recreateAgainOnce(key) {
+  if (db.prepare('SELECT 1 FROM settings WHERE key = ?').get(key)) return false;
+  const ok = provision({ withHours: true });
+  if (ok) {
+    const T = require('./testAccounts');
+    db.prepare(`UPDATE professionals SET presencial_on = 1, price_presencial_cents = NULL, subscription_until = ? WHERE code = ? AND is_test = 1`)
+      .run(U.addDaysISO(U.todayISO(), 3650), T.PRO.code);
+    require('./agenda').touch();
+  }
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(key, new Date().toISOString());
+  if (ok) console.log('[teste] contas de teste recriadas de novo (agenda + Asaas simulado)');
+  return ok;
+}
+
 function runOnce() {
   if (db.prepare('SELECT 1 FROM settings WHERE key = ?').get(KEY)) return;
   const ok = provision();
@@ -94,4 +110,4 @@ function status() {
   return out;
 }
 
-module.exports = { runOnce, recreateOnce, reactivateOnce, provision, status };
+module.exports = { runOnce, recreateOnce, reactivateOnce, recreateAgainOnce, provision, status };
