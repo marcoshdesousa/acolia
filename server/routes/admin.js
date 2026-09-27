@@ -35,6 +35,7 @@ function adminPro(p) {
     has_document: !!p.document_file, document_is_pdf: /\.pdf$/.test(p.document_file || ''),
     registry_verified: !!p.registry_verified, legal_name: p.legal_name || p.name, slug: p.slug, is_test: !!p.is_test,
     plan: p.plan ? (require('./auth').PLANS[p.plan] || p.plan) : null,
+    cpf: p.cpf ? U.formatCpf(p.cpf) : '',
   };
 }
 
@@ -111,6 +112,12 @@ router.get('/stats', (_req, res) => {
     approved: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado'"),
     visible: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND subscription_until >= date('now', '-1 day')"),
     overdue: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND (subscription_until IS NULL OR subscription_until < date('now', '-1 day'))"),
+    // Painel inicial: ativos / bloqueados / apagados de cada lado
+    pros_active: g("SELECT COUNT(*) n FROM professionals WHERE status NOT IN ('oficial', 'bloqueado', 'excluido')"),
+    pros_blocked: g("SELECT COUNT(*) n FROM professionals WHERE status = 'bloqueado'"),
+    pros_deleted: g("SELECT COUNT(*) n FROM professionals WHERE status = 'excluido'"),
+    patients_active: g("SELECT COUNT(*) n FROM patients WHERE status = 'ativo'"),
+    patients_deleted: g("SELECT COUNT(*) n FROM patients WHERE status = 'excluido'"),
     conversations: g('SELECT COUNT(*) n FROM conversations'),
     messages: g('SELECT COUNT(*) n FROM messages'),
     storage: storageInfo(),
@@ -136,6 +143,7 @@ router.get('/professionals', (req, res) => {
   let rows = db.prepare("SELECT * FROM professionals WHERE status <> 'oficial' ORDER BY created_at DESC").all();
   if ([...PRO_STATUSES, 'excluido'].includes(req.query.status)) rows = rows.filter((r) => r.status === req.query.status);
   if (req.query.status === 'vencido') rows = rows.filter((r) => r.status === 'aprovado' && !isVisible(r));
+  if (req.query.status === 'ativos') rows = rows.filter((r) => !['bloqueado', 'excluido'].includes(r.status));
   rows = filterRows(rows, req.query);
   res.json({ items: rows.map(adminPro) });
 });
@@ -151,13 +159,10 @@ router.get('/professionals/:id', (req, res) => {
 // registro válido e do mesmo estado (e, com a consulta ao conselho configurada, o nome tem que bater).
 // Psicanalista, psicoterapeuta e terapeuta (sem conselho) podem ser cadastrados sem registro.
 router.post('/professionals', async (req, res) => {
-  const d = validateProfessionalInput(req.body);
+  const d = validateProfessionalInput(req.body, { cpfOptional: true }); // a tela do admin pede o CPF
   const R = require('../registry');
   if (R.councilFor(d.profession)) {
     const reg = R.validateRegistry(d.profession, req.body.registry, d.state);
-    if (db.prepare('SELECT 1 FROM professionals WHERE registry = ?').get(reg.registry)) {
-      throw new U.HttpError(409, `Já existe um cadastro com o ${reg.registry}.`);
-    }
     if (R.isApiConfigured()) {
       const v = await R.verifyRegistry(reg, d.name);
       if (v.error) throw new U.HttpError(503, 'Não foi possível consultar o conselho agora. Tente novamente em alguns minutos.');
@@ -313,7 +318,8 @@ router.post('/patients/:id/delete-test', (req, res) => {
 // ---------- Pacientes ----------
 router.get('/patients', (req, res) => {
   let rows = db.prepare('SELECT * FROM patients ORDER BY created_at DESC').all();
-  if (['ativo', 'bloqueado', 'excluido'].includes(req.query.status)) rows = rows.filter((r) => r.status === req.query.status);
+  const st = req.query.status === 'ativos' ? 'ativo' : req.query.status;
+  if (['ativo', 'bloqueado', 'excluido'].includes(st)) rows = rows.filter((r) => r.status === st);
   rows = filterRows(rows, req.query);
   res.json({ items: rows.map(adminPatient) });
 });

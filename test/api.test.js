@@ -72,6 +72,13 @@ after(() => {
 
 // CPFs válidos (gerados para teste)
 const CPF_A = '529.982.247-25';
+// CPF válido a partir de um número (para os cadastros de profissional nos testes)
+function cpfOf(n) {
+  const d = String(100000000 + n).slice(-9);
+  const dv = (s) => { let t = 0; for (let i = 0; i < s.length; i++) t += +s[i] * (s.length + 1 - i); const r = (t * 10) % 11; return r === 10 ? 0 : r; };
+  const x = d + dv(d);
+  return x + dv(x);
+}
 const CPF_B = '111.444.777-35';
 
 const admin = client();
@@ -99,6 +106,8 @@ test('paciente: cadastro exige CPF válido e nome completo', async () => {
   assert.equal(r.status, 201);
   r = await anon.post('/api/auth/patient/register', { name: 'Outra Pessoa', cpf: CPF_A, state: 'PA', city: 'Parauapebas', birth_date: '1990-05-10', password: '123456' });
   assert.equal(r.status, 409, 'CPF duplicado');
+  assert.equal(r.data.cpf_exists, true, 'a tela oferece "Entrar" ou "Redefinir senha"');
+  assert.equal(r.data.role, 'patient');
   r = await pat.get('/api/auth/me');
   assert.equal(r.data.role, 'patient');
   assert.equal(r.data.user.city, 'Parauapebas');
@@ -108,6 +117,7 @@ const DOC = { data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 const PRO = {
   name: 'João Pereira', profession: 'Psicólogo(a)', registry: 'CRP 10/12345', email: 'joao@example.com',
   phone: '(94) 99999-0000', state: 'PA', city: 'Parauapebas', password: 'segredo1',
+  cpf: CPF_A, // o mesmo CPF da paciente Maria: paciente e profissional são contas separadas
 };
 
 test('profissional: registro precisa ser válido, do mesmo estado, e com carteirinha', async () => {
@@ -140,7 +150,15 @@ test('profissional: cadastro fica pendente e não entra até aprovação', async
   assert.match(proCode, /[A-Z]/);
   assert.match(proCode, /[0-9]/);
   r = await anon.form('/api/auth/professional/register', { ...PRO, email: 'outro@example.com' }, DOC);
-  assert.equal(r.status, 409, 'mesmo CRP duas vezes');
+  assert.equal(r.status, 409, 'mesmo CPF duas vezes');
+  assert.equal(r.data.cpf_exists, true);
+  assert.equal(r.data.role, 'professional');
+  r = await anon.form('/api/auth/professional/register', { ...PRO, cpf: '', email: 'outro@example.com' }, DOC);
+  assert.equal(r.status, 400, 'CPF obrigatório');
+  // O mesmo CRP com outro CPF pode (quem manda é o CPF)
+  r = await anon.form('/api/auth/professional/register', { ...PRO, cpf: '100.015.838-16', email: 'outro@example.com' }, DOC);
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  require('../server/db').db.prepare('DELETE FROM professionals WHERE email = ?').run('outro@example.com'); // não atrapalha os próximos testes
   r = await pro.post('/api/auth/professional/login', { login: proCode, password: 'qualquer' });
   assert.equal(r.status, 403);
   assert.equal(r.data.pending, true, 'em análise: avisa (ainda não tem senha)');
@@ -1630,7 +1648,7 @@ test('bloqueio fica na lista: apagar a própria conta não libera; admin apagar 
   assert.ok(!(await pt.get('/api/auth/me')).data.account.blocked, 'admin apagou: conta nova normal');
 
   // profissional: cadastro em análise → login avisa com o WhatsApp de atendimento
-  const PRO2 = { name: 'Caio Bloqueio', profession: 'Psicanalista', registry: '', email: 'caio.bloq@example.com', phone: '(11) 97777-1234', state: 'SP', city: 'Campinas', password: 'segredo1' };
+  const PRO2 = { name: 'Caio Bloqueio', profession: 'Psicanalista', registry: '', cpf: cpfOf(501), email: 'caio.bloq@example.com', phone: '(11) 97777-1234', state: 'SP', city: 'Campinas', password: 'segredo1' };
   let r = await anon.form('/api/auth/professional/register', PRO2);
   assert.equal(r.status, 201);
   assert.equal(r.data.blocked, false);
@@ -1877,7 +1895,7 @@ test('feed: novidade primeiro (a mais nova no topo); as já vistas vêm misturad
 test('cadastro do profissional: escolhe o plano mensal de R$ 30 (plano inválido não passa) e o admin vê o plano', async () => {
   const mk = (plan, email, phone) => {
     const fd = new FormData();
-    for (const [k, v] of Object.entries({ name: 'Paulo Plano Silva', profession: 'Psicanalista', email, phone, state: 'SP', city: 'Campinas', specialties: '["Luto"]' })) fd.append(k, v);
+    for (const [k, v] of Object.entries({ name: 'Paulo Plano Silva', profession: 'Psicanalista', cpf: cpfOf(Number(phone.slice(-4))), email, phone, state: 'SP', city: 'Campinas', specialties: '["Luto"]' })) fd.append(k, v);
     if (plan) fd.append('plan', plan);
     return fetch(`${base}/api/auth/professional/register`, { method: 'POST', body: fd });
   };
@@ -2073,7 +2091,7 @@ test('especialidades: pelo menos uma no cadastro e no perfil, sem máximo, filtr
   assert.ok(cfg.specialties.length >= 4 && cfg.specialties.every((g) => g.name && g.items.length));
   // Cadastro pelo site: sem especialidade não passa
   const anon = client();
-  const base0 = { name: 'Nara Esp Lima', profession: 'Psicanalista', email: 'nara.esp@example.com', phone: '11917171717', state: 'SP', city: 'Campinas', plan: 'mensal-30' };
+  const base0 = { name: 'Nara Esp Lima', profession: 'Psicanalista', cpf: cpfOf(502), email: 'nara.esp@example.com', phone: '11917171717', state: 'SP', city: 'Campinas', plan: 'mensal-30' };
   let r = await anon.form('/api/auth/professional/register', { ...base0, specialties: '[]' });
   assert.equal(r.status, 400);
   assert.match(r.data.error, /pelo menos uma especialidade/);
@@ -2384,7 +2402,7 @@ test('contas de teste recriadas uma vez com agenda e Asaas simulado', async () =
   assert.equal(TA.recreateOnce(), false, 'não roda de novo');
 });
 
-test('@ dos pacientes: único, escolhido no cadastro ou gerado, trocável; aparece nos comentários e para o profissional com o nome completo', async () => {
+test('@ dos pacientes: único, escolhido no cadastro ou gerado, e não muda depois; aparece nos comentários e para o profissional com o nome completo', async () => {
   const a = client();
   let r = await a.post('/api/auth/patient/register', { name: 'Marcos Henrique Alves', cpf: '100.023.757-53', state: 'SP', city: 'Campinas', birth_date: '1990-01-02', password: '123456', handle: '@Marcos.Henrique' });
   assert.equal(r.status, 201, JSON.stringify(r.data));
@@ -2400,14 +2418,14 @@ test('@ dos pacientes: único, escolhido no cadastro ou gerado, trocável; apare
   assert.equal(r.status, 201, JSON.stringify(r.data));
   const hb = (await b.get('/api/auth/me')).data.user.handle;
   assert.match(hb, /^marcos\.henrique\d+$/);
-  // Trocar: inválido, ocupado e livre
-  assert.equal((await b.put('/api/patient/profile', { handle: 'a b' })).status, 400);
-  assert.equal((await b.put('/api/patient/profile', { handle: 'marcos.henrique' })).status, 409);
-  const sug = (await b.get('/api/patient/handle/suggest')).data.handle;
-  assert.ok(sug && sug !== 'marcos.henrique');
+  // O @ é permanente: não dá para trocar (nem por um livre)
   r = await b.put('/api/patient/profile', { handle: 'marcao_2024' });
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /não pode ser alterado/);
+  assert.equal((await b.put('/api/patient/profile', { handle: 'marcos.henrique' })).status, 400);
+  assert.equal((await b.get('/api/auth/me')).data.user.handle, hb);
+  r = await b.put('/api/patient/profile', { handle: '@' + hb, state: 'SP', city: 'Campinas' }); // o mesmo @ (sem mudar) passa
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.equal(r.data.handle, 'marcao_2024');
   // O nome exibido não existe mais: para o profissional aparece o nome completo e o @
   const r0 = await admin.post('/api/admin/professionals', { name: 'Paula Arroba Lima', profession: 'Psicólogo(a)', registry: 'CRP 06/40666', email: 'paula.arroba@example.com', phone: '11913134444', state: 'SP', city: 'Campinas' });
   const pro = client();
@@ -2416,13 +2434,69 @@ test('@ dos pacientes: único, escolhido no cadastro ou gerado, trocável; apare
   await b.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Oi!' });
   const peer = (await pro.get('/api/chat/conversations')).data.items.find((c) => c.id === conv.id).peer;
   assert.equal(peer.name, 'Marcos Henrique Souza');
-  assert.equal(peer.handle, 'marcao_2024');
+  assert.equal(peer.handle, hb);
   // Comentário mostra o @
   const post = (await pro.post('/api/social/texts', { text: 'Bom dia!', font: 'padrao' })).data;
   const c = (await b.post(`/api/social/posts/${post.id}/comments`, { body: 'Bom dia!' })).data;
-  assert.equal(c.author.name, '@marcao_2024');
+  assert.equal(c.author.name, '@' + hb);
   // Curtida: o profissional vê o @ de quem curtiu
   await b.post(`/api/social/posts/${post.id}/like`);
   const n = (await pro.get('/api/social/notifications')).data.items.find((x) => x.type === 'like_post');
-  assert.match(n.text, /@marcao_2024 curtiu/);
+  assert.match(n.text, new RegExp(`@${hb.replace('.', '\\.')} curtiu`));
+});
+
+test('CPF: um cadastro de profissional por CPF; bloqueado continua ocupando, apagado libera; contagens do admin', async () => {
+  const { db } = require('../server/db');
+  const CPF = '100.000.000-19';
+  const body = { name: 'Rui Cpf Único', profession: 'Terapeuta', email: 'rui.cpf@example.com', phone: '11977771111', state: 'SP', city: 'Campinas', specialties: ['Ansiedade'], cpf: CPF };
+  const c = await admin.post('/api/admin/professionals', body);
+  assert.equal(c.status, 201, JSON.stringify(c.data));
+  assert.equal(db.prepare('SELECT cpf FROM professionals WHERE id = ?').get(c.data.id).cpf, '10000000019');
+  const bad = await admin.post('/api/admin/professionals', { ...body, cpf: '123.456.789-00', email: 'x1@example.com' });
+  assert.equal(bad.status, 400, 'CPF inválido');
+  let s0 = (await admin.get('/api/admin/stats')).data;
+  // Bloqueado: o CPF continua ocupado
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/status`, { status: 'bloqueado' })).status, 200);
+  let r = await client().form('/api/auth/professional/register', { ...body, email: 'rui.novo@example.com' });
+  assert.equal(r.status, 409);
+  assert.equal(r.data.cpf_exists, true);
+  let s1 = (await admin.get('/api/admin/stats')).data;
+  assert.equal(s1.pros_blocked, s0.pros_blocked + 1);
+  assert.equal(s1.pros_active, s0.pros_active - 1);
+  const blockedList = (await admin.get('/api/admin/professionals?status=bloqueado')).data.items;
+  assert.ok(blockedList.some((p) => p.id === c.data.id));
+  assert.ok(!(await admin.get('/api/admin/professionals?status=ativos')).data.items.some((p) => p.id === c.data.id));
+  // Apagado pelo admin: CPF livre (e sai da lista de bloqueio)
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/delete`)).status, 200);
+  assert.equal(db.prepare('SELECT cpf FROM professionals WHERE id = ?').get(c.data.id).cpf, null);
+  const s2 = (await admin.get('/api/admin/stats')).data;
+  assert.equal(s2.pros_deleted, s1.pros_deleted + 1);
+  assert.ok((await admin.get('/api/admin/professionals?status=excluido')).data.items.some((p) => p.id === c.data.id));
+  r = await client().form('/api/auth/professional/register', { ...body, email: 'rui.novo@example.com' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.blocked, false);
+  // Pacientes: ativos, bloqueados e apagados
+  for (const k of ['patients_active', 'patients_blocked', 'patients_deleted']) assert.equal(typeof s2[k], 'number');
+  const act = (await admin.get('/api/admin/patients?status=ativos')).data.items;
+  assert.ok(act.length && act.every((p) => p.status === 'ativo'));
+  assert.equal(act.length, s2.patients_active);
+});
+
+test('paciente com CPF bloqueado não cria outra conta; esqueceu a senha: redefine com CPF, nome e nascimento', async () => {
+  const CPF = '100.007.919-89';
+  const a = client();
+  assert.equal((await a.post('/api/auth/patient/register', { name: 'Lara Redefine', cpf: CPF, state: 'SP', city: 'Campinas', birth_date: '1992-03-04', password: '123456', handle: 'lara.redefine' })).status, 201);
+  // Redefinir: dados errados não passam; certos trocam a senha
+  let r = await client().post('/api/auth/patient/recover', { cpf: CPF, name: 'Lara Outra', birth_date: '1992-03-04', password: 'nova123' });
+  assert.equal(r.status, 400);
+  r = await client().post('/api/auth/patient/recover', { cpf: CPF, name: 'lara redefine', birth_date: '1992-03-04', password: 'nova123' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal((await client().post('/api/auth/patient/login', { cpf: CPF, password: 'nova123' })).status, 200);
+  // Bloqueada: não consegue outra conta com o mesmo CPF
+  const { db } = require('../server/db');
+  const id = db.prepare('SELECT id FROM patients WHERE cpf = ?').get(CPF.replace(/\D/g, '')).id;
+  assert.equal((await admin.post(`/api/admin/patients/${id}/status`, { status: 'bloqueado' })).status, 200);
+  r = await client().post('/api/auth/patient/register', { name: 'Lara Redefine', cpf: CPF, state: 'SP', city: 'Campinas', birth_date: '1992-03-04', password: '123456' });
+  assert.equal(r.status, 409);
+  assert.equal(r.data.cpf_exists, true);
 });

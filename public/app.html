@@ -47,13 +47,13 @@
           </div>
           <label class="btn secondary sm" style="width:max-content;margin:0">Trocar foto<input type="file" accept="image/jpeg,image/png,image/webp" data-photo-input hidden></label>
           <form data-profile-form>
-            <div class="field"><label for="hd">Seu @</label>
-              <div class="row" style="gap:8px;flex-wrap:nowrap"><div class="slug-input grow"><span>@</span><input id="hd" name="handle" maxlength="31" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="seu.arroba"></div>
+            <div class="field hidden" data-handle-field><label for="hd">Escolha o seu @</label>
+              <div class="row" style="gap:8px;flex-wrap:nowrap"><div class="slug-input grow"><span>@</span><input id="hd" name="handle" maxlength="31" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="seu.arroba" disabled></div>
                 <button type="button" class="btn secondary sm" data-gen-handle>Gerar @</button></div>
-              <div class="hint">É assim que você aparece nos comentários e curtidas (o seu nome não aparece para outras pessoas). Cada @ é único. Para os profissionais com quem você conversa aparece o seu nome completo, com o @ embaixo.</div></div>
+              <div class="hint">É assim que você aparece nos comentários e curtidas. Atenção: depois de salvo, o @ não pode ser alterado.</div></div>
             <div class="field"><label>Onde você mora</label>
               <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
-            <p class="small muted" style="margin:0 0 12px">Nome completo, CPF e data de nascimento não podem ser alterados.</p>
+            <p class="small muted" style="margin:0 0 12px">Seu @, nome completo, CPF e data de nascimento não podem ser alterados.</p>
             <button class="btn" type="submit">Salvar</button>
           </form>
         </div>
@@ -126,6 +126,9 @@
       $('[data-birth]').textContent = me.birth_date ? 'Nascimento ' + me.birth_date.split('-').reverse().join('/') : '';
       $('[data-loc]').textContent = me.city + ' - ' + me.state;
       const pf = $('[data-profile-form]');
+      // O @ é escolhido no cadastro e não muda. Só conta antiga, ainda sem @, escolhe uma vez aqui.
+      $('[data-handle-field]').classList.toggle('hidden', !!me.handle);
+      pf.handle.disabled = !!me.handle;
       pf.handle.value = me.handle || '';
       pf.state.value = me.state; pf.city.value = me.city;
     }

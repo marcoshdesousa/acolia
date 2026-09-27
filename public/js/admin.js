@@ -62,14 +62,17 @@
   // ---------- Visão geral ----------
   async function loadStats() {
     const s = await api('/api/admin/stats');
+    lastStats = s; syncSeg();
+    // Contas: ativos, bloqueados e apagados (profissionais e pacientes), já na tela inicial
+    const box = (title, icon, list, rows) => `<div class="card acct-box"><div class="acct-h">${ICONS[icon] || ''}<b>${title}</b></div>
+      <div class="acct-nums">${rows.map(([n, l, v, cls]) => `<a href="#${list}/${v}" class="${cls}"><span class="n">${n}</span><span class="l">${l}</span></a>`).join('')}</div></div>`;
+    $('[data-acct-sum]').innerHTML = box('Profissionais', 'therapist', 'profissionais', [[s.pros_active, 'Ativos', 'ativos', 'ok'], [s.pros_blocked, 'Bloqueados', 'bloqueado', 'bad'], [s.pros_deleted, 'Apagados', 'excluido', 'gone']])
+      + box('Pacientes', 'user', 'pacientes', [[s.patients_active, 'Ativos', 'ativos', 'ok'], [s.patients_blocked, 'Bloqueados', 'bloqueado', 'bad'], [s.patients_deleted, 'Apagados', 'excluido', 'gone']]);
     const tile = (n, l, href) => `<a class="card stat" href="${href}" style="text-decoration:none;color:inherit"><div class="n">${n}</div><div class="l">${l}</div></a>`;
     $('[data-stats]').innerHTML = [
       tile(s.pending, 'Aguardando aprovação', '#profissionais/pendente'),
       tile(s.visible, 'Profissionais na vitrine', '#profissionais/aprovado'),
       tile(s.overdue, 'Mensalidade vencida', '#profissionais/vencido'),
-      tile(s.professionals, 'Profissionais (total)', '#profissionais'),
-      tile(s.patients, 'Pacientes', '#pacientes'),
-      tile(s.patients_blocked, 'Pacientes bloqueados', '#pacientes'),
       tile(s.conversations, 'Conversas iniciadas', '#inicio'),
     ].join('');
     $$('[data-pending]').forEach((el) => { el.textContent = s.pending || ''; });
@@ -178,7 +181,32 @@
       <td><button class="btn secondary sm" data-pro="${p.id}">Gerenciar</button></td></tr>`;
   }
 
+  // Filtro rápido (Todos / Ativos / Bloqueados / Apagados), com a quantidade de cada
+  let lastStats = null;
+  function syncSeg() {
+    const s = lastStats;
+    const n = s && {
+      professionals: { '': s.professionals, ativos: s.pros_active, bloqueado: s.pros_blocked, excluido: s.pros_deleted },
+      patients: { '': s.patients, ativos: s.patients_active, bloqueado: s.patients_blocked, excluido: s.patients_deleted },
+    };
+    $$('[data-seg]').forEach((g) => {
+      const cur = $(`[data-filter="${g.dataset.seg}"]`).status.value;
+      $$('button', g).forEach((b) => {
+        b.classList.toggle('active', b.dataset.v === cur);
+        if (n) $('b', b).textContent = n[g.dataset.seg][b.dataset.v] ?? '';
+      });
+    });
+  }
+  $$('[data-seg]').forEach((g) => g.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-v]');
+    if (!b) return;
+    $(`[data-filter="${g.dataset.seg}"]`).status.value = b.dataset.v;
+    loadList(g.dataset.seg).catch((ex) => toast(ex.message, 'error'));
+  }));
+
   async function loadList(kind) {
+    api('/api/admin/stats').then((s) => { lastStats = s; syncSeg(); }).catch(() => {});
+    syncSeg();
     const f = $(`[data-filter="${kind}"]`);
     const qs = new URLSearchParams([...new FormData(f).entries()].filter(([, v]) => v));
     const { items } = await api(`/api/admin/${kind}?${qs}`);
@@ -284,7 +312,8 @@
         <table class="kv-table" style="font-size:.9rem"><tbody>
           <tr><th>Código único</th><td><code style="font-size:1.05rem;font-weight:800">${esc(p.code)}</code> <button type="button" class="btn ghost sm" data-copy-code>Copiar</button></td></tr>
           <tr><th>Link</th><td>${p.slug ? `<a href="/${esc(p.slug)}" target="_blank" rel="noopener">${esc(location.host)}/${esc(p.slug)}</a>` : '—'}</td></tr>
-          <tr><th>Nome na carteirinha</th><td>${esc(p.legal_name)}</td></tr>
+          <tr><th>Nome completo</th><td>${esc(p.legal_name)}</td></tr>
+          <tr><th>CPF</th><td>${p.cpf ? esc(p.cpf) : '<span class="muted">Não informado (cadastro antigo)</span>'}</td></tr>
           ${p.plan ? `<tr><th>Plano escolhido</th><td>${esc(p.plan)}</td></tr>` : ''}
           ${council || p.registry ? `<tr><th>Registro</th><td><div class="row" style="gap:6px"><input data-registry value="${esc(p.registry)}" maxlength="40" style="width:auto;min-height:34px;padding:4px 8px">
             <button type="button" class="btn ghost sm" data-save-registry>Salvar</button></div>
@@ -380,6 +409,7 @@
   nf.state.innerHTML = ufOptions('', 'UF');
   bindUfCity(nf.state, nf.city);
   maskPhone(nf.phone);
+  Acolia.maskCpf(nf.cpf);
   // Registro só para quem tem conselho (igual ao cadastro pelo site): CRP para psicólogo e
   // neuropsicólogo, CRM para psiquiatra. Psicanalista, psicoterapeuta e terapeuta não têm.
   const REG = {
@@ -602,7 +632,10 @@
         if (arg !== undefined) f.status.value = arg;
         await loadList('professionals');
       }
-      if (v === 'pacientes') await loadList('patients');
+      if (v === 'pacientes') {
+        if (arg !== undefined) $('[data-filter="patients"]').status.value = arg;
+        await loadList('patients');
+      }
       if (v === 'acolia') await loadOfficial();
       if (v === 'mensagens') window.AcoliaAdminMessages?.show(arg);
     } catch (e) { toast(e.message, 'error'); }

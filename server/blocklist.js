@@ -1,6 +1,6 @@
 'use strict';
 // Lista de bloqueados: quem o admin bloqueia continua bloqueado mesmo se apagar a própria conta.
-// Se criar uma conta nova com o mesmo CPF (paciente) ou o mesmo e-mail, registro ou WhatsApp
+// Se criar uma conta nova com o mesmo CPF (paciente) ou o mesmo CPF, e-mail, registro ou WhatsApp
 // (profissional), a conta nova já nasce bloqueada — para liberar, só falando com a administração.
 // - Admin bloqueia → entra na lista.  Admin desbloqueia → sai da lista.
 // - Admin APAGA a conta → sai da lista (a pessoa pode criar de novo; profissional passa pela aprovação).
@@ -9,7 +9,7 @@ const { db } = require('./db');
 const U = require('./util');
 
 db.exec(`CREATE TABLE IF NOT EXISTS blocked_identities (
-  kind TEXT NOT NULL,            -- cpf | email | registry | phone
+  kind TEXT NOT NULL,            -- cpf (paciente) | cpf_pro | email | registry | phone
   value TEXT NOT NULL,
   role TEXT NOT NULL,            -- patient | professional
   account_id INTEGER,
@@ -24,6 +24,7 @@ function identitiesOf(role, a) {
   if (!a) return [];
   if (role === 'patient') return /^\d{11}$/.test(a.cpf || '') ? [['cpf', a.cpf]] : [];
   const out = [];
+  if (/^\d{11}$/.test(a.cpf || '')) out.push(['cpf_pro', a.cpf]); // separado do paciente: cada conta tem o seu bloqueio
   if (a.email && !/\.invalid$/.test(a.email) && a.email.includes('@')) out.push(['email', String(a.email).toLowerCase()]);
   const reg = normRegistry(a.registry);
   if (reg.length >= 4 && !reg.startsWith('excluido')) out.push(['registry', reg]);

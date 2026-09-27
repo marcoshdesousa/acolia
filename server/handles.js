@@ -1,7 +1,7 @@
 'use strict';
 // @ dos pacientes (só pacientes; profissionais não têm). Cada @ é único na plataforma (guardado em
 // minúsculas). Aparece nos comentários e curtidas no lugar do nome; o profissional vê o nome completo
-// e o @ pequeno embaixo na conversa. Dá para trocar quando quiser (se estiver livre) ou gerar um.
+// e o @ pequeno embaixo na conversa. É escolhido no cadastro e não muda depois.
 const crypto = require('node:crypto');
 const { db } = require('./db');
 const U = require('./util');

@@ -58,6 +58,29 @@
       </div>
       <a class="btn block" href="${esc(supportLink(support, msg))}" target="_blank" rel="noopener" style="margin-top:12px">${ICONS.send} Mandar mensagem no WhatsApp</a>`;
   }
+  // Cadastro com CPF que já tem conta: "Entrar na sua conta" ou "Redefinir senha".
+  // Profissional redefine pelo WhatsApp da Acolia; paciente, na hora (CPF + nome completo + nascimento).
+  async function cpfExistsDialog({ role, support, cpf = '' }) {
+    const isPro = role === 'professional';
+    const r = await modal({
+      title: 'Você já tem uma conta',
+      html: `<p>Já existe uma conta de ${isPro ? 'profissional' : 'paciente'} com este CPF. Cada CPF pode ter só uma conta ${isPro ? 'de profissional' : 'de paciente'}.</p>
+        <p class="muted small">Se é você, entre na sua conta. Se esqueceu a senha, é só redefinir${isPro ? ' com o nosso atendimento no WhatsApp' : ''}.</p>`,
+      actions: [
+        { label: 'Redefinir senha', value: 'reset', class: 'secondary', handler: () => {
+          if (isPro) window.open(supportLink(support, 'Olá, Acolia! Quero redefinir a senha da minha conta de profissional.'), '_blank', 'noopener');
+          return 'reset';
+        } },
+        { label: 'Entrar na sua conta', value: 'login' },
+      ],
+    });
+    if (r === 'login') location.href = isPro ? '/entrar#profissional' : '/entrar';
+    if (r === 'reset' && !isPro) {
+      try { sessionStorage.setItem('acolia-recover-cpf', cpf); } catch { /* sem armazenamento: a pessoa digita */ }
+      location.href = '/entrar#recuperar';
+    }
+  }
+
   function showBlocked(me) {
     const a = me.account || {};
     const isPro = me.role === 'professional';
@@ -706,7 +729,7 @@
 
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
-    supportLink, pendingProBox, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
+    supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
     handleForm, logout, showBlocked, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
     SOCIAL, socialLinks, socialFields,
   };

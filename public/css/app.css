@@ -1433,3 +1433,23 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .know-row { margin-bottom: 0; }
 .know-btn { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; max-width: 100%; padding: 7px 16px; border-radius: 999px; border: 0; background: var(--primary); color: #fff; font: inherit; font-size: .84rem; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(46,64,60,.2); }
 .know-btn:hover { filter: brightness(1.08); }
+
+/* Admin: contas ativas / bloqueadas / apagadas (tela inicial) e filtro rápido das abas */
+.acct-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.acct-box { padding: 14px 16px; }
+.acct-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--primary-dark, #2e403c); }
+.acct-h svg { width: 20px; height: 20px; }
+.acct-nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.acct-nums a { display: flex; flex-direction: column; align-items: center; padding: 10px 4px; border-radius: 12px; text-decoration: none; color: #26322f; background: #f1f0eb; }
+.acct-nums a .n { font-size: 1.6rem; font-weight: 800; line-height: 1.1; }
+.acct-nums a .l { font-size: .8rem; font-weight: 700; color: var(--muted); }
+.acct-nums a.ok { background: #e5ebe8; }
+.acct-nums a.bad { background: #eee8e2; }
+.acct-nums a.bad .n { color: #8a7362; }
+.acct-nums a.gone .n { color: #6b7572; }
+.seg-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.seg-filter button { border: 1px solid #cfe0d6; background: #fff; color: #26322f; border-radius: 999px; padding: 6px 12px; font: inherit; font-size: .88rem; font-weight: 700; cursor: pointer; }
+.seg-filter button b { font-weight: 800; color: #3f5550; margin-left: 2px; }
+.seg-filter button b:empty { display: none; }
+.seg-filter button.active { background: #3f5550; border-color: #3f5550; color: #fff; }
+.seg-filter button.active b { color: #cfe0d6; }

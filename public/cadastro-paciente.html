@@ -22,10 +22,10 @@
     <form class="card" data-form novalidate>
       <div class="field"><label for="name">Nome completo</label><input id="name" name="name" autocomplete="name" required maxlength="120">
         <div class="hint">Igual ao que consta no seu CPF.</div></div>
-      <div class="field"><label for="handle">Seu @ <span class="muted small" style="font-weight:600">(opcional)</span></label>
-        <div class="row" style="gap:8px;flex-wrap:nowrap"><div class="slug-input grow"><span>@</span><input id="handle" name="handle" maxlength="31" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="seu.arroba"></div>
+      <div class="field"><label for="handle">Escolha o seu @</label>
+        <div class="row" style="gap:8px;flex-wrap:nowrap"><div class="slug-input grow"><span>@</span><input id="handle" name="handle" maxlength="31" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="seu.arroba" required></div>
           <button type="button" class="btn secondary sm" data-gen-handle>Gerar @</button></div>
-        <div class="hint">É como você aparece nos comentários e curtidas (seu nome não aparece para outras pessoas). Se deixar em branco, criamos um para você. Dá para trocar depois.</div></div>
+        <div class="hint">É como você aparece nos comentários e curtidas (seu nome não aparece para outras pessoas). <b>Atenção: o @ não pode ser alterado depois.</b> Não tem ideia? Toque em "Gerar @".</div></div>
       <div class="field"><label for="cpf">CPF</label><input id="cpf" name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" required>
         <div class="hint" data-cpf-hint>Precisa ser um CPF válido. Você vai usá-lo para entrar. Não dá para mudar depois.</div></div>
       <div class="field"><label for="birth">Data de nascimento</label><input id="birth" name="birth_date" type="date" required max="">
@@ -70,11 +70,17 @@
       $('[data-cpf-hint]').style.color = bad ? 'var(--danger)' : '';
     });
     handleForm(form, async (d) => {
+      if (!String(d.handle || '').replace(/^@+/, '').trim()) { form.handle.focus(); throw new Error('Escolha o seu @ (ou toque em "Gerar @").'); }
       if (!isValidCpf(d.cpf)) throw new Error('CPF inválido. Confira os números digitados.');
       if (!d.birth_date) throw new Error('Informe sua data de nascimento.');
       if (d.password !== d.password2) throw new Error('As senhas não são iguais.');
       if (!d.terms) throw new Error('Para continuar, aceite o uso dos dados.');
-      await api('/api/auth/patient/register', { method: 'POST', body: d });
+      try {
+        await api('/api/auth/patient/register', { method: 'POST', body: d });
+      } catch (e) {
+        if (e.data?.cpf_exists) { Acolia.cpfExistsDialog({ role: 'patient', cpf: d.cpf }); return; }
+        throw e;
+      }
       location.replace(safeNext || '/');
     });
   })();

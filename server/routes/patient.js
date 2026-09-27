@@ -11,12 +11,17 @@ const rt = require('../realtime');
 const router = express.Router();
 router.use(A.requireRole('patient'));
 
-// Pode mudar: o @ (único) e onde mora (estado/município).
-// Não muda: nome completo do CPF, CPF e data de nascimento (vão nos documentos). O nome que aparece
+// Pode mudar: onde mora (estado/município).
+// Não muda: o @ (escolhido no cadastro), nome completo do CPF, CPF e data de nascimento (vão nos documentos). O nome que aparece
 // para os profissionais é sempre o nome registrado (não existe mais "nome exibido").
 router.put('/profile', (req, res) => {
   if (req.body.handle !== undefined) {
     const H = require('../handles');
+    const cur = req.auth.user.handle;
+    // O @ é permanente: só conta antiga, que ainda não tem @, escolhe uma vez
+    if (cur && String(req.body.handle).trim().replace(/^@/, '').toLowerCase() !== cur.toLowerCase()) {
+      throw new U.HttpError(400, 'O @ é escolhido no cadastro e não pode ser alterado.');
+    }
     const h = H.assertFree(H.validate(req.body.handle), req.auth.user.id);
     db.prepare('UPDATE patients SET handle = ? WHERE id = ?').run(h, req.auth.user.id);
   }

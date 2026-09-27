@@ -42,6 +42,7 @@
       <section data-view="inicio" class="hidden">
         <h1 style="font-size:1.5rem">Visão geral</h1>
         <div data-storage style="margin-bottom:16px"></div>
+        <div class="acct-sum" data-acct-sum></div>
         <div class="stats" data-stats></div>
         <h2 style="margin-top:28px">Limite de publicações por profissional</h2>
         <form class="card limits-card" data-limits-form style="padding:16px">
@@ -68,9 +69,12 @@
 
       <section data-view="profissionais" class="hidden">
         <div class="row between"><h1 style="font-size:1.5rem;margin:0">Profissionais</h1><a class="btn secondary sm" data-export="professionals" href="#">Exportar planilha (CSV)</a></div>
+        <div class="seg-filter" data-seg="professionals" role="group" aria-label="Filtrar por situação">
+          <button type="button" data-v="">Todos <b></b></button><button type="button" data-v="ativos">Ativos <b></b></button><button type="button" data-v="bloqueado">Bloqueados <b></b></button><button type="button" data-v="excluido">Apagados <b></b></button>
+        </div>
         <form class="search-bar" data-filter="professionals" style="margin-top:12px">
           <input name="q" type="search" placeholder="Nome, e-mail, código ou registro">
-          <select name="status"><option value="">Todas as situações</option><option value="pendente">Pendentes</option><option value="aprovado">Aprovados</option><option value="vencido">Mensalidade vencida</option><option value="restrito">Restritos</option><option value="bloqueado">Bloqueados</option><option value="recusado">Recusados</option><option value="excluido">Excluídos pelo usuário</option></select>
+          <select name="status"><option value="">Todas as situações</option><option value="ativos">Ativos (não bloqueados)</option><option value="pendente">Pendentes</option><option value="aprovado">Aprovados</option><option value="vencido">Mensalidade vencida</option><option value="restrito">Restritos</option><option value="bloqueado">Bloqueados</option><option value="recusado">Recusados</option><option value="excluido">Apagados</option></select>
           <select name="state" style="flex:0 1 120px"></select>
           <select name="city"><option value="">Todos os municípios</option></select>
           <button class="btn" type="submit">Filtrar</button>
@@ -81,9 +85,12 @@
 
       <section data-view="pacientes" class="hidden">
         <div class="row between"><h1 style="font-size:1.5rem;margin:0">Pacientes</h1><a class="btn secondary sm" data-export="patients" href="#">Exportar planilha (CSV)</a></div>
+        <div class="seg-filter" data-seg="patients" role="group" aria-label="Filtrar por situação">
+          <button type="button" data-v="">Todos <b></b></button><button type="button" data-v="ativos">Ativos <b></b></button><button type="button" data-v="bloqueado">Bloqueados <b></b></button><button type="button" data-v="excluido">Apagados <b></b></button>
+        </div>
         <form class="search-bar" data-filter="patients" style="margin-top:12px">
           <input name="q" type="search" placeholder="Nome ou CPF">
-          <select name="status"><option value="">Todos</option><option value="ativo">Ativos</option><option value="bloqueado">Bloqueados</option><option value="excluido">Excluídos pelo usuário</option></select>
+          <select name="status"><option value="">Todos</option><option value="ativos">Ativos</option><option value="bloqueado">Bloqueados</option><option value="excluido">Apagados</option></select>
           <select name="state" style="flex:0 1 120px"></select>
           <select name="city"><option value="">Todos os municípios</option></select>
           <button class="btn" type="submit">Filtrar</button>
@@ -96,7 +103,11 @@
         <h1 style="font-size:1.5rem">Cadastrar profissional</h1>
         <p class="muted">O profissional cadastrado por aqui já entra aprovado. O código único e a senha aparecem ao final para você repassar.</p>
         <form class="card" data-new-pro novalidate>
-          <div class="field"><label for="n-name">Nome e sobrenome</label><input id="n-name" name="name" required maxlength="120"></div>
+          <div class="grid-2">
+            <div class="field"><label for="n-name">Nome e sobrenome</label><input id="n-name" name="name" required maxlength="120"></div>
+            <div class="field"><label for="n-cpf">CPF</label><input id="n-cpf" name="cpf" inputmode="numeric" placeholder="000.000.000-00" required>
+              <div class="hint">Um cadastro de profissional por CPF.</div></div>
+          </div>
           <div class="grid-2">
             <div class="field"><label for="n-prof">Profissão</label><select id="n-prof" name="profession"></select></div>
             <div class="field" data-n-reg-field><label for="n-reg" data-n-reg-label>Registro (CRP, CRM…)</label><input id="n-reg" name="registry" required maxlength="40">

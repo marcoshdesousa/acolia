@@ -95,7 +95,12 @@
           + '<div class="field"><label for="rbirth">Data de nascimento</label><input id="rbirth" type="date"></div>'
           + '<div class="field"><label for="rpw">Nova senha</label><input id="rpw" type="password" autocomplete="new-password" minlength="6"><div class="hint">Mínimo de 6 caracteres.</div></div>'
           + '<div class="field"><label for="rpw2">Repita a nova senha</label><input id="rpw2" type="password" autocomplete="new-password"></div>',
-        onOpen: (dlg) => maskCpf($('#rcpf', dlg)),
+        onOpen: (dlg) => {
+          maskCpf($('#rcpf', dlg));
+          // Veio do cadastro ("Redefinir senha"): o CPF já vem preenchido
+          let c = ''; try { c = sessionStorage.getItem('acolia-recover-cpf') || ''; sessionStorage.removeItem('acolia-recover-cpf'); } catch { /* sem armazenamento */ }
+          if (c) { $('#rcpf', dlg).value = c; $('#rcpf', dlg).dispatchEvent(new Event('input')); }
+        },
         actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
           label: 'Salvar nova senha', handler: async (dlg) => {
             const err = $('[data-err]', dlg);
@@ -110,10 +115,12 @@
           },
         }],
       });
+      if (location.hash === '#recuperar') history.replaceState(null, '', location.pathname + location.search);
       if (!r) return;
       toast('Senha alterada! Agora é só entrar com seu CPF e a nova senha.');
       $('#pw1')?.focus();
     });
+    if (location.hash === '#recuperar') $('[data-recover]').click();
   })();
   </script>
 </body>

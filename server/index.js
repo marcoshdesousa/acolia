@@ -150,7 +150,7 @@ function createApp() {
   app.use((err, _req, res, _next) => {
     const status = err.status || err.statusCode || 500;
     if (status >= 500) console.error(err);
-    res.status(status).json({ error: status >= 500 ? 'Erro interno. Tente novamente.' : err.message, ...(err.blocked ? { blocked: true } : {}) });
+    res.status(status).json({ error: status >= 500 ? 'Erro interno. Tente novamente.' : err.message, ...(err.blocked ? { blocked: true } : {}), ...(status < 500 && err.extra ? err.extra : {}) });
   });
   return app;
 }

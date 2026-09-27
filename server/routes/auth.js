@@ -20,6 +20,13 @@ function requirePassword(pw) {
   if (pw.length > 200) throw new HttpError(400, 'Senha muito longa.');
 }
 
+// CPF já usado: a tela mostra "Entrar na sua conta" ou "Redefinir senha".
+// Paciente e profissional são separados: o mesmo CPF pode ter uma conta de cada.
+// Conta apagada libera o CPF; conta bloqueada continua ocupando (não dá para criar outra).
+function cpfTaken(role) {
+  return Object.assign(new HttpError(409, 'Já existe uma conta com este CPF.'), { extra: { cpf_exists: true, role } });
+}
+
 function validateLocation(state, city) {
   if (!U.isUf(state)) throw new HttpError(400, 'Selecione o estado (UF).');
   const c = U.cleanText(city, 80);
@@ -37,7 +44,7 @@ router.post('/patient/register', async (req, res) => {
   if (!U.isValidBirthDate(birth)) throw new HttpError(400, 'Informe sua data de nascimento.');
   const { state, city } = validateLocation(req.body.state, req.body.city);
   requirePassword(req.body.password);
-  if (db.prepare('SELECT 1 FROM patients WHERE cpf = ?').get(cpf)) throw new HttpError(409, 'Já existe uma conta com este CPF. Faça login ou recupere sua senha.');
+  if (db.prepare('SELECT 1 FROM patients WHERE cpf = ?').get(cpf)) throw cpfTaken('patient');
   // @ do paciente: o que ele escolheu (se estiver livre) ou um gerado pelo nome
   const H = require('../handles');
   const handle = String(req.body.handle || '').trim() ? H.assertFree(H.validate(req.body.handle)) : H.generate(name);
@@ -102,14 +109,20 @@ function newProfessionalCode() {
   }
 }
 
-function validateProfessionalInput(body) {
+function validateProfessionalInput(body, opts = {}) {
   const name = U.cleanText(body.name, 120);
   const profession = U.cleanText(body.profession, 60);
   const registry = U.cleanText(body.registry, 40);
+  const cpf = U.onlyDigits(body.cpf);
   const email = U.cleanText(body.email, 160).toLowerCase();
   const phone = U.onlyDigits(body.phone);
   if (!U.isFullName(name)) throw new HttpError(400, 'Informe nome e sobrenome.');
   if (!PROFESSIONS.includes(profession)) throw new HttpError(400, 'Selecione sua profissão.');
+  // CPF: obrigatório no autocadastro; no cadastro feito pelo admin é opcional (mas, se vier, vale a mesma regra)
+  if (cpf || !opts.cpfOptional) {
+    if (!U.isValidCpf(cpf)) throw new HttpError(400, 'CPF inválido. Confira os números digitados.');
+    if (db.prepare("SELECT 1 FROM professionals WHERE cpf = ? AND status <> 'excluido'").get(cpf)) throw cpfTaken('professional');
+  }
   // Registro/carteirinha: obrigatório só para quem tem conselho (CRP: psicólogo e neuropsicólogo; CRM: psiquiatra)
   if (require('../registry').councilFor(profession) && registry.length < 3) throw new HttpError(400, 'Informe o número do seu registro profissional (CRP ou CRM).');
   if (!U.isValidEmail(email)) throw new HttpError(400, 'E-mail inválido.');
@@ -118,16 +131,16 @@ function validateProfessionalInput(body) {
   // Especialidades: pelo menos uma da lista (sem máximo)
   const specialties = require('../specialties').parse(body.specialties);
   if (db.prepare('SELECT 1 FROM professionals WHERE email = ?').get(email)) throw new HttpError(409, 'Este e-mail já está cadastrado.');
-  return { name, profession, registry, email, phone, state, city, specialties };
+  return { name, profession, registry, cpf: cpf || null, email, phone, state, city, specialties };
 }
 
 function insertProfessional(d, passwordHash, status, subscriptionUntil = null) {
   const code = newProfessionalCode();
   const info = db.prepare(`INSERT INTO professionals
-    (code, name, profession, registry, email, phone, password_hash, status, state, city, city_norm, subscription_until,
+    (code, name, profession, registry, cpf, email, phone, password_hash, status, state, city, city_norm, subscription_until,
      document_file, registry_verified, legal_name, slug, specialties)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(code, d.name, d.profession, d.registry, d.email, d.phone, passwordHash, status, d.state, d.city, U.norm(d.city), subscriptionUntil,
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(code, d.name, d.profession, d.registry, d.cpf || null, d.email, d.phone, passwordHash, status, d.state, d.city, U.norm(d.city), subscriptionUntil,
       d.document_file || null, d.registry_verified ? 1 : 0, d.name, require('../slug').uniqueSlug(db, d.name),
       require('../specialties').store(d.specialties || []));
   return { id: Number(info.lastInsertRowid), code };
@@ -150,9 +163,7 @@ router.post('/professional/register', async (req, res) => {
     const needsCard = !!require('../registry').councilFor(d.profession);
     if (needsCard && !documentFile) throw new HttpError(400, 'Envie a foto da sua carteirinha profissional (frente, com nome e número legíveis).');
     const reg = validateRegistry(d.profession, req.body.registry, d.state);
-    if (reg.registry && db.prepare('SELECT 1 FROM professionals WHERE registry = ?').get(reg.registry)) {
-      throw new HttpError(409, `Já existe um cadastro com o ${reg.registry}. Se é você, entre na sua conta ou fale com a administração.`);
-    }
+    // O mesmo registro pode aparecer em mais de um cadastro (com CPFs diferentes): quem manda é o CPF
     let verified = false;
     if (reg.council && registryApiConfigured()) {
       const r = await verifyRegistry(reg, d.name);
@@ -161,8 +172,8 @@ router.post('/professional/register', async (req, res) => {
       verified = true;
     }
     if (!needsCard && documentFile) removeDocument(documentFile); // quem não tem conselho não precisa (nem guarda) carteirinha
-    // Bloqueado pela administração antes (mesmo e-mail, registro ou WhatsApp): a conta nasce bloqueada
-    const blocked = require('../blocklist').isBlocked('professional', { email: d.email, registry: reg.registry, phone: d.phone });
+    // Bloqueado pela administração antes (mesmo CPF, e-mail, registro ou WhatsApp): a conta nasce bloqueada
+    const blocked = require('../blocklist').isBlocked('professional', { cpf: d.cpf, email: d.email, registry: reg.registry, phone: d.phone });
     const { id, code } = insertProfessional({ ...d, registry: reg.registry, document_file: needsCard ? documentFile : null, registry_verified: verified },
       NO_PASSWORD, blocked ? 'bloqueado' : 'pendente');
     db.prepare('UPDATE professionals SET plan = ? WHERE id = ?').run(plan, id);

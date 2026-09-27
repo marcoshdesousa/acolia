@@ -204,7 +204,7 @@ function wipeProfessional(me) {
   db.prepare('DELETE FROM agenda_hours WHERE professional_id = ?').run(me.id);
   db.prepare('DELETE FROM agenda_blocks WHERE professional_id = ?').run(me.id);
   require('./chat').eraseMessagesOf('professional', me.id);
-  db.prepare(`UPDATE professionals SET status = 'excluido', name = 'Profissional removido', legal_name = NULL, registry = ?, email = ?,
+  db.prepare(`UPDATE professionals SET status = 'excluido', name = 'Profissional removido', legal_name = NULL, cpf = NULL, registry = ?, email = ?,
     phone = '', bio = '', specialties = '', photo = NULL, document_file = NULL, pix_key = '', clinic_name = '', clinic_address = '',
     has_clinic = 0, instagram = '', tiktok = '', x_handle = '', youtube = '', quick_replies = '[]', gallery = '[]', maps_url = '', maps_query = '', password_hash = '!', code = ?, slug = NULL,
     packages = '[]', price_cents = NULL, session_minutes = NULL, admin_note = '', city = '', city_norm = '', state = '' WHERE id = ?`)
