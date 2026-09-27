@@ -31,6 +31,11 @@
     ativo: '<span class="badge ok">Ativo</span>',
     excluido: '<span class="badge">Excluída pelo usuário</span>',
   };
+  // Link do WhatsApp para o número do profissional (com ou sem o 55 na frente)
+  const waTo = (phone, text) => {
+    const d = String(phone || '').replace(/\D/g, '');
+    return `https://wa.me/${d.length <= 11 ? '55' + d : d}?text=${encodeURIComponent(text)}`;
+  };
   const fmtDT = (s) => parseDate(s).toLocaleDateString('pt-BR');
   const subBadge = (p) => {
     if (!p.subscription_until) return '<span class="badge">—</span>';
@@ -105,8 +110,18 @@
         </div>`);
     }
     const pend = (await api('/api/admin/professionals?status=pendente')).items;
-    $('[data-pending-list]').innerHTML = pend.length ? `<div class="table-wrap"><table><tbody>${pend.map(proRow).join('')}</tbody></table></div>`
-      : '<p class="muted">Nenhum cadastro pendente. 🎉</p>';
+    // Pré-cadastro: aparece aqui assim que a pessoa escolhe o plano (mesmo sem mandar a mensagem).
+    // Botão para chamar no WhatsApp com a mensagem pronta, sem precisar procurar o número.
+    $('[data-pending-list]').innerHTML = pend.length ? `<div class="pend-list">${pend.map((p) => `<div class="card pend-item">
+        <div class="row" style="flex-wrap:nowrap;align-items:flex-start">${avatar(p.name, p.photo, 'sm')}<div class="grow">
+          <b>${esc(p.name)}</b>
+          <div class="small muted">${esc(p.profession)}${p.registry ? ` · ${esc(p.registry)}` : ''} · ${esc(p.city)} - ${esc(p.state)}</div>
+          <div class="small muted">${p.cpf ? `CPF ${esc(p.cpf)} · ` : ''}${esc(fmtPhone(p.phone))} · ${esc(p.email)}</div>
+          <div class="small muted">Pré-cadastro em ${fmtDT(p.created_at)} · código <b>${esc(p.code)}</b></div></div></div>
+        <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
+          <a class="btn sm" target="_blank" rel="noopener" href="${esc(waTo(p.phone, `Olá, ${p.name.split(' ')[0]}! Aqui é da Acolia. Recebemos o seu pré-cadastro como ${p.profession} e queremos terminar o seu cadastro com você.`))}">${ICONS.send} Chamar no WhatsApp</a>
+          <button class="btn secondary sm" data-pro="${p.id}">Ver dados e aprovar/recusar</button></div></div>`).join('')}</div>`
+      : '<p class="muted">Nenhum cadastro pendente.</p>';
   }
 
   // ---------- Teste da agenda (Profissional Teste + Paciente Teste, com o Asaas simulado) ----------
@@ -324,7 +339,7 @@
             : `<span class="muted">${council ? 'Não enviada (cadastrado pela administração)' : 'Não precisa (profissão sem conselho: sem CRP/CRM)'}</span>`}
             ${council ? '<div class="small muted">Confira se nome, número e estado batem com os dados acima antes de aprovar.</div>' : ''}</td></tr>
           <tr><th>E-mail</th><td>${esc(p.email)}</td></tr>
-          <tr><th>WhatsApp</th><td><a href="https://wa.me/55${esc(p.phone)}" target="_blank" rel="noopener">${esc(fmtPhone(p.phone))}</a></td></tr>
+          <tr><th>WhatsApp</th><td><a href="${esc(waTo(p.phone, `Olá, ${p.name.split(' ')[0]}! Aqui é da Acolia.`))}" target="_blank" rel="noopener">${esc(fmtPhone(p.phone))}</a></td></tr>
           <tr><th>Local</th><td>${esc(p.city)} - ${esc(p.state)}<div class="small muted">Atende online${p.has_clinic ? ' e presencial' : ''}</div>${p.has_clinic ? `<div class="small">${esc(p.clinic_name)} — ${esc(p.clinic_address)}</div>` : ''}</td></tr>
           <tr><th>Especialidades</th><td>${esc((p.specialties || '').split(',').map((x) => x.trim()).filter(Boolean).join(' · ') || '—')}</td></tr>
           <tr><th>Consulta</th><td>${p.price_cents != null ? money(p.price_cents) : '—'}</td></tr>
