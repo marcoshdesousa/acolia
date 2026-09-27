@@ -184,6 +184,8 @@ async function start(port = Number(process.env.PORT) || 3000) {
   require('./testAccounts').removeTestAccountsOnce('test_accounts_removed_v2');
   // Pedido do dono: recria UMA vez as contas de teste, com a agenda e o Asaas simulado, para testar o pagamento
   if (process.env.TEST_ACCOUNTS !== '0') require('./testAgenda').recreateAgainOnce('test_accounts_recreated_v3');
+  // Pedido do dono (depois de testar o pagamento): apaga de novo, UMA vez, as contas de teste
+  require('./testAccounts').removeTestAccountsOnce('test_accounts_removed_v3');
   require('./handles').backfill(); // todo paciente tem um @ (o Paciente Teste é @pacienteteste)
   // Stories somem depois de 24 h
   const { cleanupStories } = require('./routes/social');
