@@ -109,7 +109,7 @@ function newProfessionalCode() {
   }
 }
 
-function validateProfessionalInput(body, opts = {}) {
+function validateProfessionalInput(body) {
   const name = U.cleanText(body.name, 120);
   const profession = U.cleanText(body.profession, 60);
   const registry = U.cleanText(body.registry, 40);
@@ -118,11 +118,9 @@ function validateProfessionalInput(body, opts = {}) {
   const phone = U.onlyDigits(body.phone);
   if (!U.isFullName(name)) throw new HttpError(400, 'Informe nome e sobrenome.');
   if (!PROFESSIONS.includes(profession)) throw new HttpError(400, 'Selecione sua profissão.');
-  // CPF: obrigatório no autocadastro; no cadastro feito pelo admin é opcional (mas, se vier, vale a mesma regra)
-  if (cpf || !opts.cpfOptional) {
-    if (!U.isValidCpf(cpf)) throw new HttpError(400, 'CPF inválido. Confira os números digitados.');
-    if (db.prepare("SELECT 1 FROM professionals WHERE cpf = ? AND status <> 'excluido'").get(cpf)) throw cpfTaken('professional');
-  }
+  // CPF: obrigatório (no autocadastro e no cadastro feito pelo admin)
+  if (!U.isValidCpf(cpf)) throw new HttpError(400, 'CPF inválido. Confira os números digitados.');
+  if (db.prepare("SELECT 1 FROM professionals WHERE cpf = ? AND status <> 'excluido'").get(cpf)) throw cpfTaken('professional');
   // Registro/carteirinha: obrigatório só para quem tem conselho (CRP: psicólogo e neuropsicólogo; CRM: psiquiatra)
   if (require('../registry').councilFor(profession) && registry.length < 3) throw new HttpError(400, 'Informe o número do seu registro profissional (CRP ou CRM).');
   if (!U.isValidEmail(email)) throw new HttpError(400, 'E-mail inválido.');
@@ -131,7 +129,7 @@ function validateProfessionalInput(body, opts = {}) {
   // Especialidades: pelo menos uma da lista (sem máximo)
   const specialties = require('../specialties').parse(body.specialties);
   if (db.prepare('SELECT 1 FROM professionals WHERE email = ?').get(email)) throw new HttpError(409, 'Este e-mail já está cadastrado.');
-  return { name, profession, registry, cpf: cpf || null, email, phone, state, city, specialties };
+  return { name, profession, registry, cpf, email, phone, state, city, specialties };
 }
 
 function insertProfessional(d, passwordHash, status, subscriptionUntil = null) {

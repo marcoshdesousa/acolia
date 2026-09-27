@@ -159,7 +159,7 @@ router.get('/professionals/:id', (req, res) => {
 // registro válido e do mesmo estado (e, com a consulta ao conselho configurada, o nome tem que bater).
 // Psicanalista, psicoterapeuta e terapeuta (sem conselho) podem ser cadastrados sem registro.
 router.post('/professionals', async (req, res) => {
-  const d = validateProfessionalInput(req.body, { cpfOptional: true }); // a tela do admin pede o CPF
+  const d = validateProfessionalInput(req.body);
   const R = require('../registry');
   if (R.councilFor(d.profession)) {
     const reg = R.validateRegistry(d.profession, req.body.registry, d.state);

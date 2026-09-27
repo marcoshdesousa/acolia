@@ -1453,3 +1453,6 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .seg-filter button b:empty { display: none; }
 .seg-filter button.active { background: #3f5550; border-color: #3f5550; color: #fff; }
 .seg-filter button.active b { color: #cfe0d6; }
+/* "Coloque seu CPF" (profissional com conta antiga): não é bloqueio, usa as cores da marca */
+.cpf-card .blocked-ic { background: #e5ebe8; color: #3f5550; }
+.cpf-card form { max-width: 320px; margin: 0 auto; }

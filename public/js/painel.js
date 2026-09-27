@@ -8,6 +8,7 @@
   if (auth.offline) { window.addEventListener('online', () => location.reload(), { once: true }); return; } // sem internet: espera voltar
   if (auth.role !== 'professional') { location.replace(location.hash ? '/entrar?next=' + encodeURIComponent('/painel' + location.hash) + '#profissional' : '/'); return; }
   if (auth.account?.blocked) { Acolia.showBlocked(auth); return; } // bloqueado (admin ou assinatura vencida)
+  if (auth.account?.needs_cpf) { Acolia.showNeedsCpf(auth); return; } // conta antiga sem CPF: informa para liberar
   let me = auth.user;
   // Versão 1.1.3: secretária usa este mesmo painel, com limites (ver js/secretary.js)
   const isSec = !!auth.secretary;

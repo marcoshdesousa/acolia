@@ -12,9 +12,13 @@ const GRACE_DAYS = 1; // dia a mais depois do vencimento
 const WARN_DAYS = 2;  // aviso começa 2 dias antes do vencimento
 const SUPPORT_WHATSAPP = process.env.SUPPORT_WHATSAPP || '5511939023938'; // canal de atendimento da Acolia
 
+// Profissional sem CPF (conta antiga): precisa informar para liberar a plataforma. Conta de teste não precisa.
+const needsCpf = (p) => !!p && !p.cpf && !p.is_test && !['oficial', 'excluido'].includes(p.status);
+
 function proState(p) {
   if (!p) return {};
   if (p.status === 'bloqueado') return { blocked: 'admin' };
+  if (needsCpf(p)) return { needs_cpf: true };
   const until = p.subscription_until;
   if (p.status !== 'aprovado' && p.status !== 'restrito') return {};
   if (!until) return {};
@@ -31,4 +35,4 @@ function patientState(p) {
 
 const stateOf = (role, user) => (role === 'professional' ? proState(user) : role === 'patient' ? patientState(user) : {});
 
-module.exports = { proState, patientState, stateOf, GRACE_DAYS, WARN_DAYS, SUPPORT_WHATSAPP };
+module.exports = { needsCpf, proState, patientState, stateOf, GRACE_DAYS, WARN_DAYS, SUPPORT_WHATSAPP };

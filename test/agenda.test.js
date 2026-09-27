@@ -60,9 +60,18 @@ const { start } = require('../server');
 const G = require('../server/agenda');
 let server;
 let base;
+// CPF válido novo para cada profissional cadastrado pelo admin
+let AUTO_CPF = 0;
+function nextCpf() {
+  const d = String(200000000 + (++AUTO_CPF));
+  const dv = (x) => { let t = 0; for (let i = 0; i < x.length; i++) t += +x[i] * (x.length + 1 - i); const r = (t * 10) % 11; return r === 10 ? 0 : r; };
+  const a = d + dv(d);
+  return a + dv(a);
+}
 function client() {
   let cookie = '';
   const call = async (method, url, body) => {
+    if (method === 'POST' && url === '/api/admin/professionals' && body && !('cpf' in body)) body = { ...body, cpf: nextCpf() };
     const res = await fetch(base + url, {
       method,
       headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(cookie ? { Cookie: cookie } : {}) },

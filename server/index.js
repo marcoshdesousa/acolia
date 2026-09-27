@@ -65,6 +65,14 @@ function createApp() {
     }
     next();
   });
+  // Profissional sem CPF (conta antiga): só vê a tela "Coloque seu CPF" até informar
+  const NEEDS_CPF_OK = [...BLOCKED_OK, '/professional/cpf'];
+  app.use('/api', (req, _res, next) => {
+    if (req.auth?.role === 'professional' && require('./accountState').needsCpf(req.auth.user) && !NEEDS_CPF_OK.includes(req.path)) {
+      return next(Object.assign(new U.HttpError(428, 'Informe o seu CPF para liberar a plataforma.'), { extra: { needs_cpf: true } }));
+    }
+    next();
+  });
   // Secretária (versão 1.1.3): o que ela não pode fazer é barrado aqui; e as mensagens que ela manda
   // ficam marcadas (o pedido inteiro "sabe" que foi ela)
   const SEC = require('./secretary');

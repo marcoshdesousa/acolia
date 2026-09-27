@@ -60,6 +60,25 @@ router.put('/quick-replies', (req, res) => {
   res.json({ items, max: QUICK_MAX });
 });
 
+// Conta antiga sem CPF: o profissional informa uma vez (depois não muda) e a plataforma é liberada
+router.post('/cpf', (req, res) => {
+  if (req.auth.secretary) throw new U.HttpError(403, 'Só o profissional pode informar o CPF.');
+  const me = db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id);
+  if (me.cpf) throw new U.HttpError(400, 'O CPF já foi informado e não pode ser alterado.');
+  const cpf = U.onlyDigits(req.body.cpf);
+  if (!U.isValidCpf(cpf)) throw new U.HttpError(400, 'CPF inválido. Confira os números digitados.');
+  if (db.prepare("SELECT 1 FROM professionals WHERE cpf = ? AND status <> 'excluido' AND id <> ?").get(cpf, me.id)) {
+    throw new U.HttpError(409, 'Este CPF já está em outro cadastro de profissional. Fale com o nosso atendimento no WhatsApp.');
+  }
+  db.prepare('UPDATE professionals SET cpf = ? WHERE id = ?').run(cpf, me.id);
+  // CPF de um profissional bloqueado antes: esta conta também fica bloqueada
+  if (require('../blocklist').isBlocked('professional', { cpf })) {
+    db.prepare("UPDATE professionals SET status = 'bloqueado' WHERE id = ?").run(me.id);
+    require('../blocklist').block('professional', { ...me, cpf });
+  }
+  res.json({ ok: true });
+});
+
 router.put('/profile', async (req, res) => {
   let b = req.body;
   // Secretária (versão 1.1.3): muda só redes sociais, plano de saúde, localização e clínica.

@@ -118,6 +118,46 @@
     $('[data-blocked-logout]').onclick = () => logout('/');
     $('[data-blocked-delete]').onclick = () => deleteAccountFlow(me.role);
   }
+  // Profissional com conta antiga sem CPF: tela única pedindo o CPF para liberar a plataforma.
+  // A secretária não informa o CPF (só vê o aviso para o profissional entrar e informar).
+  function showNeedsCpf(me) {
+    const sec = !!me.secretary;
+    document.body.className = 'blocked-page';
+    document.body.innerHTML = `
+      <header class="topbar"><div class="container"><a class="brand" href="/">${ICONS.logo}<img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a></div></header>
+      <main class="blocked-wrap">
+        <div class="card blocked-card cpf-card">
+          <span class="blocked-ic">${ICONS.lock}</span>
+          <h1>Coloque seu CPF</h1>
+          ${sec
+    ? '<p>Para liberar toda a plataforma, o profissional precisa entrar na conta dele e informar o CPF. Assim que ele fizer isso, o painel volta a funcionar para você também.</p>'
+    : `<p>Para liberar toda a plataforma, informe o seu CPF. Cada CPF pode ter só um cadastro de profissional. <b>Depois de salvo, não dá para mudar.</b></p>
+          <form data-cpf-form novalidate style="text-align:left">
+            <div class="field"><label for="needCpf">CPF</label><input id="needCpf" name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" required></div>
+            <button class="btn block" type="submit">Liberar a plataforma</button>
+          </form>`}
+          <a class="btn ghost sm" href="${esc(supportLink((me.account || {}).support, 'Olá, Acolia! Tenho uma dúvida sobre informar o CPF na minha conta de profissional.'))}" target="_blank" rel="noopener">Alguma dúvida? Fale no WhatsApp</a>
+          <button type="button" class="btn ghost sm" data-blocked-logout>Sair</button>
+        </div>
+      </main>`;
+    $('[data-blocked-logout]').onclick = () => logout('/');
+    const f = $('[data-cpf-form]');
+    if (!f) return;
+    maskCpf(f.cpf);
+    handleForm(f, async (d) => {
+      if (!isValidCpf(d.cpf)) throw new Error('CPF inválido. Confira os números digitados.');
+      await api('/api/professional/cpf', { method: 'POST', body: { cpf: d.cpf } });
+      toast('CPF salvo! A plataforma está liberada.');
+      setTimeout(() => location.reload(), 700);
+    });
+  }
+  let needsCpfShown = false;
+  async function onNeedsCpf() {
+    if (needsCpfShown) return;
+    needsCpfShown = true;
+    try { const me = await api('/api/auth/me'); if (me.account?.needs_cpf) showNeedsCpf(me); } catch { /* ignora */ }
+  }
+
   // Excluir a própria conta: 3 passos para não apagar sem querer
   //   1) "Excluir sua conta?"  2) "Tem certeza? Se apagar, já era"  3) digitar o CPF (paciente)
   //   ou o código de acesso (profissional). Só então apaga tudo.
@@ -187,6 +227,7 @@
     }
     const data = await res.json().catch(() => ({}));
     if (res.status === 423 && data.blocked) onBlocked();
+    if (res.status === 428 && data.needs_cpf) onNeedsCpf();
     if (!res.ok) throw Object.assign(new Error(data.error || 'Algo deu errado.'), { status: res.status, data });
     return data;
   }
@@ -730,7 +771,7 @@
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
     supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
-    handleForm, logout, showBlocked, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
+    handleForm, logout, showBlocked, showNeedsCpf, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
     SOCIAL, socialLinks, socialFields,
   };
 })();

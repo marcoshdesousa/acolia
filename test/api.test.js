@@ -27,6 +27,8 @@ function client() {
   const SP_URLS = ['/api/admin/professionals', '/api/professional/profile', '/api/auth/professional/register'];
   const call = async (method, url, body) => {
     if (body && SP_URLS.includes(url) && !('specialties' in body)) body = { ...body, specialties: ['Ansiedade'] };
+    // Cadastro pelo admin exige CPF: quando o teste não manda, vai um CPF válido novo
+    if (method === 'POST' && url === '/api/admin/professionals' && body && !('cpf' in body)) body = { ...body, cpf: cpfOf(700 + (++AUTO_CPF)) };
     const res = await fetch(base + url, {
       method,
       headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(cookie ? { Cookie: cookie } : {}) },
@@ -72,6 +74,7 @@ after(() => {
 
 // CPFs válidos (gerados para teste)
 const CPF_A = '529.982.247-25';
+let AUTO_CPF = 0;
 // CPF válido a partir de um número (para os cadastros de profissional nos testes)
 function cpfOf(n) {
   const d = String(100000000 + n).slice(-9);
@@ -2499,4 +2502,30 @@ test('paciente com CPF bloqueado não cria outra conta; esqueceu a senha: redefi
   r = await client().post('/api/auth/patient/register', { name: 'Lara Redefine', cpf: CPF, state: 'SP', city: 'Campinas', birth_date: '1992-03-04', password: '123456' });
   assert.equal(r.status, 409);
   assert.equal(r.data.cpf_exists, true);
+});
+
+test('profissional antigo sem CPF: só vê "Coloque seu CPF" até informar; conta de teste não precisa', async () => {
+  const { db } = require('../server/db');
+  const c = await admin.post('/api/admin/professionals', { name: 'Olga Antiga Reis', profession: 'Terapeuta', email: 'olga.antiga@example.com', phone: '11978781111', state: 'SP', city: 'Campinas' });
+  assert.equal(c.status, 201, JSON.stringify(c.data));
+  assert.equal((await admin.post('/api/admin/professionals', { name: 'Sem Cpf Nenhum', profession: 'Terapeuta', email: 'semcpf@example.com', phone: '11978781112', state: 'SP', city: 'Campinas', cpf: '' })).status, 400, 'admin também precisa do CPF');
+  db.prepare('UPDATE professionals SET cpf = NULL WHERE id = ?').run(c.data.id); // simula a conta antiga
+  const pro = client();
+  assert.equal((await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password })).status, 200);
+  const me = (await pro.get('/api/auth/me')).data;
+  assert.equal(me.account.needs_cpf, true);
+  let r = await pro.get('/api/professional/me');
+  assert.equal(r.status, 428);
+  assert.equal(r.data.needs_cpf, true);
+  assert.equal((await pro.post('/api/professional/cpf', { cpf: '123.456.789-00' })).status, 400);
+  assert.equal((await admin.post('/api/admin/professionals', { name: 'Outro Cpf Dono', profession: 'Terapeuta', email: 'outro.dono@example.com', phone: '11978781113', state: 'SP', city: 'Campinas', cpf: cpfOf(992) })).status, 201);
+  assert.equal((await pro.post('/api/professional/cpf', { cpf: cpfOf(992) })).status, 409, 'CPF de outro profissional');
+  assert.equal((await pro.post('/api/professional/cpf', { cpf: cpfOf(990) })).status, 200);
+  assert.equal((await pro.get('/api/auth/me')).data.account.needs_cpf, undefined);
+  assert.equal((await pro.get('/api/professional/me')).status, 200, 'liberado');
+  assert.equal((await pro.post('/api/professional/cpf', { cpf: cpfOf(991) })).status, 400, 'não muda depois');
+  // Conta de teste sem CPF: tudo liberado
+  db.prepare('UPDATE professionals SET cpf = NULL, is_test = 1 WHERE id = ?').run(c.data.id);
+  assert.equal((await pro.get('/api/professional/me')).status, 200);
+  db.prepare('UPDATE professionals SET is_test = 0, cpf = ? WHERE id = ?').run(cpfOf(990), c.data.id);
 });
