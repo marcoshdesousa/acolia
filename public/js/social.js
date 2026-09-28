@@ -135,7 +135,11 @@
       const c = await api('/api/chat/conversations', { method: 'POST', body: { professional_id: proId } });
       const m = await api(`/api/chat/conversations/${c.id}/messages`, { method: 'POST', body: { kind: 'post', post_id: postId } });
       toast(m.already ? 'Mensagem já enviada para este profissional ✓' : 'Mensagem enviada para este profissional ✓', '', { top: true });
-    } catch (e) { sentPosts.delete(postId); toast(e.message, 'error', { top: true }); }
+    } catch (e) {
+      sentPosts.delete(postId);
+      if (e.data?.paused) Acolia.pauseWhy('msg'); // profissional pausou as mensagens: explica o motivo
+      else toast(e.message, 'error', { top: true });
+    }
   }
 
   // Seguir / Seguindo no canto da publicação (não aparece na própria publicação — lá fica o ⋮)

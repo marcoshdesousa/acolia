@@ -188,7 +188,11 @@
         try {
           const c = await api('/api/chat/conversations', { method: 'POST', body: { professional_id: Number(arg) } });
           location.replace('#chat/' + c.id);
-        } catch (e) { toast(e.message, 'error'); location.replace('#buscar'); }
+        } catch (e) {
+          // Profissional pausou as mensagens: volta para onde estava e explica
+          if (e.data?.paused) { history.back(); Acolia.pauseWhy('msg'); return; }
+          toast(e.message, 'error'); location.replace('#buscar');
+        }
         return;
       }
       const v = ['inicio', 'buscar', 'perfil', 'posts', 'chat', 'config'].includes(view) ? view : 'inicio';
@@ -219,7 +223,8 @@
         try {
           const p = await api('/api/professionals/' + Number(arg));
           $('[data-profile]').innerHTML = AcoliaProfile.render(p, {
-            actions: '<a class="btn" href="#conversar/' + p.id + '">' + ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"') + ' Enviar mensagem</a>',
+            actions: p.accepts_messages === false ? Acolia.pauseNote('msg')
+              : '<a class="btn" href="#conversar/' + p.id + '">' + ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"') + ' Enviar mensagem</a>',
           });
           AcoliaSocial.bindProfile($('[data-profile]'), p);
         } catch (e) { $('[data-profile]').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }

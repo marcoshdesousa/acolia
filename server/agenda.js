@@ -4,8 +4,11 @@
 // O dinheiro vai sempre direto para a conta do profissional — nada passa pela Acolia.
 //
 // Regras da plataforma:
-// - Pagamento só por Pix. Automático: 10 minutos para pagar. Manual: o profissional tem 5 minutos para
-//   mandar a chave Pix e o paciente tem 10 minutos para pagar depois que ela chega.
+// - Pagamento só por Pix. Automático: 10 minutos para pagar. Manual: o profissional tem até 2 horas
+//   (ou até 10 minutos antes do horário, o que vier primeiro) para mandar a chave Pix e o paciente tem
+//   10 minutos para pagar depois que ela chega. Sem a chave no prazo, o pedido é cancelado sozinho.
+// - Dá para marcar no mês atual e nos 3 seguintes (ex.: em setembro, até dezembro). Se tudo isso estiver
+//   lotado, o mês seguinte abre também (e assim por diante), até achar horário livre.
 // - Paciente remarca 1 vez e cancela (com motivo e reembolso) até 30 minutos antes. Com 30 minutos ou
 //   menos, não remarca nem pede reembolso; se não comparecer, o valor não volta.
 // - Profissional não remarca sozinho: até 30 min antes (presencial) ou 15 (online) ele avisa, com o motivo, que não pode atender e o paciente
@@ -19,7 +22,8 @@ const rt = require('./realtime');
 const MIN = 60e3;
 const RULES = {
   PAY_MIN: 10,            // minutos para pagar o Pix
-  PRO_PIX_MIN: 5,         // manual: minutos para o profissional mandar a chave Pix
+  PRO_PIX_MIN: 120,       // manual: minutos para o profissional mandar a chave Pix (2 horas)
+  PRO_PIX_BEFORE_MIN: 10, // …mas a chave precisa chegar até 10 minutos antes do horário da consulta
   ANSWER_MIN: 5,          // manual: minutos para o paciente responder "quer tentar de novo?"
   CUTOFF_MIN: 30,         // paciente remarca/cancela só com MAIS de 30 minutos de antecedência
   SWITCH_MIN: 15,         // paciente troca o tipo (online ↔ presencial) só com MAIS de 15 minutos de antecedência
@@ -30,7 +34,8 @@ const RULES = {
   CALL_BEFORE_MIN: 5,     // a chamada é aberta (e o paciente avisado) 5 minutos antes
   DONE_AFTER_MIN: 30,     // 30 minutos depois do fim, a consulta vira "concluída"
   MAX_RESCHEDULES: 1,
-  HORIZON_DAYS: 90,       // dá para marcar até 90 dias à frente
+  HORIZON_MONTHS: 3,      // mês atual + 3 (se estiverem lotados, abre o seguinte)
+  HORIZON_MAX_MONTHS: 24, // no máximo 2 anos à frente
   DEFAULT_MINUTES: 50,
 };
 const CANCEL_REASONS = {
@@ -124,6 +129,8 @@ function sendLocation(c, pro) {
 // Pode receber marcações? (horários cadastrados, valor da consulta e uma forma de receber o Pix)
 function readiness(pro) {
   const missing = [];
+  // "Aceitar mensagens e agendamentos" desligado (férias, repouso…): ninguém marca, mas a agenda fica guardada
+  if (pro.accepts_messages === 0) missing.push('pausado');
   // Agenda aberta = online ligado OU presencial ligado (com consultório)
   if (!pro.agenda_on && !presencialOpen(pro)) missing.push('online');
   if (!db.prepare('SELECT 1 FROM agenda_hours WHERE professional_id = ?').get(pro.id)) missing.push('horarios');
@@ -165,7 +172,7 @@ function slotsForDay(pro, date, opts = {}) {
   const t0 = now();
   // Conta de teste: dá para marcar até em cima da hora (para o dono testar na hora)
   const earliest = t0 + (pro.is_test ? 1 : RULES.MIN_ADVANCE_MIN) * MIN;
-  const latest = fromLocal(localDate(t0), 0) + (RULES.HORIZON_DAYS + 1) * 1440 * MIN;
+  const latest = opts.latest ?? (fromLocal(maxDate(pro), 0) + 1440 * MIN);
   const dayStart = fromLocal(date, 0);
   const busy = opts.busy || loadBusy(pro.id, dayStart, dayStart + 1440 * MIN, opts);
   const out = [];
@@ -199,6 +206,41 @@ function weekStarts(pro) {
   return out;
 }
 
+// Último dia em que dá para marcar: fim do 3º mês depois do atual. Se não houver nenhum horário livre
+// até lá (agenda lotada), abre mais um mês, e assim por diante (até 2 anos). Guarda por 30 segundos.
+const lastOfMonth = (ym) => { const [y, m] = ym.split('-').map(Number); return `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`; };
+const addMonths = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
+const maxCache = new Map();
+function maxDate(pro) {
+  const today = localDate(now());
+  const ym0 = today.slice(0, 7);
+  const base = lastOfMonth(addMonths(ym0, RULES.HORIZON_MONTHS));
+  if (!db.prepare('SELECT 1 FROM agenda_hours WHERE professional_id = ?').get(pro.id)) return base;
+  const hit = maxCache.get(pro.id);
+  if (hit && hit.v === version && hit.today === today && now() - hit.at < 30e3) return hit.value;
+  const hasFree = (from, to) => {
+    const busy = loadBusy(pro.id, fromLocal(from, 0), fromLocal(to, 0) + 1440 * MIN);
+    const latest = fromLocal(to, 0) + 1440 * MIN;
+    for (let d = from; d <= to; d = addDays(d, 1)) if (slotsForDay(pro, d, { busy, latest }).length) return true;
+    return false;
+  };
+  let value = base;
+  if (!hasFree(today, base)) {
+    for (let n = RULES.HORIZON_MONTHS + 1; n <= RULES.HORIZON_MAX_MONTHS; n++) {
+      const ym = addMonths(ym0, n);
+      value = lastOfMonth(ym);
+      if (hasFree(`${ym}-01`, value)) break;
+    }
+  }
+  maxCache.set(pro.id, { v: version, at: now(), today, value });
+  return value;
+}
+
+// Prazo para o profissional mandar a chave Pix (manual): 2 horas, mas até 10 minutos antes da consulta
+function pixDeadline(t, startMs) {
+  return Math.max(t + MIN, Math.min(t + RULES.PRO_PIX_MIN * MIN, startMs - RULES.PRO_PIX_BEFORE_MIN * MIN));
+}
+
 // Dias de um mês ("2026-10") com quantos horários livres cada um tem
 function monthDays(pro, ym, opts = {}) {
   const [y, m] = ym.split('-').map(Number);
@@ -225,9 +267,9 @@ function nextAvailable(pro) {
   let value = null;
   if (readiness(pro).ok) {
     const today = localDate(now());
-    const busy = loadBusy(pro.id, fromLocal(today, 0), fromLocal(today, 0) + 62 * 1440 * MIN);
-    for (let i = 0; i <= 60 && !value; i++) {
-      const date = addDays(today, i);
+    const last = maxDate(pro);
+    const busy = loadBusy(pro.id, fromLocal(today, 0), fromLocal(last, 0) + 1440 * MIN);
+    for (let date = today; date <= last && !value; date = addDays(date, 1)) {
       const s = slotsForDay(pro, date, { busy });
       if (s.length) value = { date, label: dayLabel(date), first: s[0].label };
     }
@@ -239,9 +281,8 @@ function nextAvailable(pro) {
 function nextAvailableFor(pro, patientId) {
   const base = nextAvailable(pro);
   if (!base || !patientId || !patientDayTaken(patientId, base.date)) return base;
-  const today = localDate(now());
-  for (let i = 0; i <= 60; i++) {
-    const date = addDays(today, i);
+  const last = maxDate(pro);
+  for (let date = localDate(now()); date <= last; date = addDays(date, 1)) {
     const s = slotsForDay(pro, date, { patientId });
     if (s.length) return { date, label: dayLabel(date), first: s[0].label };
   }
@@ -655,7 +696,7 @@ function view(a, role) {
 module.exports = {
   RULES, CANCEL_REASONS, HOLDING, ACTIVE, OCCUPY_SQL,
   now, iso, ms, localDate, localMin, fromLocal, hhmm, parseHHMM, addDays, fmtWhen, dayLabel, dowOf,
-  getPro, getAppt, duration, readiness, clinicOf, presencialOpen, priceFor, modalityChange, proCancelMin, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
+  getPro, getAppt, duration, readiness, maxDate, pixDeadline, clinicOf, presencialOpen, priceFor, modalityChange, proCancelMin, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
   ensureConversation, post, pushText, notifyBoth, setStatus, createCharge, confirmPaid, checkPayment, refund, refundLock,
   openCall, closeCall, canEndCall, finishFromCall, sweep, canDo, view, onAccountGone,
   _setNow(fn) { nowFn = fn || Date.now; touch(); },

@@ -115,13 +115,17 @@
     const nx = p.next_available;
     const canBook = !p.is_self && p.viewer_role !== 'professional';
     if (nx) PRO_CACHE.set(p.id, p);
-    const agendaBox = nx
+    // Pausou mensagens e agendamentos: só o aviso (com o "?" que explica). Sem agenda aberta: outro aviso.
+    const paused = p.accepts_messages === false;
+    const agendaBox = paused && !p.test_only
+      ? `<div class="agenda-box">${Acolia.pauseNote('agenda')}</div>`
+      : nx
       ? `<div class="agenda-box"><div>${ic('calendar', 18)} Próximo horário livre: <b>${esc(nx.label)} às ${esc(nx.first)}</b></div>
           ${canBook ? `<button type="button" class="btn block" data-book="${p.id}">${ic('calendar', 18)} Agendar consulta</button>
           <span class="small muted">Escolha o dia e o horário e pague pelo Pix para confirmar. Pacotes: combine pelo chat.</span>` : ''}</div>`
       : p.test_only
         ? `<div class="small muted">🧪 Conta de teste: a agenda deste profissional só abre para o <b>Paciente Teste</b>. Entre com o Paciente Teste para marcar e pagar (pagamento simulado).</div>`
-      : `<div class="small muted">A agenda online deste profissional está fechada no momento. ${canBook ? 'Mande uma mensagem para combinar.' : ''}</div>`;
+      : `<div class="agenda-box">${Acolia.pauseNote('closed')}${canBook ? '<span class="small muted">Mande uma mensagem para combinar.</span>' : ''}</div>`;
     let values;
     if (p.locked) {
       values = `<div class="card flat stack">

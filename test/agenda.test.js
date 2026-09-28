@@ -236,10 +236,19 @@ test('manual: paciente marca, profissional manda a chave Pix, aprova e a consult
   assert.equal(r.status, 409, 'Quitéria ainda não abriu (sem forma de receber)');
 });
 
-test('manual: sem a chave Pix em 5 minutos o horário volta; "não aprovado" pergunta se quer tentar de novo', async () => {
+test('manual: sem a chave Pix em 2 horas o pedido é cancelado e o horário volta; "não aprovado" pergunta se quer tentar de novo', async () => {
+  const { db } = require('../server/db');
   let r = await bia.post('/api/agenda/book', { professional_id: P.id, start: at('2030-01-08', '09:40'), accept: true });
   const a = r.data;
+  assert.equal(a.status, 'aguardando_pix');
+  // O profissional tem 2 horas para mandar a chave (a consulta é amanhã)
+  const hold = Date.parse(db.prepare('SELECT hold_until FROM appointments WHERE id = ?').get(a.id).hold_until);
+  assert.ok(Math.abs(hold - (G.now() + 120 * 60e3)) < 5000, 'prazo de 2 horas');
   advance(6);
+  await G.sweep();
+  assert.equal((await bia.get(`/api/agenda/appointments/${a.id}`)).data.status, 'aguardando_pix', 'com 6 minutos ainda espera');
+  // Passaram as 2 horas (sem mexer no relógio dos outros testes: o prazo é antecipado)
+  db.prepare('UPDATE appointments SET hold_until = ? WHERE id = ?').run(G.iso(G.now() - 1000), a.id);
   await G.sweep();
   r = await bia.get(`/api/agenda/appointments/${a.id}`);
   assert.equal(r.data.status, 'expirada');
@@ -923,4 +932,72 @@ test('paciente troca o tipo (online ↔ presencial) no mesmo horário e remarca 
   r = await sofia.get(`/api/agenda/appointments/${e.id}`);
   assert.equal(r.data.can.switch_type, false);
   assert.equal((await sofia.post(`/api/agenda/appointments/${e.id}/modality`, { modality: 'presencial', confirm_place: true })).status, 409);
+});
+
+test('"Aceitar mensagens e agendamentos" desligado: sem mensagem nova e sem marcar; agenda guardada; consulta em andamento continua falando', async () => {
+  const Z = await mkPro('Zeca Pausa Rocha', 'zeca.pausa@example.com', '11955556666', 'CRP 06/51077', { pix_key: 'zeca@pix.com', session_minutes: 50 });
+  assert.equal((await Z.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true })).status, 200);
+  const pz = await mkPatient('Pedro Pausa Lima', nextCpf());
+  const pz2 = await mkPatient('Rita Pausa Dias', nextCpf());
+  const conv = (await pz.post('/api/chat/conversations', { professional_id: Z.id })).data;
+  assert.equal((await pz.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Oi!' })).status, 201);
+  // Desliga
+  assert.equal((await Z.cl.post('/api/professional/accepts-messages', { on: false })).status, 200);
+  let r = await pz.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Oi de novo' });
+  assert.equal(r.status, 403);
+  assert.equal(r.data.paused, true);
+  assert.equal((await pz.get(`/api/chat/conversations/${conv.id}`)).data.paused, true, 'a conversa antiga continua aparecendo, sem poder escrever');
+  assert.equal((await pz.get(`/api/chat/conversations/${conv.id}/messages`)).status, 200);
+  r = await pz2.post('/api/chat/conversations', { professional_id: Z.id });
+  assert.equal(r.status, 403, 'conversa nova não abre');
+  assert.equal(r.data.paused, true);
+  let pub = (await pz2.get(`/api/professionals/${Z.id}`)).data;
+  assert.equal(pub.accepts_messages, false, 'o perfil continua aparecendo');
+  assert.equal(pub.next_available, null);
+  const month = (await pz2.get(`/api/agenda/pro/${Z.id}/month`)).data;
+  assert.equal(month.paused, true);
+  assert.equal(month.ready, false);
+  r = await pz2.post('/api/agenda/book', { professional_id: Z.id, start: G.iso(G.now() + 2 * 86400e3), accept: true });
+  assert.equal(r.status, 409);
+  assert.match(r.data.error, /não está fazendo agendamentos/);
+  // O profissional continua escrevendo
+  assert.equal((await Z.cl.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Estou de férias, volto logo.' })).status, 201);
+  // Liga de novo: a agenda volta como estava
+  assert.equal((await Z.cl.post('/api/professional/accepts-messages', { on: true })).status, 200);
+  pub = (await pz2.get(`/api/professionals/${Z.id}`)).data;
+  assert.equal(pub.accepts_messages, true);
+  assert.ok(pub.next_available, 'agenda de volta');
+  assert.equal((await pz.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Que bom!' })).status, 201);
+  // Consulta em andamento (esperando a chave Pix): mesmo pausado, o paciente continua falando com ele
+  const day = (await pz.get(`/api/agenda/pro/${Z.id}/day?date=${pub.next_available.date}`)).data;
+  r = await pz.post('/api/agenda/book', { professional_id: Z.id, start: day.slots[0].start, accept: true });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.status, 'aguardando_pix');
+  await Z.cl.post('/api/professional/accepts-messages', { on: false });
+  assert.equal((await pz.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Pode mandar a chave?' })).status, 201);
+  await Z.cl.post('/api/professional/accepts-messages', { on: true });
+});
+
+test('agenda: dá para marcar no mês atual e nos 3 seguintes; se lotar, abre o mês seguinte', async () => {
+  const lastOf = (ym) => { const [y, m] = ym.split('-').map(Number); return `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`; };
+  const plus = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
+  const ym0 = G.localDate(G.now()).slice(0, 7);
+  // Um horário só por semana (segunda 09:00), para dar para lotar
+  const W = await mkPro('Wanda Lotada Reis', 'wanda.lotada@example.com', '11955557777', 'CRP 06/51078', { pix_key: 'w@pix.com', session_minutes: 50 });
+  assert.equal((await W.cl.put('/api/agenda/settings', { hours: [{ dow: 1, start: '09:00', end: '09:50' }], session_minutes: 50, online: true })).status, 200);
+  const pw = await mkPatient('Otto Lotado Cruz', nextCpf());
+  let info = (await pw.get(`/api/agenda/pro/${W.id}/month`)).data;
+  assert.equal(info.max_date, lastOf(plus(ym0, 3)), 'mês atual + 3');
+  // Lota todas as segundas até lá
+  for (let i = 0; i < 30; i++) {
+    const nx = (await pw.get(`/api/agenda/pro/${W.id}/next`)).data.next;
+    if (!nx || nx.date > lastOf(plus(ym0, 3))) break;
+    const d = (await pw.get(`/api/agenda/pro/${W.id}/day?date=${nx.date}`)).data;
+    const b = await pw.post('/api/agenda/book', { professional_id: W.id, start: d.slots[0].start, accept: true });
+    assert.equal(b.status, 201, JSON.stringify(b.data));
+  }
+  info = (await pw.get(`/api/agenda/pro/${W.id}/month`)).data;
+  assert.equal(info.max_date, lastOf(plus(ym0, 4)), 'lotou: abre o mês seguinte');
+  const nx = (await pw.get(`/api/agenda/pro/${W.id}/next`)).data.next;
+  assert.ok(nx && nx.date.startsWith(plus(ym0, 4)), 'o próximo horário livre é no mês que abriu');
 });

@@ -30,7 +30,7 @@
 
   const STATUS = {
     aguardando_pagamento: ['Aguardando pagamento', 'warn'],
-    aguardando_pix: ['Esperando a chave Pix', 'warn'],
+    aguardando_pix: ['Aguardando a chave Pix', 'warn'],
     pagamento_recusado: ['Pagamento não aprovado', 'danger'],
     confirmada: ['Consulta marcada', 'ok'],
     aguardando_paciente: ['Profissional não poderá atender', 'warn'],
@@ -46,7 +46,7 @@
 
   // ---------- Política (aparece antes de pagar, com "Li e aceito") ----------
   function policyHtml(rules) {
-    const r = { SWITCH_MIN: 15, PRO_CANCEL_PRES_MIN: 30, PRO_CANCEL_ONLINE_MIN: 15, ...(rules || { CUTOFF_MIN: 30, PAY_MIN: 10, PRO_PIX_MIN: 5, PRO_GRACE_MIN: 3 }) };
+    const r = { SWITCH_MIN: 15, PRO_CANCEL_PRES_MIN: 30, PRO_CANCEL_ONLINE_MIN: 15, ...(rules || { CUTOFF_MIN: 30, PAY_MIN: 10, PRO_PIX_MIN: 120, PRO_GRACE_MIN: 3 }) };
     return `<ul class="policy-list">
       <li>O pagamento é <b>só por Pix</b> e confirma a consulta. Você tem <b>${r.PAY_MIN} minutos</b> para pagar; depois disso o horário é liberado.</li>
       <li>Cada paciente marca <b>uma consulta por dia</b>.</li>
@@ -173,7 +173,10 @@
             <button type="button" class="btn sm secondary" data-ins-chat>${ic('chat', 16)} Mandar mensagem</button></div></div>` : ''}`;
       // Agenda fechada (online e presencial desligados): as opções aparecem apagadas e o aviso
       if (!(mode === 'propose' ? info.agenda_ok : info.ready)) {
-        page.body.innerHTML = `${head}${choices}<div class="empty-agenda">${ic('calendar', 28)}<b>Sem agenda disponível</b><p class="muted">${mode === 'propose' ? 'Abra a sua agenda primeiro: em <b>Consultas → Minha agenda</b>, ligue o atendimento online ou presencial e cadastre os horários (e confira o valor e a forma de receber).' : 'Este profissional não está com a agenda aberta no momento. Mande uma mensagem para combinar.'}</p>${mode === 'book' ? `<button type="button" class="btn secondary sm" data-ins-chat>${ic('chat', 16)} Mandar mensagem</button>` : ''}</div>`;
+        page.body.innerHTML = mode === 'propose'
+          ? `${head}${choices}<div class="empty-agenda">${ic('calendar', 28)}<b>Sem agenda disponível</b><p class="muted">${info.paused ? 'Você pausou as mensagens e os agendamentos. Ligue <b>"Aceitar mensagens e agendamentos"</b> em <b>Meu perfil</b> para marcar consultas.' : 'Abra a sua agenda primeiro: em <b>Consultas → Minha agenda</b>, ligue o atendimento online ou presencial e cadastre os horários (e confira o valor e a forma de receber).'}</p></div>`
+          // Paciente: pausou (não recebe mensagens nem agendamentos) ou está sem agenda (pode mandar mensagem)
+          : `${head}<div class="empty-agenda">${ic('calendar', 28)}${Acolia.pauseNote(info.paused ? 'agenda' : 'closed')}${!info.paused && mode === 'book' ? `<button type="button" class="btn secondary sm" data-ins-chat>${ic('chat', 16)} Mandar mensagem</button>` : ''}</div>`;
         $$('[data-ins-chat]', page.body).forEach((b) => b.addEventListener('click', async () => {
           try { const c = await api('/api/chat/conversations', { method: 'POST', body: { professional_id: proId } }); await page.close(); goChat(c.id); } catch (ex) { toast(ex.message, 'error'); }
         }));
@@ -325,12 +328,13 @@
 
   // Pedido manual: o profissional manda a chave Pix no chat
   function manualSent(page, a) {
-    page.setTitle('Pedido enviado');
+    page.setTitle('Aguardando a chave Pix');
     page.body.innerHTML = `<div class="card stack center">
         <div class="big-ic">${ic('send', 30)}</div>
-        <h2 style="margin:0">Pedido enviado ao profissional</h2>
+        <h2 style="margin:0">Pedido de consulta enviado</h2>
         <p>${esc(a.when)}</p>
-        <p class="muted">O profissional tem <b>5 minutos</b> para mandar a chave Pix na conversa. Depois que ela chegar, você tem <b>10 minutos</b> para pagar. O horário fica guardado para você enquanto isso.</p>
+        <p><b>Sua consulta ainda não está confirmada.</b> Olhe as mensagens: o profissional vai enviar a chave Pix na conversa para você fazer o pagamento. Depois que ela chegar, você tem <b>10 minutos</b> para pagar, e a consulta é confirmada quando o pagamento for aprovado.</p>
+        <p class="muted small">O horário fica guardado para você enquanto isso. Se a chave Pix não chegar em até <b>2 horas</b> (ou até 10 minutos antes do horário), o pedido é cancelado e o horário é liberado.</p>
         <button type="button" class="btn" data-chat>Ir para a conversa</button></div>`;
     $('[data-chat]', page.body).addEventListener('click', async () => { await page.close(); goChat(a.conversation_id); });
     setTimeout(async () => { if (page.el.isConnected) { await page.close(); goChat(a.conversation_id); } }, 2500);
@@ -617,7 +621,7 @@
 
   // ---------- Cartão da consulta no chat ----------
   const EVENT = {
-    pedido: ['📅 Pedido de consulta', (a, r) => (r === 'professional' ? 'O paciente quer marcar esta consulta e fazer o pagamento. Mande a sua chave Pix em até 5 minutos.' : 'Pedido enviado. O profissional manda a chave Pix aqui em até 5 minutos.')],
+    pedido: ['📅 Pedido de consulta: aguardando a chave Pix', (a, r) => (r === 'professional' ? 'O paciente quer marcar esta consulta e fazer o pagamento. Mande a sua chave Pix em até 2 horas (ou até 10 minutos antes do horário); se não mandar, o pedido é cancelado.' : 'Sua consulta ainda não está confirmada: o profissional vai enviar a chave Pix aqui para você fazer o pagamento. A consulta é confirmada depois do pagamento. Se a chave não chegar em até 2 horas, o pedido é cancelado.')],
     proposta: ['📅 Consulta quase pronta: falta o pagamento', (a, r) => (r === 'patient'
       ? (a.mode === 'auto' ? `Sua consulta de ${a.when} está quase pronta! Toque em "Pagar agora" e pague o Pix em até 10 minutos para confirmar.`
         : `Sua consulta de ${a.when} está quase pronta! Toque em "Copiar Pix", pague ${money(a.price_cents)} no app do seu banco em até 10 minutos e o profissional confirma aqui.`)
@@ -639,7 +643,7 @@
     recusado: ['⚠️ Pagamento não aprovado', (a, r) => (r === 'patient' ? 'Quer realmente fazer esta consulta? Se sim, o profissional manda a chave Pix de novo.' : 'O paciente vai responder se quer tentar de novo.')],
     tentar: ['🔁 Nova tentativa de pagamento', (a, r, m) => (m?.extra === 'direto'
       ? (r === 'professional' ? 'O paciente vai pagar de novo. Confirme em cima do campo de mensagem quando o Pix cair.' : `Toque em "Copiar Pix" e pague ${money(a.price_cents)} em até 10 minutos.`)
-      : (r === 'professional' ? 'Mande a chave Pix de novo em até 5 minutos.' : 'O profissional vai mandar a chave Pix de novo.'))],
+      : (r === 'professional' ? 'Mande a chave Pix de novo em até 2 horas (ou até 10 minutos antes do horário).' : 'O profissional vai mandar a chave Pix de novo.'))],
     pro_cancelou: ['⚠️ O profissional não poderá atender', (a, r) => `${a.cancel_detail ? `“${a.cancel_detail}” · ` : ''}${r === 'patient' ? 'Escolha entre o reembolso e remarcar para outro horário.' : 'O paciente vai escolher entre o reembolso e remarcar.'}`],
     finalizada: ['✅ Chamada finalizada', () => 'A consulta terminou.'],
     concluida: ['✅ Consulta concluída', () => 'A consulta presencial terminou.'],
@@ -650,7 +654,7 @@
     chamada: ['🎥 Sua consulta vai começar', (a, r) => (a.can?.enter_call ? `Toque em "Entrar na chamada" e entre até 3 minutos depois do horário: ${r === 'patient' ? 'depois disso a chamada é encerrada e o valor não é devolvido' : 'depois disso a chamada fecha e o paciente é reembolsado'}. Não saia da tela durante a consulta.`
       : a.secretary ? 'A chamada desta consulta foi aberta. Só o profissional entra nela.' : 'A chamada desta consulta foi encerrada.')],
     expirada: ['⏱️ Tempo para pagar acabou', () => 'O horário foi liberado.'],
-    sem_resposta: ['⏱️ A chave Pix não chegou a tempo', (a, r) => (r === 'patient' ? 'O profissional não mandou a chave Pix em 5 minutos e o horário foi liberado. Escolha outro horário ou mande uma mensagem.' : 'Você não mandou a chave Pix em 5 minutos e o horário foi liberado.')],
+    sem_resposta: ['⏱️ A chave Pix não chegou a tempo', (a, r) => (r === 'patient' ? 'O profissional não mandou a chave Pix a tempo, então o pedido foi cancelado e o horário foi liberado. Escolha outro horário ou outro profissional.' : 'Você não mandou a chave Pix a tempo (até 2 horas depois do pedido), então o pedido foi cancelado e o horário foi liberado.')],
   };
   function fmtIso(s) {
     const d = new Date(Date.parse(s) - 3 * 3600e3);

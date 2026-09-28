@@ -232,6 +232,7 @@
           <div class="messages" data-messages></div>
         </div>
         <div data-pay-ask></div>
+        ${c.paused ? `<div class="chat-pause">${Acolia.pauseNote('msg')}</div>` : ''}
         <form class="composer" data-composer>
           ${role === 'professional'
             // Profissional (e secretária): um botão de funções com mensagens prontas, agendar e enviar foto
@@ -239,7 +240,7 @@
             // Paciente: só a foto (ex.: o print do comprovante do Pix)
             : `<label class="icon-btn quick-btn ${canWrite(c) ? '' : 'off'}" title="Enviar foto (ex.: comprovante do Pix)" aria-label="Enviar foto">${ICONS.camera}</label>`}
           <input type="file" accept="image/jpeg,image/png,image/webp" data-chat-photo hidden ${canWrite(c) ? '' : 'disabled'}>
-          <textarea rows="1" placeholder="${!c.peer.active ? 'Esta conta não está mais ativa' : c.blocked_by_me || c.blocked_me ? 'Mensagens bloqueadas' : 'Digite uma mensagem'}" aria-label="Mensagem" ${canWrite(c) ? '' : 'disabled'} maxlength="4000"></textarea>
+          <textarea rows="1" placeholder="${!c.peer.active ? 'Esta conta não está mais ativa' : c.blocked_by_me || c.blocked_me ? 'Mensagens bloqueadas' : c.paused ? 'Não está recebendo mensagens' : 'Digite uma mensagem'}" aria-label="Mensagem" ${canWrite(c) ? '' : 'disabled'} maxlength="4000"></textarea>
           <button class="icon-btn rec-cancel" type="button" data-rec-cancel aria-label="Apagar áudio" title="Apagar áudio">${ICONS.trash}</button>
           <div class="rec-bar" aria-live="polite"><span class="rec-dot"></span><b data-rec-time>0:00</b><div class="rec-live" data-rec-live></div>
             <button class="icon-btn rec-stop" type="button" data-rec-stop aria-label="Parar e ouvir antes de enviar" title="Parar e ouvir">${ICONS.stop}</button></div>
@@ -575,7 +576,7 @@
       if (el) el.outerHTML = msgHtml(m);
     }
 
-    const canWrite = (c) => c.peer.active && !c.blocked_by_me && !c.blocked_me;
+    const canWrite = (c) => c.peer.active && !c.blocked_by_me && !c.blocked_me && !c.paused;
 
     // Limpar conversa: apaga todas as mensagens só para você
     async function clearConversation() {

@@ -102,6 +102,8 @@ function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest 
     city: p.city,
     has_clinic: !!p.has_clinic,
     accepts_insurance: !!p.accepts_insurance,
+    // "Aceitar mensagens e agendamentos" desligado: o perfil aparece, mas não recebe mensagens nem marcações
+    accepts_messages: p.accepts_messages !== 0,
     instagram: p.instagram || '',
     social: require('./social').list(p), // Instagram, TikTok, X, YouTube: no perfil só o ícone
     // Próximo dia com horário livre na agenda (aparece para todos, até sem conta)
@@ -170,6 +172,7 @@ function ownProfessional(p) {
     city: p.city,
     has_clinic: !!p.has_clinic,
     accepts_insurance: !!p.accepts_insurance,
+    accepts_messages: p.accepts_messages !== 0,
     clinic_name: p.clinic_name,
     clinic_address: p.clinic_address,
     maps_url: p.maps_url || '',

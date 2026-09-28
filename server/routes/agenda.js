@@ -55,8 +55,9 @@ router.get('/pro/:id/month', (req, res) => {
     if (p && mine) patient = { name: p.name, cpf: U.formatCpf(p.cpf), birth_date: p.birth_date ? p.birth_date.split('-').reverse().join('/') : '', place: [p.city, p.state].filter(Boolean).join(' - ') };
   }
   res.json({
-    ym, today: G.localDate(G.now()), max_date: G.addDays(G.localDate(G.now()), G.RULES.HORIZON_DAYS),
+    ym, today: G.localDate(G.now()), max_date: G.maxDate(pro),
     ready: ready.ok, agenda_ok: agendaOk, mode: ready.mode, price_cents: pro.price_cents, price_presencial_cents: G.clinicOf(pro) ? G.priceFor(pro, 'presencial') : null, minutes: G.duration(pro),
+    paused: pro.accepts_messages === 0,
     presencial: G.clinicOf(pro), presencial_open: G.presencialOpen(pro), online: !!pro.agenda_on, insurance: !!pro.accepts_insurance, patient,
     days: agendaOk ? G.monthDays(pro, ym, { patientId }) : [],
   });
@@ -83,6 +84,7 @@ router.post('/book', async (req, res) => {
   const me = req.auth.user;
   if (!sameKind(pro, me)) throw new U.HttpError(403, TEST_MSG);
   const ready = G.readiness(pro);
+  if (pro.accepts_messages === 0) throw new U.HttpError(409, 'Este profissional não está fazendo agendamentos no momento.');
   if (!ready.ok) throw new U.HttpError(409, 'Este profissional ainda não abriu a agenda.');
   const modality = req.body.modality === 'presencial' ? 'presencial' : 'online';
   if (modality === 'presencial' && !G.presencialOpen(pro)) throw new U.HttpError(400, 'Este profissional não está com a agenda presencial aberta. Marque uma consulta online.');
@@ -95,7 +97,7 @@ router.post('/book', async (req, res) => {
     const auto = ready.mode === 'auto';
     const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, hold_until, accepted_policy_at, modality)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'paciente', ?, ?, ?, ?)`).run(pro.id, me.id, c.id, G.iso(slot.start), G.iso(slot.end), G.priceFor(pro, modality), ready.mode,
-      auto ? 'aguardando_pagamento' : 'aguardando_pix', G.iso(t + (auto ? G.RULES.PAY_MIN : G.RULES.PRO_PIX_MIN) * MIN), G.iso(t), modality);
+      auto ? 'aguardando_pagamento' : 'aguardando_pix', G.iso(auto ? t + G.RULES.PAY_MIN * MIN : G.pixDeadline(t, slot.start)), G.iso(t), modality);
     return G.getAppt(Number(info.lastInsertRowid));
   });
   let out = a;
@@ -322,7 +324,7 @@ router.post('/appointments/:id/retry', (req, res) => {
     upd = G.setStatus(a.id, { status: 'aguardando_pagamento', hold_until: G.iso(G.now() + G.RULES.PAY_MIN * MIN), pix_payload: key });
     G.post(upd, 'patient', 'tentar', 'direto');
   } else if (req.body.yes) {
-    upd = G.setStatus(a.id, { status: 'aguardando_pix', hold_until: G.iso(G.now() + G.RULES.PRO_PIX_MIN * MIN), pix_payload: null });
+    upd = G.setStatus(a.id, { status: 'aguardando_pix', hold_until: G.iso(G.pixDeadline(G.now(), G.ms(a.start_at))), pix_payload: null });
     G.post(upd, 'patient', 'tentar');
   } else {
     upd = G.setStatus(a.id, { status: 'cancelada', hold_until: null, cancel_reason: 'desistiu' });

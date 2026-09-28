@@ -24,6 +24,17 @@
     if ($('[data-origin]')) $('[data-origin]').textContent = `${location.host}/`;
     if ($('[data-slug-form]')) $('[data-slug-form]').slug.value = me.slug || ''; // (a secretária não tem)
   }
+  // "Aceitar mensagens e agendamentos": salva na hora (a secretária não muda esta opção)
+  if (isSec) $('[data-accepts-card]')?.remove();
+  $('[data-accepts-messages]')?.addEventListener('change', async (e) => {
+    const on = e.target.checked;
+    if (!on && !await confirmDialog('Desligar as mensagens e os agendamentos? Seu perfil continua aparecendo e você continua publicando, mas os pacientes não conseguem mandar mensagem nova nem marcar consulta até você ligar de novo. Sua agenda fica guardada.', { okLabel: 'Desligar', title: 'Pausar atendimento' })) { e.target.checked = true; return; }
+    try {
+      await api('/api/professional/accepts-messages', { method: 'POST', body: { on } });
+      me.accepts_messages = on;
+      toast(on ? 'Pronto! Pacientes já podem mandar mensagem e marcar consulta.' : 'Mensagens e agendamentos pausados. Sua agenda ficou guardada.');
+    } catch (ex) { e.target.checked = !on; toast(ex.message, 'error'); }
+  });
   $('[data-copy-link]').addEventListener('click', () => copyText(`${location.origin}/${me.slug}`));
   $('[data-share-link]').addEventListener('click', async () => {
     const url = `${location.origin}/${me.slug}`;
@@ -101,6 +112,7 @@
     form.city.value = me.city;
     form.has_clinic.checked = me.has_clinic;
     form.accepts_insurance.checked = me.accepts_insurance;
+    $('[data-accepts-messages]').checked = me.accepts_messages !== false;
     form.clinic_name.value = me.clinic_name;
     form.clinic_address.value = me.clinic_address;
     form.maps_url.value = me.maps_url || '';

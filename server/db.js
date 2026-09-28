@@ -155,7 +155,8 @@ addColumn('professionals', 'maps_url', "TEXT NOT NULL DEFAULT ''");   // link do
 addColumn('professionals', 'maps_query', "TEXT NOT NULL DEFAULT ''"); // o que o mini mapa mostra (coordenadas/local)
 addColumn('patients', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('patients', 'birth_date', 'TEXT');
-addColumn('professionals', 'cpf', 'TEXT'); // CPF do profissional: um cadastro por CPF (apagado libera)
+addColumn('professionals', 'cpf', 'TEXT');
+addColumn('professionals', 'accepts_messages', 'INTEGER NOT NULL DEFAULT 1'); // "Aceitar mensagens e agendamentos" (Meu perfil) // CPF do profissional: um cadastro por CPF (apagado libera)
 addColumn('professionals', 'accepts_insurance', 'INTEGER NOT NULL DEFAULT 0'); // aceita plano de saúde (online ou presencial) // data de nascimento (AAAA-MM-DD): não muda depois de informada
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_professionals_slug ON professionals(slug)');
 fs.mkdirSync(path.join(DATA_DIR, 'documents'), { recursive: true });

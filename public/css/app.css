@@ -1459,3 +1459,9 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 /* Admin: pré-cadastros aguardando aprovação */
 .pend-list { display: grid; gap: 10px; }
 .pend-item { padding: 14px 16px; }
+/* Aviso "não recebe mensagens / agendamentos / sem agenda" com o "?" ao lado */
+.pause-note { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: #eee8e2; color: #26322f; font-size: .9rem; font-weight: 600; line-height: 1.35; }
+.pause-note > span { flex: 1; }
+.pause-q { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid #8a7362; background: #fff; color: #8a7362; font: inherit; font-size: .85rem; font-weight: 800; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.pause-q:hover, .pause-q:focus-visible { background: #8a7362; color: #fff; }
+.chat-pause { padding: 8px 12px 0; background: var(--surface); border-top: 1px solid var(--line); }

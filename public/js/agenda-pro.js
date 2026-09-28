@@ -8,6 +8,7 @@
   const DAYS = [[1, 'Segunda'], [2, 'Terça'], [3, 'Quarta'], [4, 'Quinta'], [5, 'Sexta'], [6, 'Sábado'], [0, 'Domingo']];
   const MINUTES = [30, 40, 45, 50, 60, 90, 120];
   const MISSING = {
+    pausado: 'Você pausou as mensagens e os agendamentos. Para os pacientes marcarem, ligue <b>"Aceitar mensagens e agendamentos"</b> em <a href="#perfil">Meu perfil</a> (sua agenda está guardada).',
     online: 'Ligue <b>"Disponível para atendimento online"</b> ou <b>"presencial"</b> (logo acima).',
     horarios: 'Coloque os horários de início das consultas (abaixo) e toque em "Salvar agenda".',
     valor: 'Coloque o valor da consulta em <a href="#perfil">Meu perfil</a>.',
@@ -77,7 +78,7 @@
   function renderAgenda() {
     const s = settings;
     const status = s.ready
-      ? `<div class="notice ok small">✅ Pacientes já podem marcar. ${s.next ? `Próximo horário livre: <b>${esc(s.next.label)} às ${esc(s.next.first)}</b>.` : 'Não há horário livre nos próximos 60 dias.'} Pagamento: <b>${s.mode === 'auto' ? 'Pix automático (Asaas)' : 'Pix manual pelo chat'}</b>.</div>`
+      ? `<div class="notice ok small">✅ Pacientes já podem marcar. ${s.next ? `Próximo horário livre: <b>${esc(s.next.label)} às ${esc(s.next.first)}</b>.` : 'Não há horário livre no período aberto para marcar.'} Pagamento: <b>${s.mode === 'auto' ? 'Pix automático (Asaas)' : 'Pix manual pelo chat'}</b>.</div>`
       : `<div class="notice warn small"><b>Os pacientes ainda não conseguem marcar.</b> Falta:<ul style="margin:6px 0 0;padding-left:18px">${s.missing.map((m) => `<li>${MISSING[m]}</li>`).join('')}</ul></div>`;
     els.agenda.innerHTML = `<h2 style="margin:0">Minha agenda</h2>
       <label class="switch-row"><span class="sw-ic">${ic('video', 22)}</span>

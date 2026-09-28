@@ -60,6 +60,17 @@ router.put('/quick-replies', (req, res) => {
   res.json({ items, max: QUICK_MAX });
 });
 
+// "Aceitar mensagens e agendamentos" (Meu perfil): desligado, o perfil continua aparecendo e ele publica
+// normalmente, mas os pacientes não mandam mensagem nova nem marcam consulta. A agenda (horários, valor,
+// online/presencial) fica guardada e volta como estava quando ele liga de novo.
+router.post('/accepts-messages', (req, res) => {
+  if (req.auth.secretary) throw new U.HttpError(403, 'Só o profissional muda esta opção.');
+  const on = req.body.on === true || req.body.on === 1 || req.body.on === '1' || req.body.on === 'true';
+  db.prepare('UPDATE professionals SET accepts_messages = ? WHERE id = ?').run(on ? 1 : 0, req.auth.user.id);
+  require('../agenda').touch();
+  res.json({ ok: true, accepts_messages: on });
+});
+
 // Conta antiga sem CPF: o profissional informa uma vez (depois não muda) e a plataforma é liberada
 router.post('/cpf', (req, res) => {
   if (req.auth.secretary) throw new U.HttpError(403, 'Só o profissional pode informar o CPF.');

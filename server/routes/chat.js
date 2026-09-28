@@ -50,7 +50,21 @@ function blocksOf(c) {
   const rows = db.prepare('SELECT blocker_role FROM chat_blocks WHERE conversation_id = ?').all(c.id).map((r) => r.blocker_role);
   return { patient: rows.includes('patient'), professional: rows.includes('professional') };
 }
+// Profissional com "Aceitar mensagens" desligado: o paciente não manda mensagem nova (a conversa antiga
+// continua aparecendo). Quem tem consulta em andamento com ele (pagamento, marcada) continua falando.
+const PAUSED_MSG = 'Este profissional não está recebendo mensagens no momento.';
+function proPaused(proId) {
+  return db.prepare('SELECT accepts_messages FROM professionals WHERE id = ?').get(proId)?.accepts_messages === 0;
+}
+function hasOpenAppointment(patientId, proId) {
+  return !!db.prepare(`SELECT 1 FROM appointments WHERE patient_id = ? AND professional_id = ?
+    AND status IN ('aguardando_pix', 'aguardando_pagamento', 'pagamento_recusado', 'aguardando_paciente', 'confirmada') AND end_at > ?`)
+    .get(patientId, proId, require('../agenda').iso(require('../agenda').now()));
+}
+const pausedFor = (c) => proPaused(c.professional_id) && !hasOpenAppointment(c.patient_id, c.professional_id);
+
 function assertCanSend(role, c) {
+  if (role === 'patient' && pausedFor(c)) throw Object.assign(new U.HttpError(403, PAUSED_MSG), { extra: { paused: true } });
   const b = blocksOf(c);
   const other = role === 'patient' ? 'professional' : 'patient';
   if (b[role]) throw new U.HttpError(403, `Você bloqueou este ${other === 'patient' ? 'paciente' : 'profissional'}. Desbloqueie para mandar mensagens.`);
@@ -88,7 +102,7 @@ function summarize(role, c) {
   const unread = db.prepare(`SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND sender_role = ? AND read_at IS NULL AND kind <> 'deleted' AND ${hc} = 0`).get(c.id, other).n;
   const b = blocksOf(c);
   return { id: c.id, archived: !!c[s], peer: peerOf(role, c), last_message: last, unread, updated_at: c.last_message_at || c.created_at,
-    blocked_by_me: b[role], blocked_me: b[other] };
+    blocked_by_me: b[role], blocked_me: b[other], ...(role === 'patient' && pausedFor(c) ? { paused: true } : {}) };
 }
 
 router.get('/conversations', (req, res) => {
@@ -136,6 +150,7 @@ router.post('/conversations', (req, res) => {
   if (!c) {
     const p = db.prepare(`SELECT id FROM professionals p WHERE id = ? AND ${VISIBLE_SQL}`).get(proId);
     if (!p) throw new U.HttpError(404, 'Profissional indisponível no momento.');
+    if (proPaused(proId)) throw Object.assign(new U.HttpError(403, PAUSED_MSG), { extra: { paused: true } });
     const info = db.prepare('INSERT INTO conversations (patient_id, professional_id) VALUES (?, ?)').run(req.auth.user.id, proId);
     c = db.prepare('SELECT * FROM conversations WHERE id = ?').get(Number(info.lastInsertRowid));
   } else if (c.archived_by_patient) {

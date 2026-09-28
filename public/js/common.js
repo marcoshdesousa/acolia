@@ -118,6 +118,37 @@
     $('[data-blocked-logout]').onclick = () => logout('/');
     $('[data-blocked-delete]').onclick = () => deleteAccountFlow(me.role);
   }
+  // Aviso com "?" quando o profissional não recebe mensagens/agendamentos ou está sem agenda.
+  // kind: 'msg' (não recebe mensagens), 'agenda' (não faz agendamentos), 'closed' (sem agenda aberta)
+  const PAUSE_TEXT = {
+    msg: 'Este profissional não está recebendo mensagens no momento.',
+    agenda: 'Este profissional não está fazendo agendamentos no momento.',
+    closed: 'Este profissional está sem agenda disponível no momento.',
+  };
+  function pauseNote(kind) {
+    return `<div class="pause-note" data-pause-note="${kind}"><span>${esc(PAUSE_TEXT[kind])}</span>
+      <button type="button" class="pause-q" data-pause-why="${kind}" aria-label="Saiba mais" title="Saiba mais">?</button></div>`;
+  }
+  function pauseWhy(kind) {
+    const paused = kind !== 'closed';
+    return modal({
+      title: paused ? 'Pausa no atendimento' : 'Sem agenda no momento',
+      html: paused
+        ? `<p>${esc(PAUSE_TEXT[kind])} Por isso, agora não dá para <b>mandar mensagem</b> nem <b>marcar consulta</b> com ele(a).</p>
+          <p>Os profissionais podem pausar o atendimento por um tempo, por exemplo por <b>férias</b>, <b>repouso</b>, <b>licença ou atestado médico</b>, <b>congressos e cursos</b> ou <b>questões pessoais</b> que os impedem de atender neste momento.</p>
+          <p>O perfil e as publicações continuam aqui. Assim que ele(a) voltar, as mensagens e os agendamentos abrem de novo.</p>
+          <p class="muted small">Se você já tem uma consulta marcada com este profissional, ela continua valendo e a conversa sobre ela continua aberta.</p>`
+        : `<p>${esc(PAUSE_TEXT.closed)} Por isso, agora não dá para <b>marcar a consulta por aqui</b>.</p>
+          <p>Isso acontece, por exemplo, quando a <b>agenda está lotada</b>, quando ele(a) ainda está <b>organizando os horários</b> ou ainda não abriu a agenda online.</p>
+          <p>Você pode <b>mandar uma mensagem</b> para combinar ou tentar de novo mais tarde.</p>`,
+      actions: [{ label: 'Entendi' }],
+    });
+  }
+  document.addEventListener('click', (e) => {
+    const q = e.target.closest('[data-pause-why]');
+    if (q) { e.preventDefault(); e.stopPropagation(); pauseWhy(q.dataset.pauseWhy); }
+  });
+
   // Profissional com conta antiga sem CPF: tela única pedindo o CPF para liberar a plataforma.
   // A secretária não informa o CPF (só vê o aviso para o profissional entrar e informar).
   function showNeedsCpf(me) {
@@ -771,7 +802,7 @@
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
     supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
-    handleForm, logout, showBlocked, showNeedsCpf, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
+    handleForm, logout, showBlocked, showNeedsCpf, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
     SOCIAL, socialLinks, socialFields,
   };
 })();
