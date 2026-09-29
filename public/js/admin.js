@@ -198,6 +198,7 @@
 
   // Filtro rápido (Todos / Ativos / Bloqueados / Apagados), com a quantidade de cada
   let lastStats = null;
+  const PATIENTS = new Map();
   function syncSeg() {
     const s = lastStats;
     const n = s && {
@@ -225,6 +226,7 @@
     const f = $(`[data-filter="${kind}"]`);
     const qs = new URLSearchParams([...new FormData(f).entries()].filter(([, v]) => v));
     const { items } = await api(`/api/admin/${kind}?${qs}`);
+    if (kind === 'patients') items.forEach((x) => PATIENTS.set(x.id, x));
     const body = $(`[data-rows="${kind}"]`);
     if (kind === 'professionals') body.innerHTML = items.length ? items.map(proRow).join('') : '<tr><td colspan="6" class="center muted">Nenhum profissional encontrado.</td></tr>';
     else {
@@ -235,6 +237,7 @@
         <td>${fmtDT(p.created_at)}</td>
         <td>${p.status === 'excluido' ? '<span class="badge">Apagada</span>' : STATUS_BADGE[p.status]}</td>
         <td>${p.status === 'excluido' ? '' : `<div class="row">
+          <button class="btn sm" data-pat-edit="${p.id}">Editar dados</button>
           <button class="btn secondary sm" data-pat-status="${p.id}" data-to="${p.status === 'ativo' ? 'bloqueado' : 'ativo'}">${p.status === 'ativo' ? 'Bloquear' : 'Desbloquear'}</button>
           <button class="btn ghost sm" data-pat-reset="${p.id}" data-name="${esc(p.name)}">Gerar nova senha</button>
           <button class="btn danger sm" data-pat-del="${p.id}" data-name="${esc(p.name)}">Apagar conta</button></div>`}</td></tr>`).join('')
@@ -259,6 +262,12 @@
   document.addEventListener('click', async (e) => {
     const pb = e.target.closest('[data-pro]');
     if (pb) return openPro(Number(pb.dataset.pro));
+    const pe = e.target.closest('[data-pat-edit]');
+    if (pe) {
+      const pat = PATIENTS.get(Number(pe.dataset.patEdit));
+      if (pat && await editPatient(pat)) loadList('patients');
+      return;
+    }
     const ps = e.target.closest('[data-pat-status]');
     if (ps) {
       const to = ps.dataset.to;
@@ -306,6 +315,79 @@
     });
   }
 
+  // ---------- Editar dados (o admin corrige tudo: nome, CPF, carteirinha, plano, contato, local, especialidades) ----------
+  const fld = (label, html, hint = '') => `<div class="field"><label>${label}</label>${html}${hint ? `<div class="hint">${hint}</div>` : ''}</div>`;
+  async function editPro(p) {
+    let sp = null;
+    return modal({
+      title: 'Editar dados do profissional',
+      html: `<div class="form-error hidden" data-err></div>
+        ${fld('Nome completo', `<input data-f="name" value="${esc(p.legal_name || p.name)}" maxlength="120">`, 'É o nome que aparece no perfil e nos documentos.')}
+        <div class="grid-2">${fld('CPF', `<input data-f="cpf" inputmode="numeric" value="${esc(p.cpf || '')}" placeholder="000.000.000-00">`)}
+          ${fld('Profissão', `<select data-f="profession">${cfg.professions.map((x) => `<option ${x === p.profession ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`)}</div>
+        <div class="grid-2">${fld('Carteirinha (CRP/CRM)', `<input data-f="registry" value="${esc(p.registry || '')}" maxlength="40" placeholder="Ex.: CRP 06/12345">`)}
+          ${fld('Plano', `<select data-f="plan">${(cfg.plans || []).map((x) => `<option value="${esc(x.key)}" ${x.key === (p.plan_key || 'mensal-30') ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>`)}</div>
+        <div class="grid-2">${fld('E-mail', `<input data-f="email" type="email" value="${esc(p.email)}">`)}
+          ${fld('WhatsApp', `<input data-f="phone" inputmode="tel" value="${esc(fmtPhone(p.phone))}">`)}</div>
+        ${fld('Estado e município', `<div class="grid-uf"><select data-f="state" aria-label="Estado"></select><input data-f="city" value="${esc(p.city)}" aria-label="Município"></div>`)}
+        ${fld('Especialidades', '<div data-sp></div>')}
+        <label class="check" style="margin:6px 0 10px"><input type="checkbox" data-f="has_clinic" ${p.has_clinic ? 'checked' : ''}> Atende presencial (consultório)</label>
+        <div data-clinic class="${p.has_clinic ? '' : 'hidden'}">
+          ${fld('Nome da clínica', `<input data-f="clinic_name" value="${esc(p.clinic_name || '')}" maxlength="120">`)}
+          ${fld('Endereço completo', `<input data-f="clinic_address" value="${esc(p.clinic_address || '')}" maxlength="250">`)}
+          ${fld('Link do Google Maps', `<input data-f="maps_url" value="${esc(p.maps_url || '')}">`)}
+        </div>`,
+      onOpen: async (dlg) => {
+        const f = (k) => $(`[data-f="${k}"]`, dlg);
+        Acolia.maskCpf(f('cpf')); maskPhone(f('phone'));
+        f('state').innerHTML = ufOptions(p.state, 'UF'); bindUfCity(f('state'), f('city'));
+        f('has_clinic').addEventListener('change', () => $('[data-clinic]', dlg).classList.toggle('hidden', !f('has_clinic').checked));
+        sp = await AcoliaSpecialties.picker($('[data-sp]', dlg), { name: 'specialties', selected: (p.specialties || '').split(',').map((x) => x.trim()).filter(Boolean) });
+      },
+      actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, {
+        label: 'Salvar alterações', handler: async (dlg) => {
+          const f = (k) => $(`[data-f="${k}"]`, dlg);
+          const err = $('[data-err]', dlg);
+          const body = {};
+          for (const k of ['name', 'cpf', 'profession', 'registry', 'plan', 'email', 'phone', 'state', 'city', 'clinic_name', 'clinic_address', 'maps_url']) body[k] = f(k).value;
+          body.has_clinic = f('has_clinic').checked;
+          if (sp) body.specialties = sp.value();
+          try { await api(`/api/admin/professionals/${p.id}/edit`, { method: 'POST', body }); toast('Dados atualizados'); return true; }
+          catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); err.scrollIntoView({ block: 'nearest' }); return false; }
+        },
+      }],
+    });
+  }
+  async function editPatient(p) {
+    return modal({
+      title: 'Editar dados do paciente',
+      html: `<div class="form-error hidden" data-err></div>
+        ${fld('Nome completo', `<input data-f="name" value="${esc(p.name)}" maxlength="120">`)}
+        <div class="grid-2">${fld('CPF', `<input data-f="cpf" inputmode="numeric" value="${esc(p.cpf || '')}">`)}
+          ${fld('Data de nascimento', `<input data-f="birth_date" type="date" value="${esc(p.birth_date || '')}">`)}</div>
+        ${fld('@', `<div class="slug-input"><span>@</span><input data-f="handle" value="${esc(p.handle || '')}" maxlength="31" autocapitalize="none" spellcheck="false"></div>`, 'O paciente não consegue mudar o @; só a administração.')}
+        ${fld('Estado e município', `<div class="grid-uf"><select data-f="state" aria-label="Estado"></select><input data-f="city" value="${esc(p.city)}" aria-label="Município"></div>`)}`,
+      onOpen: (dlg) => {
+        const f = (k) => $(`[data-f="${k}"]`, dlg);
+        Acolia.maskCpf(f('cpf'));
+        f('state').innerHTML = ufOptions(p.state, 'UF'); bindUfCity(f('state'), f('city'));
+      },
+      actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, {
+        label: 'Salvar alterações', handler: async (dlg) => {
+          const body = {};
+          for (const k of ['name', 'cpf', 'birth_date', 'handle', 'state', 'city']) {
+            const v = $(`[data-f="${k}"]`, dlg).value;
+            if (k === 'handle' && !v.trim()) continue;
+            if (k === 'birth_date' && !v) continue;
+            body[k] = v;
+          }
+          try { await api(`/api/admin/patients/${p.id}/edit`, { method: 'POST', body }); toast('Dados atualizados'); return true; }
+          catch (ex) { const err = $('[data-err]', dlg); err.textContent = ex.message; err.classList.remove('hidden'); return false; }
+        },
+      }],
+    });
+  }
+
   async function openPro(id) {
     const p = await api(`/api/admin/professionals/${id}`);
     const btn = (status, label, cls = 'secondary') => `<button type="button" class="btn sm ${cls}" data-set="${status}">${label}</button>`;
@@ -346,6 +428,7 @@
           <tr><th>Cadastro</th><td>${fmtDT(p.created_at)}</td></tr>
           <tr><th>Mensalidade</th><td>${subBadge(p)}</td></tr>
         </tbody></table>
+        ${p.status !== 'excluido' && p.status !== 'oficial' ? '<button type="button" class="btn sm" data-edit-pro style="margin-top:10px">Editar dados</button>' : ''}
         <h3 style="margin-top:16px">Situação</h3>
         <div class="row">${statusBtns}</div>
         <p class="small muted" style="margin-top:6px">Restrito: some da vitrine, mas ainda responde às conversas. Bloqueado: não consegue entrar.</p>
@@ -368,6 +451,12 @@
       onOpen: (dlg) => {
         const refresh = async () => { dlg.close(); dlg.remove(); await reloadAll(); openPro(id); };
         $('[data-copy-code]', dlg).addEventListener('click', () => copyText(p.code));
+        $('[data-edit-pro]', dlg)?.addEventListener('click', async () => {
+          dlg.close(); dlg.remove();
+          const saved = await editPro(p);
+          if (saved) await reloadAll();
+          openPro(id);
+        });
         $('[data-save-registry]', dlg)?.addEventListener('click', async () => {
           try {
             await api(`/api/admin/professionals/${id}/registry`, { method: 'POST', body: { registry: $('[data-registry]', dlg).value } });

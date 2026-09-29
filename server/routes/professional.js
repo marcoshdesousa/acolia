@@ -60,6 +60,15 @@ router.put('/quick-replies', (req, res) => {
   res.json({ items, max: QUICK_MAX });
 });
 
+// Plano: o profissional pode trocar (quando houver mais de um); a secretária não
+router.post('/plan', (req, res) => {
+  if (req.auth.secretary) throw new U.HttpError(403, 'Só o profissional troca o plano.');
+  const { PLANS } = require('./auth');
+  if (!PLANS[req.body.plan]) throw new U.HttpError(400, 'Selecione um plano.');
+  db.prepare('UPDATE professionals SET plan = ? WHERE id = ?').run(req.body.plan, req.auth.user.id);
+  res.json({ ok: true, plan: req.body.plan });
+});
+
 // "Aceitar mensagens e agendamentos" (Meu perfil): desligado, o perfil continua aparecendo e ele publica
 // normalmente, mas os pacientes não mandam mensagem nova nem marcam consulta. A agenda (horários, valor,
 // online/presencial) fica guardada e volta como estava quando ele liga de novo.

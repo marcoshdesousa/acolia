@@ -3,7 +3,7 @@ const express = require('express');
 const { db } = require('../db');
 const U = require('../util');
 const { VISIBLE_SQL, publicProfessional, isVisible } = require('../serialize');
-const { PROFESSIONS } = require('./auth');
+const { PROFESSIONS, PLANS } = require('./auth');
 
 const router = express.Router();
 
@@ -12,7 +12,7 @@ router.get('/config', (_req, res) => {
   if (process.env.ICE_SERVERS) {
     try { iceServers = JSON.parse(process.env.ICE_SERVERS); } catch { console.error('ICE_SERVERS inválido (JSON)'); }
   }
-  res.json({ iceServers, professions: PROFESSIONS, specialties: require('../specialties').GROUPS, ufs: U.UFS, support: require('../accountState').SUPPORT_WHATSAPP });
+  res.json({ iceServers, professions: PROFESSIONS, plans: Object.entries(PLANS).map(([key, label]) => ({ key, label })), specialties: require('../specialties').GROUPS, ufs: U.UFS, support: require('../accountState').SUPPORT_WHATSAPP });
 });
 
 // Vitrine de profissionais.

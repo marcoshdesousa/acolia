@@ -24,6 +24,21 @@
     if ($('[data-origin]')) $('[data-origin]').textContent = `${location.host}/`;
     if ($('[data-slug-form]')) $('[data-slug-form]').slug.value = me.slug || ''; // (a secretária não tem)
   }
+  // Plano: mostra o atual; com mais de um plano, o profissional troca aqui (a secretária não vê)
+  function renderPlan() {
+    const box = $('[data-plan-box]');
+    if (!box) return;
+    if (isSec) { $('[data-plan-row]')?.remove(); return; }
+    const plans = cfg.plans || [];
+    const cur = plans.find((x) => x.key === me.plan) || plans[0];
+    if (plans.length < 2) { box.innerHTML = `<b>${esc(cur ? cur.label : '—')}</b>`; return; }
+    box.innerHTML = `<select data-plan-sel aria-label="Plano">${plans.map((x) => `<option value="${esc(x.key)}" ${x.key === cur?.key ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>`;
+    $('[data-plan-sel]').addEventListener('change', async (e) => {
+      try { await api('/api/professional/plan', { method: 'POST', body: { plan: e.target.value } }); me.plan = e.target.value; toast('Plano alterado!'); }
+      catch (ex) { toast(ex.message, 'error'); renderPlan(); }
+    });
+  }
+  renderPlan();
   // "Aceitar mensagens e agendamentos": salva na hora (a secretária não muda esta opção)
   if (isSec) $('[data-accepts-card]')?.remove();
   $('[data-accepts-messages]')?.addEventListener('change', async (e) => {

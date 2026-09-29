@@ -173,6 +173,7 @@ function ownProfessional(p) {
     has_clinic: !!p.has_clinic,
     accepts_insurance: !!p.accepts_insurance,
     accepts_messages: p.accepts_messages !== 0,
+    plan: p.plan || 'mensal-30',
     clinic_name: p.clinic_name,
     clinic_address: p.clinic_address,
     maps_url: p.maps_url || '',

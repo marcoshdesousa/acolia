@@ -2529,3 +2529,51 @@ test('profissional antigo sem CPF: só vê "Coloque seu CPF" até informar; cont
   assert.equal((await pro.get('/api/professional/me')).status, 200);
   db.prepare('UPDATE professionals SET is_test = 0, cpf = ? WHERE id = ?').run(cpfOf(990), c.data.id);
 });
+
+test('admin corrige os dados do profissional e do paciente (nome, CPF, carteirinha, plano, contato, local, especialidades, @)', async () => {
+  const { db } = require('../server/db');
+  const c = await admin.post('/api/admin/professionals', { name: 'Marta Erro Silva', profession: 'Psicólogo(a)', registry: 'CRP 06/77001', email: 'marta.erro@example.com', phone: '11966661111', state: 'SP', city: 'Campinas', cpf: cpfOf(801) });
+  assert.equal(c.status, 201, JSON.stringify(c.data));
+  let r = await admin.post(`/api/admin/professionals/${c.data.id}/edit`, {
+    name: 'Marta Certa Silva', cpf: cpfOf(802), registry: 'CRP 06/77002', plan: 'mensal-30', email: 'marta.certa@example.com', phone: '(11) 95555-2222',
+    state: 'SP', city: 'Santos', specialties: ['Ansiedade', 'Luto'], profession: 'Psicanalista',
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const row = db.prepare('SELECT * FROM professionals WHERE id = ?').get(c.data.id);
+  assert.equal(row.name, 'Marta Certa Silva');
+  assert.equal(row.legal_name, 'Marta Certa Silva');
+  assert.equal(row.cpf, cpfOf(802));
+  assert.equal(row.registry, 'CRP 06/77002');
+  assert.equal(row.email, 'marta.certa@example.com');
+  assert.equal(row.phone, '11955552222');
+  assert.equal(row.city, 'Santos');
+  assert.equal(row.profession, 'Psicanalista');
+  assert.match(row.specialties, /Luto/);
+  // Não aceita dado inválido nem repetido
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { cpf: '123' })).status, 400);
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { name: 'Marta' })).status, 400);
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { plan: 'ouro' })).status, 400);
+  const other = await admin.post('/api/admin/professionals', { name: 'Nina Outra Reis', profession: 'Terapeuta', email: 'nina.outra@example.com', phone: '11966661112', state: 'SP', city: 'Campinas', cpf: cpfOf(803) });
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { cpf: cpfOf(803) })).status, 409, 'CPF de outro profissional');
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { email: 'nina.outra@example.com' })).status, 409);
+  // O profissional troca o plano (e a secretária não), mas não muda CPF/carteirinha pelo perfil
+  const pro = client();
+  await pro.post('/api/auth/professional/login', { login: other.data.code, password: other.data.password });
+  assert.equal((await pro.post('/api/professional/plan', { plan: 'mensal-30' })).status, 200);
+  assert.equal((await pro.post('/api/professional/plan', { plan: 'ouro' })).status, 400);
+  assert.equal((await pro.get('/api/auth/me')).data.user.plan, 'mensal-30');
+  // Paciente: nome, CPF, nascimento, @ e local
+  const pt = client();
+  assert.equal((await pt.post('/api/auth/patient/register', { name: 'Lia Errada Souza', cpf: cpfOf(804), state: 'SP', city: 'Campinas', birth_date: '1990-01-01', password: '123456', handle: 'lia.errada' })).status, 201);
+  const pid = db.prepare('SELECT id FROM patients WHERE cpf = ?').get(cpfOf(804)).id;
+  r = await admin.post(`/api/admin/patients/${pid}/edit`, { name: 'Lia Certa Souza', cpf: cpfOf(805), birth_date: '1991-02-03', handle: 'lia.certa', state: 'RJ', city: 'Niterói' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const me = (await pt.get('/api/auth/me')).data.user;
+  assert.equal(me.name, 'Lia Certa Souza');
+  assert.equal(me.handle, 'lia.certa');
+  assert.equal(me.birth_date, '1991-02-03');
+  assert.equal(me.city, 'Niterói');
+  assert.equal((await client().post('/api/auth/patient/login', { cpf: cpfOf(805), password: '123456' })).status, 200, 'entra com o CPF corrigido');
+  assert.equal((await admin.post(`/api/admin/patients/${pid}/edit`, { cpf: CPF_A })).status, 409, 'CPF de outra conta de paciente');
+  assert.equal((await admin.post(`/api/admin/patients/${pid}/edit`, { birth_date: '2999-01-01' })).status, 400);
+});

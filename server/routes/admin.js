@@ -34,7 +34,8 @@ function adminPro(p) {
     visible: isVisible(p), admin_note: p.admin_note, created_at: p.created_at,
     has_document: !!p.document_file, document_is_pdf: /\.pdf$/.test(p.document_file || ''),
     registry_verified: !!p.registry_verified, legal_name: p.legal_name || p.name, slug: p.slug, is_test: !!p.is_test,
-    plan: p.plan ? (require('./auth').PLANS[p.plan] || p.plan) : null,
+    plan: p.plan ? (require('./auth').PLANS[p.plan] || p.plan) : null, plan_key: p.plan || '',
+    maps_url: p.maps_url || '',
     cpf: p.cpf ? U.formatCpf(p.cpf) : '',
   };
 }
@@ -43,6 +44,7 @@ function adminPatient(p) {
   return {
     id: p.id, name: p.name, display_name: p.display_name, handle: p.handle || '', cpf: U.formatCpf(p.cpf), cpf_name_verified: !!p.cpf_name_verified,
     state: p.state, city: p.city, photo: p.photo, status: p.status, created_at: p.created_at, is_test: !!p.is_test,
+    birth_date: p.birth_date || '',
   };
 }
 
@@ -245,6 +247,71 @@ router.post('/professionals/:id/registry', (req, res) => {
   res.json(adminPro(db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id))));
 });
 
+// Admin corrige os dados do profissional (ex.: nome ou CPF digitado errado no cadastro). O profissional
+// não muda nome completo, CPF, profissão nem carteirinha; o admin muda tudo. Campo que não vier fica como está.
+router.post('/professionals/:id/edit', async (req, res) => {
+  const p = db.prepare("SELECT * FROM professionals WHERE id = ? AND status NOT IN ('oficial', 'excluido')").get(Number(req.params.id));
+  if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
+  const b = req.body || {};
+  const has = (k) => b[k] !== undefined;
+  const up = {};
+  if (has('name')) {
+    const name = U.cleanText(b.name, 120);
+    if (!U.isFullName(name)) throw new U.HttpError(400, 'Informe o nome completo (nome e sobrenome).');
+    up.name = name; up.legal_name = name;
+  }
+  if (has('cpf')) {
+    const cpf = U.onlyDigits(b.cpf);
+    if (!U.isValidCpf(cpf)) throw new U.HttpError(400, 'CPF inválido. Confira os números digitados.');
+    if (db.prepare("SELECT 1 FROM professionals WHERE cpf = ? AND status <> 'excluido' AND id <> ?").get(cpf, p.id)) throw new U.HttpError(409, 'Este CPF já está em outro cadastro de profissional.');
+    up.cpf = cpf;
+  }
+  const { PROFESSIONS, PLANS, validateLocation } = require('./auth');
+  if (has('profession')) {
+    if (!PROFESSIONS.includes(b.profession)) throw new U.HttpError(400, 'Selecione a profissão.');
+    up.profession = b.profession;
+  }
+  if (has('registry')) up.registry = U.cleanText(b.registry, 40); // o admin define a carteirinha livremente
+  if (has('plan')) {
+    if (b.plan && !PLANS[b.plan]) throw new U.HttpError(400, 'Selecione um plano.');
+    up.plan = b.plan || null;
+  }
+  if (has('email')) {
+    const email = U.cleanText(b.email, 160).toLowerCase();
+    if (!U.isValidEmail(email)) throw new U.HttpError(400, 'E-mail inválido.');
+    if (db.prepare('SELECT 1 FROM professionals WHERE email = ? AND id <> ?').get(email, p.id)) throw new U.HttpError(409, 'Este e-mail já está em uso em outra conta.');
+    up.email = email;
+  }
+  if (has('phone')) {
+    const phone = U.onlyDigits(b.phone);
+    if (phone.length < 10 || phone.length > 13) throw new U.HttpError(400, 'Informe o WhatsApp com DDD.');
+    up.phone = phone;
+  }
+  if (has('state') || has('city')) {
+    const { state, city } = validateLocation(b.state ?? p.state, b.city ?? p.city);
+    up.state = state; up.city = city; up.city_norm = U.norm(city);
+  }
+  if (has('specialties')) up.specialties = require('../specialties').store(require('../specialties').parse(b.specialties));
+  if (has('has_clinic')) {
+    const on = !!b.has_clinic;
+    up.has_clinic = on ? 1 : 0;
+    if (on) {
+      up.clinic_name = U.cleanText(b.clinic_name, 120);
+      up.clinic_address = U.cleanText(b.clinic_address, 250);
+      if (up.clinic_name.length < 2) throw new U.HttpError(400, 'Informe o nome da clínica.');
+      if (up.clinic_address.length < 5) throw new U.HttpError(400, 'Informe o endereço completo da clínica.');
+      const maps = require('../maps');
+      up.maps_url = maps.cleanMapsUrl(b.maps_url);
+      if (!up.maps_url) throw new U.HttpError(400, 'Cole o link do Google Maps da clínica.');
+      up.maps_query = p.maps_url === up.maps_url && p.maps_query ? p.maps_query : maps.mapQuery(await maps.resolveShort(up.maps_url));
+    } else Object.assign(up, { clinic_name: '', clinic_address: '', maps_url: '', maps_query: '' });
+  }
+  const keys = Object.keys(up);
+  if (keys.length) db.prepare(`UPDATE professionals SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => up[k]), p.id);
+  require('../agenda').touch();
+  res.json(adminPro(db.prepare('SELECT * FROM professionals WHERE id = ?').get(p.id)));
+});
+
 router.post('/professionals/:id/note', (req, res) => {
   db.prepare('UPDATE professionals SET admin_note = ? WHERE id = ?').run(U.cleanText(req.body.note, 1000), Number(req.params.id));
   res.json({ ok: true });
@@ -322,6 +389,43 @@ router.get('/patients', (req, res) => {
   if (['ativo', 'bloqueado', 'excluido'].includes(st)) rows = rows.filter((r) => r.status === st);
   rows = filterRows(rows, req.query);
   res.json({ items: rows.map(adminPatient) });
+});
+
+// Admin corrige os dados do paciente (nome, CPF, nascimento, @, onde mora). O paciente não muda nome, CPF,
+// nascimento nem o @; o admin muda tudo.
+router.post('/patients/:id/edit', (req, res) => {
+  const p = db.prepare("SELECT * FROM patients WHERE id = ? AND status <> 'excluido'").get(Number(req.params.id));
+  if (!p) throw new U.HttpError(404, 'Paciente não encontrado.');
+  const b = req.body || {};
+  const has = (k) => b[k] !== undefined;
+  const up = {};
+  if (has('name')) {
+    const name = U.cleanText(b.name, 120);
+    if (!U.isFullName(name)) throw new U.HttpError(400, 'Informe o nome completo (nome e sobrenome).');
+    up.name = name;
+  }
+  if (has('cpf')) {
+    const cpf = U.onlyDigits(b.cpf);
+    if (!U.isValidCpf(cpf) && !(p.is_test && cpf === p.cpf)) throw new U.HttpError(400, 'CPF inválido. Confira os números digitados.');
+    if (db.prepare('SELECT 1 FROM patients WHERE cpf = ? AND id <> ?').get(cpf, p.id)) throw new U.HttpError(409, 'Já existe outra conta de paciente com este CPF.');
+    if (cpf !== p.cpf) up.cpf_name_verified = 0;
+    up.cpf = cpf;
+  }
+  if (has('birth_date')) {
+    if (!U.isValidBirthDate(String(b.birth_date))) throw new U.HttpError(400, 'Informe uma data de nascimento válida.');
+    up.birth_date = String(b.birth_date);
+  }
+  if (has('handle')) {
+    const H = require('../handles');
+    up.handle = H.assertFree(H.validate(b.handle), p.id);
+  }
+  if (has('state') || has('city')) {
+    const { state, city } = require('./auth').validateLocation(b.state ?? p.state, b.city ?? p.city);
+    up.state = state; up.city = city; up.city_norm = U.norm(city);
+  }
+  const keys = Object.keys(up);
+  if (keys.length) db.prepare(`UPDATE patients SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => up[k]), p.id);
+  res.json(adminPatient(db.prepare('SELECT * FROM patients WHERE id = ?').get(p.id)));
 });
 
 router.post('/patients/:id/status', (req, res) => {
