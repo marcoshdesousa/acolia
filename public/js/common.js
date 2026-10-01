@@ -750,6 +750,22 @@
     parent.prepend(div);
   }
 
+  // Aviso "Baixe o app" (no topo, com X). Some se fechar ou se o app já estiver instalado.
+  function installBanner(parent) {
+    if (!parent || isStandalone() || $('[data-install-banner]')) return;
+    try { if (localStorage.getItem('install-banner-fechado') === '1') return; } catch { /* ignora */ }
+    const div = document.createElement('div');
+    div.className = 'notice info push-banner';
+    div.dataset.installBanner = '';
+    div.innerHTML = `<span class="grow"><b>Baixe o app da Acolia</b> (grátis, pelo próprio site) e receba os lembretes das consultas e as mensagens na hora.</span>
+      <button class="btn sm" type="button" data-act>Como baixar</button>
+      <button class="icon-btn" type="button" aria-label="Fechar aviso" data-close>✕</button>`;
+    $('[data-act]', div).addEventListener('click', installGuide);
+    $('[data-close]', div).addEventListener('click', () => { div.remove(); try { localStorage.setItem('install-banner-fechado', '1'); } catch { /* ignora */ } });
+    window.addEventListener('appinstalled', () => div.remove(), { once: true });
+    parent.prepend(div);
+  }
+
   // Ao sair da conta, este aparelho para de receber notificações dessa conta
   async function stopPushOnThisDevice() {
     try {
@@ -802,7 +818,7 @@
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
     supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
-    handleForm, logout, showBlocked, showNeedsCpf, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
+    handleForm, logout, showBlocked, showNeedsCpf, installBanner, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
     SOCIAL, socialLinks, socialFields,
   };
 })();

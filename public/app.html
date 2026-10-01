@@ -263,6 +263,7 @@
     });
     $('[data-install-btn]').addEventListener('click', installApp);
     Acolia.setupNotifications($('[data-view=buscar]'));
+    Acolia.installBanner($('[data-view=buscar]'));
     $('[data-logout]').addEventListener('click', () => logout('/'));
     AcoliaDeleteAccount($('[data-delete-account]'), '/api/patient/delete');
   })();

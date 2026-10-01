@@ -181,7 +181,10 @@
     if (!file) return;
     const fd = new FormData();
     fd.append('photo', await Acolia.shrinkImage(file, 640)); // foto de perfil aparece pequena: 640 px basta
-    try { me = await api('/api/professional/photo', { method: 'POST', form: fd }); renderMe(); toast('Foto atualizada!'); } catch (ex) { toast(ex.message, 'error'); }
+    try {
+      me = await api('/api/professional/photo', { method: 'POST', form: fd }); renderMe(); toast('Foto atualizada!');
+      if (me.photo && $('[data-photo-banner]')) { $('[data-photo-banner]').remove(); Acolia.installBanner($('.panel-main')); }
+    } catch (ex) { toast(ex.message, 'error'); }
     e.target.value = '';
   });
 
@@ -203,6 +206,15 @@
   AcoliaDeleteAccount($('[data-delete-account]'), '/api/professional/delete');
   $('[data-install-btn]').addEventListener('click', installApp);
   Acolia.setupNotifications($('.panel-main'));
+  // Sem foto de perfil: aviso fixo para colocar (some quando colocar). Com foto: aviso de baixar o app.
+  if (!isSec && !me.photo) {
+    const ph = document.createElement('div');
+    ph.className = 'notice warn push-banner';
+    ph.dataset.photoBanner = '';
+    ph.innerHTML = '<span class="grow"><b>Coloque a sua foto de perfil.</b> Perfis com foto passam mais confiança e aparecem melhor na vitrine.</span><button class="btn sm" type="button" data-add-photo>Colocar foto</button>';
+    $('[data-add-photo]', ph).addEventListener('click', () => $('[data-photo-input]').click());
+    $('.panel-main').prepend(ph);
+  } else if (!isSec) Acolia.installBanner($('.panel-main'));
   Acolia.renewBanner(auth, $('.panel-main')); // aviso: assinatura acabando (2 dias antes)
 
   // ---------- Atendimento ----------
