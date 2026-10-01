@@ -775,6 +775,8 @@
   let bar = null;
   let barAppt = null;
   function pickForBar(list) {
+    // A pergunta "a consulta presencial aconteceu?" tem o seu próprio aviso (em cima): a barra mostra a próxima
+    if (ctx.role === 'professional') list = list.filter((a) => !a.can?.presence_check);
     const need = list.find((a) => Object.entries(a.can || {}).some(([k, v]) => v && !['reschedule', 'cancel', 'pro_cancel', 'enter_call', 'give_up'].includes(k)));
     return need || list.find((a) => a.status === 'confirmada') || null;
   }
@@ -816,6 +818,36 @@
     document.body.classList.add('has-appt-bar');
     place();
   }
+  // Pergunta fixa (profissional): "A consulta presencial com Fulano aconteceu? Sim / Não".
+  // Aparece em todas as telas, em cima do aviso de consulta (ou no lugar dele), até ele responder.
+  let presEl = null;
+  let presList = [];
+  function renderPres() {
+    if (!presEl) return;
+    const a = presList[0];
+    if (!a || ctx.secretary) { presEl.classList.add('hidden'); return; }
+    presEl.innerHTML = `<span class="ab-ic">${ic('home', 18)}</span>
+      <span class="ab-txt"><b>A consulta presencial com ${esc(a.patient.name.split(' ')[0])} aconteceu?</b><small>${esc(shortWhen(a))}${presList.length > 1 ? ` · mais ${presList.length - 1} para responder` : ''}</small></span>
+      <button type="button" class="btn sm" data-pres="1">Sim</button><button type="button" class="btn sm secondary" data-pres="0">Não</button>`;
+    presEl.dataset.id = a.id;
+    presEl.classList.remove('hidden');
+    placePres();
+  }
+  function placePres() {
+    if (!presEl || presEl.classList.contains('hidden')) return;
+    presEl.classList.toggle('gone', !!$('.story-viewer') || !!$('.agenda-page') || !!document.querySelector('dialog[open], .fn-pop, .qr-pop') || !!$('.reels-view'));
+    const shown = (el) => { const r = el.getBoundingClientRect(); return r.height > 0 && r.width > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('.hidden'); };
+    let bottom;
+    if (bar && !bar.classList.contains('hidden') && !bar.classList.contains('gone')) {
+      const r = bar.getBoundingClientRect();
+      bottom = window.innerHeight - r.top + 8;
+    } else {
+      const composer = [...$$('.pay-ask')].find(shown) || [...$$('.composer')].find(shown);
+      const nav = [...$$('.bottom-nav')].find(shown);
+      bottom = composer ? window.innerHeight - composer.getBoundingClientRect().top + 8 : nav ? window.innerHeight - nav.getBoundingClientRect().top + 8 : 24;
+    }
+    presEl.style.bottom = `${Math.max(8, Math.round(bottom))}px`;
+  }
   const localToday = () => new Date(now() - 3 * 3600e3).toISOString().slice(0, 10);
   const shortWhen = (a) => `${a.date.slice(8)}/${a.date.slice(5, 7)} às ${a.time}`;
   function place() {
@@ -836,13 +868,16 @@
     if (composer) bottom = window.innerHeight - composer.getBoundingClientRect().top + 8;
     else if (nav) bottom = window.innerHeight - nav.getBoundingClientRect().top + 8;
     bar.style.bottom = bottom === null ? '' : `${Math.max(8, Math.round(bottom))}px`;
-    document.documentElement.style.setProperty('--appt-bar-space', `${bar.offsetHeight + 12}px`);
+    document.documentElement.style.setProperty('--appt-bar-space', `${bar.offsetHeight + 12 + (presEl && !presEl.classList.contains('hidden') ? presEl.offsetHeight + 8 : 0)}px`);
+    placePres();
   }
   async function refreshBar() {
     if (!bar) return;
     const list = await loadUpcoming();
     barAppt = ctx.secretary ? (list.find((a) => a.status === 'confirmada') || list[0] || null) : pickForBar(list);
+    presList = ctx.role === 'professional' && !ctx.secretary ? list.filter((a) => a.can?.presence_check) : [];
     renderBar();
+    renderPres();
   }
   function mountBar({ role, socket, onSee, secretary = null }) {
     ctx.role = role;
@@ -851,6 +886,23 @@
     bar.className = 'appt-bar hidden';
     bar.setAttribute('role', 'status');
     document.body.appendChild(bar);
+    if (role === 'professional' && !secretary) {
+      presEl = document.createElement('div');
+      presEl.className = 'appt-bar pres-ask hidden';
+      presEl.setAttribute('role', 'alert');
+      document.body.appendChild(presEl);
+      presEl.addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-pres]');
+        if (!b) return;
+        const done = b.dataset.pres === '1';
+        if (!done && !await Acolia.confirmDialog('Confirmar que esta consulta presencial não aconteceu? Ela não entra em Meus pacientes nem no Financeiro.', { okLabel: 'Não aconteceu', title: 'Consulta presencial' })) return;
+        try {
+          await api(`/api/agenda/appointments/${presEl.dataset.id}/presencial-result`, { method: 'POST', body: { done } });
+          toast(done ? 'Pronto! A consulta entrou em Meus pacientes e no Financeiro.' : 'Pronto, anotado.');
+          refreshAll();
+        } catch (ex) { toast(ex.message, 'error'); }
+      });
+    }
     bar.addEventListener('click', (e) => {
       if (e.target.closest('[data-bar-see]')) return (onSee || openList)();
       const b = e.target.closest('[data-ag-act]');

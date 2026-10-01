@@ -91,6 +91,23 @@
           <div class="pat-summary" data-pat-summary></div>
           <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Nome completo</th><th>CPF</th><th>Nascimento</th><th>Município</th><th>Modalidade</th><th>Consultas</th><th>Última</th><th aria-label="Ações"></th></tr></thead><tbody data-pat-list></tbody></table></div>
         </div>
+        <div class="card fin-card" data-finance data-pro-only style="margin-top:24px">
+          <div class="row between" style="flex-wrap:wrap;gap:10px">
+            <h2 style="margin:0">Financeiro</h2>
+            <button type="button" class="btn sm" data-fin-add>+ Lançar consulta</button>
+          </div>
+          <p class="small muted" style="margin:6px 0 12px">As consultas pagas pela Acolia entram sozinhas: online quando a chamada termina; presencial quando você confirma que aconteceu. Atendeu e recebeu por fora? Toque em <b>Lançar consulta</b>. Convênio não entra.</p>
+          <div class="fin-month"><button type="button" class="icon-btn" data-fin-prev aria-label="Mês anterior">‹</button><b data-fin-month></b><button type="button" class="icon-btn" data-fin-next aria-label="Próximo mês">›</button></div>
+          <div class="fin-total"><span class="small muted">Total <span data-fin-total-label>do mês</span> <button type="button" class="pause-q" data-fin-why="total" aria-label="O que entra no total">?</button></span><b data-fin-total></b><span class="small muted" data-fin-alltime></span></div>
+          <div class="fin-grid" data-fin-grid></div>
+          <div class="fin-counts" data-fin-counts></div>
+          <div class="pat-period" style="margin-top:12px">
+            <div class="field"><label for="fin-from">De</label><input type="date" id="fin-from" data-fin-from></div>
+            <div class="field"><label for="fin-to">Até</label><input type="date" id="fin-to" data-fin-to></div>
+          </div>
+          <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap"><input type="search" data-fin-q placeholder="Buscar por nome ou CPF" aria-label="Buscar por nome ou CPF" style="flex:1;min-width:180px"><button type="button" class="btn ghost sm" data-fin-clear>Voltar para o mês</button></div>
+          <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Data</th><th>Paciente</th><th>CPF</th><th>Valor</th><th>Situação</th><th aria-label="Ações"></th></tr></thead><tbody data-fin-list></tbody></table></div>
+        </div>
         <h2 style="margin-top:24px">Histórico de chamadas</h2>
         <div class="table-wrap"><table><thead><tr><th>Paciente</th><th>Código</th><th>Criado</th><th>Situação</th></tr></thead><tbody data-history></tbody></table></div>
       </section>

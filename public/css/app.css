@@ -1465,3 +1465,24 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .pause-q { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid #8a7362; background: #fff; color: #8a7362; font: inherit; font-size: .85rem; font-weight: 800; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 .pause-q:hover, .pause-q:focus-visible { background: #8a7362; color: #fff; }
 .chat-pause { padding: 8px 12px 0; background: var(--surface); border-top: 1px solid var(--line); }
+
+/* Financeiro do profissional */
+.fin-month { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 4px 0 10px; }
+.fin-month b { font-size: 1.1rem; min-width: 190px; text-align: center; }
+.fin-total { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 16px; border-radius: 18px; background: #e5ebe8; text-align: center; }
+.fin-total > b { font-size: 2.1rem; font-weight: 800; color: #2e403c; line-height: 1.1; }
+.fin-total .pause-q { width: 20px; height: 20px; font-size: .75rem; vertical-align: middle; }
+.fin-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
+@media (min-width: 720px) { .fin-grid { grid-template-columns: repeat(4, 1fr); } }
+.fin-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 14px; background: #faf9f5; border: 1px solid var(--line, #e3e2dc); }
+.fin-tile > span { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #4d5f59; }
+.fin-tile .pause-q { width: 20px; height: 20px; font-size: .72rem; }
+.fin-tile b { font-size: 1.2rem; color: #26322f; }
+.fin-tile small { color: #6b7a74; }
+.fin-tile.recebido b { color: #2e403c; }
+.fin-tile.nao_reembolsado b { color: #8a7362; }
+.fin-counts { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center; margin-top: 10px; font-size: .9rem; color: #4d5f59; }
+/* Pergunta fixa "a consulta presencial aconteceu?" (em cima do aviso de consulta) */
+.appt-bar.pres-ask { background: #eee8e2; border: 1px solid #c2ae9d; }
+.appt-bar.pres-ask .ab-ic { color: #8a7362; }
+.appt-bar.pres-ask .ab-txt b { white-space: normal; }

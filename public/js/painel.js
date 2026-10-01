@@ -2,7 +2,7 @@
 (async function () {
   'use strict';
   const { $, $$, api, ICONS, avatar, esc, toast, handleForm, logout, installApp, ufOptions, bindUfCity, maskPhone, fmtPhone,
-    fmtDate, parseDate, copyText, confirmDialog, modal } = Acolia;
+    fmtDate, parseDate, copyText, confirmDialog, modal, money } = Acolia;
 
   const auth = await api('/api/auth/me').catch((e) => ({ offline: e.status === 0 }));
   if (auth.offline) { window.addEventListener('online', () => location.reload(), { once: true }); return; } // sem internet: espera voltar
@@ -278,7 +278,88 @@
       <span class="pat-num"><b>${totals.patients}</b> paciente${totals.patients === 1 ? '' : 's'}</span>
       <span class="pat-num"><b>${totals.consultations}</b> consulta${totals.consultations === 1 ? '' : 's'}</span>`;
   }
-  window.AcoliaAgenda?.onChange(() => { loadMyPatients().catch(() => {}); }); // presencial confirmada entra na lista
+  window.AcoliaAgenda?.onChange(() => { loadMyPatients().catch(() => {}); loadFinance().catch(() => {}); }); // presencial confirmada entra na lista e no financeiro
+
+  // ---------- Financeiro ----------
+  const MONTHS_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const FIN_STATE = { recebido: ['Recebido', 'ok'], a_confirmar: ['A confirmar', 'warn'], reembolsado: ['Reembolsado', ''], nao_reembolsado: ['Não reembolsado', 'danger'] };
+  const FIN_WHY = {
+    total: ['O que entra no total', 'É o que você recebeu: as consultas que aconteceram (online e presencial), os lançamentos que você fez e o dinheiro não reembolsado. O que foi reembolsado e o que ainda está a confirmar não entram.'],
+    recebido: ['Recebido', 'Consultas pagas que aconteceram: online, quando a chamada terminou; presencial, quando você confirmou que aconteceu. Inclui os lançamentos que você fez à mão.'],
+    a_confirmar: ['A confirmar', 'Consultas já pagas que ainda vão acontecer. Ainda podem ser remarcadas ou reembolsadas, por isso não entram no total. Depois que acontecem, passam para Recebido.'],
+    reembolsado: ['Reembolsado', 'Consultas não realizadas em que o paciente pediu o reembolso no prazo (ou você não pôde atender). Esse dinheiro voltou para o paciente e não entra no total.'],
+    nao_reembolsado: ['Dinheiro não reembolsado', 'Consultas não realizadas em que o paciente perdeu o prazo de reembolso (por exemplo, não entrou na chamada ou faltou na presencial). O pagamento fica com você e entra no total.'],
+  };
+  let finYm = null;
+  let finTimer = null;
+  const finQuery = () => {
+    const qs = new URLSearchParams();
+    const from = $('[data-fin-from]').value; const to = $('[data-fin-to]').value; const q = $('[data-fin-q]').value.trim();
+    if (from || to) { if (from) qs.set('from', from); if (to) qs.set('to', to); } else if (finYm) qs.set('ym', finYm);
+    if (q) qs.set('q', q);
+    return qs.toString();
+  };
+  async function loadFinance() {
+    if (!$('[data-finance]') || isSec) return;
+    const d = await api(`/api/professional/finance?${finQuery()}`);
+    finYm = d.ym;
+    const ranged = !!($('[data-fin-from]').value || $('[data-fin-to]').value);
+    const [y, m] = d.ym.split('-').map(Number);
+    $('[data-fin-month]').textContent = ranged ? 'Período escolhido' : `${MONTHS_PT[m - 1].charAt(0).toUpperCase() + MONTHS_PT[m - 1].slice(1)} de ${y}`;
+    $('[data-fin-total-label]').textContent = ranged ? 'do período' : 'do mês';
+    const P = d.period;
+    $('[data-fin-total]').textContent = money(P.total_cents);
+    $('[data-fin-alltime]').innerHTML = `Desde o início na Acolia: <b>${money(d.all_time.total_cents)}</b>`;
+    const tile = (k, cents, n) => `<div class="fin-tile ${k}"><span class="small">${FIN_STATE[k][0]} <button type="button" class="pause-q" data-fin-why="${k}" aria-label="O que é">?</button></span><b>${money(cents)}</b><small>${n} consulta${n === 1 ? '' : 's'}</small></div>`;
+    $('[data-fin-grid]').innerHTML = tile('recebido', P.recebido_cents, P.realizadas) + tile('a_confirmar', P.a_confirmar_cents, P.a_confirmar)
+      + tile('reembolsado', P.reembolsado_cents, P.reembolsos) + tile('nao_reembolsado', P.nao_reembolsado_cents, P.nao_reembolsados);
+    $('[data-fin-counts]').innerHTML = `<span><b>${P.clientes}</b> cliente${P.clientes === 1 ? '' : 's'}</span><span><b>${P.realizadas}</b> consulta${P.realizadas === 1 ? '' : 's'} realizada${P.realizadas === 1 ? '' : 's'}</span><span><b>${P.reembolsos}</b> reembolso${P.reembolsos === 1 ? '' : 's'}</span>`;
+    $('[data-fin-list]').innerHTML = d.items.length ? d.items.map((e) => `<tr>
+      <td style="white-space:nowrap">${e.date.split('-').reverse().join('/')}</td>
+      <td><b>${esc(e.name)}</b><div class="small muted">${e.kind === 'manual' ? 'Lançado por você' : `Pela Acolia · ${e.modality === 'presencial' ? 'presencial' : 'online'}`}</div></td>
+      <td style="white-space:nowrap">${esc(e.cpf || '—')}</td><td style="white-space:nowrap"><b>${money(e.amount_cents)}</b></td>
+      <td><span class="badge ${FIN_STATE[e.state][1]}">${FIN_STATE[e.state][0]}</span></td>
+      <td><button type="button" class="icon-btn" data-fin-del="${esc(e.key)}" aria-label="Tirar este valor" title="Tirar da lista">${ICONS.trash}</button></td></tr>`).join('')
+      : '<tr><td colspan="6" class="muted center">Nenhum valor neste período.</td></tr>';
+  }
+  if ($('[data-finance]') && !isSec) {
+    const reloadFin = () => { clearTimeout(finTimer); finTimer = setTimeout(() => loadFinance().catch((e) => toast(e.message, 'error')), 250); };
+    const shift = (n) => { const [y, m] = finYm.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); finYm = d.toISOString().slice(0, 7); $('[data-fin-from]').value = ''; $('[data-fin-to]').value = ''; reloadFin(); };
+    $('[data-fin-prev]').addEventListener('click', () => shift(-1));
+    $('[data-fin-next]').addEventListener('click', () => shift(1));
+    $('[data-fin-from]').addEventListener('change', reloadFin);
+    $('[data-fin-to]').addEventListener('change', reloadFin);
+    $('[data-fin-q]').addEventListener('input', reloadFin);
+    $('[data-fin-clear]').addEventListener('click', () => { $('[data-fin-from]').value = ''; $('[data-fin-to]').value = ''; $('[data-fin-q]').value = ''; reloadFin(); });
+    $('[data-finance]').addEventListener('click', async (e) => {
+      const w = e.target.closest('[data-fin-why]');
+      if (w) { const [t, x] = FIN_WHY[w.dataset.finWhy]; modal({ title: t, html: `<p>${esc(x)}</p>`, actions: [{ label: 'Entendi' }] }); return; }
+      const del = e.target.closest('[data-fin-del]');
+      if (del) {
+        if (!await confirmDialog('Tirar este valor do financeiro? (Não muda a consulta nem o pagamento.)', { okLabel: 'Tirar', danger: true, title: 'Financeiro' })) return;
+        try { await api('/api/professional/finance/remove', { method: 'POST', body: { key: del.dataset.finDel } }); toast('Valor tirado da lista.'); loadFinance(); } catch (ex) { toast(ex.message, 'error'); }
+      }
+    });
+    $('[data-fin-add]').addEventListener('click', async () => {
+      const ok = await modal({
+        title: 'Lançar consulta',
+        html: `<div class="form-error hidden" data-err></div>
+          <div class="field"><label>Nome do paciente</label><input data-f="name" maxlength="120"></div>
+          <div class="grid-2"><div class="field"><label>CPF (opcional)</label><input data-f="cpf" inputmode="numeric" placeholder="000.000.000-00"></div>
+            <div class="field"><label>Data da consulta</label><input data-f="date" type="date" value="${new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10)}"></div></div>
+          <div class="field"><label>Valor recebido (R$)</label><input data-f="amount" inputmode="decimal" placeholder="Ex.: 150,00"></div>
+          <div class="field"><label>Observação (opcional)</label><input data-f="note" maxlength="200"></div>`,
+        onOpen: (dlg) => Acolia.maskCpf($('[data-f="cpf"]', dlg)),
+        actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, { label: 'Lançar', handler: async (dlg) => {
+          const v = (k) => $(`[data-f="${k}"]`, dlg).value;
+          try { await api('/api/professional/finance/manual', { method: 'POST', body: { name: v('name'), cpf: v('cpf'), date: v('date'), amount: v('amount'), note: v('note') } }); return true; }
+          catch (ex) { const er = $('[data-err]', dlg); er.textContent = ex.message; er.classList.remove('hidden'); return false; }
+        } }],
+      });
+      if (ok) { toast('Consulta lançada!'); loadFinance(); }
+    });
+    loadFinance().catch(() => {});
+  }
   const reloadPatients = () => { clearTimeout(patTimer); patTimer = setTimeout(() => loadMyPatients().catch((e) => toast(e.message, 'error')), 250); };
   $('[data-pat-q]').addEventListener('input', reloadPatients);
   $('[data-pat-from]').addEventListener('change', reloadPatients);

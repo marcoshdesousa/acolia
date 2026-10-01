@@ -82,6 +82,7 @@ function createApp() {
   app.use('/api/auth', require('./routes/auth').router);
   app.use('/api', require('./routes/public').router);
   app.use('/api/patient', require('./routes/patient').router);
+  app.use('/api/professional/finance', require('./routes/finance').router); // Financeiro (só o profissional)
   app.use('/api/professional', require('./routes/professional').router);
   app.use('/api/chat', require('./routes/chat').router);
   app.use('/api/support', require('./routes/support').router); // Suporte Acolia (conversa fixa no topo)

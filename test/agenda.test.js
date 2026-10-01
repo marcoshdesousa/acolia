@@ -1050,3 +1050,52 @@ test('lembretes: 1 dia antes (se marcou antes) e 1 hora antes, para o paciente e
     assert.equal(wa.sent.filter((x) => /Rui/.test(x.text)).length, 0);
   }
 });
+
+test('financeiro: recebido, a confirmar, reembolsado e não reembolsado; total; lançamento manual; tirar da lista', async () => {
+  const { db } = require('../server/db');
+  const F = await mkPro('Fabio Financas Lima', 'fabio.fin@example.com', '11955559999', 'CRP 06/51080', { pix_key: 'f@pix.com', session_minutes: 50 });
+  assert.equal((await F.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true })).status, 200);
+  const ids = [];
+  let date = (await (await mkPatient('Paciente Um Fin', nextCpf())).get(`/api/agenda/pro/${F.id}/next`)).data.next.date;
+  for (let i = 0; i < 4; i++) {
+    const pt = await mkPatient(`Paciente Fin ${['Ana', 'Bia', 'Cau', 'Dri'][i]}`, nextCpf());
+    let sl = (await pt.get(`/api/agenda/pro/${F.id}/day?date=${date}`)).data.slots;
+    while (!sl.length) { date = G.addDays(date, 1); sl = (await pt.get(`/api/agenda/pro/${F.id}/day?date=${date}`)).data.slots; }
+    const b = await pt.post('/api/agenda/book', { professional_id: F.id, start: sl[0].start, accept: true });
+    assert.equal(b.status, 201, JSON.stringify(b.data));
+    await F.cl.post(`/api/agenda/appointments/${b.data.id}/send-pix`);
+    assert.equal((await F.cl.post(`/api/agenda/appointments/${b.data.id}/manual-result`, { approved: true })).data.status, 'confirmada');
+    ids.push(b.data.id);
+  }
+  // 150 cada: concluída (recebido), reembolsada, paciente faltou (não reembolsado) e uma ainda marcada (a confirmar)
+  db.prepare("UPDATE appointments SET status = 'concluida' WHERE id = ?").run(ids[0]);
+  db.prepare("UPDATE appointments SET status = 'reembolsada' WHERE id = ?").run(ids[1]);
+  db.prepare("UPDATE appointments SET status = 'paciente_ausente' WHERE id = ?").run(ids[2]);
+  const from = G.localDate(G.now()); const to = G.addDays(from, 200);
+  let d = (await F.cl.get(`/api/professional/finance?from=${from}&to=${to}`)).data;
+  assert.equal(d.period.recebido_cents, 15000);
+  assert.equal(d.period.reembolsado_cents, 15000);
+  assert.equal(d.period.nao_reembolsado_cents, 15000);
+  assert.equal(d.period.a_confirmar_cents, 15000);
+  assert.equal(d.period.total_cents, 30000, 'recebido + não reembolsado (sem reembolsado nem a confirmar)');
+  assert.equal(d.period.reembolsos, 1);
+  // Lançamento manual
+  assert.equal((await F.cl.post('/api/professional/finance/manual', { name: 'Fora Da Acolia', date: from, amount: '200,00' })).status, 201);
+  assert.equal((await F.cl.post('/api/professional/finance/manual', { name: 'Sem Valor', date: from, amount: '' })).status, 400);
+  d = (await F.cl.get(`/api/professional/finance?from=${from}&to=${to}`)).data;
+  assert.equal(d.period.total_cents, 50000);
+  const man = d.items.find((e) => e.kind === 'manual');
+  // Tirar da lista: o manual some; o da Acolia some só do financeiro
+  assert.equal((await F.cl.post('/api/professional/finance/remove', { key: man.key })).status, 200);
+  assert.equal((await F.cl.post('/api/professional/finance/remove', { key: `a${ids[2]}` })).status, 200);
+  d = (await F.cl.get(`/api/professional/finance?from=${from}&to=${to}`)).data;
+  assert.equal(d.period.total_cents, 15000);
+  assert.equal(db.prepare('SELECT status FROM appointments WHERE id = ?').get(ids[2]).status, 'paciente_ausente', 'a consulta não muda');
+  // Por mês e o total desde o início
+  const ym = G.localDate(G.ms(db.prepare('SELECT start_at FROM appointments WHERE id = ?').get(ids[0]).start_at)).slice(0, 7);
+  d = (await F.cl.get(`/api/professional/finance?ym=${ym}`)).data;
+  assert.equal(d.ym, ym);
+  assert.ok(d.all_time.total_cents >= 15000);
+  // Outro profissional não mexe
+  assert.equal((await P.cl.post('/api/professional/finance/remove', { key: `a${ids[0]}` })).status, 404);
+});

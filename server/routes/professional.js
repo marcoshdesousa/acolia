@@ -251,6 +251,7 @@ function wipeProfessional(me) {
   db.prepare('DELETE FROM favorites WHERE professional_id = ?').run(me.id);
   db.prepare("DELETE FROM calls WHERE professional_id = ? AND status <> 'ativo'").run(me.id); // histórico de atendimentos some junto
   db.prepare('DELETE FROM pro_manual_patients WHERE professional_id = ?').run(me.id); // "Meus pacientes" adicionados à mão
+  try { db.prepare('DELETE FROM pro_finance_manual WHERE professional_id = ?').run(me.id); db.prepare('DELETE FROM pro_finance_hidden WHERE professional_id = ?').run(me.id); } catch { /* tabela ainda não criada */ }
   db.prepare('DELETE FROM pro_patient_hidden WHERE professional_id = ?').run(me.id);
   for (const c of db.prepare('SELECT id, patient_id FROM conversations WHERE professional_id = ?').all(me.id)) {
     rt.emit(`patient:${c.patient_id}`, 'conversation:peer', { conversation_id: c.id });
