@@ -10,6 +10,7 @@ const http = require('node:http');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'acolia-agenda-'));
 process.env.DATA_DIR = tmp;
+process.env.WHATSAPP_FAKE = '1'; // lembretes pelo WhatsApp: guarda em vez de mandar
 process.env.ADMIN_USER = 'admin';
 process.env.ADMIN_PASSWORD = 'senha-admin-123';
 process.env.TEST_ACCOUNTS = '0';
@@ -71,6 +72,8 @@ function nextCpf() {
 function client() {
   let cookie = '';
   const call = async (method, url, body) => {
+    // Cadastro de paciente pede o WhatsApp (lembretes): quando o teste não manda, vai um número
+    if (method === 'POST' && url === '/api/auth/patient/register' && body && !('phone' in body)) body = { ...body, phone: '11988887777' };
     if (method === 'POST' && url === '/api/admin/professionals' && body && !('cpf' in body)) body = { ...body, cpf: nextCpf() };
     const res = await fetch(base + url, {
       method,
@@ -1000,4 +1003,50 @@ test('agenda: dá para marcar no mês atual e nos 3 seguintes; se lotar, abre o 
   assert.equal(info.max_date, lastOf(plus(ym0, 4)), 'lotou: abre o mês seguinte');
   const nx = (await pw.get(`/api/agenda/pro/${W.id}/next`)).data.next;
   assert.ok(nx && nx.date.startsWith(plus(ym0, 4)), 'o próximo horário livre é no mês que abriu');
+});
+
+test('lembretes: 1 dia antes (se marcou antes) e 1 hora antes, para o paciente e o profissional, uma vez só', async () => {
+  const wa = require('../server/whatsapp');
+  const L = await mkPro('Laura Lembra Melo', 'laura.lembra@example.com', '11955558888', 'CRP 06/51079', { pix_key: 'l@pix.com', session_minutes: 50 });
+  assert.equal((await L.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true })).status, 200);
+  const pl = await mkPatient('Lucas Lembra Rocha', nextCpf());
+  // Marca com dias de antecedência
+  const nx = (await pl.get(`/api/agenda/pro/${L.id}/next`)).data.next;
+  let date = nx.date;
+  for (let i = 0; i < 10 && (Date.parse(G.iso(G.fromLocal(date, 0))) - G.now()) < 3 * 86400e3; i++) date = G.addDays(date, 1);
+  let sl = (await pl.get(`/api/agenda/pro/${L.id}/day?date=${date}`)).data.slots;
+  for (let i = 0; i < 10 && !sl.length; i++) { date = G.addDays(date, 1); sl = (await pl.get(`/api/agenda/pro/${L.id}/day?date=${date}`)).data.slots; }
+  const b = await pl.post('/api/agenda/book', { professional_id: L.id, start: sl[0].start, accept: true });
+  assert.equal(b.status, 201, JSON.stringify(b.data));
+  await L.cl.post(`/api/agenda/appointments/${b.data.id}/send-pix`);
+  assert.equal((await L.cl.post(`/api/agenda/appointments/${b.data.id}/manual-result`, { approved: true })).data.status, 'confirmada');
+  const start = Date.parse(sl[0].start);
+  const mine = () => wa.sent.filter((m) => /Lucas|Laura/.test(m.text));
+  wa.sent.length = 0;
+  // 1 dia antes
+  clock = start - 24 * 60 * 60e3 + 60e3;
+  await G.sweep(); await G.sweep();
+  let m = mine();
+  assert.equal(m.length, 2, 'paciente e profissional, uma vez só');
+  assert.ok(m.some((x) => x.to === '5511988887777' && /Olá, Lucas! Lembrete da Acolia: você tem uma consulta online com Laura Lembra Melo amanhã/.test(x.text)));
+  assert.ok(m.some((x) => x.to === '5511955558888' && /Olá, Laura! .*paciente Lucas Lembra Rocha amanhã/.test(x.text)));
+  assert.ok(m.every((x) => /Acesse pelo link ou pelo app: https?:\/\//.test(x.text)));
+  // 1 hora antes
+  wa.sent.length = 0;
+  clock = start - 59 * 60e3;
+  await G.sweep(); await G.sweep();
+  m = mine();
+  assert.equal(m.length, 2);
+  assert.ok(m.every((x) => /daqui a 1 hora, hoje às/.test(x.text)));
+  // Marcou em cima da hora (menos de 1 hora antes): sem lembrete
+  wa.sent.length = 0;
+  const pl2 = await mkPatient('Rui Cima Hora', nextCpf());
+  const sl2 = (await pl2.get(`/api/agenda/pro/${L.id}/day?date=${G.localDate(G.now())}`)).data.slots;
+  if (sl2.length && Date.parse(sl2[0].start) - G.now() < 60 * 60e3) {
+    const b2 = await pl2.post('/api/agenda/book', { professional_id: L.id, start: sl2[0].start, accept: true });
+    await L.cl.post(`/api/agenda/appointments/${b2.data.id}/send-pix`);
+    await L.cl.post(`/api/agenda/appointments/${b2.data.id}/manual-result`, { approved: true });
+    await G.sweep();
+    assert.equal(wa.sent.filter((x) => /Rui/.test(x.text)).length, 0);
+  }
 });

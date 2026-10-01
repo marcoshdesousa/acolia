@@ -379,6 +379,8 @@ function notifyBoth(a) {
 }
 
 function setStatus(id, fields) {
+  // Marcou ou remarcou: guarda quando (os lembretes de 1 dia e 1 hora só saem se deu tempo)
+  if ((fields.status === 'confirmada' || fields.start_at) && !fields.scheduled_at) fields = { ...fields, scheduled_at: iso(now()) };
   const keys = Object.keys(fields);
   db.prepare(`UPDATE appointments SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`).run(...keys.map((k) => fields[k]), iso(now()), id);
   return getAppt(id);
@@ -586,6 +588,8 @@ async function sweep() {
       post(upd, 'professional', a.modality === 'presencial' ? 'concluida' : 'finalizada');
       notifyBoth(upd);
     }
+    // Lembretes de 1 dia e 1 hora antes (WhatsApp da Acolia + notificação do app)
+    await require('./reminders').run(module.exports);
   } catch (e) {
     console.error('[agenda] varredura', e);
   } finally {

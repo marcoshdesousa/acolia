@@ -28,6 +28,8 @@
         <div class="hint">É como você aparece nos comentários e curtidas (seu nome não aparece para outras pessoas). <b>Atenção: o @ não pode ser alterado depois.</b> Não tem ideia? Toque em "Gerar @".</div></div>
       <div class="field"><label for="cpf">CPF</label><input id="cpf" name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" required>
         <div class="hint" data-cpf-hint>Precisa ser um CPF válido. Você vai usá-lo para entrar. Não dá para mudar depois.</div></div>
+      <div class="field"><label for="phone">WhatsApp (com DDD)</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="(11) 99999-9999" required>
+        <div class="hint">Para receber os lembretes das suas consultas. Não aparece para ninguém.</div></div>
       <div class="field"><label for="birth">Data de nascimento</label><input id="birth" name="birth_date" type="date" required max="">
         <div class="hint">Igual à do seu documento. Não dá para mudar depois.</div></div>
       <div class="field"><label>Onde você mora</label>
@@ -49,7 +51,7 @@
   <script src="/js/common.js"></script>
   <script>
   (function () {
-    const { $, api, ICONS, handleForm, maskCpf, isValidCpf, ufOptions, bindUfCity } = Acolia;
+    const { $, api, ICONS, handleForm, maskCpf, isValidCpf, ufOptions, bindUfCity, maskPhone } = Acolia;
     $('[data-logo]').innerHTML = ICONS.logo;
     const form = $('[data-form]');
     // "Gerar @" a partir do nome (o servidor confere se está livre; em branco, ele cria um)
@@ -64,6 +66,7 @@
     bindUfCity(form.state, form.city);
     form.birth_date.max = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
     maskCpf(form.cpf);
+    maskPhone(form.phone);
     form.cpf.addEventListener('blur', () => {
       const bad = form.cpf.value && !isValidCpf(form.cpf.value);
       $('[data-cpf-hint]').textContent = bad ? 'CPF inválido — confira os números.' : 'Precisa ser um CPF válido. Você vai usá-lo para entrar.';
@@ -72,6 +75,7 @@
     handleForm(form, async (d) => {
       if (!String(d.handle || '').replace(/^@+/, '').trim()) { form.handle.focus(); throw new Error('Escolha o seu @ (ou toque em "Gerar @").'); }
       if (!isValidCpf(d.cpf)) throw new Error('CPF inválido. Confira os números digitados.');
+      if (String(d.phone || '').replace(/\D/g, '').length < 10) { form.phone.focus(); throw new Error('Informe o seu WhatsApp com DDD.'); }
       if (!d.birth_date) throw new Error('Informe sua data de nascimento.');
       if (d.password !== d.password2) throw new Error('As senhas não são iguais.');
       if (!d.terms) throw new Error('Para continuar, aceite o uso dos dados.');

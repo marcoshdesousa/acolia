@@ -156,6 +156,7 @@ addColumn('professionals', 'maps_query', "TEXT NOT NULL DEFAULT ''"); // o que o
 addColumn('patients', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('patients', 'birth_date', 'TEXT');
 addColumn('professionals', 'cpf', 'TEXT');
+addColumn('patients', 'phone', "TEXT NOT NULL DEFAULT ''"); // WhatsApp do paciente (lembretes da consulta)
 addColumn('professionals', 'accepts_messages', 'INTEGER NOT NULL DEFAULT 1'); // "Aceitar mensagens e agendamentos" (Meu perfil) // CPF do profissional: um cadastro por CPF (apagado libera)
 addColumn('professionals', 'accepts_insurance', 'INTEGER NOT NULL DEFAULT 0'); // aceita plano de saúde (online ou presencial) // data de nascimento (AAAA-MM-DD): não muda depois de informada
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_professionals_slug ON professionals(slug)');
@@ -331,6 +332,7 @@ addColumn('agenda_hours', 'single', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('calls', 'appointment_id', 'INTEGER');   // chamada criada sozinha para a consulta marcada
 addColumn('calls', 'guest_joined_at', 'TEXT');
 // Versão 1.2.1: consulta presencial (no consultório do profissional) e pelo convênio (plano de saúde, sem Pix)
+addColumn('appointments', 'scheduled_at', 'TEXT'); // quando a consulta ficou marcada nesse horário (lembretes)
 addColumn('appointments', 'modality', "TEXT NOT NULL DEFAULT 'online'");  // online | presencial
 addColumn('appointments', 'billing', "TEXT NOT NULL DEFAULT 'pix'");      // pix | convenio
 addColumn('professionals', 'presencial_on', 'INTEGER NOT NULL DEFAULT 1'); // "Disponível para atendimento presencial" (Minha agenda)

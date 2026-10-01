@@ -26,6 +26,8 @@ function client() {
   // Cadastro e perfil de profissional exigem ao menos uma especialidade: quando o teste não manda, vai uma padrão
   const SP_URLS = ['/api/admin/professionals', '/api/professional/profile', '/api/auth/professional/register'];
   const call = async (method, url, body) => {
+    // Cadastro de paciente pede o WhatsApp (lembretes): quando o teste não manda, vai um número
+    if (method === 'POST' && url === '/api/auth/patient/register' && body && !('phone' in body)) body = { ...body, phone: '11988887777' };
     if (body && SP_URLS.includes(url) && !('specialties' in body)) body = { ...body, specialties: ['Ansiedade'] };
     // Cadastro pelo admin exige CPF: quando o teste não manda, vai um CPF válido novo
     if (method === 'POST' && url === '/api/admin/professionals' && body && !('cpf' in body)) body = { ...body, cpf: cpfOf(700 + (++AUTO_CPF)) };
@@ -2536,7 +2538,7 @@ test('admin corrige os dados do profissional e do paciente (nome, CPF, carteirin
   assert.equal(c.status, 201, JSON.stringify(c.data));
   let r = await admin.post(`/api/admin/professionals/${c.data.id}/edit`, {
     name: 'Marta Certa Silva', cpf: cpfOf(802), registry: 'CRP 06/77002', plan: 'mensal-30', email: 'marta.certa@example.com', phone: '(11) 95555-2222',
-    state: 'SP', city: 'Santos', specialties: ['Ansiedade', 'Luto'], profession: 'Psicanalista',
+    state: 'SP', city: 'Santos', specialties: ['Luto'], profession: 'Psicanalista',
   });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   const row = db.prepare('SELECT * FROM professionals WHERE id = ?').get(c.data.id);
@@ -2548,7 +2550,7 @@ test('admin corrige os dados do profissional e do paciente (nome, CPF, carteirin
   assert.equal(row.phone, '11955552222');
   assert.equal(row.city, 'Santos');
   assert.equal(row.profession, 'Psicanalista');
-  assert.match(row.specialties, /Luto/);
+  assert.doesNotMatch(row.specialties, /Luto/, 'especialidades ficam com o profissional');
   // Não aceita dado inválido nem repetido
   assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { cpf: '123' })).status, 400);
   assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { name: 'Marta' })).status, 400);

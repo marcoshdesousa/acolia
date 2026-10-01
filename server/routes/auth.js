@@ -43,6 +43,9 @@ router.post('/patient/register', async (req, res) => {
   const birth = String(req.body.birth_date || '');
   if (!U.isValidBirthDate(birth)) throw new HttpError(400, 'Informe sua data de nascimento.');
   const { state, city } = validateLocation(req.body.state, req.body.city);
+  // WhatsApp: para os lembretes da consulta (não aparece para ninguém)
+  const phone = U.onlyDigits(req.body.phone);
+  if (phone.length < 10 || phone.length > 13) throw new HttpError(400, 'Informe o seu WhatsApp com DDD.');
   requirePassword(req.body.password);
   if (db.prepare('SELECT 1 FROM patients WHERE cpf = ?').get(cpf)) throw cpfTaken('patient');
   // @ do paciente: o que ele escolheu (se estiver livre) ou um gerado pelo nome
@@ -59,8 +62,8 @@ router.post('/patient/register', async (req, res) => {
 
   // CPF bloqueado pela administração (mesmo que tenha apagado a conta antiga): a conta nasce bloqueada
   const status = require('../blocklist').isBlocked('patient', { cpf }) ? 'bloqueado' : 'ativo';
-  const info = db.prepare(`INSERT INTO patients (name, cpf, cpf_name_verified, birth_date, state, city, city_norm, password_hash, status, handle)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name, cpf, verified, birth, state, city, U.norm(city), U.hashPassword(req.body.password), status, handle);
+  const info = db.prepare(`INSERT INTO patients (name, cpf, cpf_name_verified, birth_date, state, city, city_norm, password_hash, status, handle, phone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name, cpf, verified, birth, state, city, U.norm(city), U.hashPassword(req.body.password), status, handle, phone);
   A.createSession(res, 'patient', Number(info.lastInsertRowid));
   res.status(201).json({ ok: true });
 });

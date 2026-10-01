@@ -315,10 +315,10 @@
     });
   }
 
-  // ---------- Editar dados (o admin corrige tudo: nome, CPF, carteirinha, plano, contato, local, especialidades) ----------
+  // ---------- Editar dados (o admin corrige: nome, CPF, profissão, carteirinha, plano, contato, local e consultório) ----------
   const fld = (label, html, hint = '') => `<div class="field"><label>${label}</label>${html}${hint ? `<div class="hint">${hint}</div>` : ''}</div>`;
+  // As especialidades ficam com o próprio profissional (ele muda no Meu perfil)
   async function editPro(p) {
-    let sp = null;
     return modal({
       title: 'Editar dados do profissional',
       html: `<div class="form-error hidden" data-err></div>
@@ -330,7 +330,6 @@
         <div class="grid-2">${fld('E-mail', `<input data-f="email" type="email" value="${esc(p.email)}">`)}
           ${fld('WhatsApp', `<input data-f="phone" inputmode="tel" value="${esc(fmtPhone(p.phone))}">`)}</div>
         ${fld('Estado e município', `<div class="grid-uf"><select data-f="state" aria-label="Estado"></select><input data-f="city" value="${esc(p.city)}" aria-label="Município"></div>`)}
-        ${fld('Especialidades', '<div data-sp></div>')}
         <label class="check" style="margin:6px 0 10px"><input type="checkbox" data-f="has_clinic" ${p.has_clinic ? 'checked' : ''}> Atende presencial (consultório)</label>
         <div data-clinic class="${p.has_clinic ? '' : 'hidden'}">
           ${fld('Nome da clínica', `<input data-f="clinic_name" value="${esc(p.clinic_name || '')}" maxlength="120">`)}
@@ -342,7 +341,6 @@
         Acolia.maskCpf(f('cpf')); maskPhone(f('phone'));
         f('state').innerHTML = ufOptions(p.state, 'UF'); bindUfCity(f('state'), f('city'));
         f('has_clinic').addEventListener('change', () => $('[data-clinic]', dlg).classList.toggle('hidden', !f('has_clinic').checked));
-        sp = await AcoliaSpecialties.picker($('[data-sp]', dlg), { name: 'specialties', selected: (p.specialties || '').split(',').map((x) => x.trim()).filter(Boolean) });
       },
       actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, {
         label: 'Salvar alterações', handler: async (dlg) => {
@@ -351,7 +349,6 @@
           const body = {};
           for (const k of ['name', 'cpf', 'profession', 'registry', 'plan', 'email', 'phone', 'state', 'city', 'clinic_name', 'clinic_address', 'maps_url']) body[k] = f(k).value;
           body.has_clinic = f('has_clinic').checked;
-          if (sp) body.specialties = sp.value();
           try { await api(`/api/admin/professionals/${p.id}/edit`, { method: 'POST', body }); toast('Dados atualizados'); return true; }
           catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); err.scrollIntoView({ block: 'nearest' }); return false; }
         },
@@ -365,17 +362,18 @@
         ${fld('Nome completo', `<input data-f="name" value="${esc(p.name)}" maxlength="120">`)}
         <div class="grid-2">${fld('CPF', `<input data-f="cpf" inputmode="numeric" value="${esc(p.cpf || '')}">`)}
           ${fld('Data de nascimento', `<input data-f="birth_date" type="date" value="${esc(p.birth_date || '')}">`)}</div>
+        ${fld('WhatsApp', `<input data-f="phone" inputmode="tel" value="${esc(p.phone ? fmtPhone(p.phone) : '')}">`, 'Para os lembretes das consultas.')}
         ${fld('@', `<div class="slug-input"><span>@</span><input data-f="handle" value="${esc(p.handle || '')}" maxlength="31" autocapitalize="none" spellcheck="false"></div>`, 'O paciente não consegue mudar o @; só a administração.')}
         ${fld('Estado e município', `<div class="grid-uf"><select data-f="state" aria-label="Estado"></select><input data-f="city" value="${esc(p.city)}" aria-label="Município"></div>`)}`,
       onOpen: (dlg) => {
         const f = (k) => $(`[data-f="${k}"]`, dlg);
-        Acolia.maskCpf(f('cpf'));
+        Acolia.maskCpf(f('cpf')); maskPhone(f('phone'));
         f('state').innerHTML = ufOptions(p.state, 'UF'); bindUfCity(f('state'), f('city'));
       },
       actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, {
         label: 'Salvar alterações', handler: async (dlg) => {
           const body = {};
-          for (const k of ['name', 'cpf', 'birth_date', 'handle', 'state', 'city']) {
+          for (const k of ['name', 'cpf', 'birth_date', 'phone', 'handle', 'state', 'city']) {
             const v = $(`[data-f="${k}"]`, dlg).value;
             if (k === 'handle' && !v.trim()) continue;
             if (k === 'birth_date' && !v) continue;
@@ -748,4 +746,37 @@
   await loadLocations().catch(() => {});
   loadStats().catch(() => {});
   route();
+})();
+
+// ---------- Lembretes pelo WhatsApp (Conta) ----------
+(async function () {
+  const { $, api, esc, toast, maskPhone, fmtPhone, handleForm } = Acolia;
+  const f = $('[data-wa-form]');
+  if (!f) return;
+  maskPhone(f.number); maskPhone($('[data-wa-test-num]'));
+  const sync = () => { $('[data-wa-zapi]', f).classList.toggle('hidden', f.provider.value !== 'zapi'); $('[data-wa-meta]', f).classList.toggle('hidden', f.provider.value !== 'meta'); };
+  f.provider.addEventListener('change', sync);
+  const fill = (c) => {
+    f.enabled.checked = c.enabled; f.number.value = c.number ? fmtPhone(c.number.replace(/^55(?=\d{10,11}$)/, '')) : ''; f.site.value = c.site;
+    f.provider.value = c.provider; f.zapi_instance.value = c.zapi_instance; f.meta_phone_id.value = c.meta_phone_id; f.meta_template.value = c.meta_template; f.meta_lang.value = c.meta_lang;
+    for (const k of ['zapi_token', 'zapi_client_token', 'meta_token']) { f[k].value = ''; f[k].placeholder = c['has_' + k] ? '•••••• (salvo)' : ''; }
+    $('[data-wa-status]').textContent = c.enabled ? 'Lembretes pelo WhatsApp ligados.' : 'Lembretes pelo WhatsApp desligados: só a notificação do app.';
+    sync();
+  };
+  try {
+    const r = await api('/api/admin/whatsapp');
+    fill(r.config);
+    const L = { patient_1d: 'Paciente · 1 dia antes', patient_1h: 'Paciente · 1 hora antes', pro_1d: 'Profissional · 1 dia antes', pro_1h: 'Profissional · 1 hora antes' };
+    $('[data-wa-samples]').innerHTML = Object.entries(r.samples).map(([k, t]) => `<div class="card" style="padding:12px 14px;margin-bottom:8px"><b>${L[k]}</b><div style="white-space:pre-wrap;margin-top:4px">${esc(t)}</div></div>`).join('');
+  } catch { /* tela segue sem os dados */ }
+  handleForm(f, async () => {
+    const body = { enabled: f.enabled.checked, number: f.number.value, site: f.site.value, provider: f.provider.value };
+    for (const k of ['zapi_instance', 'zapi_token', 'zapi_client_token', 'meta_phone_id', 'meta_token', 'meta_template', 'meta_lang']) body[k] = f[k].value;
+    const r = await api('/api/admin/whatsapp', { method: 'POST', body });
+    fill(r.config); toast('Salvo!');
+  });
+  $('[data-wa-test]').addEventListener('click', async () => {
+    try { await api('/api/admin/whatsapp/test', { method: 'POST', body: { phone: $('[data-wa-test-num]').value } }); toast('Mensagem de teste enviada!'); }
+    catch (e) { toast(e.message, 'error'); }
+  });
 })();

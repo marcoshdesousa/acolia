@@ -198,6 +198,7 @@ function ownPatient(p) {
     handle: p.handle || '',
     cpf_masked: `***.${p.cpf.slice(3, 6)}.${p.cpf.slice(6, 9)}-**`,
     birth_date: p.birth_date || '',
+    phone: p.phone || '',
     state: p.state,
     city: p.city,
     photo: p.photo,

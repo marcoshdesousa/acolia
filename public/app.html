@@ -51,6 +51,8 @@
               <div class="row" style="gap:8px;flex-wrap:nowrap"><div class="slug-input grow"><span>@</span><input id="hd" name="handle" maxlength="31" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="seu.arroba" disabled></div>
                 <button type="button" class="btn secondary sm" data-gen-handle>Gerar @</button></div>
               <div class="hint">É assim que você aparece nos comentários e curtidas. Atenção: depois de salvo, o @ não pode ser alterado.</div></div>
+            <div class="field"><label for="pphone">WhatsApp (com DDD)</label><input id="pphone" name="phone" inputmode="tel" autocomplete="tel" placeholder="(11) 99999-9999" required>
+              <div class="hint">Para os lembretes das suas consultas (1 dia e 1 hora antes). Não aparece para ninguém.</div></div>
             <div class="field"><label>Onde você mora</label>
               <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
             <p class="small muted" style="margin:0 0 12px">Seu @, nome completo, CPF e data de nascimento não podem ser alterados.</p>
@@ -131,12 +133,14 @@
       pf.handle.disabled = !!me.handle;
       pf.handle.value = me.handle || '';
       pf.state.value = me.state; pf.city.value = me.city;
+      pf.phone.value = me.phone ? Acolia.fmtPhone(me.phone) : '';
     }
     const pf0 = $('[data-profile-form]');
     // "Gerar @": sugere um @ livre (pelo nome); salva ao tocar em Salvar
     $('[data-gen-handle]').addEventListener('click', async () => {
       try { pf0.handle.value = (await api('/api/patient/handle/suggest')).handle; pf0.handle.focus(); } catch (e) { toast(e.message, 'error'); }
     });
+    Acolia.maskPhone(pf0.phone);
     pf0.state.innerHTML = Acolia.ufOptions(me.state, 'UF');
     Acolia.bindUfCity(pf0.state, pf0.city);
     renderMe();

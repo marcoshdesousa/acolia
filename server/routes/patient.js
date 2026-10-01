@@ -11,7 +11,7 @@ const rt = require('../realtime');
 const router = express.Router();
 router.use(A.requireRole('patient'));
 
-// Pode mudar: onde mora (estado/município).
+// Pode mudar: onde mora (estado/município) e o WhatsApp (lembretes).
 // Não muda: o @ (escolhido no cadastro), nome completo do CPF, CPF e data de nascimento (vão nos documentos). O nome que aparece
 // para os profissionais é sempre o nome registrado (não existe mais "nome exibido").
 router.put('/profile', (req, res) => {
@@ -24,6 +24,12 @@ router.put('/profile', (req, res) => {
     }
     const h = H.assertFree(H.validate(req.body.handle), req.auth.user.id);
     db.prepare('UPDATE patients SET handle = ? WHERE id = ?').run(h, req.auth.user.id);
+  }
+  // WhatsApp para os lembretes: o paciente muda quando quiser
+  if (req.body.phone !== undefined) {
+    const phone = U.onlyDigits(req.body.phone);
+    if (phone.length < 10 || phone.length > 13) throw new U.HttpError(400, 'Informe o seu WhatsApp com DDD.');
+    db.prepare('UPDATE patients SET phone = ? WHERE id = ?').run(phone, req.auth.user.id);
   }
   if (req.body.state !== undefined || req.body.city !== undefined) {
     const { state, city } = validateLocation(req.body.state, req.body.city);

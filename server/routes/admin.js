@@ -44,7 +44,7 @@ function adminPatient(p) {
   return {
     id: p.id, name: p.name, display_name: p.display_name, handle: p.handle || '', cpf: U.formatCpf(p.cpf), cpf_name_verified: !!p.cpf_name_verified,
     state: p.state, city: p.city, photo: p.photo, status: p.status, created_at: p.created_at, is_test: !!p.is_test,
-    birth_date: p.birth_date || '',
+    birth_date: p.birth_date || '', phone: p.phone || '',
   };
 }
 
@@ -247,6 +247,20 @@ router.post('/professionals/:id/registry', (req, res) => {
   res.json(adminPro(db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id))));
 });
 
+// Lembretes pelo WhatsApp: número que envia, serviço conectado a ele e o link do site
+router.get('/whatsapp', (_req, res) => res.json({ config: require('../whatsapp').publicConfig(), samples: require('../reminders').SAMPLES }));
+router.post('/whatsapp', (req, res) => {
+  try { res.json({ config: require('../whatsapp').saveConfig(req.body || {}) }); } catch (e) { throw new U.HttpError(e.status || 400, e.message); }
+});
+router.post('/whatsapp/test', async (req, res) => {
+  const wa = require('../whatsapp');
+  const phone = U.onlyDigits(req.body.phone);
+  if (phone.length < 10) throw new U.HttpError(400, 'Informe o número para o teste, com DDD.');
+  const r = await wa.send(phone, { name: 'Acolia', detail: 'esta é uma mensagem de teste dos lembretes de consulta.', site: wa.siteUrl() });
+  if (!r.ok) throw new U.HttpError(400, `Não foi possível enviar: ${r.error}`);
+  res.json({ ok: true });
+});
+
 // Admin corrige os dados do profissional (ex.: nome ou CPF digitado errado no cadastro). O profissional
 // não muda nome completo, CPF, profissão nem carteirinha; o admin muda tudo. Campo que não vier fica como está.
 router.post('/professionals/:id/edit', async (req, res) => {
@@ -291,7 +305,7 @@ router.post('/professionals/:id/edit', async (req, res) => {
     const { state, city } = validateLocation(b.state ?? p.state, b.city ?? p.city);
     up.state = state; up.city = city; up.city_norm = U.norm(city);
   }
-  if (has('specialties')) up.specialties = require('../specialties').store(require('../specialties').parse(b.specialties));
+  // Especialidades: só o próprio profissional muda (no Meu perfil)
   if (has('has_clinic')) {
     const on = !!b.has_clinic;
     up.has_clinic = on ? 1 : 0;
@@ -414,6 +428,11 @@ router.post('/patients/:id/edit', (req, res) => {
   if (has('birth_date')) {
     if (!U.isValidBirthDate(String(b.birth_date))) throw new U.HttpError(400, 'Informe uma data de nascimento válida.');
     up.birth_date = String(b.birth_date);
+  }
+  if (has('phone')) {
+    const phone = U.onlyDigits(b.phone);
+    if (phone && (phone.length < 10 || phone.length > 13)) throw new U.HttpError(400, 'Informe o WhatsApp com DDD.');
+    up.phone = phone;
   }
   if (has('handle')) {
     const H = require('../handles');
