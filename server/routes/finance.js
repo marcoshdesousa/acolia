@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS pro_finance_hidden (
   appointment_id INTEGER NOT NULL,
   PRIMARY KEY (professional_id, appointment_id)
 );`);
+// Lançamento à mão registrado como recebido, reembolsado ou não reembolsado (coluna nova, só acrescenta)
+try { db.exec("ALTER TABLE pro_finance_manual ADD COLUMN state TEXT NOT NULL DEFAULT 'recebido'"); } catch { /* já existe */ }
+const MANUAL_STATES = ['recebido', 'reembolsado', 'nao_reembolsado'];
 
 const STATE = {
   concluida: 'recebido',
@@ -58,7 +61,7 @@ function entries(proId) {
       return { key: `a${a.id}`, kind: 'acolia', date: G.localDate(G.ms(a.start_at)), name: a.name, cpf: U.formatCpf(a.cpf), amount_cents: a.price_cents || 0, state, modality: a.modality };
     }).filter(Boolean);
   const manual = db.prepare('SELECT * FROM pro_finance_manual WHERE professional_id = ?').all(proId)
-    .map((m) => ({ key: `m${m.id}`, kind: 'manual', date: m.date, name: m.name, cpf: m.cpf ? U.formatCpf(m.cpf) : '', amount_cents: m.amount_cents, state: 'recebido', note: m.note }));
+    .map((m) => ({ key: `m${m.id}`, kind: 'manual', date: m.date, name: m.name, cpf: m.cpf ? U.formatCpf(m.cpf) : '', amount_cents: m.amount_cents, state: MANUAL_STATES.includes(m.state) ? m.state : 'recebido', note: m.note }));
   return auto.concat(manual).sort((x, y) => y.date.localeCompare(x.date));
 }
 
@@ -97,9 +100,19 @@ router.post('/manual', (req, res) => {
   if (!isDate(req.body.date)) throw new U.HttpError(400, 'Informe a data da consulta.');
   const cents = Math.round(Number(String(req.body.amount || '').replace(/\./g, '').replace(',', '.')) * 100);
   if (!(cents > 0) || cents > 100000000) throw new U.HttpError(400, 'Informe o valor da consulta.');
-  const info = db.prepare('INSERT INTO pro_finance_manual (professional_id, name, cpf, date, amount_cents, note) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(req.auth.user.id, name, cpf, req.body.date, cents, U.cleanText(req.body.note, 200));
+  const state = req.body.state || 'recebido';
+  if (!MANUAL_STATES.includes(state)) throw new U.HttpError(400, 'Escolha: recebido, reembolsado ou não reembolsado.');
+  const info = db.prepare('INSERT INTO pro_finance_manual (professional_id, name, cpf, date, amount_cents, note, state) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(req.auth.user.id, name, cpf, req.body.date, cents, U.cleanText(req.body.note, 200), state);
   res.status(201).json({ ok: true, id: Number(info.lastInsertRowid) });
+});
+
+// Mudar como o lançamento à mão está registrado (ex.: recebido → reembolsado)
+router.post('/manual/:id/state', (req, res) => {
+  const state = String(req.body.state || '');
+  if (!MANUAL_STATES.includes(state)) throw new U.HttpError(400, 'Escolha: recebido, reembolsado ou não reembolsado.');
+  if (!db.prepare('UPDATE pro_finance_manual SET state = ? WHERE id = ? AND professional_id = ?').run(state, Number(req.params.id), req.auth.user.id).changes) throw new U.HttpError(404, 'Lançamento não encontrado.');
+  res.json({ ok: true });
 });
 
 // Tirar um valor da lista: manual é apagado; o da Acolia some só do financeiro

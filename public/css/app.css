@@ -1469,9 +1469,10 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 /* Financeiro do profissional */
 .fin-month { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 4px 0 10px; }
 .fin-month b { font-size: 1.1rem; min-width: 190px; text-align: center; }
-.fin-total { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 16px; border-radius: 18px; background: #e5ebe8; text-align: center; }
-.fin-total > b { font-size: 2.1rem; font-weight: 800; color: #2e403c; line-height: 1.1; }
-.fin-total .pause-q { width: 20px; height: 20px; font-size: .75rem; vertical-align: middle; }
+.fin-month.big { margin: 0 0 12px; padding: 12px 8px; border-radius: 18px; background: #e5ebe8; }
+.fin-month.big b { flex: 1; min-width: 0; font-size: 1.3rem; font-weight: 800; color: #2e403c; white-space: nowrap; }
+.fin-month.big .icon-btn { width: 44px; height: 44px; font-size: 1.6rem; background: #faf9f5; color: #2e403c; border-radius: 50%; }
+.badge.manual { background: #eee8e2; color: #8a7362; }
 .fin-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
 @media (min-width: 720px) { .fin-grid { grid-template-columns: repeat(4, 1fr); } }
 .fin-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 14px; background: #faf9f5; border: 1px solid var(--line, #e3e2dc); }

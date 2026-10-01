@@ -21,6 +21,7 @@
   <main class="narrow" style="padding-top:20px;padding-bottom:120px">
     <div class="tabs" role="tablist" style="margin-bottom:16px">
       <button role="tab" data-tab="inicio" class="active">Início</button>
+      <button role="tab" data-tab="clinicas">Clínicas</button>
       <button role="tab" data-tab="perfil">Perfil</button>
       <button role="tab" data-tab="conta">Conta</button>
     </div>
@@ -42,6 +43,10 @@
         <h2 style="margin:0">Profissionais da clínica</h2>
         <p class="small muted" style="margin:0">Em breve: convide para a clínica os profissionais da mente que já têm conta na Acolia (pelo CPF e pela carteirinha). Eles aparecem no perfil da clínica.</p>
       </div>
+    </section>
+
+    <section data-panel="clinicas" class="hidden">
+      <div data-clinics-page></div>
     </section>
 
     <section data-panel="perfil" class="hidden">
@@ -103,9 +108,10 @@
     const show = (t) => {
       $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
       $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== t));
+      if (t === 'clinicas') AcoliaClinics.mountList($('[data-clinics-page]'));
     };
     $$('[data-tab]').forEach((b) => b.addEventListener('click', () => { show(b.dataset.tab); history.replaceState(null, '', '#' + b.dataset.tab); }));
-    if (['perfil', 'conta'].includes(location.hash.slice(1))) show(location.hash.slice(1));
+    if (['clinicas', 'perfil', 'conta'].includes(location.hash.slice(1))) show(location.hash.slice(1));
     Acolia.renewBanner(auth, $('main'));
     const DOCTORS = ['Clínico geral', 'Cardiologista', 'Cirurgião geral', 'Dermatologista', 'Endocrinologista', 'Gastroenterologista', 'Geriatra', 'Ginecologista e obstetra', 'Infectologista', 'Nefrologista', 'Neurologista', 'Nutrólogo', 'Oftalmologista', 'Oncologista', 'Ortopedista', 'Otorrinolaringologista', 'Pediatra', 'Pneumologista', 'Reumatologista', 'Urologista'];
     let chosen = new Set(me.doctors);

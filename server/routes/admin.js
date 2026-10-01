@@ -252,20 +252,6 @@ router.post('/professionals/:id/registry', (req, res) => {
   res.json(adminPro(db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(req.params.id))));
 });
 
-// Lembretes pelo WhatsApp: número que envia, serviço conectado a ele e o link do site
-router.get('/whatsapp', (_req, res) => res.json({ config: require('../whatsapp').publicConfig(), samples: require('../reminders').SAMPLES }));
-router.post('/whatsapp', (req, res) => {
-  try { res.json({ config: require('../whatsapp').saveConfig(req.body || {}) }); } catch (e) { throw new U.HttpError(e.status || 400, e.message); }
-});
-router.post('/whatsapp/test', async (req, res) => {
-  const wa = require('../whatsapp');
-  const phone = U.onlyDigits(req.body.phone);
-  if (phone.length < 10) throw new U.HttpError(400, 'Informe o número para o teste, com DDD.');
-  const r = await wa.send(phone, { name: 'Acolia', detail: 'esta é uma mensagem de teste dos lembretes de consulta.', site: wa.siteUrl() });
-  if (!r.ok) throw new U.HttpError(400, `Não foi possível enviar: ${r.error}`);
-  res.json({ ok: true });
-});
-
 // Admin corrige os dados do profissional (ex.: nome ou CPF digitado errado no cadastro). O profissional
 // não muda nome completo, CPF, profissão nem carteirinha; o admin muda tudo. Campo que não vier fica como está.
 router.post('/professionals/:id/edit', async (req, res) => {

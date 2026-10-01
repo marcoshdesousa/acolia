@@ -1,5 +1,5 @@
 /* Clínicas (versão 1.3): perfil da clínica e "Clínicas perto de você" (ícone de hospital).
-   Usado na página pública da clínica (site.com/<link>), no app do paciente e no painel do profissional. */
+   Usado na página pública da clínica (site.com/<link>) e na aba Clínicas (app do paciente, painel do profissional e da clínica). */
 (function () {
   'use strict';
   const { $, $$, api, esc, avatar, ICONS } = window.Acolia;
@@ -61,20 +61,26 @@
     } catch (e) { page.body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   }
 
-  // "Clínicas perto de você": mesmo município primeiro, depois o estado; dá para escolher outro lugar
-  async function openList() {
-    const page = fullPage('Clínicas perto de você');
-    page.body.innerHTML = `<p class="muted" style="margin-top:0">Clínicas cadastradas na Acolia. As do seu município aparecem primeiro.</p>
-      <div class="grid-uf" style="margin-bottom:12px"><select data-cv-state aria-label="Estado"></select><input data-cv-city placeholder="Município" aria-label="Município"></div>
+  // Aba "Clínicas" (separada dos profissionais): filtro por estado e município; começa pelo lugar da pessoa
+  function mountList(host) {
+    if (!host || host.dataset.mounted) return;
+    host.dataset.mounted = '1';
+    fillList({ body: host });
+  }
+  // "Clínicas perto de você" em página cheia (link de fora)
+  function openList() { fillList(fullPage('Clínicas perto de você')); }
+  async function fillList(page) {
+    page.body.innerHTML = `<p class="muted" style="margin-top:0">Escolha o estado e, se quiser, o município. As do seu município aparecem primeiro.</p>
+      <div class="grid-uf" style="margin-bottom:12px"><select data-cv-state aria-label="Estado"></select><input data-cv-city placeholder="Todos os municípios" aria-label="Município"></div>
       <div data-cv-list><div class="spinner"></div></div>`;
     const st = $('[data-cv-state]', page.body);
     const ct = $('[data-cv-city]', page.body);
     let first = true;
     async function load() {
       const qs = new URLSearchParams();
-      if (!first) { if (st.value) qs.set('state', st.value); if (ct.value.trim()) qs.set('city', ct.value.trim()); }
+      if (!first) { qs.set('state', st.value || 'todos'); if (ct.value.trim()) qs.set('city', ct.value.trim()); }
       const d = await api('/api/clinics?' + qs);
-      if (first) { st.innerHTML = window.Acolia.ufOptions(d.state || '', 'Todos os estados'); ct.value = d.city || ''; window.Acolia.bindUfCity(st, ct); first = false; }
+      if (first) { st.innerHTML = window.Acolia.ufOptions(d.state || '', 'Todos os estados'); window.Acolia.bindUfCity(st, ct); ct.value = ''; first = false; }
       $('[data-cv-list]', page.body).innerHTML = d.items.length ? `<div class="clinic-list">${d.items.map((c) => `<button type="button" class="card clinic-item" data-cv-open="${c.slug || c.id}">
           ${logoOf(c, 'md')}<span class="grow"><b>${esc(c.name)}</b><small class="muted">${esc(c.city)} - ${esc(c.state)}${c.near ? ' · perto de você' : ''}</small>
           ${c.has_doctors ? '<small class="muted">Também tem médicos</small>' : ''}</span><span class="muted" aria-hidden="true">›</span></button>`).join('')}</div>`
@@ -88,11 +94,5 @@
     load().catch((e) => { $('[data-cv-list]', page.body).innerHTML = `<div class="empty">${esc(e.message)}</div>`; });
   }
 
-  // Botão de hospital (cabeçalho do app do paciente e do painel do profissional)
-  function headerButton() {
-    return `<button type="button" class="icon-btn clinic-btn" data-clinics-open aria-label="Clínicas perto de você" title="Clínicas perto de você">${IC.hospital}</button>`;
-  }
-  document.addEventListener('click', (e) => { if (e.target.closest('[data-clinics-open]')) { e.preventDefault(); openList(); } });
-
-  window.AcoliaClinics = { render, openClinic, openList, headerButton, IC, logoOf };
+  window.AcoliaClinics = { render, openClinic, openList, mountList, IC, logoOf };
 })();

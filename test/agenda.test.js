@@ -10,7 +10,6 @@ const http = require('node:http');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'acolia-agenda-'));
 process.env.DATA_DIR = tmp;
-process.env.WHATSAPP_FAKE = '1'; // lembretes pelo WhatsApp: guarda em vez de mandar
 process.env.ADMIN_USER = 'admin';
 process.env.ADMIN_PASSWORD = 'senha-admin-123';
 process.env.TEST_ACCOUNTS = '0';
@@ -1006,7 +1005,11 @@ test('agenda: dá para marcar no mês atual e nos 3 seguintes; se lotar, abre o 
 });
 
 test('lembretes: 1 dia antes (se marcou antes) e 1 hora antes, para o paciente e o profissional, uma vez só', async () => {
-  const wa = require('../server/whatsapp');
+  // Lembretes saem só pela notificação do app: guarda em vez de mandar
+  const push = require('../server/push');
+  const realNotify = push.notify;
+  const sent = [];
+  push.notify = (role, id, p) => { sent.push({ role, id, ...p }); };
   const L = await mkPro('Laura Lembra Melo', 'laura.lembra@example.com', '11955558888', 'CRP 06/51079', { pix_key: 'l@pix.com', session_minutes: 50 });
   assert.equal((await L.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true })).status, 200);
   const pl = await mkPatient('Lucas Lembra Rocha', nextCpf());
@@ -1021,25 +1024,24 @@ test('lembretes: 1 dia antes (se marcou antes) e 1 hora antes, para o paciente e
   await L.cl.post(`/api/agenda/appointments/${b.data.id}/send-pix`);
   assert.equal((await L.cl.post(`/api/agenda/appointments/${b.data.id}/manual-result`, { approved: true })).data.status, 'confirmada');
   const start = Date.parse(sl[0].start);
-  const mine = () => wa.sent.filter((m) => /Lucas|Laura/.test(m.text));
-  wa.sent.length = 0;
+  const mine = () => sent.filter((m) => /Lucas|Laura/.test(m.body) && /^Lembrete/.test(m.title));
+  sent.length = 0;
   // 1 dia antes
   clock = start - 24 * 60 * 60e3 + 60e3;
   await G.sweep(); await G.sweep();
   let m = mine();
   assert.equal(m.length, 2, 'paciente e profissional, uma vez só');
-  assert.ok(m.some((x) => x.to === '5511988887777' && /Olá, Lucas! Lembrete da Acolia: você tem uma consulta online com Laura Lembra Melo amanhã/.test(x.text)));
-  assert.ok(m.some((x) => x.to === '5511955558888' && /Olá, Laura! .*paciente Lucas Lembra Rocha amanhã/.test(x.text)));
-  assert.ok(m.every((x) => /Acesse pelo link ou pelo app: https?:\/\//.test(x.text)));
+  assert.ok(m.some((x) => x.role === 'patient' && /^Você tem uma consulta online com Laura Lembra Melo amanhã/.test(x.body)));
+  assert.ok(m.some((x) => x.role === 'professional' && x.id === L.id && /paciente Lucas Lembra Rocha amanhã/.test(x.body)));
   // 1 hora antes
-  wa.sent.length = 0;
+  sent.length = 0;
   clock = start - 59 * 60e3;
   await G.sweep(); await G.sweep();
   m = mine();
   assert.equal(m.length, 2);
-  assert.ok(m.every((x) => /daqui a 1 hora, hoje às/.test(x.text)));
+  assert.ok(m.every((x) => /daqui a 1 hora, hoje às/.test(x.body)));
   // Marcou em cima da hora (menos de 1 hora antes): sem lembrete
-  wa.sent.length = 0;
+  sent.length = 0;
   const pl2 = await mkPatient('Rui Cima Hora', nextCpf());
   const sl2 = (await pl2.get(`/api/agenda/pro/${L.id}/day?date=${G.localDate(G.now())}`)).data.slots;
   if (sl2.length && Date.parse(sl2[0].start) - G.now() < 60 * 60e3) {
@@ -1047,8 +1049,9 @@ test('lembretes: 1 dia antes (se marcou antes) e 1 hora antes, para o paciente e
     await L.cl.post(`/api/agenda/appointments/${b2.data.id}/send-pix`);
     await L.cl.post(`/api/agenda/appointments/${b2.data.id}/manual-result`, { approved: true });
     await G.sweep();
-    assert.equal(wa.sent.filter((x) => /Rui/.test(x.text)).length, 0);
+    assert.equal(sent.filter((x) => /^Lembrete/.test(x.title) && /Rui/.test(x.body)).length, 0);
   }
+  push.notify = realNotify;
 });
 
 test('financeiro: recebido, a confirmar, reembolsado e não reembolsado; total; lançamento manual; tirar da lista', async () => {
@@ -1085,6 +1088,18 @@ test('financeiro: recebido, a confirmar, reembolsado e não reembolsado; total; 
   d = (await F.cl.get(`/api/professional/finance?from=${from}&to=${to}`)).data;
   assert.equal(d.period.total_cents, 50000);
   const man = d.items.find((e) => e.kind === 'manual');
+  assert.equal(man.state, 'recebido');
+  // Registrar o lançamento à mão como reembolsado (sai do total) e como não reembolsado (volta)
+  const manId = man.key.slice(1);
+  assert.equal((await F.cl.post(`/api/professional/finance/manual/${manId}/state`, { state: 'reembolsado' })).status, 200);
+  d = (await F.cl.get(`/api/professional/finance?from=${from}&to=${to}`)).data;
+  assert.equal(d.period.total_cents, 30000);
+  assert.equal((await F.cl.post(`/api/professional/finance/manual/${manId}/state`, { state: 'xx' })).status, 400);
+  assert.equal((await F.cl.post(`/api/professional/finance/manual/${manId}/state`, { state: 'nao_reembolsado' })).status, 200);
+  assert.equal((await F.cl.post('/api/professional/finance/manual', { name: 'Devolvido', date: from, amount: '50', state: 'reembolsado' })).status, 201);
+  d = (await F.cl.get(`/api/professional/finance?from=${from}&to=${to}`)).data;
+  assert.equal(d.period.total_cents, 50000);
+  await F.cl.post('/api/professional/finance/remove', { key: d.items.find((e) => e.name === 'Devolvido').key });
   // Tirar da lista: o manual some; o da Acolia some só do financeiro
   assert.equal((await F.cl.post('/api/professional/finance/remove', { key: man.key })).status, 200);
   assert.equal((await F.cl.post('/api/professional/finance/remove', { key: `a${ids[2]}` })).status, 200);

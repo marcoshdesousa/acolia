@@ -172,38 +172,6 @@
 
       <section data-view="conta" class="hidden" style="max-width:640px">
         <h1 style="font-size:1.5rem">Conta do administrador</h1>
-        <form class="card stack" data-wa-form style="margin-bottom:16px">
-          <h2 style="margin:0">Lembretes pelo WhatsApp</h2>
-          <p class="small muted" style="margin:0">O número cadastrado aqui manda os lembretes automáticos das consultas para o <b>paciente</b> e para o <b>profissional</b>: 1 dia antes (se a consulta foi marcada com antecedência) e 1 hora antes. Os lembretes também chegam como notificação no app. Trocou de número? É só conectar o número novo no serviço e atualizar aqui.</p>
-          <label class="switch-row" style="margin:0"><span class="sw-text"><b>Enviar lembretes pelo WhatsApp</b><span class="sw-state"><i class="sw-on">● Ligado</i><i class="sw-off">○ Desligado (só a notificação do app)</i></span></span>
-            <input type="checkbox" class="switch" role="switch" name="enabled" aria-label="Enviar lembretes pelo WhatsApp"></label>
-          <div class="grid-2">
-            <div class="field" style="margin:0"><label for="wa-num">Número que envia (com DDD)</label><input id="wa-num" name="number" inputmode="tel" placeholder="(11) 99999-9999"></div>
-            <div class="field" style="margin:0"><label for="wa-site">Link do site (vai na mensagem)</label><input id="wa-site" name="site" inputmode="url" placeholder="https://..."></div>
-          </div>
-          <div class="field" style="margin:0"><label for="wa-prov">Serviço conectado ao número</label>
-            <select id="wa-prov" name="provider"><option value="zapi">Z-API (conecta o número pelo QR Code)</option><option value="meta">WhatsApp Cloud API (oficial da Meta)</option></select>
-            <div class="hint">Para o WhatsApp mandar mensagem sozinho, o número precisa estar conectado a um desses serviços (eles são pagos à parte). As chaves ficam guardadas criptografadas; deixe em branco para manter a que já está salva.</div></div>
-          <div data-wa-zapi class="grid-2">
-            <div class="field" style="margin:0"><label for="wa-zi">ID da instância</label><input id="wa-zi" name="zapi_instance" autocomplete="off"></div>
-            <div class="field" style="margin:0"><label for="wa-zt">Token da instância</label><input id="wa-zt" name="zapi_token" type="password" autocomplete="new-password"></div>
-            <div class="field" style="margin:0"><label for="wa-zc">Client-Token (segurança da conta)</label><input id="wa-zc" name="zapi_client_token" type="password" autocomplete="new-password"></div>
-          </div>
-          <div data-wa-meta class="hidden">
-            <div class="grid-2">
-              <div class="field" style="margin:0"><label for="wa-mp">ID do número de telefone</label><input id="wa-mp" name="meta_phone_id" autocomplete="off"></div>
-              <div class="field" style="margin:0"><label for="wa-mt">Token de acesso</label><input id="wa-mt" name="meta_token" type="password" autocomplete="new-password"></div>
-              <div class="field" style="margin:0"><label for="wa-mn">Nome do modelo (template)</label><input id="wa-mn" name="meta_template"></div>
-              <div class="field" style="margin:0"><label for="wa-ml">Idioma do modelo</label><input id="wa-ml" name="meta_lang"></div>
-            </div>
-            <p class="small muted" style="margin:8px 0 0">Na Meta, a mensagem automática só sai com um modelo aprovado. Cadastre um modelo de "Utilidade" com este texto: <code>Olá, {{1}}! Lembrete da Acolia: {{2}} Acesse pelo link ou pelo app: {{3}}</code></p>
-          </div>
-          <details class="small"><summary><b>Ver as mensagens prontas</b></summary><div data-wa-samples style="margin-top:8px"></div></details>
-          <div class="row"><button class="btn" type="submit">Salvar</button>
-            <input data-wa-test-num inputmode="tel" placeholder="Número para teste" style="width:auto;flex:1;min-width:160px">
-            <button class="btn secondary" type="button" data-wa-test>Enviar teste</button></div>
-          <p class="small muted" data-wa-status style="margin:0"></p>
-        </form>
         <form class="card" data-pw-form>
           <div class="field"><label for="a-cur">Senha atual</label><input id="a-cur" name="current" type="password" required autocomplete="current-password"></div>
           <div class="field"><label for="a-new">Nova senha (mín. 8 caracteres)</label><input id="a-new" name="password" type="password" minlength="8" required autocomplete="new-password"></div>

@@ -16,7 +16,7 @@
   <div class="app-shell">
     <header class="topbar"><div class="container">
       <a class="brand" href="/app"><span data-logo><img class="brand-mark" src="/img/logo-simbolo.png" alt="" width="34" height="34"></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
-      <nav><a class="btn ghost sm" href="/atendimento" target="_blank" rel="noopener">Entrar no atendimento</a><span data-clinics-btn></span><span data-me-avatar></span></nav>
+      <nav><a class="btn ghost sm" href="/atendimento" target="_blank" rel="noopener">Entrar no atendimento</a><span data-me-avatar></span></nav>
     </div></header>
 
     <main class="app-main">
@@ -25,6 +25,11 @@
       <section data-view="buscar" class="container hidden">
         <h1 style="font-size:1.5rem">Encontre seu profissional</h1>
         <div data-catalog></div>
+      </section>
+
+      <section data-view="clinicas" class="container hidden">
+        <h1 style="font-size:1.5rem">Clínicas</h1>
+        <div data-clinics-page></div>
       </section>
 
       <section data-view="perfil" class="container hidden">
@@ -90,6 +95,7 @@
     <nav class="bottom-nav icons" aria-label="Navegação">
       <a href="#inicio" data-nav="inicio" title="Início" aria-label="Início"><span data-i="home"></span><span class="nav-badge" data-home-badge></span></a>
       <a href="#buscar" data-nav="buscar" title="Profissionais" aria-label="Profissionais"><span data-i="therapist"></span></a>
+      <a href="#clinicas" data-nav="clinicas" title="Clínicas" aria-label="Clínicas"><span data-i="hospital"></span></a>
       <a href="#chat" data-nav="chat" title="Mensagens" aria-label="Mensagens"><span data-i="chat"></span><span class="nav-badge" data-unread></span></a>
       <a href="#config" data-nav="config" title="Configurações" aria-label="Configurações"><span data-i="gear"></span></a>
     </nav>
@@ -122,7 +128,6 @@
 
     function renderMe() {
       $('[data-me-avatar]').innerHTML = '<a href="#config" aria-label="Configurações">' + avatar(me.name, me.photo, 'sm') + '</a>';
-      if (window.AcoliaClinics) $('[data-clinics-btn]').innerHTML = AcoliaClinics.headerButton(); // clínicas perto (ícone de hospital)
       $('[data-photo]').innerHTML = avatar(me.name, me.photo, 'lg');
       $('[data-name]').textContent = me.name;
       $('[data-handle]').textContent = me.handle ? '@' + me.handle : '';
@@ -201,7 +206,7 @@
         }
         return;
       }
-      const v = ['inicio', 'buscar', 'perfil', 'posts', 'chat', 'config'].includes(view) ? view : 'inicio';
+      const v = ['inicio', 'buscar', 'clinicas', 'perfil', 'posts', 'chat', 'config'].includes(view) ? view : 'inicio';
       if (v === 'inicio' || v === 'buscar') backTo = '#' + v;
       $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
       $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'perfil' || v === 'posts' ? backTo.slice(1) : v)));
@@ -224,6 +229,7 @@
           onMessage: (id) => { location.hash = 'conversar/' + id; },
         });
       }
+      if (v === 'clinicas') AcoliaClinics.mountList($('[data-clinics-page]'));
       if (v === 'perfil') {
         $('[data-profile]').innerHTML = '<div class="spinner"></div>';
         try {
@@ -265,7 +271,7 @@
     });
     $('[data-install-btn]').addEventListener('click', installApp);
     Acolia.setupNotifications($('[data-view=buscar]'));
-    Acolia.installBanner($('[data-view=buscar]'));
+    Acolia.installBanner($('[data-view=inicio]'));
     $('[data-logout]').addEventListener('click', () => logout('/'));
     AcoliaDeleteAccount($('[data-delete-account]'), '/api/patient/delete');
   })();

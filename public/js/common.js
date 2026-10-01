@@ -285,6 +285,8 @@
     logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>',
     users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1M16 4a4 4 0 0 1 0 8M22 21v-1a6 6 0 0 0-4-5.7"/></svg>',
     user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 16 0v1"/></svg>',
+    hospital: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14"/><path d="M2 21h20M12 8v6M9 11h6M9 21v-3h6v3"/></svg>',
+    money: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/></svg>',
     home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>',
     checks: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 12 5 5L17 7M12 16l1 1L23 7"/></svg>',
@@ -754,7 +756,8 @@
   // Aviso "Baixe o app" (no topo, com X). Some se fechar ou se o app já estiver instalado.
   function installBanner(parent) {
     if (!parent || isStandalone() || $('[data-install-banner]')) return;
-    try { if (localStorage.getItem('install-banner-fechado') === '1') return; } catch { /* ignora */ }
+    // Aparece toda vez que a pessoa abre o site (até instalar o app); fechar vale só para esta visita
+    try { if (sessionStorage.getItem('install-banner-fechado') === '1') return; } catch { /* ignora */ }
     const div = document.createElement('div');
     div.className = 'notice info push-banner';
     div.dataset.installBanner = '';
@@ -762,7 +765,7 @@
       <button class="btn sm" type="button" data-act>Como baixar</button>
       <button class="icon-btn" type="button" aria-label="Fechar aviso" data-close>✕</button>`;
     $('[data-act]', div).addEventListener('click', installGuide);
-    $('[data-close]', div).addEventListener('click', () => { div.remove(); try { localStorage.setItem('install-banner-fechado', '1'); } catch { /* ignora */ } });
+    $('[data-close]', div).addEventListener('click', () => { div.remove(); try { sessionStorage.setItem('install-banner-fechado', '1'); } catch { /* ignora */ } });
     window.addEventListener('appinstalled', () => div.remove(), { once: true });
     parent.prepend(div);
   }

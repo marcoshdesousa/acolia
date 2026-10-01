@@ -15,7 +15,6 @@
   const cfg = await api('/api/config');
 
   $('[data-logo]').innerHTML = ICONS.logo;
-  if (window.AcoliaClinics && $('[data-clinics-btn]')) $('[data-clinics-btn]').innerHTML = AcoliaClinics.headerButton(); // clínicas perto
   $$('[data-i]').forEach((el) => { el.outerHTML = ICONS[el.dataset.i]; });
 
   function renderLink() {
@@ -284,12 +283,12 @@
   // ---------- Financeiro ----------
   const MONTHS_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
   const FIN_STATE = { recebido: ['Recebido', 'ok'], a_confirmar: ['A confirmar', 'warn'], reembolsado: ['Reembolsado', ''], nao_reembolsado: ['Não reembolsado', 'danger'] };
+  const MANUAL_STATES = ['recebido', 'reembolsado', 'nao_reembolsado'];
   const FIN_WHY = {
-    total: ['O que entra no total', 'É o que você recebeu: as consultas que aconteceram (online e presencial), os lançamentos que você fez e o dinheiro não reembolsado. O que foi reembolsado e o que ainda está a confirmar não entram.'],
-    recebido: ['Recebido', 'Consultas pagas que aconteceram: online, quando a chamada terminou; presencial, quando você confirmou que aconteceu. Inclui os lançamentos que você fez à mão.'],
-    a_confirmar: ['A confirmar', 'Consultas já pagas que ainda vão acontecer. Ainda podem ser remarcadas ou reembolsadas, por isso não entram no total. Depois que acontecem, passam para Recebido.'],
-    reembolsado: ['Reembolsado', 'Consultas não realizadas em que o paciente pediu o reembolso no prazo (ou você não pôde atender). Esse dinheiro voltou para o paciente e não entra no total.'],
-    nao_reembolsado: ['Dinheiro não reembolsado', 'Consultas não realizadas em que o paciente perdeu o prazo de reembolso (por exemplo, não entrou na chamada ou faltou na presencial). O pagamento fica com você e entra no total.'],
+    recebido: ['Recebido', 'Consultas pagas que aconteceram: online, quando a chamada terminou; presencial, quando você confirmou que aconteceu. Inclui os lançamentos que você fez à mão e marcou como recebido.'],
+    a_confirmar: ['A confirmar', 'Consultas já pagas que ainda vão acontecer. Ainda podem ser remarcadas ou reembolsadas, por isso ficam separadas. Depois que acontecem, passam para Recebido.'],
+    reembolsado: ['Reembolsado', 'Consultas não realizadas em que o paciente pediu o reembolso no prazo (ou você não pôde atender). Esse dinheiro voltou para o paciente.'],
+    nao_reembolsado: ['Dinheiro não reembolsado', 'Consultas não realizadas em que o paciente perdeu o prazo de reembolso (por exemplo, não entrou na chamada ou faltou na presencial). O pagamento fica com você.'],
   };
   let finYm = null;
   let finTimer = null;
@@ -307,19 +306,16 @@
     const ranged = !!($('[data-fin-from]').value || $('[data-fin-to]').value);
     const [y, m] = d.ym.split('-').map(Number);
     $('[data-fin-month]').textContent = ranged ? 'Período escolhido' : `${MONTHS_PT[m - 1].charAt(0).toUpperCase() + MONTHS_PT[m - 1].slice(1)} de ${y}`;
-    $('[data-fin-total-label]').textContent = ranged ? 'do período' : 'do mês';
     const P = d.period;
-    $('[data-fin-total]').textContent = money(P.total_cents);
-    $('[data-fin-alltime]').innerHTML = `Desde o início na Acolia: <b>${money(d.all_time.total_cents)}</b>`;
     const tile = (k, cents, n) => `<div class="fin-tile ${k}"><span class="small">${FIN_STATE[k][0]} <button type="button" class="pause-q" data-fin-why="${k}" aria-label="O que é">?</button></span><b>${money(cents)}</b><small>${n} consulta${n === 1 ? '' : 's'}</small></div>`;
     $('[data-fin-grid]').innerHTML = tile('recebido', P.recebido_cents, P.realizadas) + tile('a_confirmar', P.a_confirmar_cents, P.a_confirmar)
       + tile('reembolsado', P.reembolsado_cents, P.reembolsos) + tile('nao_reembolsado', P.nao_reembolsado_cents, P.nao_reembolsados);
     $('[data-fin-counts]').innerHTML = `<span><b>${P.clientes}</b> cliente${P.clientes === 1 ? '' : 's'}</span><span><b>${P.realizadas}</b> consulta${P.realizadas === 1 ? '' : 's'} realizada${P.realizadas === 1 ? '' : 's'}</span><span><b>${P.reembolsos}</b> reembolso${P.reembolsos === 1 ? '' : 's'}</span>`;
     $('[data-fin-list]').innerHTML = d.items.length ? d.items.map((e) => `<tr>
       <td style="white-space:nowrap">${e.date.split('-').reverse().join('/')}</td>
-      <td><b>${esc(e.name)}</b><div class="small muted">${e.kind === 'manual' ? 'Lançado por você' : `Pela Acolia · ${e.modality === 'presencial' ? 'presencial' : 'online'}`}</div></td>
+      <td><b>${esc(e.name)}</b><div class="small muted">${e.kind === 'manual' ? `<span class="badge manual">Lançado à mão</span>${e.note ? ` ${esc(e.note)}` : ''}` : `Pela Acolia · ${e.modality === 'presencial' ? 'presencial' : 'online'}`}</div></td>
       <td style="white-space:nowrap">${esc(e.cpf || '—')}</td><td style="white-space:nowrap"><b>${money(e.amount_cents)}</b></td>
-      <td><span class="badge ${FIN_STATE[e.state][1]}">${FIN_STATE[e.state][0]}</span></td>
+      <td><span class="badge ${FIN_STATE[e.state][1]}">${FIN_STATE[e.state][0]}</span>${e.kind === 'manual' ? `<div><button type="button" class="link-btn small" data-fin-reg="${esc(e.key.slice(1))}" data-cur="${e.state}">Registrar</button></div>` : ''}</td>
       <td><button type="button" class="icon-btn" data-fin-del="${esc(e.key)}" aria-label="Tirar este valor" title="Tirar da lista">${ICONS.trash}</button></td></tr>`).join('')
       : '<tr><td colspan="6" class="muted center">Nenhum valor neste período.</td></tr>';
   }
@@ -335,6 +331,17 @@
     $('[data-finance]').addEventListener('click', async (e) => {
       const w = e.target.closest('[data-fin-why]');
       if (w) { const [t, x] = FIN_WHY[w.dataset.finWhy]; modal({ title: t, html: `<p>${esc(x)}</p>`, actions: [{ label: 'Entendi' }] }); return; }
+      const reg = e.target.closest('[data-fin-reg]');
+      if (reg) {
+        const st = await modal({
+          title: 'Registrar como',
+          html: '<p class="small muted" style="margin-top:0">Como fica este lançamento feito à mão?</p>',
+          actions: MANUAL_STATES.map((k) => ({ label: FIN_STATE[k][0], value: k, class: k === reg.dataset.cur ? '' : 'secondary' })).concat([{ label: 'Cancelar', value: null, class: 'ghost' }]),
+        });
+        if (!st || st === reg.dataset.cur) return;
+        try { await api(`/api/professional/finance/manual/${reg.dataset.finReg}/state`, { method: 'POST', body: { state: st } }); toast('Registrado!'); loadFinance(); } catch (ex) { toast(ex.message, 'error'); }
+        return;
+      }
       const del = e.target.closest('[data-fin-del]');
       if (del) {
         if (!await confirmDialog('Tirar este valor do financeiro? (Não muda a consulta nem o pagamento.)', { okLabel: 'Tirar', danger: true, title: 'Financeiro' })) return;
@@ -348,12 +355,14 @@
           <div class="field"><label>Nome do paciente</label><input data-f="name" maxlength="120"></div>
           <div class="grid-2"><div class="field"><label>CPF (opcional)</label><input data-f="cpf" inputmode="numeric" placeholder="000.000.000-00"></div>
             <div class="field"><label>Data da consulta</label><input data-f="date" type="date" value="${new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10)}"></div></div>
-          <div class="field"><label>Valor recebido (R$)</label><input data-f="amount" inputmode="decimal" placeholder="Ex.: 150,00"></div>
+          <div class="field"><label>Valor da consulta (R$)</label><input data-f="amount" inputmode="decimal" placeholder="Ex.: 150,00"></div>
+          <div class="field"><label>Registrar como</label><div class="row" style="gap:8px;flex-wrap:wrap" role="radiogroup">
+            ${MANUAL_STATES.map((k, i) => `<label class="chip-radio"><input type="radio" name="fin-state" value="${k}" ${i ? '' : 'checked'}> ${FIN_STATE[k][0]}</label>`).join('')}</div></div>
           <div class="field"><label>Observação (opcional)</label><input data-f="note" maxlength="200"></div>`,
         onOpen: (dlg) => Acolia.maskCpf($('[data-f="cpf"]', dlg)),
         actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, { label: 'Lançar', handler: async (dlg) => {
           const v = (k) => $(`[data-f="${k}"]`, dlg).value;
-          try { await api('/api/professional/finance/manual', { method: 'POST', body: { name: v('name'), cpf: v('cpf'), date: v('date'), amount: v('amount'), note: v('note') } }); return true; }
+          try { await api('/api/professional/finance/manual', { method: 'POST', body: { name: v('name'), cpf: v('cpf'), date: v('date'), amount: v('amount'), note: v('note'), state: $('[name="fin-state"]:checked', dlg).value } }); return true; }
           catch (ex) { const er = $('[data-err]', dlg); er.textContent = ex.message; er.classList.remove('hidden'); return false; }
         } }],
       });
@@ -491,7 +500,7 @@
   // ---------- Rotas ----------
   function route() {
     const [view, arg] = (location.hash.slice(1) || 'inicio').split('/');
-    const views = ['inicio', 'profissionais', 'verpro', 'posts', 'conversas', 'atendimento', 'perfil', 'conta', ...(isSec ? [] : ['chamadas'])];
+    const views = ['inicio', 'profissionais', 'clinicas', 'verpro', 'posts', 'conversas', 'atendimento', 'perfil', 'conta', ...(isSec ? [] : ['chamadas', 'financeiro'])];
     const v = views.includes(view) ? view : 'inicio';
     $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
     $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'verpro' || v === 'posts' ? 'profissionais' : v)));
@@ -510,6 +519,8 @@
     }
     if (v === 'verpro' && arg) showPro(Number(arg));
     if (v === 'chamadas') callsPage?.load();
+    if (v === 'clinicas') AcoliaClinics.mountList($('[data-clinics-page]'));
+    if (v === 'financeiro') loadFinance().catch((e) => toast(e.message, 'error'));
     if (v === 'perfil') loadMyPosts(); // sempre atualizada (inclusive depois de publicar no Início)
     if (v === 'atendimento') { agendaPro.load(); loadCalls().catch((e) => toast(e.message, 'error')); loadMyPatients().catch((e) => toast(e.message, 'error')); }
     if (v === 'conversas') {

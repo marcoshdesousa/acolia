@@ -35,16 +35,18 @@ router.get('/clinics', (req, res) => {
   const C = require('../clinics');
   const logged = !!req.auth && ['patient', 'professional', 'clinic'].includes(req.auth.role);
   const me = req.auth?.user;
-  const state = U.isUf(req.query.state) ? req.query.state.toUpperCase() : (me?.state || '');
-  const city = U.norm(req.query.city || (req.query.state ? '' : me?.city || ''));
-  const q = U.norm(req.query.q || '').trim();
+  // Filtro só por lugar: estado (começa no da pessoa) e município (quando escolhido)
+  const all = req.query.state === 'todos';
+  const state = all ? '' : U.isUf(req.query.state) ? req.query.state.toUpperCase() : (me?.state || '');
+  const city = U.norm(req.query.city || '').trim();
+  const myCity = me?.city ? U.norm(me.city) : '';
   let rows = db.prepare(`SELECT * FROM clinics c WHERE ${C.VISIBLE_SQL}`).all();
-  if (q) rows = rows.filter((c) => U.norm(`${c.name} ${c.city}`).includes(q));
-  // Mesmo município primeiro, depois o mesmo estado, depois o resto
-  const score = (c) => (city && c.city_norm === city ? 0 : state && c.state === state ? 1 : 2);
-  rows.sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name, 'pt-BR'));
-  if (req.query.near === '1' && state) rows = rows.filter((c) => c.state === state);
-  res.json({ items: rows.slice(0, 200).map((c) => ({ ...C.publicClinic(c, { loggedIn: logged }), near: score(c) === 0 })), state, city: req.query.city || (req.query.state ? '' : me?.city || '') });
+  if (state) rows = rows.filter((c) => c.state === state);
+  if (city) rows = rows.filter((c) => (c.city_norm || '').includes(city));
+  // O município da pessoa aparece primeiro
+  const near = (c) => !!myCity && c.city_norm === myCity && (!me.state || c.state === me.state);
+  rows.sort((a, b) => Number(near(b)) - Number(near(a)) || a.name.localeCompare(b.name, 'pt-BR'));
+  res.json({ items: rows.slice(0, 200).map((c) => ({ ...C.publicClinic(c, { loggedIn: logged }), near: near(c) })), state });
 });
 router.get('/clinics/:key', (req, res) => {
   const C = require('../clinics');
