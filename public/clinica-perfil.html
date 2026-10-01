@@ -22,7 +22,10 @@
     <div data-clinic><div class="spinner"></div></div>
   </main>
   <script src="/js/common.js"></script>
+  <script src="/js/specialties.js"></script>
+  <script src="/js/profile-view.js"></script>
   <script src="/js/clinic-view.js"></script>
+  <script src="/js/social.js"></script>
   <script>
   (async function () {
     const { $, api, ICONS, esc } = Acolia;
@@ -38,9 +41,12 @@
     try {
       const c = await api('/api/clinics/' + encodeURIComponent(key));
       document.title = c.name + ' | Acolia';
-      $('[data-clinic]').innerHTML = AcoliaClinics.render(c, { next: here })
-        + (c.locked ? `<div class="notice info" style="margin-top:16px">Crie sua conta grátis para ver o endereço e o mapa da clínica.
-          <div class="row" style="margin-top:10px"><a class="btn sm" href="/cadastro-paciente?next=${encodeURIComponent(here)}">Criar conta grátis</a><a class="btn secondary sm" href="/entrar?next=${encodeURIComponent(here)}">Já tenho conta</a></div></div>` : '');
+      // Publicações: com conta abre tudo (no app/painel); sem conta, só algumas e o "Criar conta grátis"
+      AcoliaSocial.setContext({ role: me.role || null, me: me.user || null, anon: !me.role, onNeedAccount: () => { location.href = '/cadastro-paciente?next=' + encodeURIComponent(here); },
+        onAllPosts: (id, kind) => { location.href = (me.role === 'professional' ? '/painel' : me.role === 'clinic' ? '/clinica' : '/app') + '#posts/' + id + '/' + (kind || 'photo'); },
+        onOpenProfile: (id) => { location.href = '/profissional.html?id=' + id; } });
+      $('[data-clinic]').innerHTML = AcoliaClinics.render(c, { next: here });
+      AcoliaClinics.bind($('[data-clinic]'), c);
     } catch (e) {
       $('[data-clinic]').innerHTML = '<div class="empty">' + esc(e.message === 'Clínica não encontrada.' ? 'Esta clínica não está disponível no momento.' : e.message) + '</div>';
     }

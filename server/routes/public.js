@@ -57,7 +57,7 @@ router.get('/clinics/:key', (req, res) => {
   const cc = c || (req.auth?.role === 'clinic' && (/^\d+$/.test(key) ? Number(key) === req.auth.user.id : req.auth.user.slug === key.toLowerCase()) ? db.prepare('SELECT * FROM clinics WHERE id = ?').get(req.auth.user.id) : null);
   if (!cc) throw new U.HttpError(404, 'Clínica não encontrada.');
   const logged = !!req.auth && ['patient', 'professional', 'clinic'].includes(req.auth.role);
-  res.json({ ...C.publicClinic(cc, { loggedIn: logged }), is_self: own || (req.auth?.role === 'clinic' && req.auth.user.id === cc.id), viewer_role: req.auth?.role || null });
+  res.json({ ...C.publicClinic(cc, { loggedIn: logged, full: true, viewer: logged ? { role: req.auth.role, id: req.auth.user.id } : null }), is_self: own || (req.auth?.role === 'clinic' && req.auth.user.id === cc.id), viewer_role: req.auth?.role || null });
 });
 
 router.get('/professionals', (req, res) => {

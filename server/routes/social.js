@@ -1,7 +1,8 @@
 'use strict';
 // Versão 1.2 — Início estilo Instagram: publicações (fotos com legenda), stories (foto ou
 // vídeo de até 20 s, somem em 24 h), seguir profissionais, curtir, comentar e notificações.
-// Só profissionais publicam; pacientes e profissionais seguem, curtem e comentam.
+// Profissionais e clínicas publicam; pacientes, profissionais e clínicas seguem, curtem e comentam.
+// A clínica publica por uma linha "autora" em professionals (status 'clinica'), como o perfil oficial.
 const express = require('express');
 const { db } = require('../db');
 const U = require('../util');
@@ -24,15 +25,47 @@ const PAGE = 12;
 // ---------- Quem é quem ----------
 const who = (req) => ({ role: req.auth.role, id: req.auth.user.id });
 const isPro = (req) => req.auth?.role === 'professional';
+const C = require('../clinics');
+const LOGGED = ['patient', 'professional', 'clinic'];
+// Id de autor de quem está logado: o próprio profissional, ou a linha autora da clínica (0 = não publica)
+function authorIdOf(me) {
+  if (!me) return 0;
+  if (me.role === 'professional') return me.id;
+  if (me.role === 'clinic') return C.authorOf(me.id) || 0;
+  return 0;
+}
+const myAuthor = (req) => (req.auth ? authorIdOf(who(req)) : 0);
+// Quem publica: profissional (a secretária dele também pode) ou clínica
+function posterId(req) {
+  const id = isPro(req) || req.auth?.role === 'clinic' ? myAuthor(req) : 0;
+  if (!id) throw new U.HttpError(403, 'Só profissionais e clínicas publicam.');
+  return id;
+}
+// Dono de um autor, para as notificações: a clínica (se a linha for de clínica) ou o profissional
+function ownerOf(authorId) {
+  const c = C.clinicOfAuthor(authorId);
+  return c ? { role: 'clinic', id: c.id } : { role: 'professional', id: authorId };
+}
+// Autores que aparecem no feed: profissional visível ou clínica visível
+const SOCIAL_VISIBLE = `((${VISIBLE_SQL}) OR (p.status = 'clinica' AND p.id IN (SELECT c.author_id FROM clinics c WHERE c.author_id IS NOT NULL AND ${C.VISIBLE_SQL})))`;
 
 // Nome público: profissional com nome completo; paciente só com o 1º e o 2º nome + cidade
 function actor(role, id) {
   if (role === 'professional' && O.isOfficial(id)) {
     return { role, id: O.officialId(), name: O.NAME, subtitle: 'Perfil oficial', photo: O.PHOTO, slug: O.SLUG, official: true };
   }
+  if (role === 'clinic') {
+    const c = db.prepare('SELECT * FROM clinics WHERE id = ?').get(id);
+    if (!c || c.status === 'excluido') return { role, id, name: 'Clínica', subtitle: '', photo: null };
+    return { role: 'professional', id: C.authorOf(c.id), name: c.name, subtitle: 'Clínica', photo: c.logo, clinic: c.slug || String(c.id) };
+  }
   if (role === 'professional') {
-    const p = db.prepare('SELECT id, name, photo, profession, slug FROM professionals WHERE id = ?').get(id);
+    const p = db.prepare('SELECT id, name, photo, profession, slug, status FROM professionals WHERE id = ?').get(id);
     if (!p) return { role, id, name: 'Profissional', subtitle: '', photo: null };
+    if (p.status === 'clinica') {
+      const c = C.clinicOfAuthor(p.id);
+      if (c) return { role, id: p.id, name: c.name, subtitle: 'Clínica', photo: c.logo, clinic: c.slug || String(c.id) };
+    }
     return { role, id: p.id, name: p.name, subtitle: p.profession, photo: p.photo, slug: p.slug };
   }
   const p = db.prepare('SELECT id, name, handle, photo, city, state, status FROM patients WHERE id = ?').get(id);
@@ -44,6 +77,8 @@ function actor(role, id) {
 function notify(toRole, toId, type, from, extra = {}) {
   if (toRole === from.role && toId === from.id) return; // não avisa a própria pessoa
   if (toRole === 'professional' && O.isOfficial(toId)) return; // o perfil oficial não tem sininho
+  if (toRole === 'professional') ({ role: toRole, id: toId } = ownerOf(toId)); // publicação de clínica: avisa a clínica
+  if (toRole === from.role && toId === from.id) return;
   const info = db.prepare(`INSERT INTO notifications (recipient_role, recipient_id, type, actor_role, actor_id, post_id, story_id, comment_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(toRole, toId, type, from.role, from.id, extra.post_id || null, extra.story_id || null, extra.comment_id || null);
   rt.emit(`${toRole}:${toId}`, 'social:notification', { id: Number(info.lastInsertRowid), type });
@@ -54,12 +89,17 @@ function visiblePro(id) {
   return db.prepare(`SELECT * FROM professionals p WHERE id = ? AND ${VISIBLE_SQL}`).get(id);
 }
 // Quem pode ter publicações vistas: profissional visível ou o perfil oficial da Acolia
-const socialPro = (id) => (O.isOfficial(id) ? O.officialRow() : visiblePro(id));
+// Clínica visível (pela linha autora)
+function visibleClinicAuthor(id) {
+  const c = C.clinicOfAuthor(id);
+  return c && C.isVisible(c) ? db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(id)) : null;
+}
+const socialPro = (id) => (O.isOfficial(id) ? O.officialRow() : visiblePro(id) || visibleClinicAuthor(id));
 
 // A pessoa segue este profissional? 'self' (é ela), 'official' (Acolia Brasil: todos seguem) ou true/false
 function followState(proId, me) {
   if (!me) return undefined;
-  if (me.role === 'professional' && me.id === proId) return 'self';
+  if (authorIdOf(me) === proId) return 'self';
   if (O.isOfficial(proId)) return 'official';
   return !!db.prepare('SELECT 1 FROM follows WHERE follower_role = ? AND follower_id = ? AND professional_id = ?').get(me.role, me.id, proId);
 }
@@ -80,7 +120,7 @@ function postOut(p, me) {
     font: p.kind === 'text' ? (TEXT_FONTS.includes(p.font) ? p.font : 'padrao') : undefined,
     video: p.kind === 'reel' ? p.video : undefined, duration: p.kind === 'reel' ? p.duration : undefined,
     likes, comments, liked,
-    mine: !!me && me.role === 'professional' && me.id === p.professional_id,
+    mine: !!me && authorIdOf(me) === p.professional_id,
     author: actor('professional', p.professional_id),
     follow: followState(p.professional_id, me),
   };
@@ -89,7 +129,7 @@ function postOut(p, me) {
 function loadPost(req, id) {
   const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(id));
   if (!p) throw new U.HttpError(404, 'Publicação não encontrada.');
-  const mine = isPro(req) && req.auth.user.id === p.professional_id;
+  const mine = myAuthor(req) === p.professional_id;
   if (!mine && !socialPro(p.professional_id)) throw new U.HttpError(404, 'Publicação não encontrada.');
   return p;
 }
@@ -97,13 +137,13 @@ function loadPost(req, id) {
 // Grade do perfil: visitante vê só até 2 fotos (regra da galeria) e não abre nenhuma
 router.get('/professionals/:id/posts', (req, res) => {
   const proId = Number(req.params.id);
-  const mine = isPro(req) && req.auth.user.id === proId;
+  const mine = myAuthor(req) === proId;
   if (!mine && !socialPro(proId)) throw new U.HttpError(404, 'Profissional não encontrado.');
   // ?kind=photo (aba Publicações: fotos e textos) | reel (aba Vídeos); sem kind = tudo
   const kind = ['photo', 'reel'].includes(req.query.kind) ? req.query.kind : null;
   const kindSql = kind === 'reel' ? "AND kind = 'reel'" : kind === 'photo' ? "AND kind <> 'reel'" : '';
   const total = db.prepare(`SELECT COUNT(*) n FROM posts WHERE professional_id = ? ${kindSql}`).get(proId).n;
-  if (!req.auth || !['patient', 'professional'].includes(req.auth.role)) {
+  if (!req.auth || !LOGGED.includes(req.auth.role)) {
     // Visitante: nenhum vídeo (Reels) e 1 ou 2 publicações de foto/texto
     const first = kind === 'reel' ? [] : db.prepare(`SELECT image, kind, caption, font FROM posts WHERE professional_id = ? AND kind <> 'reel' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(proId);
     const free = freeGalleryCount(first.length);
@@ -120,7 +160,7 @@ router.get('/professionals/:id/posts', (req, res) => {
 // Publicação aberta pelo link compartilhado: qualquer pessoa vê a foto e a descrição.
 // Curtir e comentar pedem conta (sem conta não vê os comentários, só o número).
 router.get('/posts/:id', (req, res) => {
-  const logged = req.auth && ['patient', 'professional'].includes(req.auth.role);
+  const logged = req.auth && LOGGED.includes(req.auth.role);
   const p = loadPost(logged ? req : {}, req.params.id);
   if (logged) return res.json(postOut(p, who(req)));
   // Link compartilhado (WhatsApp, redes sociais): qualquer pessoa vê, inclusive vídeo (Reels).
@@ -128,7 +168,14 @@ router.get('/posts/:id', (req, res) => {
   res.json({ ...postOut(p, null), locked: true });
 });
 
-router.use(A.requireRole('patient', 'professional'));
+// Nome e foto de um autor (página "todas as publicações" de uma clínica)
+router.get('/authors/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!socialPro(id) && myAuthor(req) !== id) throw new U.HttpError(404, 'Perfil não encontrado.');
+  res.json(actor('professional', id));
+});
+
+router.use(A.requireRole('patient', 'professional', 'clinic'));
 
 // Feed: publicações de quem a pessoa segue, as próprias (profissional) e as da Acolia Brasil
 // (todos seguem). Primeiro as que ela ainda não viu (mais novas no topo), depois as já vistas.
@@ -150,11 +197,11 @@ router.get('/feed', (req, res) => {
   const rows = db.prepare(`
     SELECT po.*, ${SEEN} AS seen
     FROM posts po JOIN professionals p ON p.id = po.professional_id
-    WHERE (${VISIBLE_SQL} AND po.professional_id IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?))
-       OR (? = 'professional' AND po.professional_id = ?)
+    WHERE (${SOCIAL_VISIBLE} AND po.professional_id IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?))
+       OR po.professional_id = ?
        OR po.professional_id = ?
     ORDER BY seen IS NOT NULL, CASE WHEN seen IS NULL THEN -po.id ELSE feed_mix(po.id, ?) END
-    LIMIT ? OFFSET ?`).all(me.role, me.id, snap, me.role, me.id, me.role, me.id, official, seed, PAGE + 1, offset);
+    LIMIT ? OFFSET ?`).all(me.role, me.id, snap, me.role, me.id, authorIdOf(me) || -1, official, seed, PAGE + 1, offset);
   const mainMore = rows.length > PAGE;
   const main = rows.slice(0, PAGE);
 
@@ -168,12 +215,12 @@ router.get('/feed', (req, res) => {
     sug = db.prepare(`
       SELECT po.*, ${SEEN} AS seen
       FROM posts po JOIN professionals p ON p.id = po.professional_id
-      WHERE ${VISIBLE_SQL} AND po.professional_id <> ?
-        AND NOT (? = 'professional' AND po.professional_id = ?)
+      WHERE ${SOCIAL_VISIBLE} AND po.professional_id <> ?
+        AND po.professional_id <> ?
         AND po.professional_id NOT IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?)
         AND po.id NOT IN (SELECT value FROM json_each(?))
       ORDER BY seen IS NOT NULL, RANDOM()
-      LIMIT ?`).all(me.role, me.id, snap, official, me.role, me.id, me.role, me.id, JSON.stringify(shown), want + 1);
+      LIMIT ?`).all(me.role, me.id, snap, official, authorIdOf(me) || -1, me.role, me.id, JSON.stringify(shown), want + 1);
   }
   const sugMore = sug.length > want;
   sug = sug.slice(0, Math.max(0, want));
@@ -203,9 +250,9 @@ router.post('/seen', (req, res) => {
 
 // Uma publicação por vez, com 1 a 10 fotos (carrossel) e uma descrição para todas
 router.post('/posts', async (req, res) => {
-  if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
+  const author = posterId(req);
   const urls = await handlePhotos(req, res);
-  const p = createPost(req.auth.user.id, urls, req.body.caption, req.body.aspect);
+  const p = createPost(author, urls, req.body.caption, req.body.aspect);
   res.status(201).json(postOut(p, who(req)));
 });
 
@@ -294,12 +341,12 @@ function createText(proId, text, font) {
   return db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(info.lastInsertRowid));
 }
 router.post('/texts', (req, res) => {
-  if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
-  res.status(201).json(postOut(createText(req.auth.user.id, req.body.text, req.body.font), who(req)));
+  const author = posterId(req);
+  res.status(201).json(postOut(createText(author, req.body.text, req.body.font), who(req)));
 });
 
 router.post('/reels', async (req, res) => {
-  if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
+  const author = posterId(req);
   const media = await handleReel(req, res);
   const secs = Number(req.body.duration) || 0;
   if (secs > REEL_MAX_SECS + 1) {
@@ -307,7 +354,7 @@ router.post('/reels', async (req, res) => {
     removePhoto(media.poster);
     throw new U.HttpError(400, 'O vídeo pode ter no máximo 1 minuto e 30 segundos.');
   }
-  res.status(201).json(postOut(createReel(req.auth.user.id, media, req.body.caption, secs || null), who(req)));
+  res.status(201).json(postOut(createReel(author, media, req.body.caption, secs || null), who(req)));
 });
 
 // ---------- Envio do reel em pedaços (segundo plano, continua de onde parou) ----------
@@ -316,20 +363,20 @@ router.post('/reels', async (req, res) => {
 const UP = require('../upload');
 const CHUNK_MAX = 8 * 1024 * 1024;
 function ownUpload(req) {
-  const u = db.prepare('SELECT * FROM upload_sessions WHERE id = ? AND professional_id = ?').get(String(req.params.id), req.auth.user.id);
+  const u = db.prepare('SELECT * FROM upload_sessions WHERE id = ? AND professional_id = ?').get(String(req.params.id), myAuthor(req));
   if (!u) throw new U.HttpError(404, 'Envio não encontrado. Comece de novo.');
   return u;
 }
 
 router.post('/uploads', (req, res) => {
-  if (!isPro(req)) throw new U.HttpError(403, 'Só profissionais publicam.');
+  const author = posterId(req);
   const mime = String(req.body.mime || '').split(';')[0].toLowerCase();
   const size = Number(req.body.size);
   if (!(mime in UP.VIDEO_EXT)) throw new U.HttpError(400, 'Envie um vídeo MP4, MOV ou WEBM.');
   if (!(size > 0)) throw new U.HttpError(400, 'Vídeo inválido.');
   const id = require('node:crypto').randomBytes(16).toString('hex');
   require('node:fs').writeFileSync(UP.partPath(id), Buffer.alloc(0));
-  db.prepare("INSERT INTO upload_sessions (id, professional_id, kind, mime, size) VALUES (?, ?, 'reel', ?, ?)").run(id, req.auth.user.id, mime, size);
+  db.prepare("INSERT INTO upload_sessions (id, professional_id, kind, mime, size) VALUES (?, ?, 'reel', ?, ?)").run(id, author, mime, size);
   res.status(201).json({ id, received: 0, size });
 });
 
@@ -362,7 +409,7 @@ router.post('/uploads/:id/finish', async (req, res) => {
   }
   const video = UP.finishPart(u.id, u.mime);
   db.prepare('DELETE FROM upload_sessions WHERE id = ?').run(u.id);
-  res.status(201).json(postOut(createReel(req.auth.user.id, { video, poster }, req.body.caption, secs || null), who(req)));
+  res.status(201).json(postOut(createReel(myAuthor(req), { video, poster }, req.body.caption, secs || null), who(req)));
 });
 
 router.delete('/uploads/:id', (req, res) => {
@@ -382,7 +429,7 @@ function cleanupUploads() {
 // Quanto o profissional já usou do limite (aparece na hora de publicar)
 router.get('/limits', (req, res) => {
   const lim = getLimits();
-  const used = (kind) => (isPro(req) ? db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = ?').get(req.auth.user.id, kind).n : 0);
+  const used = (kind) => (myAuthor(req) ? db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = ?').get(myAuthor(req), kind).n : 0);
   res.json({ photo: { max: lim.photo, used: used('photo') }, reel: { max: lim.reel, used: used('reel') } });
 });
 
@@ -396,9 +443,9 @@ router.get('/reels', (req, res) => {
   const following = req.query.scope === 'following';
   const FOLLOWED = 'SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?';
   const who_ = following
-    ? `((${VISIBLE_SQL} AND po.professional_id IN (${FOLLOWED})) OR po.professional_id = ?)`
-    : `((${VISIBLE_SQL}) OR po.professional_id = ? OR (? = 'professional' AND po.professional_id = ?))`;
-  const whoArgs = following ? [me.role, me.id, O.officialId()] : [O.officialId(), me.role, me.id];
+    ? `((${SOCIAL_VISIBLE} AND po.professional_id IN (${FOLLOWED})) OR po.professional_id = ?)`
+    : `((${SOCIAL_VISIBLE}) OR po.professional_id = ? OR po.professional_id = ?)`;
+  const whoArgs = following ? [me.role, me.id, O.officialId()] : [O.officialId(), authorIdOf(me) || -1];
   const rows = db.prepare(`
     SELECT po.*, (SELECT 1 FROM post_views v WHERE v.post_id = po.id AND v.role = ? AND v.user_id = ?) AS seen
     FROM posts po JOIN professionals p ON p.id = po.professional_id
@@ -410,7 +457,7 @@ router.get('/reels', (req, res) => {
   // Fotinhos de quem a pessoa segue com vídeos (aparecem ao lado de "Seguindo")
   if (req.query.avatars === '1') {
     out.following_avatars = db.prepare(`SELECT po.professional_id AS id, MAX(po.id) AS last FROM posts po JOIN professionals p ON p.id = po.professional_id
-      WHERE po.kind = 'reel' AND ${VISIBLE_SQL} AND po.professional_id IN (${FOLLOWED})
+      WHERE po.kind = 'reel' AND ${SOCIAL_VISIBLE} AND po.professional_id IN (${FOLLOWED})
       GROUP BY po.professional_id ORDER BY last DESC LIMIT 3`).all(me.role, me.id).map((r) => actor('professional', r.id));
   }
   res.json(out);
@@ -419,7 +466,7 @@ router.get('/reels', (req, res) => {
 // Miniatura (até ~600 px) usada na prévia do link compartilhado
 router.post('/posts/:id/thumb', async (req, res) => {
   const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(req.params.id));
-  if (!p || !isPro(req) || p.professional_id !== req.auth.user.id) throw new U.HttpError(404, 'Publicação não encontrada.');
+  if (!p || !myAuthor(req) || p.professional_id !== myAuthor(req)) throw new U.HttpError(404, 'Publicação não encontrada.');
   const url = await handlePhoto(req, res);
   if (p.thumb) removePhoto(p.thumb);
   db.prepare('UPDATE posts SET thumb = ? WHERE id = ?').run(url, p.id);
@@ -428,7 +475,7 @@ router.post('/posts/:id/thumb', async (req, res) => {
 
 router.delete('/posts/:id', (req, res) => {
   const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(req.params.id));
-  if (!p || !isPro(req) || p.professional_id !== req.auth.user.id) throw new U.HttpError(404, 'Publicação não encontrada.');
+  if (!p || !myAuthor(req) || p.professional_id !== myAuthor(req)) throw new U.HttpError(404, 'Publicação não encontrada.');
   deletePostFully(p);
   res.json({ ok: true });
 });
@@ -468,11 +515,13 @@ router.delete('/posts/:id/like', (req, res) => {
 function commentOut(c, me, postOwner) {
   const mine = c.role === me.role && c.user_id === me.id;
   const author = actor(c.role, c.user_id);
+  const ownsPost = authorIdOf(me) === postOwner;
   return {
     id: c.id, body: c.body, created_at: c.created_at, author,
-    can_delete: mine || (me.role === 'professional' && me.id === postOwner),
-    can_open_profile: !mine && c.role === 'professional' && (me.role === 'professional' || c.user_id === postOwner),
-    can_message: me.role === 'professional' && me.id === postOwner && c.role === 'patient' && author.name !== 'Conta excluída',
+    can_delete: mine || ownsPost,
+    // Clínica que comentou: abre o perfil da clínica (qualquer pessoa com conta)
+    can_open_profile: !mine && (c.role === 'clinic' || (c.role === 'professional' && (me.role !== 'patient' || c.user_id === postOwner))),
+    can_message: me.role === 'professional' && ownsPost && c.role === 'patient' && author.name !== 'Conta excluída',
   };
 }
 
@@ -498,7 +547,7 @@ router.delete('/comments/:id', (req, res) => {
   const me = who(req);
   const c = db.prepare('SELECT c.*, p.professional_id AS owner FROM post_comments c JOIN posts p ON p.id = c.post_id WHERE c.id = ?').get(Number(req.params.id));
   if (!c) throw new U.HttpError(404, 'Comentário não encontrado.');
-  const allowed = (c.role === me.role && c.user_id === me.id) || (me.role === 'professional' && me.id === c.owner);
+  const allowed = (c.role === me.role && c.user_id === me.id) || authorIdOf(me) === c.owner;
   if (!allowed) throw new U.HttpError(403, 'Você só pode apagar os seus comentários.');
   db.prepare('DELETE FROM notifications WHERE comment_id = ?').run(c.id);
   db.prepare('DELETE FROM post_comments WHERE id = ?').run(c.id);
@@ -518,9 +567,9 @@ function followInfo(proId, me) {
 router.post('/follow/:id', (req, res) => {
   const me = who(req);
   const proId = Number(req.params.id);
-  if (me.role === 'professional' && me.id === proId) throw new U.HttpError(400, 'Você não pode seguir a si mesmo.');
+  if (authorIdOf(me) === proId) throw new U.HttpError(400, 'Você não pode seguir a si mesmo.');
   if (O.isOfficial(proId)) return res.json(followInfo(proId, me)); // já segue (todo mundo segue)
-  if (!visiblePro(proId)) throw new U.HttpError(404, 'Profissional não encontrado.');
+  if (!socialPro(proId)) throw new U.HttpError(404, 'Perfil não encontrado.');
   const r = db.prepare('INSERT OR IGNORE INTO follows (follower_role, follower_id, professional_id) VALUES (?, ?, ?)').run(me.role, me.id, proId);
   if (r.changes) notify('professional', proId, 'follow', me);
   res.json(followInfo(proId, me));
@@ -547,7 +596,7 @@ function storyOut(s, me) {
   return {
     id: s.id, media: s.media, kind: s.kind, created_at: s.created_at, post,
     liked: !!db.prepare('SELECT 1 FROM story_likes WHERE story_id = ? AND role = ? AND user_id = ?').get(s.id, me.role, me.id),
-    likes: me.role === 'professional' && me.id === s.professional_id
+    likes: authorIdOf(me) === s.professional_id
       ? db.prepare('SELECT COUNT(*) n FROM story_likes WHERE story_id = ?').get(s.id).n : undefined,
   };
 }
@@ -556,14 +605,14 @@ function storyOut(s, me) {
 router.get('/stories', (req, res) => {
   const me = who(req);
   const pros = db.prepare(`SELECT DISTINCT s.professional_id AS id FROM stories s JOIN professionals p ON p.id = s.professional_id
-    WHERE s.${STORY_ALIVE} AND ((${VISIBLE_SQL} AND s.professional_id IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?))
-      OR (? = 'professional' AND s.professional_id = ?))`).all(me.role, me.id, me.role, me.id);
+    WHERE s.${STORY_ALIVE} AND ((${SOCIAL_VISIBLE} AND s.professional_id IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?))
+      OR s.professional_id = ?)`).all(me.role, me.id, authorIdOf(me) || -1);
   const groups = pros.map(({ id }) => {
     const items = db.prepare(`SELECT * FROM stories WHERE professional_id = ? AND ${STORY_ALIVE} ORDER BY id`).all(id);
-    return { professional: actor('professional', id), mine: me.role === 'professional' && me.id === id, items: items.map((s) => storyOut(s, me)), last: items.at(-1)?.id || 0 };
+    return { professional: actor('professional', id), mine: authorIdOf(me) === id, items: items.map((s) => storyOut(s, me)), last: items.at(-1)?.id || 0 };
   });
   groups.sort((a, b) => (b.mine - a.mine) || (b.last - a.last));
-  res.json({ groups, can_post: me.role === 'professional' });
+  res.json({ groups, can_post: me.role === 'professional' || me.role === 'clinic' });
 });
 
 // Stories saem só das publicações do próprio profissional (⭐+ na publicação): foto, reel ou texto.
@@ -575,7 +624,7 @@ router.post('/stories', (req, res) => {
 
 router.delete('/stories/:id', (req, res) => {
   const s = db.prepare('SELECT * FROM stories WHERE id = ?').get(Number(req.params.id));
-  if (!s || !isPro(req) || s.professional_id !== req.auth.user.id) throw new U.HttpError(404, 'Story não encontrado.');
+  if (!s || !myAuthor(req) || s.professional_id !== myAuthor(req)) throw new U.HttpError(404, 'Story não encontrado.');
   db.prepare('DELETE FROM notifications WHERE story_id = ?').run(s.id);
   db.prepare('DELETE FROM stories WHERE id = ?').run(s.id);
   if (s.kind !== 'post') removePhoto(s.media);
@@ -586,7 +635,7 @@ router.delete('/stories/:id', (req, res) => {
 router.post('/posts/:id/story', (req, res) => {
   const p = db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Publicação não encontrada.');
-  if (!isPro(req) || p.professional_id !== req.auth.user.id) throw new U.HttpError(403, 'Só quem publicou pode colocar esta publicação no story.');
+  if (!myAuthor(req) || p.professional_id !== myAuthor(req)) throw new U.HttpError(403, 'Só quem publicou pode colocar esta publicação no story.');
   const info = db.prepare("INSERT INTO stories (professional_id, media, kind, post_id) VALUES (?, ?, 'post', ?)").run(p.professional_id, p.image || '', p.id);
   res.status(201).json(storyOut(db.prepare('SELECT * FROM stories WHERE id = ?').get(Number(info.lastInsertRowid)), who(req)));
 });
@@ -628,7 +677,7 @@ function cleanupStories() {
 // Curtida em publicação e novo seguidor não mostram quem foi; comentário e curtida no story mostram.
 function notifOut(n) {
   const a = n.actor_role ? actor(n.actor_role, n.actor_id) : null;
-  const kindOf = n.actor_role === 'patient' ? 'Um paciente' : 'Um profissional';
+  const kindOf = n.actor_role === 'patient' ? 'Um paciente' : n.actor_role === 'clinic' ? 'Uma clínica' : 'Um profissional';
   let text;
   let showActor = false;
   // Aviso da Acolia (enviado pelo admin)
@@ -673,6 +722,10 @@ router.post('/notifications/read', (req, res) => {
 // Conta apagada: some tudo o que ela fez no Acolia Feed (publicações, reels e stories com os
 // arquivos, curtidas, comentários, seguidores, notificações e envios pela metade)
 function purgeUserSocial(role, id) {
+  if (role === 'clinic') {
+    const c = db.prepare('SELECT author_id FROM clinics WHERE id = ?').get(id);
+    if (c?.author_id) purgeUserSocial('professional', c.author_id); // publicações, stories e seguidores da clínica
+  }
   if (role === 'professional') {
     for (const p of db.prepare('SELECT * FROM posts WHERE professional_id = ?').all(id)) deletePostFully(p);
     for (const st of db.prepare('SELECT * FROM stories WHERE professional_id = ?').all(id)) {

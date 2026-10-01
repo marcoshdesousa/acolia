@@ -13,7 +13,7 @@ const WARN_DAYS = 2;  // aviso começa 2 dias antes do vencimento
 const SUPPORT_WHATSAPP = process.env.SUPPORT_WHATSAPP || '5511939023938'; // canal de atendimento da Acolia
 
 // Profissional sem CPF (conta antiga): precisa informar para liberar a plataforma. Conta de teste não precisa.
-const needsCpf = (p) => !!p && !p.cpf && !p.is_test && !['oficial', 'excluido'].includes(p.status);
+const needsCpf = (p) => !!p && !p.cpf && !p.is_test && !['oficial', 'clinica', 'excluido'].includes(p.status);
 
 function proState(p) {
   if (!p) return {};

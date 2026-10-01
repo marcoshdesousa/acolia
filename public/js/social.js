@@ -10,6 +10,8 @@
   const MAX_STORY_SECS = 20;
 
   let ctx = { role: null, me: null, onMessage: null, onOpenProfile: null };
+  // Quem é a conta neste aparelho (envios em segundo plano): clínica com "c" na frente para não confundir com profissional
+  const meKey = () => (ctx.me?.id ? (ctx.role === 'clinic' ? `c${ctx.me.id}` : ctx.me.id) : null);
 
   // ---------- Peças ----------
   const likeBtn = (liked, attr) => `<button type="button" class="like-btn ${liked ? 'on' : ''}" ${attr} aria-pressed="${liked}" aria-label="${liked ? 'Descurtir' : 'Curtir'}"><span class="mind" aria-hidden="true"></span></button>`;
@@ -19,7 +21,9 @@
 
   function authorLink(a, extra = '') {
     const inner = `${avatar(a.name, a.photo, 'sm')}<span class="who"><b>${esc(a.name)}${a.official ? officialBadge : ''}</b>${a.subtitle ? `<small>${esc(a.subtitle)}</small>` : ''}${extra}</span>`;
-    return a.role === 'professional'
+    return a.clinic
+      ? `<a class="post-author" href="#" data-open-clinic="${esc(a.clinic)}">${inner}</a>`
+      : a.role === 'professional'
       ? `<a class="post-author" href="#" data-open-pro="${a.id}">${inner}</a>`
       : `<span class="post-author">${inner}</span>`;
   }
@@ -118,7 +122,7 @@
   }
 
   // Só paciente (ou visitante, que é levado a criar conta) manda mensagem; profissional não manda para profissional
-  const canMsg = (p) => !p.mine && !p.author.official && ctx.role !== 'professional';
+  const canMsg = (p) => !p.mine && !p.author.official && !p.author.clinic && ctx.role !== 'professional' && ctx.role !== 'clinic';
   // A partir de um post: a conversa abre com aquela publicação anexada para enviar junto
   // Botão "Mensagem" num post (paciente): a publicação já vai para o profissional que publicou,
   // aparece o aviso no topo e a pessoa continua vendo o feed/vídeo. A resposta chega no chat (numerozinho).
@@ -199,7 +203,7 @@
   // Versão 1.1.2: o servidor diz em quem dá para tocar — perfil de profissional (can_open_profile) ou,
   // para o dono da publicação, a conversa com o paciente que comentou (can_message)
   function commentHtml(c) {
-    const link = c.can_open_profile ? `data-open-pro="${c.author.id}"` : c.can_message ? `data-msg-patient="${c.id}" title="Mandar mensagem para ${esc(c.author.name)}"` : '';
+    const link = c.can_open_profile ? (c.author.clinic ? `data-open-clinic="${esc(c.author.clinic)}"` : `data-open-pro="${c.author.id}"`) : c.can_message ? `data-msg-patient="${c.id}" title="Mandar mensagem para ${esc(c.author.name)}"` : '';
     const wrap = (inner) => (link ? `<a href="#" ${link}>${inner}</a>` : inner);
     return `<li class="comment" data-comment="${c.id}">
       ${wrap(avatar(c.author.name, c.author.photo, 'sm'))}
@@ -256,6 +260,8 @@
           }
           const pro = e.target.closest('[data-open-pro]');
           if (pro) { e.preventDefault(); dlg.close(); dlg.remove(); openProfile(Number(pro.dataset.openPro)); return; }
+          const cl = e.target.closest('[data-open-clinic]');
+          if (cl) { e.preventDefault(); dlg.close(); dlg.remove(); openClinicProfile(cl.dataset.openClinic); return; }
           const mp = e.target.closest('[data-msg-patient]');
           if (mp) {
             e.preventDefault();
@@ -281,6 +287,12 @@
       $('[data-rv-close]', rv)?.click();
       await new Promise((ok) => setTimeout(ok, 350));
     }
+  }
+
+  // Perfil de clínica (publicação ou comentário de clínica)
+  function openClinicProfile(key) {
+    if (window.AcoliaClinics) AcoliaClinics.openByKey(key);
+    else location.href = /^\d+$/.test(String(key)) ? `/clinica-perfil.html?id=${key}` : `/${key}`;
   }
 
   function openProfile(id) {
@@ -369,6 +381,8 @@
       const fol = e.target.closest('[data-follow-pro]');
       if (fol) return ctx.anon ? ctx.onNeedAccount?.() : followFromPost(fol);
       if (e.target.closest('[data-follow-official]')) return toast('Todos seguem a Acolia Brasil 💚');
+      const cl = e.target.closest('[data-open-clinic]');
+      if (cl) { e.preventDefault(); return openClinicProfile(cl.dataset.openClinic); }
       const pro = e.target.closest('[data-open-pro]');
       if (pro) { e.preventDefault(); return openProfile(Number(pro.dataset.openPro)); }
       const menu = e.target.closest('[data-post-menu]');
@@ -398,7 +412,7 @@
         dlg.classList.add('post-dialog');
         bindActions(dlg);
         dlg.addEventListener('click', (e) => {
-          if (e.target.closest('[data-open-pro]')) { dlg.close(); dlg.remove(); }
+          if (e.target.closest('[data-open-pro], [data-open-clinic]')) { dlg.close(); dlg.remove(); }
         }, true);
       },
     });
@@ -1002,7 +1016,7 @@
     }
 
     function add(job) {
-      const j = { lid: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, created: Date.now(), meId: ctx.me?.id || null, progress: 0, ...job };
+      const j = { lid: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, created: Date.now(), meId: meKey(), progress: 0, ...job };
       jobs.set(j.lid, j);
       if (!j.base) store('put', saved(j)); // publicação do admin (perfil oficial) não fica guardada no aparelho
       else j.noPersist = true;
@@ -1026,7 +1040,7 @@
       const list = (await store('all')) || [];
       for (const s0 of list) {
         if (jobs.has(s0.lid)) continue;
-        if (s0.meId && ctx.me?.id && s0.meId !== ctx.me.id) continue; // de outra conta neste aparelho
+        if (s0.meId && meKey() && s0.meId !== meKey()) continue; // de outra conta neste aparelho
         if (Date.now() - (s0.created || 0) > 3 * 864e5) { store('del', s0.lid); continue; }
         const j = { ...s0, progress: 0 };
         jobs.set(j.lid, j);
@@ -1318,7 +1332,7 @@
   // ---------- Início ----------
   function mountHome(root, opts) {
     ctx = { ...ctx, ...opts };
-    const isPro = opts.role === 'professional';
+    const isPro = opts.role === 'professional' || opts.role === 'clinic'; // quem publica (profissional ou clínica)
     root.innerHTML = `
       <div class="home">
         <div class="home-top">
@@ -1455,7 +1469,7 @@
         if (p.locked || !p.viewer_role) return onNeedAccount?.();
         const kind = moreBtn.dataset.allPosts === 'reel' ? 'reel' : 'photo';
         if (ctx.onAllPosts) ctx.onAllPosts(p.id, kind);
-        else location.href = `${ctx.role === 'professional' ? '/painel' : '/app'}#posts/${p.id}/${kind}`;
+        else location.href = `${ctx.role === 'professional' ? '/painel' : ctx.role === 'clinic' ? '/clinica' : '/app'}#posts/${p.id}/${kind}`;
       });
     });
     container.addEventListener('click', (e) => {
@@ -1552,14 +1566,17 @@
         <div data-end style="height:1px"></div>
       </div>`;
     bindActions(root);
-    $('[data-back-profile]', root).addEventListener('click', () => onBack?.(proId));
+    let backToClinic = null; // publicações de uma clínica: o voltar abre o perfil da clínica
+    $('[data-back-profile]', root).addEventListener('click', () => (backToClinic ? openClinicProfile(backToClinic) : onBack?.(proId)));
     const grid = $('[data-grid]', root);
     let offset = 0;
     let more = true;
     let busy = false;
-    api(`/api/professionals/${proId}`).then((p) => {
+    // Clínica: o nome e a logo vêm do autor (não é um profissional da vitrine)
+    api(`/api/professionals/${proId}`).catch(() => api(`/api/social/authors/${proId}`)).then((p) => {
+      if (p.clinic) backToClinic = p.clinic;
       $('[data-head]', root).innerHTML = `<div class="row" style="gap:12px">${avatar(p.name, p.photo)}<div><b>${esc(p.name)}</b>
-        <div class="muted small">${p.posts_count} ${p.posts_count === 1 ? 'publicação' : 'publicações'}</div></div></div>`;
+        <div class="muted small">${p.posts_count != null ? `${p.posts_count} ${p.posts_count === 1 ? 'publicação' : 'publicações'}` : esc(p.subtitle || '')}</div></div></div>`;
     }).catch(() => {});
     async function load() {
       if (busy || !more) return;

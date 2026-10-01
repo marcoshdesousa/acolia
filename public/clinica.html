@@ -26,7 +26,16 @@
       <button role="tab" data-tab="conta">Conta</button>
     </div>
 
-    <section data-panel="inicio">
+    <!-- Início: feed da Acolia (a clínica publica fotos, vídeos e textos e coloca no story, como o profissional) -->
+    <section data-panel="inicio"><div data-home></div></section>
+    <section data-panel="posts" class="hidden"><div data-posts-page></div></section>
+
+
+    <section data-panel="clinicas" class="hidden">
+      <div data-clinics-page></div>
+    </section>
+
+    <section data-panel="perfil" class="hidden">
       <div data-status></div>
       <div class="card stack" style="margin-top:16px">
         <h2 style="margin:0">Link da clínica</h2>
@@ -41,15 +50,9 @@
       </div>
       <div class="card stack" style="margin-top:16px">
         <h2 style="margin:0">Profissionais da clínica</h2>
-        <p class="small muted" style="margin:0">Em breve: convide para a clínica os profissionais da mente que já têm conta na Acolia (pelo CPF e pela carteirinha). Eles aparecem no perfil da clínica.</p>
+        <p class="small muted" style="margin:0">Em breve: convide para a clínica os profissionais da mente que já têm conta na Acolia (pelo CPF e pela carteirinha). Eles aparecem no perfil da clínica, em "Profissionais que trabalham na clínica".</p>
       </div>
-    </section>
-
-    <section data-panel="clinicas" class="hidden">
-      <div data-clinics-page></div>
-    </section>
-
-    <section data-panel="perfil" class="hidden">
+      <div data-my-profile style="margin:16px 0"></div>
       <div class="card stack">
         <div class="row" style="gap:14px"><span data-logo-big></span>
           <label class="btn secondary sm" style="margin:0">Trocar a logo<input type="file" accept="image/jpeg,image/png,image/webp" data-logo-input hidden></label></div>
@@ -96,7 +99,10 @@
     </section>
   </main>
   <script src="/js/common.js"></script>
+  <script src="/js/specialties.js"></script>
+  <script src="/js/profile-view.js"></script>
   <script src="/js/clinic-view.js"></script>
+  <script src="/js/social.js"></script>
   <script>
   (async function () {
     const { $, $$, api, ICONS, esc, toast, handleForm, logout, ufOptions, bindUfCity, maskPhone, fmtPhone, copyText } = Acolia;
@@ -106,13 +112,33 @@
     if (auth.account?.blocked) { Acolia.showBlocked(auth); return; }
     let me = auth.user;
     const cfg = await api('/api/config');
-    const show = (t) => {
-      $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
+    // Feed: a clínica publica e vê as publicações de quem segue (mesmo Início dos profissionais)
+    let home = null;
+    AcoliaSocial.setContext({ role: 'clinic', me, onAllPosts: (id, kind) => { location.hash = `posts/${id}/${kind || 'photo'}`; } });
+    const show = (t, arg) => {
+      $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === (t === 'posts' ? 'perfil' : t)));
       $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== t));
       if (t === 'clinicas') AcoliaClinics.mountList($('[data-clinics-page]'));
+      if (t === 'inicio' && home) home.refreshIfStale();
+      if (t === 'inicio' && !home) home = AcoliaSocial.mountHome($('[data-home]'), { role: 'clinic', me, onFindPros: () => { location.href = '/'; } });
+      if (t === 'perfil') loadMine();
+      if (t === 'posts' && arg) AcoliaSocial.mountPostsPage($('[data-posts-page]'), Number(arg), { onBack: () => { location.hash = 'perfil'; } });
     };
-    $$('[data-tab]').forEach((b) => b.addEventListener('click', () => { show(b.dataset.tab); history.replaceState(null, '', '#' + b.dataset.tab); }));
-    if (['clinicas', 'perfil', 'conta'].includes(location.hash.slice(1))) show(location.hash.slice(1));
+    $$('[data-tab]').forEach((b) => b.addEventListener('click', () => { location.hash = b.dataset.tab; }));
+    const route = () => {
+      const [t, arg] = (location.hash.slice(1) || 'inicio').split('/');
+      show(['inicio', 'clinicas', 'perfil', 'conta', 'posts'].includes(t) ? t : t === 'clinica' ? 'perfil' : 'inicio', arg);
+    };
+    window.addEventListener('hashchange', route);
+    // "Minha clínica": como os outros veem o perfil (publicações, seguidores e profissionais)
+    async function loadMine() {
+      const box = $('[data-my-profile]');
+      try {
+        const c = await api('/api/clinics/' + me.id);
+        box.innerHTML = `<h2 style="margin:0">Como aparece para as pessoas</h2>` + AcoliaClinics.render(c, {});
+        AcoliaClinics.bind(box, c);
+      } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    }
     Acolia.renewBanner(auth, $('main'));
     const DOCTORS = ['Clínico geral', 'Cardiologista', 'Cirurgião geral', 'Dermatologista', 'Endocrinologista', 'Gastroenterologista', 'Geriatra', 'Ginecologista e obstetra', 'Infectologista', 'Nefrologista', 'Neurologista', 'Nutrólogo', 'Oftalmologista', 'Oncologista', 'Ortopedista', 'Otorrinolaringologista', 'Pediatra', 'Pneumologista', 'Reumatologista', 'Urologista'];
     let chosen = new Set(me.doctors);
@@ -145,6 +171,7 @@
     $('[data-doc-no]').addEventListener('click', () => { hasDoctors = false; syncDocs(); });
     bindUfCity(f.state, f.city); maskPhone(f.phone);
     render();
+    route();
     handleForm(f, async (d) => {
       me = await api('/api/clinic/profile', { method: 'PUT', body: { ...d, has_doctors: hasDoctors, doctors: [...chosen] } });
       render(); toast('Salvo!');

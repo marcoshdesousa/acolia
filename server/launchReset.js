@@ -28,7 +28,7 @@ function runOnce() {
   const count = (sql) => db.prepare(sql).get().n;
   const before = {
     patients: count('SELECT COUNT(*) n FROM patients'),
-    professionals: count("SELECT COUNT(*) n FROM professionals WHERE status <> 'oficial'"),
+    professionals: count("SELECT COUNT(*) n FROM professionals WHERE status NOT IN ('oficial', 'clinica')"),
     posts: has('posts') ? count('SELECT COUNT(*) n FROM posts') : 0,
     messages: count('SELECT COUNT(*) n FROM messages'),
   };
@@ -42,7 +42,7 @@ function runOnce() {
     if (has('push_subscriptions')) db.exec("DELETE FROM push_subscriptions WHERE role <> 'admin'");
     db.exec("DELETE FROM sessions WHERE role <> 'admin'");
     db.exec('DELETE FROM patients');
-    db.exec("DELETE FROM professionals WHERE status <> 'oficial'");
+    db.exec("DELETE FROM professionals WHERE status NOT IN ('oficial', 'clinica')");
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('test_accounts_seeded', ?)").run(new Date().toISOString());
     db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(KEY, JSON.stringify({ at: new Date().toISOString(), before }));
     db.exec('COMMIT');

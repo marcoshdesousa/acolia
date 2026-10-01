@@ -100,6 +100,55 @@
     if (pro) openBio(pro);
   });
 
+  // ---------- Publicações: fotos e vídeos (Reels) em abas, 4 de cada (profissional e clínica) ----------
+  // "Ver todas as fotos" / "Ver todos os vídeos" abre a página com as duas abas.
+  // Visitante: no máximo 2 abertas por aba (sem ampliar) e o resto com "Crie conta para ver"
+  function postsHtml(p, { next = '', signup = '/cadastro-paciente' } = {}) {
+    const total = p.posts_count ?? ((p.gallery || []).length + (p.gallery_hidden || 0));
+    const photosTotal = p.photos_count ?? total;
+    const reelsTotal = p.reels_count || 0;
+    const play = `<span class="multi-ic" aria-hidden="true">${ICONS.play}</span>`;
+    const lockedTiles = (n) => Array.from({ length: n }, () => `<a class="gallery-item gallery-locked" href="${signup}">${ic('lock', 20)}<span>Crie conta para ver</span></a>`).join('');
+    const freeTile = (src, i, isReel) => `<button type="button" class="gallery-item" data-gallery-need-account="${esc(next || '')}" aria-label="Crie conta para ver"><img src="${esc(src)}" alt="${isReel ? 'Vídeo' : 'Foto'} ${i + 1} de ${esc(p.name)}" loading="lazy">${isReel ? play : ''}</button>`;
+    const freeText = (x) => `<button type="button" class="gallery-item text-tile font-${esc(x.font || 'padrao')}" data-gallery-need-account="${esc(next || '')}" aria-label="Crie conta para ler"><span>${esc(x.caption || '')}</span></button>`;
+    const tile = (x) => (window.AcoliaSocial ? window.AcoliaSocial.gridTile(x)
+      : `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação"><img src="${esc(x.image)}" alt="" loading="lazy"></button>`);
+    let gallery = '';
+    if (total) {
+      let photoTiles;
+      let reelTiles;
+      if (p.locked) {
+        const photos = p.gallery || [];
+        const reels = p.reels || [];
+        photoTiles = photos.map((src, i) => (typeof src === 'object' ? freeText(src) : freeTile(src, i, false))).join('') + lockedTiles(Math.min(p.gallery_hidden || 0, 4 - photos.length));
+        reelTiles = reels.map((src, i) => freeTile(src, i, true)).join('') + lockedTiles(Math.min(p.reels_hidden || 0, 4 - reels.length));
+      } else {
+        photoTiles = (p.gallery_posts || []).map(tile).join('');
+        reelTiles = (p.reels_posts || []).map(tile).join('');
+      }
+      const empty = (t) => `<p class="muted small" style="grid-column:1/-1;margin:0">${t}</p>`;
+      gallery = `<div><h3>Publicações</h3>
+        <div class="pv-tabs" role="tablist">
+          <button type="button" role="tab" class="active" data-pv-tab="photo" aria-label="Publicações" title="Publicações">${ic('grid', 22)}<span>${photosTotal}</span></button>
+          <button type="button" role="tab" data-pv-tab="reel" aria-label="Vídeos" title="Vídeos">${ic('reel', 22)}<span>${reelsTotal}</span></button>
+        </div>
+        <div data-pv-pane="photo"><div class="gallery-grid" data-post-grid>${photoTiles || empty('Nenhuma publicação ainda.')}</div>
+          ${photosTotal > 4 ? `<button type="button" class="btn secondary sm" data-all-posts="photo" style="margin-top:10px">${ic('image', 16)} Ver todas as publicações (${photosTotal})</button>` : ''}</div>
+        <div data-pv-pane="reel" hidden><div class="gallery-grid" data-reel-grid>${reelTiles || empty('Nenhum vídeo ainda.')}</div>
+          ${reelsTotal > 4 ? `<button type="button" class="btn secondary sm" data-all-posts="reel" style="margin-top:10px">${ic('reel', 16)} Ver todos os vídeos (${reelsTotal})</button>` : ''}</div>
+      </div>`;
+    }
+
+    return gallery;
+  }
+  // Publicações e seguidores (só os números; "seguindo" não aparece)
+  function countsHtml(p) {
+    const total = p.posts_count ?? ((p.gallery || []).length + (p.gallery_hidden || 0));
+    return `<div class="pro-counts"><span><b>${total}</b> ${total === 1 ? 'publicação' : 'publicações'}</span>
+      <span><b data-followers>${p.followers_count || 0}</b> ${p.followers_count === 1 ? 'seguidor' : 'seguidores'}</span></div>`;
+  }
+  const followHtml = (p) => (p.is_self ? '' : `<button type="button" class="btn ${p.following ? 'following' : ''}" data-follow>${p.following ? 'Seguindo' : 'Seguir'}</button>`);
+
   function render(p, { actions = '', next = '' } = {}) {
     if (p.official) return renderOfficial(p, { next });
     const specialties = (p.specialties || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -178,48 +227,9 @@
       BIO_CACHE.set(p.id, { name: p.name, bio: p.bio, photo: p.photo, profession: p.profession });
     }
 
-    // ---------- Publicações: fotos e vídeos (Reels) em abas, 4 de cada ----------
-    // "Ver todas as fotos" / "Ver todos os vídeos" abre a página com as duas abas.
-    // Visitante: no máximo 2 abertas por aba (sem ampliar) e o resto com "Crie conta para ver"
-    const total = p.posts_count ?? ((p.gallery || []).length + (p.gallery_hidden || 0));
-    const photosTotal = p.photos_count ?? total;
-    const reelsTotal = p.reels_count || 0;
-    const play = `<span class="multi-ic" aria-hidden="true">${ICONS.play}</span>`;
-    const lockedTiles = (n) => Array.from({ length: n }, () => `<a class="gallery-item gallery-locked" href="${signup}">${ic('lock', 20)}<span>Crie conta para ver</span></a>`).join('');
-    const freeTile = (src, i, isReel) => `<button type="button" class="gallery-item" data-gallery-need-account="${esc(next || '')}" aria-label="Crie conta para ver"><img src="${esc(src)}" alt="${isReel ? 'Vídeo' : 'Foto'} ${i + 1} de ${esc(p.name)}" loading="lazy">${isReel ? play : ''}</button>`;
-    const freeText = (x) => `<button type="button" class="gallery-item text-tile font-${esc(x.font || 'padrao')}" data-gallery-need-account="${esc(next || '')}" aria-label="Crie conta para ler"><span>${esc(x.caption || '')}</span></button>`;
-    const tile = (x) => (window.AcoliaSocial ? window.AcoliaSocial.gridTile(x)
-      : `<button type="button" class="gallery-item" data-post-open="${x.id}" aria-label="Abrir publicação"><img src="${esc(x.image)}" alt="" loading="lazy"></button>`);
-    let gallery = '';
-    if (total) {
-      let photoTiles;
-      let reelTiles;
-      if (p.locked) {
-        const photos = p.gallery || [];
-        const reels = p.reels || [];
-        photoTiles = photos.map((src, i) => (typeof src === 'object' ? freeText(src) : freeTile(src, i, false))).join('') + lockedTiles(Math.min(p.gallery_hidden || 0, 4 - photos.length));
-        reelTiles = reels.map((src, i) => freeTile(src, i, true)).join('') + lockedTiles(Math.min(p.reels_hidden || 0, 4 - reels.length));
-      } else {
-        photoTiles = (p.gallery_posts || []).map(tile).join('');
-        reelTiles = (p.reels_posts || []).map(tile).join('');
-      }
-      const empty = (t) => `<p class="muted small" style="grid-column:1/-1;margin:0">${t}</p>`;
-      gallery = `<div><h3>Publicações</h3>
-        <div class="pv-tabs" role="tablist">
-          <button type="button" role="tab" class="active" data-pv-tab="photo" aria-label="Publicações" title="Publicações">${ic('grid', 22)}<span>${photosTotal}</span></button>
-          <button type="button" role="tab" data-pv-tab="reel" aria-label="Vídeos" title="Vídeos">${ic('reel', 22)}<span>${reelsTotal}</span></button>
-        </div>
-        <div data-pv-pane="photo"><div class="gallery-grid" data-post-grid>${photoTiles || empty('Nenhuma publicação ainda.')}</div>
-          ${photosTotal > 4 ? `<button type="button" class="btn secondary sm" data-all-posts="photo" style="margin-top:10px">${ic('image', 16)} Ver todas as publicações (${photosTotal})</button>` : ''}</div>
-        <div data-pv-pane="reel" hidden><div class="gallery-grid" data-reel-grid>${reelTiles || empty('Nenhum vídeo ainda.')}</div>
-          ${reelsTotal > 4 ? `<button type="button" class="btn secondary sm" data-all-posts="reel" style="margin-top:10px">${ic('reel', 16)} Ver todos os vídeos (${reelsTotal})</button>` : ''}</div>
-      </div>`;
-    }
-
-    // Publicações e seguidores (só os números; "seguindo" não aparece) e botão Seguir
-    const counts = `<div class="pro-counts"><span><b>${total}</b> ${total === 1 ? 'publicação' : 'publicações'}</span>
-      <span><b data-followers>${p.followers_count || 0}</b> ${p.followers_count === 1 ? 'seguidor' : 'seguidores'}</span></div>`;
-    const followBtn = p.is_self ? '' : `<button type="button" class="btn ${p.following ? 'following' : ''}" data-follow>${p.following ? 'Seguindo' : 'Seguir'}</button>`;
+    const gallery = postsHtml(p, { next, signup });
+    const counts = countsHtml(p);
+    const followBtn = followHtml(p);
 
     return `
       <div class="card stack" data-pro-id="${p.id}">
@@ -276,5 +286,5 @@
     window.Acolia.modal({ title: 'Galeria', html: `<img src="${esc(b.dataset.galleryOpen)}" alt="" style="width:100%;border-radius:12px">`, actions: [{ label: 'Fechar' }] });
   });
 
-  window.AcoliaProfile = { render, duration };
+  window.AcoliaProfile = { render, duration, postsHtml, countsHtml, followHtml };
 })();

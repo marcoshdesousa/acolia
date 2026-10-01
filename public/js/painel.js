@@ -484,6 +484,7 @@
 
   // ---------- Início estilo Instagram e outros profissionais (versão 1.2) ----------
   const openPro = (id) => { location.hash = id === me.id ? 'perfil' : `verpro/${id}`; };
+  AcoliaClinics.setOpenPro(openPro); // profissionais da clínica: abre o perfil no painel
   AcoliaSocial.setContext({ role: 'professional', me, onOpenProfile: openPro, onAllPosts: (id, kind) => { location.hash = `posts/${id}/${kind || 'photo'}`; } });
   let home = null;
   let catalogMounted = false;

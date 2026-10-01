@@ -188,6 +188,7 @@
     // Início estilo Instagram (versão 1.2)
     let home = null;
     const openPro = (id) => { location.hash = 'perfil/' + id; };
+    AcoliaClinics.setOpenPro(openPro); // profissionais da clínica: abre o perfil no app
     AcoliaSocial.setContext({ role: 'patient', me, onOpenProfile: openPro, onMessage: (id) => { location.hash = 'conversar/' + id; },
       onAllPosts: (id, kind) => { location.hash = 'posts/' + id + '/' + (kind || 'photo'); } });
 

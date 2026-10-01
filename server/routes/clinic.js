@@ -69,6 +69,9 @@ router.post('/password', (req, res) => {
 // A própria clínica apaga a conta (confirma com o código de acesso). O CPF/CNPJ fica livre.
 function wipeClinic(c) {
   require('../upload').removePhoto(c.logo);
+  // Some tudo do feed: publicações, stories, seguidores, curtidas e comentários da clínica; e os vínculos com profissionais
+  require('./social').purgeUserSocial('clinic', c.id);
+  db.prepare('DELETE FROM clinic_members WHERE clinic_id = ?').run(c.id);
   db.prepare(`UPDATE clinics SET status = 'excluido', name = 'Clínica removida', doc = NULL, responsible = '', email = ?, phone = '', logo = NULL, bio = '',
     address = '', maps_url = '', maps_query = '', doctors = '[]', slug = NULL, password_hash = '!', code = ?, instagram = '', tiktok = '', x_handle = '', youtube = '' WHERE id = ?`)
     .run(`excluido-${c.id}@removido.acolia`, `excluido-c${c.id}`, c.id);

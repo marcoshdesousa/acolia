@@ -2651,6 +2651,46 @@ test('clínicas (1.3): pré-cadastro com logo, um por CPF/CNPJ, aprovação com 
   assert.equal(anon.address, '', 'visitante não vê o endereço');
   const html = await (await fetch(`${base}/${me.user.slug}`)).text();
   assert.match(html, /Clínica Bem Viver/);
+  // Publicações da clínica (etapa 2): publica como o profissional; quem tem conta segue e vê no feed
+  r = await cl.post('/api/social/texts', { text: 'Cuidar da mente é cuidar da vida.', font: 'padrao' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.mine, true);
+  assert.equal(r.data.author.name, 'Clínica Bem Viver');
+  assert.equal(r.data.author.subtitle, 'Clínica');
+  assert.equal(r.data.author.clinic, me.user.slug);
+  const postId = r.data.id;
+  let prof = (await pt.get(`/api/clinics/${id}`)).data;
+  assert.ok(prof.author_id);
+  assert.equal(prof.posts_count, 1);
+  assert.equal(prof.following, false);
+  assert.equal((await pt.post(`/api/social/follow/${prof.author_id}`)).status, 200);
+  prof = (await pt.get(`/api/clinics/${id}`)).data;
+  assert.equal(prof.following, true);
+  assert.equal(prof.followers_count, 2, 'paciente + Acolia Brasil');
+  const feed = (await pt.get('/api/social/feed')).data;
+  assert.ok(feed.items.some((x) => x.id === postId && x.author.clinic), 'aparece no feed de quem segue');
+  const notes = (await cl.get('/api/social/notifications')).data;
+  assert.ok(notes.items.some((n) => n.type === 'follow'), 'a clínica recebe o aviso de novo seguidor');
+  assert.equal((await pt.post(`/api/social/posts/${postId}/comments`, { body: 'Que lindo!' })).status, 201);
+  assert.ok((await cl.get('/api/social/notifications')).data.items.some((n) => n.type === 'comment'));
+  // Visitante: vê só algumas publicações (e o resto pede conta)
+  const anonProf = (await client().get(`/api/clinics/${me.user.slug}`)).data;
+  assert.equal(anonProf.locked, true);
+  assert.equal(anonProf.gallery.length, 0, 'com 1 publicação o visitante não vê nenhuma (mesma regra do profissional)');
+  assert.equal(anonProf.gallery_hidden, 1);
+  assert.equal(anonProf.gallery_posts, undefined);
+  // Paciente não publica; a linha autora da clínica não aparece no admin nem entra no login
+  assert.equal((await pt.post('/api/social/texts', { text: 'oi' })).status, 403);
+  assert.ok(!JSON.stringify((await admin.get('/api/admin/professionals')).data).includes('Clínica Bem Viver'));
+  assert.equal((await client().get(`/api/professionals/${prof.author_id}`)).status, 404);
+  // Profissionais que trabalham na clínica
+  const mp = db.prepare("SELECT id FROM professionals WHERE status = 'aprovado' LIMIT 1").get();
+  if (mp) {
+    db.prepare('INSERT INTO clinic_members (clinic_id, professional_id) VALUES (?, ?)').run(id, mp.id);
+    const withPros = (await client().get(`/api/clinics/${id}`)).data;
+    assert.ok(Array.isArray(withPros.professionals));
+  }
+  const authorId = prof.author_id;
   // Admin corrige o nome e o documento
   r = await admin.post(`/api/admin/clinics/${id}/edit`, { name: 'Clínica Bem Viver Campinas', doc: '529.982.247-25' });
   assert.equal(r.status, 200, JSON.stringify(r.data));
@@ -2658,6 +2698,8 @@ test('clínicas (1.3): pré-cadastro com logo, um por CPF/CNPJ, aprovação com 
   // Apagar: some e o documento fica livre
   assert.equal((await cl.post('/api/clinic/delete', { code: 'ERRADO' })).status, 400);
   assert.equal((await cl.post('/api/clinic/delete', { code })).status, 200);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(authorId).n, 0, 'apagar a clínica apaga as publicações');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(authorId).n, 0);
   assert.equal((await cl.get('/api/auth/me')).data.role, null);
   r = await client().form('/api/auth/clinic/register', { ...base0, doc: '529.982.247-25' }, LOGO);
   assert.equal(r.status, 201, 'documento livre de novo');

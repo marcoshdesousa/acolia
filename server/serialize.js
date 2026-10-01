@@ -78,23 +78,10 @@ function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest 
     specialties: p.specialties,
     photo: p.photo,
   };
-  // No perfil aparecem só as 4 publicações mais recentes; "Ver todas" abre a página de publicações
   const { db } = require('./db');
-  // Perfil: aba "Publicações" (fotos e textos juntos) e aba "Vídeos" (Reels): 4 de cada
-  const recent = db.prepare(`SELECT id, image, thumb, kind, caption, font FROM posts WHERE professional_id = ? AND kind <> 'reel' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id)
-    .map((r) => (r.kind === 'text' ? { id: r.id, kind: 'text', caption: r.caption.slice(0, 300), font: r.font || 'padrao' } : { id: r.id, image: r.image, thumb: r.thumb, kind: 'photo' }));
-  const recentReels = db.prepare(`SELECT id, image, thumb FROM posts WHERE professional_id = ? AND kind = 'reel' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(p.id);
-  const postsCount = db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(p.id).n;
-  const reelsCount = db.prepare("SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = 'reel'").get(p.id).n;
-  const photosCount = postsCount - reelsCount; // fotos + textos
-  // Visitante: foto vira a miniatura (600 px); texto vai como texto
-  const gallery = recent.map((r) => (r.kind === 'text' ? { kind: 'text', caption: r.caption, font: r.font } : r.thumb || r.image));
+  const { recent, recentReels, photosCount, reelsCount, gallery, social: socialCounts } = postsSummary(p.id);
   const social = {
-    posts_count: postsCount,
-    photos_count: photosCount,
-    reels_count: reelsCount,
-    // +1 nos dois: a Acolia Brasil segue todo profissional e todo profissional segue a Acolia Brasil
-    followers_count: db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(p.id).n + 1,
+    ...socialCounts,
     following_count: db.prepare("SELECT COUNT(*) n FROM follows WHERE follower_role = 'professional' AND follower_id = ?").get(p.id).n + 1,
   };
   const common = {
@@ -148,6 +135,41 @@ function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest 
     gallery_posts: recent.map((r) => ({ ...r, count: Math.max(1, db.prepare('SELECT COUNT(*) n FROM post_images WHERE post_id = ?').get(r.id).n) })),
     reels_posts: recentReels.map((r) => ({ ...r, kind: 'reel', count: 1 })),
     gallery_hidden: 0,
+  };
+}
+
+// Publicações do perfil (profissional ou clínica): aba "Publicações" (fotos e textos) e aba "Vídeos", 4 de cada;
+// contagens e seguidores (+1: a Acolia Brasil segue todo mundo)
+function postsSummary(authorId) {
+  const { db } = require('./db');
+  const recent = db.prepare(`SELECT id, image, thumb, kind, caption, font FROM posts WHERE professional_id = ? AND kind <> 'reel' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(authorId)
+    .map((r) => (r.kind === 'text' ? { id: r.id, kind: 'text', caption: r.caption.slice(0, 300), font: r.font || 'padrao' } : { id: r.id, image: r.image, thumb: r.thumb, kind: 'photo' }));
+  const recentReels = db.prepare(`SELECT id, image, thumb FROM posts WHERE professional_id = ? AND kind = 'reel' ORDER BY id DESC LIMIT ${PROFILE_POSTS}`).all(authorId);
+  const postsCount = db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(authorId).n;
+  const reelsCount = db.prepare("SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = 'reel'").get(authorId).n;
+  const photosCount = postsCount - reelsCount; // fotos + textos
+  // Visitante: foto vira a miniatura (600 px); texto vai como texto
+  const gallery = recent.map((r) => (r.kind === 'text' ? { kind: 'text', caption: r.caption, font: r.font } : r.thumb || r.image));
+  return {
+    recent, recentReels, photosCount, reelsCount, gallery,
+    social: {
+      posts_count: postsCount, photos_count: photosCount, reels_count: reelsCount,
+      followers_count: db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(authorId).n + 1,
+    },
+  };
+}
+// Parte das publicações no perfil: visitante vê 1 ou 2 e o resto pede conta; com conta, as 4 mais recentes de cada aba
+function postsForProfile(authorId, loggedIn) {
+  const { db } = require('./db');
+  const S = postsSummary(authorId);
+  if (!loggedIn) {
+    const free = freeGalleryCount(S.gallery.length);
+    return { ...S.social, gallery: S.gallery.slice(0, free), gallery_hidden: S.photosCount - free, reels: [], reels_hidden: S.reelsCount };
+  }
+  return {
+    ...S.social, gallery: S.gallery, gallery_hidden: 0,
+    gallery_posts: S.recent.map((r) => ({ ...r, count: Math.max(1, db.prepare('SELECT COUNT(*) n FROM post_images WHERE post_id = ?').get(r.id).n) })),
+    reels_posts: S.recentReels.map((r) => ({ ...r, kind: 'reel', count: 1 })),
   };
 }
 
@@ -205,4 +227,4 @@ function ownPatient(p) {
   };
 }
 
-module.exports = { prices, clinicMap, PROFILE_POSTS, freeGalleryCount, VISIBLE_SQL, isVisible, parsePackages, parseGallery, GALLERY_SLOTS, publicProfessional, ownProfessional, ownPatient };
+module.exports = { postsSummary, postsForProfile, prices, clinicMap, PROFILE_POSTS, freeGalleryCount, VISIBLE_SQL, isVisible, parsePackages, parseGallery, GALLERY_SLOTS, publicProfessional, ownProfessional, ownPatient };

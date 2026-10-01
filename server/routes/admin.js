@@ -109,13 +109,13 @@ router.get('/stats', (_req, res) => {
   res.json({
     patients: g('SELECT COUNT(*) n FROM patients'),
     patients_blocked: g("SELECT COUNT(*) n FROM patients WHERE status = 'bloqueado'"),
-    professionals: g("SELECT COUNT(*) n FROM professionals WHERE status <> 'oficial'"),
+    professionals: g("SELECT COUNT(*) n FROM professionals WHERE status NOT IN ('oficial', 'clinica')"),
     pending: g("SELECT COUNT(*) n FROM professionals WHERE status = 'pendente'"),
     approved: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado'"),
     visible: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND subscription_until >= date('now', '-1 day')"),
     overdue: g("SELECT COUNT(*) n FROM professionals WHERE status = 'aprovado' AND (subscription_until IS NULL OR subscription_until < date('now', '-1 day'))"),
     // Painel inicial: ativos / bloqueados / apagados de cada lado
-    pros_active: g("SELECT COUNT(*) n FROM professionals WHERE status NOT IN ('oficial', 'bloqueado', 'excluido')"),
+    pros_active: g("SELECT COUNT(*) n FROM professionals WHERE status NOT IN ('oficial', 'clinica', 'bloqueado', 'excluido')"),
     pros_blocked: g("SELECT COUNT(*) n FROM professionals WHERE status = 'bloqueado'"),
     pros_deleted: g("SELECT COUNT(*) n FROM professionals WHERE status = 'excluido'"),
     clinics_active: g("SELECT COUNT(*) n FROM clinics WHERE status NOT IN ('bloqueado', 'excluido')"),
@@ -147,7 +147,7 @@ router.get('/locations', (_req, res) => {
 
 // ---------- Profissionais ----------
 router.get('/professionals', (req, res) => {
-  let rows = db.prepare("SELECT * FROM professionals WHERE status <> 'oficial' ORDER BY created_at DESC").all();
+  let rows = db.prepare("SELECT * FROM professionals WHERE status NOT IN ('oficial', 'clinica') ORDER BY created_at DESC").all();
   if ([...PRO_STATUSES, 'excluido'].includes(req.query.status)) rows = rows.filter((r) => r.status === req.query.status);
   if (req.query.status === 'vencido') rows = rows.filter((r) => r.status === 'aprovado' && !isVisible(r));
   if (req.query.status === 'ativos') rows = rows.filter((r) => !['bloqueado', 'excluido'].includes(r.status));
@@ -156,7 +156,7 @@ router.get('/professionals', (req, res) => {
 });
 
 router.get('/professionals/:id', (req, res) => {
-  const p = db.prepare("SELECT * FROM professionals WHERE id = ? AND status <> 'oficial'").get(Number(req.params.id));
+  const p = db.prepare("SELECT * FROM professionals WHERE id = ? AND status NOT IN ('oficial', 'clinica')").get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
   res.json(adminPro(p));
 });
@@ -255,7 +255,7 @@ router.post('/professionals/:id/registry', (req, res) => {
 // Admin corrige os dados do profissional (ex.: nome ou CPF digitado errado no cadastro). O profissional
 // não muda nome completo, CPF, profissão nem carteirinha; o admin muda tudo. Campo que não vier fica como está.
 router.post('/professionals/:id/edit', async (req, res) => {
-  const p = db.prepare("SELECT * FROM professionals WHERE id = ? AND status NOT IN ('oficial', 'excluido')").get(Number(req.params.id));
+  const p = db.prepare("SELECT * FROM professionals WHERE id = ? AND status NOT IN ('oficial', 'clinica', 'excluido')").get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
   const b = req.body || {};
   const has = (k) => b[k] !== undefined;
@@ -483,6 +483,7 @@ router.post('/clinics/:id/edit', async (req, res) => {
   if (b.plan !== undefined) { if (!C.PLANS[b.plan]) throw new U.HttpError(400, 'Selecione um plano.'); up.plan = b.plan; }
   const keys = Object.keys(up);
   if (keys.length) db.prepare(`UPDATE clinics SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => up[k]), c.id);
+  if (up.name && c.author_id) db.prepare("UPDATE professionals SET name = ?, legal_name = ? WHERE id = ? AND status = 'clinica'").run(up.name, up.name, c.author_id); // nome nas publicações
   res.json(adminClinic(loadClinic(c.id)));
 });
 router.post('/clinics/:id/delete', (req, res) => {
@@ -578,7 +579,7 @@ router.get('/export/patients.csv', (req, res) => {
 });
 
 router.get('/export/professionals.csv', (req, res) => {
-  const rows = filterRows(db.prepare("SELECT * FROM professionals WHERE status <> 'oficial' ORDER BY name").all(), req.query).map(adminPro);
+  const rows = filterRows(db.prepare("SELECT * FROM professionals WHERE status NOT IN ('oficial', 'clinica') ORDER BY name").all(), req.query).map(adminPro);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="profissionais.csv"');
   res.send(csv(rows, [['Nome', 'name'], ['Profissão', 'profession'], ['Registro', 'registry'], ['Código', 'code'], ['E-mail', 'email'],

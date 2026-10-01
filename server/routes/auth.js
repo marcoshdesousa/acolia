@@ -203,7 +203,7 @@ router.post('/professional/login', (req, res) => {
     A.createSession(res, 'professional', sec.professional_id, sec.id);
     return res.json({ ok: true, secretary: true });
   }
-  const p = db.prepare("SELECT * FROM professionals WHERE (code = ? OR email = ?) AND status <> 'oficial'").get(login.toUpperCase(), login.toLowerCase());
+  const p = db.prepare("SELECT * FROM professionals WHERE (code = ? OR email = ?) AND status NOT IN ('oficial', 'clinica')").get(login.toUpperCase(), login.toLowerCase());
   // Cadastro em análise: ainda não tem senha — mostra o aviso com o WhatsApp de atendimento
   if (p && p.status === 'pendente') {
     return res.status(403).json({ error: 'Seus dados estão sendo analisados pela nossa equipe. Você recebe sua senha pelo WhatsApp assim que o cadastro for aprovado.',

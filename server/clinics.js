@@ -84,9 +84,59 @@ function newCode() {
 const VISIBLE_SQL = "c.status = 'aprovado' AND c.subscription_until IS NOT NULL AND c.subscription_until >= date('now', '-1 day')";
 const isVisible = (c) => c.status === 'aprovado' && !!c.subscription_until && c.subscription_until >= U.addDaysISO(U.todayISO(), -1);
 
-function publicClinic(c, { loggedIn = false } = {}) {
+// ---------- Publicações da clínica (etapa 2) ----------
+// Como o perfil oficial da Acolia, cada clínica tem uma linha "autora" em professionals (status 'clinica'):
+// assim as publicações, reels, stories, curtidas, comentários e seguidores usam o mesmo caminho dos
+// profissionais. Essa linha não aparece na vitrine, não entra no admin e ninguém faz login nela.
+try { db.exec('ALTER TABLE clinics ADD COLUMN author_id INTEGER'); } catch { /* já existe */ }
+// Profissionais que trabalham na clínica (os convites chegam na etapa 3)
+db.exec(`CREATE TABLE IF NOT EXISTS clinic_members (
+  clinic_id INTEGER NOT NULL,
+  professional_id INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ativo',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (clinic_id, professional_id)
+)`);
+
+function authorOf(clinicId) {
+  const c = db.prepare('SELECT id, name, author_id FROM clinics WHERE id = ?').get(Number(clinicId));
+  if (!c) return null;
+  if (c.author_id && db.prepare("SELECT 1 FROM professionals WHERE id = ? AND status = 'clinica'").get(c.author_id)) return c.author_id;
+  const crypto = require('node:crypto');
+  const code = `CLINICA${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
+  const info = db.prepare(`INSERT INTO professionals (code, name, legal_name, profession, registry, email, phone, password_hash, status)
+    VALUES (?, ?, ?, 'Clínica', '', ?, '', ?, 'clinica')`)
+    .run(code, c.name, c.name, `clinica-${code.toLowerCase()}@acolia.invalid`, U.hashPassword(crypto.randomBytes(24).toString('hex')));
+  const id = Number(info.lastInsertRowid);
+  db.prepare('UPDATE clinics SET author_id = ? WHERE id = ?').run(id, c.id);
+  return id;
+}
+// Linha autora → clínica (ou null se não for de clínica)
+const clinicOfAuthor = (authorId) => db.prepare('SELECT * FROM clinics WHERE author_id = ?').get(Number(authorId)) || null;
+// Profissionais (visíveis) que trabalham na clínica
+function membersOf(clinicId) {
+  const { VISIBLE_SQL: PRO_VISIBLE } = require('./serialize');
+  return db.prepare(`SELECT p.id, p.name, p.photo, p.profession, p.registry, p.slug FROM clinic_members m JOIN professionals p ON p.id = m.professional_id
+    WHERE m.clinic_id = ? AND m.status = 'ativo' AND ${PRO_VISIBLE} ORDER BY p.name`).all(Number(clinicId));
+}
+
+function publicClinic(c, { loggedIn = false, viewer = null, full = false } = {}) {
   const maps = require('./maps');
+  // Lista ("Clínicas perto de você") não precisa das publicações; o perfil da clínica precisa
+  let social = {};
+  if (full) {
+    const authorId = authorOf(c.id);
+    const mineSelf = viewer?.role === 'clinic' && viewer.id === c.id;
+    social = {
+      author_id: authorId, is_self: mineSelf,
+      ...require('./serialize').postsForProfile(authorId, loggedIn),
+      following: viewer && !mineSelf ? !!db.prepare('SELECT 1 FROM follows WHERE follower_role = ? AND follower_id = ? AND professional_id = ?').get(viewer.role, viewer.id, authorId) : false,
+      professionals: membersOf(c.id),
+      viewer_role: loggedIn ? viewer?.role : undefined,
+    };
+  }
   return {
+    ...social,
     id: c.id, kind: 'clinic', name: c.name, slug: c.slug, logo: c.logo, bio: c.bio, state: c.state, city: c.city,
     address: loggedIn ? c.address : '', maps_url: loggedIn ? c.maps_url : '',
     map_embed: loggedIn && c.maps_query ? maps.embedUrl?.(c.maps_query) || '' : '',
@@ -104,4 +154,4 @@ function ownClinic(c) {
   };
 }
 
-module.exports = { PLANS, NO_PASSWORD, DOCTORS, isValidCnpj, parseDoc, fmtDoc, docTaken, parseDoctors, doctorsOf, newCode, VISIBLE_SQL, isVisible, publicClinic, ownClinic };
+module.exports = { authorOf, clinicOfAuthor, membersOf, PLANS, NO_PASSWORD, DOCTORS, isValidCnpj, parseDoc, fmtDoc, docTaken, parseDoctors, doctorsOf, newCode, VISIBLE_SQL, isVisible, publicClinic, ownClinic };
