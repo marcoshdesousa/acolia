@@ -244,6 +244,33 @@
     try { const me = await api('/api/auth/me'); if (me.account?.blocked) showBlocked(me); } catch { /* ignora */ }
   }
 
+  // ---------- Site atualizando / servidor reiniciando ----------
+  // No lugar de erro, aparece "Estamos preparando tudo para você" por cima da página; quando o site
+  // responder de novo, a página recarrega sozinha. (Na chamada de vídeo não aparece: não atrapalha a consulta.)
+  const isServerDown = (res) => [502, 503, 504].includes(res.status) || /^(no-server|suspend)/.test(res.headers.get('x-render-routing') || '');
+  let updatingEl = null;
+  async function checkServer() {
+    try { const r = await fetch('/api/config', { cache: 'no-store' }); if (isServerDown(r)) showUpdating(); } catch { if (navigator.onLine !== false) showUpdating(); }
+  }
+  function showUpdating() {
+    if (updatingEl || location.pathname.startsWith('/atendimento')) return;
+    updatingEl = document.createElement('div');
+    updatingEl.className = 'updating-screen';
+    updatingEl.setAttribute('role', 'status');
+    updatingEl.innerHTML = `<div class="updating-breath" aria-hidden="true"><img src="/img/logo-simbolo.png" alt=""></div>
+      <h2>Estamos preparando tudo para você</h2>
+      <p>A Acolia está passando por uma atualização rápida. Respire fundo: em instantes tudo volta ao normal.</p>
+      <p class="small">Esta página volta sozinha assim que estiver pronta.</p>
+      <div class="updating-dots" aria-hidden="true"><span></span><span></span><span></span></div>`;
+    document.body.appendChild(updatingEl);
+    const timer = setInterval(async () => {
+      try {
+        const r = await fetch('/api/config', { cache: 'no-store' });
+        if (r.ok && !isServerDown(r)) { clearInterval(timer); location.reload(); }
+      } catch { /* ainda fora */ }
+    }, 5000);
+  }
+
   async function api(path, { method = 'GET', body, form } = {}) {
     const opts = { method, headers: {}, credentials: 'same-origin' };
     if (form) opts.body = form;
@@ -255,7 +282,12 @@
     try {
       res = await fetch(path, opts);
     } catch {
+      if (navigator.onLine !== false) checkServer(); // tem internet mas o servidor não respondeu: pode ser atualização
       throw Object.assign(new Error('Sem conexão com o servidor. Verifique sua internet.'), { status: 0 });
+    }
+    if (isServerDown(res)) {
+      showUpdating();
+      throw Object.assign(new Error('Estamos atualizando a Acolia. Em instantes tudo volta ao normal.'), { status: res.status, updating: true });
     }
     const data = await res.json().catch(() => ({}));
     if (res.status === 423 && data.blocked) onBlocked();

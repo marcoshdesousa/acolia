@@ -1,8 +1,8 @@
 /* Service worker — permite instalar o app e abre mais rápido.
    Dados (API, chat, chamadas) nunca são guardados em cache. */
-const VERSION = 'acolia-v161';
+const VERSION = 'acolia-v162';
 const SHELL = ['/css/app.css', '/js/common.js', '/js/chat.js', '/js/voice.js', '/js/social.js', '/js/specialties.js', '/js/agenda.js', '/js/agenda-pro.js', '/js/catalog.js', '/js/profile-view.js', '/js/call.js', '/js/painel.js', '/js/delete-account.js', '/js/docs.js', '/js/quick-replies.js', '/js/secretary.js', '/js/admin-messages.js', '/js/clinic-view.js', '/js/admin-clinics.js',
-  '/img/logo-simbolo.png', '/img/logo-nome.png', '/img/logo-completo-branco.png', '/img/favicon.png', '/img/app-icon-192.png', '/offline.html'];
+  '/img/logo-simbolo.png', '/img/logo-nome.png', '/img/logo-completo-branco.png', '/img/favicon.png', '/img/app-icon-192.png', '/offline.html', '/atualizando.html'];
 // Páginas guardadas para abrir rápido (e sem internet mostrar a última versão)
 const PAGES = ['/', '/app', '/painel', '/entrar', '/clinica'];
 const MEDIA = 'acolia-fotos'; // fotos já vistas (/uploads) ficam no aparelho: não baixa de novo
@@ -17,6 +17,12 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== MEDIA).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
+
+// Resposta de erro do Render (não do nosso servidor): 502/503/504 ou "sem servidor" durante a atualização
+function serverDown(res) {
+  const routing = res.headers.get('x-render-routing') || '';
+  return [502, 503, 504].includes(res.status) || /^(no-server|suspend)/.test(routing);
+}
 
 // Guarda no máximo MEDIA_MAX fotos (as mais antigas saem)
 async function trimMedia() {
@@ -44,17 +50,24 @@ self.addEventListener('fetch', (e) => {
   }
 
   if (e.request.mode === 'navigate') {
-    // Páginas: busca na internet (até 4 s); se estiver lenta ou sem internet, abre a versão guardada
+    // Páginas: busca na internet (até 4 s); se estiver lenta ou sem internet, abre a versão guardada.
+    // Servidor fora do ar (atualização do site, servidor reiniciando): no lugar da tela de erro do
+    // Render aparece "Estamos preparando tudo para você", que volta sozinha quando o site responder.
     e.respondWith((async () => {
       const cache = await caches.open(VERSION);
       const net = fetch(e.request).then((res) => {
+        if (serverDown(res)) throw new Error('fora do ar');
         if (res.ok && PAGES.includes(url.pathname)) cache.put(url.pathname, res.clone()).catch(() => {});
         return res;
       });
+      const fallback = async (saved) => {
+        if (self.navigator.onLine === false) return saved || caches.match('/offline.html'); // sem internet
+        return (await caches.match('/atualizando.html')) || saved || caches.match('/offline.html');
+      };
       const saved = await cache.match(url.pathname);
-      if (!saved) return net.catch(() => caches.match('/offline.html'));
+      if (!saved) return net.catch(() => fallback(null));
       const timeout = new Promise((r) => setTimeout(() => r(saved), 4000));
-      return Promise.race([net.catch(() => saved), timeout]);
+      return Promise.race([net.catch(() => fallback(saved)), timeout]);
     })());
     return;
   }
