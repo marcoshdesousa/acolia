@@ -1544,9 +1544,9 @@ test('documentos: quem pode emitir o quê, envio no chat, verificação pública
   const cPsico = await conv(psico);
   const cAna = await conv(analista);
   const kinds = async (pro, cid) => (await pro.cl.get(`/api/docs/options/${cid}`)).data.kinds.map((k) => k.kind);
-  assert.deepEqual(await kinds(psiq, cPsiq), ['atestado', 'receita', 'encaminhamento'], 'psiquiatra: tudo');
-  assert.deepEqual(await kinds(psico, cPsico), ['atestado', 'encaminhamento'], 'psicólogo: sem receita');
-  assert.deepEqual(await kinds(analista, cAna), ['encaminhamento'], 'psicanalista: só encaminhamento');
+  assert.deepEqual(await kinds(psiq, cPsiq), ['atestado', 'receita', 'declaracao', 'encaminhamento'], 'psiquiatra: tudo');
+  assert.deepEqual(await kinds(psico, cPsico), ['atestado', 'declaracao', 'encaminhamento'], 'psicólogo: sem receita');
+  assert.deepEqual(await kinds(analista, cAna), ['declaracao', 'encaminhamento'], 'psicanalista: declaração e encaminhamento');
   const opt = (await psiq.cl.get(`/api/docs/options/${cPsiq}`)).data;
   assert.equal(opt.patient.cpf, CPF, 'CPF do paciente já vem preenchido');
   assert.equal(opt.patient.name, 'Rita Souza', 'nome oficial do cadastro');
@@ -1557,6 +1557,14 @@ test('documentos: quem pode emitir o quê, envio no chat, verificação pública
   const base0 = { patient_name: 'Rita Souza Lima', cpf: CPF, birth_date: '1990-05-10', attended_at: '2026-09-20T14:30', signature: SIG };
   assert.equal((await psico.cl.post('/api/docs', { ...base0, conversation_id: cPsico, kind: 'receita', items: [{ name: 'X', instructions: 'y' }] })).status, 403, 'psicólogo não receita');
   assert.equal((await analista.cl.post('/api/docs', { ...base0, conversation_id: cAna, kind: 'atestado' })).status, 403, 'psicanalista não dá atestado');
+  // Declaração de comparecimento: todos emitem (com assinatura), e diz se foi online ou presencial
+  assert.equal((await analista.cl.post('/api/docs', { ...base0, signature: undefined, conversation_id: cAna, kind: 'declaracao' })).status, 400, 'declaração também precisa de assinatura');
+  const dec = await analista.cl.post('/api/docs', { ...base0, conversation_id: cAna, kind: 'declaracao', att_modality: 'online' });
+  assert.equal(dec.status, 201, JSON.stringify(dec.data));
+  const decDoc = (await analista.cl.get(`/api/docs/${dec.data.code}`)).data;
+  assert.equal(decDoc.kind, 'declaracao');
+  assert.equal(decDoc.data.title, 'Declaração de comparecimento');
+  assert.equal(decDoc.data.att_modality, 'online');
   assert.equal((await psiq.cl.post('/api/docs', { ...base0, conversation_id: cPsiq, kind: 'atestado', cid: 'F41.1' })).status, 400, 'CID só com autorização');
 
   // Receita do psiquiatra: vai no chat e o paciente abre completa
@@ -1598,7 +1606,7 @@ test('documentos: quem pode emitir o quê, envio no chat, verificação pública
   // Conta de teste: emite tudo, mas sai marcado como teste (sem validade)
   const { db } = require('../server/db');
   db.prepare('UPDATE professionals SET is_test = 1 WHERE id = ?').run(analista.id);
-  assert.deepEqual(await kinds(analista, cAna), ['atestado', 'receita', 'encaminhamento'], 'conta de teste: tudo');
+  assert.deepEqual(await kinds(analista, cAna), ['atestado', 'receita', 'declaracao', 'encaminhamento'], 'conta de teste: tudo');
   r = await analista.cl.post('/api/docs', { ...base0, conversation_id: cAna, kind: 'receita', items: [{ name: 'Teste', instructions: '1 ao dia' }] });
   assert.equal(r.status, 201, JSON.stringify(r.data));
   const tdoc = (await anon.get(`/api/docs/${r.data.code}`)).data;

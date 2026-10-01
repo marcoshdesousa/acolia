@@ -7,6 +7,9 @@
 //   (Psicólogo(a) / Neuropsicólogo(a), CRP — "atestado psicológico", CFP Res. 06/2019).
 //   Psicanalista, psicoterapeuta e terapeuta não têm conselho que permita atestado.
 // - Encaminhamento para outro profissional: todos.
+// - Declaração de comparecimento: todos (com ou sem conselho). Comprova que o paciente esteve no
+//   atendimento (ex.: para o trabalho ou a escola); não é atestado e não dá afastamento.
+// - Atestado e declaração dizem se o atendimento foi online ou presencial; receita e encaminhamento não.
 // - Laudo: não é feito pela plataforma (só presencialmente, em clínica).
 //
 // Cada documento tem um código único e um QR Code que abre a página pública de verificação
@@ -27,7 +30,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS documents (
   conversation_id INTEGER NOT NULL,
   professional_id INTEGER NOT NULL,
   patient_id INTEGER NOT NULL,
-  kind TEXT NOT NULL,                      -- atestado | receita | encaminhamento
+  kind TEXT NOT NULL,                      -- atestado | receita | declaracao | encaminhamento
   data TEXT NOT NULL,                      -- JSON com os dados do documento
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
   revoked_at TEXT
@@ -42,14 +45,14 @@ const PSICO = ['Psicólogo(a)', 'Neuropsicólogo(a)'];
 // Conta de teste do profissional: emite tudo (para testar), mas o documento sai marcado
 // "TESTE — SEM VALIDADE" e com o nome/registro de teste, então não vale como documento real.
 function allowedKinds(profession, isTest = false) {
-  if (isTest) return ['atestado', 'receita', 'encaminhamento'];
+  if (isTest) return ['atestado', 'receita', 'declaracao', 'encaminhamento'];
   const kinds = [];
   if (MEDICO.includes(profession) || PSICO.includes(profession)) kinds.push('atestado');
   if (MEDICO.includes(profession)) kinds.push('receita');
-  kinds.push('encaminhamento');
+  kinds.push('declaracao', 'encaminhamento');
   return kinds;
 }
-const TITLES = { receita: 'Receita', encaminhamento: 'Encaminhamento' };
+const TITLES = { receita: 'Receita', encaminhamento: 'Encaminhamento', declaracao: 'Declaração de comparecimento' };
 const titleOf = (kind, profession) => (kind === 'atestado' ? (MEDICO.includes(profession) ? 'Atestado médico' : 'Atestado psicológico') : TITLES[kind]);
 
 // Código fácil de ler e digitar (sem 0/O, 1/I)
@@ -111,6 +114,8 @@ router.get('/options/:conversationId', (req, res) => {
     // exatamente como estão no cadastro, sem o profissional poder mudar.
     patient: { name: pat.name, cpf: U.formatCpf(pat.cpf), birth_date: pat.birth_date || '' },
     attended_at: lastAttendance(c),
+    // Tipo do último atendimento (para já vir marcado em atestado e declaração)
+    last_modality: db.prepare("SELECT modality FROM appointments WHERE conversation_id = ? AND status IN ('confirmada', 'concluida') ORDER BY start_at DESC LIMIT 1").get(c.id)?.modality || 'online',
     professional: proInfo(req.auth.user),
   });
 });
@@ -120,7 +125,7 @@ router.post('/', (req, res) => {
   const chat = require('./chat');
   const c = chat.loadConversation(req, req.body.conversation_id);
   const kind = String(req.body.kind || '');
-  if (!['atestado', 'receita', 'encaminhamento'].includes(kind)) throw new U.HttpError(400, 'Tipo de documento inválido.');
+  if (!['atestado', 'receita', 'declaracao', 'encaminhamento'].includes(kind)) throw new U.HttpError(400, 'Tipo de documento inválido.');
   if (!allowedKinds(pro.profession, !!pro.is_test).includes(kind)) {
     throw new U.HttpError(403, kind === 'receita'
       ? 'Só médico (psiquiatra, com CRM) pode emitir receita de medicamentos.'
@@ -151,7 +156,11 @@ router.post('/', (req, res) => {
     attended_at: attended.slice(0, 16), // horário local de quem emitiu (AAAA-MM-DDTHH:MM)
   };
   if (pro.is_test) data.test = true;
-  if (kind === 'atestado') {
+  // Atestado e declaração: o atendimento foi online ou presencial (aparece no documento)
+  if (kind === 'atestado' || kind === 'declaracao') data.att_modality = req.body.att_modality === 'presencial' ? 'presencial' : 'online';
+  if (kind === 'declaracao') {
+    // só os dados acima: nome, CPF, nascimento, data e horário do atendimento
+  } else if (kind === 'atestado') {
     data.days = 1; // um atendimento = um dia
     const cid = U.cleanText(req.body.cid, 20).toUpperCase();
     if (cid) {

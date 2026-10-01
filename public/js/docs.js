@@ -1,4 +1,4 @@
-/* Documentos do profissional (atestado, receita, encaminhamento).
+/* Documentos do profissional (atestado, receita, declaração de comparecimento, encaminhamento).
    - O profissional preenche no chat (nome e CPF do paciente e o horário do último atendimento
      já vêm preenchidos) e o documento vai para o paciente na conversa.
    - O documento vira uma imagem (folha A4) para salvar/compartilhar, com o nome e o registro
@@ -70,7 +70,7 @@
     g.fillStyle = MUTED;
     g.font = font(28, 600);
     g.fillText(p.registry ? `${p.profession} · ${p.registry}` : p.profession, M, 165);
-    if (p.city) g.fillText(`${p.city}${p.state ? ` - ${p.state}` : ''} · Atendimento online`, M, 205);
+    if (p.city) g.fillText(`${p.city}${p.state ? ` - ${p.state}` : ''}`, M, 205);
     g.fillStyle = '#e3e2dc';
     g.fillRect(M, 240, W - 2 * M, 3);
 
@@ -90,9 +90,16 @@
     g.fillStyle = INK;
     g.font = font(32, 400);
     const bodyW = W - 2 * M;
-    if (doc.kind === 'atestado') {
+    // Atestado e declaração dizem se foi online (documentos antigos, sem a informação, eram online)
+    const online = (d.att_modality || 'online') === 'online';
+    if (doc.kind === 'declaracao') {
+      y = wrap(g, `Declaro, para os devidos fins, que ${who}, compareceu a atendimento ${online ? 'online' : 'presencial'} comigo no dia ${attDate}, às ${attTime}.`, M, y, bodyW, 50);
+      y += 20; g.font = font(26, 400); g.fillStyle = MUTED;
+      y = wrap(g, 'Esta declaração comprova o comparecimento ao atendimento. Não é atestado e não indica afastamento.', M, y, bodyW, 40);
+      g.fillStyle = INK;
+    } else if (doc.kind === 'atestado') {
       const tipo = d.title === 'Atestado médico' ? 'médico' : 'psicológico';
-      y = wrap(g, `Atesto, para os devidos fins, que ${who}, esteve sob meu atendimento ${tipo} online no dia ${attDate}, às ${attTime}, necessitando de afastamento de suas atividades por ${d.days || 1} (um) dia, a contar da data do atendimento.`, M, y, bodyW, 50);
+      y = wrap(g, `Atesto, para os devidos fins, que ${who}, esteve sob meu atendimento ${tipo}${online ? ' online' : ' presencial'} no dia ${attDate}, às ${attTime}, necessitando de afastamento de suas atividades por ${d.days || 1} (um) dia, a contar da data do atendimento.`, M, y, bodyW, 50);
       if (d.cid) { y += 20; g.font = font(30, 700); y = wrap(g, `CID: ${d.cid} (informado com a autorização do(a) paciente)`, M, y, bodyW, 46); }
     } else if (doc.kind === 'receita') {
       g.font = font(30, 700);
@@ -115,7 +122,7 @@
         y += 18;
       });
     } else {
-      y = wrap(g, `Encaminho o(a) paciente ${who}, atendido(a) por mim online em ${attDate}, às ${attTime}, para avaliação e acompanhamento com ${d.specialty}, na modalidade ${d.modality === 'online' ? 'online' : 'presencial'}.`, M, y, bodyW, 50);
+      y = wrap(g, `Encaminho o(a) paciente ${who}, atendido(a) por mim em ${attDate}, às ${attTime}, para avaliação e acompanhamento com ${d.specialty}, na modalidade ${d.modality === 'online' ? 'online' : 'presencial'}.`, M, y, bodyW, 50);
       if (d.reason) { y += 14; g.font = font(30, 700); g.fillText('Motivo / informações:', M, y + 10); y += 60; g.font = font(30, 400); y = wrap(g, d.reason, M, y, bodyW, 46); }
     }
 
@@ -319,8 +326,8 @@
     await modal({
       title: 'Documentos',
       html: `<p class="small muted" style="margin-top:0">Escolha o que emitir para este paciente. Vai com o seu nome e registro (${esc(opt.professional.registry)}) e um código de verificação.</p>
-        <div class="create-menu">${opt.kinds.map((k) => `<button type="button" data-v="${k.kind}">${k.kind === 'atestado' ? ICONS.doc : k.kind === 'receita' ? ICONS.text : ICONS.send}<b>${esc(k.title)}</b><small>${k.kind === 'atestado' ? '1 dia de afastamento pelo atendimento' : k.kind === 'receita' ? 'Medicamentos e como tomar' : 'Para outro profissional (presencial ou online)'}</small></button>`).join('')}</div>
-        ${opt.kinds.length === 1 ? `<p class="small muted">Pela sua profissão (${esc(opt.professional.profession)}), você pode emitir encaminhamentos. Atestado é de médico (CRM) ou psicólogo (CRP) e receita, só de médico. Laudos não são feitos pela plataforma.</p>` : '<p class="small muted">Laudos não são feitos pela plataforma (só presencialmente, em clínica).</p>'}`,
+        <div class="create-menu">${opt.kinds.map((k) => `<button type="button" data-v="${k.kind}">${k.kind === 'atestado' || k.kind === 'declaracao' ? ICONS.doc : k.kind === 'receita' ? ICONS.text : ICONS.send}<b>${esc(k.title)}</b><small>${k.kind === 'atestado' ? '1 dia de afastamento pelo atendimento' : k.kind === 'receita' ? 'Medicamentos e como tomar' : k.kind === 'declaracao' ? 'Comprova que o paciente esteve no atendimento' : 'Para outro profissional (presencial ou online)'}</small></button>`).join('')}</div>
+        ${opt.kinds.length === 2 ? `<p class="small muted">Pela sua profissão (${esc(opt.professional.profession)}), você pode emitir declarações de comparecimento e encaminhamentos. Atestado é de médico (CRM) ou psicólogo (CRP) e receita, só de médico. Laudos não são feitos pela plataforma.</p>` : '<p class="small muted">Laudos não são feitos pela plataforma (só presencialmente, em clínica).</p>'}`,
       actions: [],
       onOpen: (dlg) => {
         dlg.classList.add('sheet');
@@ -351,8 +358,13 @@
       <div class="field"><label>Data e horário do atendimento</label><input data-f="attended_at" type="datetime-local" value="${att}" required>
         <small class="muted">${opt.attended_at ? 'Preenchido com o seu último atendimento com este paciente.' : 'Nenhum atendimento encontrado — confira a data e o horário.'}</small></div>`;
     let extra = '';
-    if (kind === 'atestado') {
-      extra = `<p class="small notice info" style="margin:0">Afastamento de <b>1 dia</b> (o dia do atendimento).</p>
+    // Atestado e declaração: online ou presencial (vem marcado com o último atendimento)
+    const modSel = `<div class="field"><label>O atendimento foi</label><select data-f="att_modality"><option value="online" ${opt.last_modality !== 'presencial' ? 'selected' : ''}>Online</option><option value="presencial" ${opt.last_modality === 'presencial' ? 'selected' : ''}>Presencial</option></select></div>`;
+    if (kind === 'declaracao') {
+      extra = `${modSel}<p class="small notice info" style="margin:0">Comprova que o paciente esteve no atendimento (por exemplo, para o trabalho ou a escola). Não é atestado: não indica afastamento.</p>`;
+    } else if (kind === 'atestado') {
+      extra = modSel;
+      extra += `<p class="small notice info" style="margin:0">Afastamento de <b>1 dia</b> (o dia do atendimento).</p>
         <div class="field" style="margin-top:10px"><label>CID (opcional)</label><input data-f="cid" placeholder="Ex.: F41.1" maxlength="10"></div>
         <label class="check"><input type="checkbox" data-f="cid_authorized"> O paciente autorizou colocar o CID no atestado</label>`;
     } else if (kind === 'receita') {
@@ -381,6 +393,7 @@
           const err = $('[data-err]', dlg);
           const body = { conversation_id: conversationId, kind, signature, birth_date: v('birth_date'), attended_at: v('attended_at') };
           if (kind === 'atestado') Object.assign(body, { cid: v('cid'), cid_authorized: v('cid_authorized') });
+          if (kind === 'atestado' || kind === 'declaracao') body.att_modality = v('att_modality');
           if (kind === 'receita') body.items = $$('[data-item]', dlg).map((it) => Object.fromEntries($$('[data-i]', it).map((x) => [x.dataset.i, x.value])));
           if (kind === 'encaminhamento') Object.assign(body, { specialty: v('specialty'), modality: v('modality'), reason: v('reason') });
           try {
