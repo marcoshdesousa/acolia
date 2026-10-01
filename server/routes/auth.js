@@ -224,6 +224,67 @@ router.post('/professional/login', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Clínica (versão 1.3) ----------
+// Pré-cadastro pelo site (com a logo): fica em análise e a administração manda a senha pelo WhatsApp
+router.post('/clinic/register', async (req, res) => {
+  const { handlePhoto } = require('../upload');
+  const C = require('../clinics');
+  const logo = await handlePhoto(req, res).catch((e) => { throw new HttpError(400, e.message === 'Selecione uma foto.' ? 'Envie a logo da clínica.' : e.message); });
+  try {
+    const b = req.body || {};
+    const name = U.cleanText(b.name, 120);
+    if (name.length < 2) throw new HttpError(400, 'Informe o nome da clínica.');
+    const responsible = U.cleanText(b.responsible, 120);
+    if (!U.isFullName(responsible)) throw new HttpError(400, 'Informe o nome completo do responsável.');
+    const { type, doc } = C.parseDoc(b.doc);
+    if (C.docTaken(doc)) throw Object.assign(new HttpError(409, 'Já existe uma clínica com este CPF/CNPJ.'), { extra: { doc_exists: true, role: 'clinic' } });
+    const email = U.cleanText(b.email, 160).toLowerCase();
+    if (!U.isValidEmail(email)) throw new HttpError(400, 'E-mail inválido.');
+    if (db.prepare("SELECT 1 FROM clinics WHERE email = ? AND status <> 'excluido'").get(email)) throw new HttpError(409, 'Este e-mail já está cadastrado em outra clínica.');
+    const phone = U.onlyDigits(b.phone);
+    if (phone.length < 10 || phone.length > 13) throw new HttpError(400, 'Informe o WhatsApp da clínica com DDD.');
+    const { state, city } = validateLocation(b.state, b.city);
+    const address = U.cleanText(b.address, 250);
+    if (address.length < 5) throw new HttpError(400, 'Informe o endereço completo da clínica.');
+    const maps = require('../maps');
+    const mapsUrl = maps.cleanMapsUrl(b.maps_url);
+    if (!mapsUrl) throw new HttpError(400, 'Cole o link do Google Maps da clínica (veja "Como pegar o link").');
+    const hasDoctors = b.has_doctors === '1' || b.has_doctors === 'true' || b.has_doctors === true ? 1 : 0;
+    const doctors = hasDoctors ? C.parseDoctors(b.doctors) : [];
+    if (hasDoctors && !doctors.length) throw new HttpError(400, 'Escolha quais médicos atendem na clínica (ou marque que não tem).');
+    const plan = String(b.plan || 'clinica-4990');
+    if (!C.PLANS[plan]) throw new HttpError(400, 'Selecione um plano.');
+    const mapsQuery = maps.mapQuery(await maps.resolveShort(mapsUrl), `${address}, ${city} - ${state}`);
+    const code = C.newCode();
+    db.prepare(`INSERT INTO clinics (code, password_hash, status, name, doc_type, doc, responsible, email, phone, logo, bio, state, city, city_norm, address, maps_url, maps_query, has_doctors, doctors, slug, plan)
+      VALUES (?, ?, 'pendente', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(code, C.NO_PASSWORD, name, type, doc, responsible, email, phone, logo, U.cleanText(b.bio, 1500), state, city, U.norm(city), address, mapsUrl, mapsQuery,
+        hasDoctors, JSON.stringify(doctors), require('../slug').uniqueSlug(db, name, 0, { clinic: true }), plan);
+    res.status(201).json({ ok: true, code, support: require('../accountState').SUPPORT_WHATSAPP });
+  } catch (e) {
+    require('../upload').removePhoto(logo);
+    throw e;
+  }
+});
+
+router.post('/clinic/login', (req, res) => {
+  const C = require('../clinics');
+  const login = U.cleanText(req.body.login, 160);
+  const key = `cli:${req.ip}:${login.toLowerCase()}`;
+  A.checkLoginRate(key);
+  const c = db.prepare("SELECT * FROM clinics WHERE (code = ? OR email = ?) AND status <> 'excluido'").get(login.toUpperCase(), login.toLowerCase());
+  if (c && c.status === 'pendente') {
+    return res.status(403).json({ error: 'Os dados da clínica estão sendo analisados pela nossa equipe. Você recebe a senha pelo WhatsApp assim que o cadastro for aprovado.',
+      pending: true, support: require('../accountState').SUPPORT_WHATSAPP, name: c.name, code: c.code, clinic: true });
+  }
+  if (c && c.password_hash === C.NO_PASSWORD) { A.registerLoginFailure(key); throw new HttpError(401, 'A clínica ainda não tem senha. Fale com o nosso atendimento no WhatsApp para receber.'); }
+  if (!c || !U.verifyPassword(req.body.password || '', c.password_hash)) { A.registerLoginFailure(key); throw new HttpError(401, 'Código/e-mail ou senha incorretos.'); }
+  A.clearLoginFailures(key);
+  if (c.status === 'recusado') throw new HttpError(403, 'O cadastro da clínica não foi aprovado. Fale com a administração.');
+  A.createSession(res, 'clinic', c.id);
+  res.json({ ok: true });
+});
+
 // ---------- Administrador ----------
 router.post('/admin/login', (req, res) => {
   const username = U.cleanText(req.body.username, 60);
@@ -251,6 +312,7 @@ router.get('/me', (req, res) => {
   if (role === 'admin') return res.json({ role, user: { id: user.id, username: user.username } });
   // account: bloqueio e aviso de renovação (+ WhatsApp do atendimento da Acolia)
   const account = { ...require('../accountState').stateOf(role, user), support: require('../accountState').SUPPORT_WHATSAPP };
+  if (role === 'clinic') return res.json({ role, user: require('../clinics').ownClinic(user), account });
   if (role === 'professional') {
     // Secretária: usa o painel do profissional, sem o código único (e a tela sabe que é ela)
     if (req.auth.secretary) {

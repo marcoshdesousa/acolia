@@ -45,7 +45,7 @@ function client() {
     if (SP_URLS.includes(url) && !('specialties' in fields)) fields = { ...fields, specialties: JSON.stringify(['Ansiedade']) };
     const fd = new FormData();
     for (const [k, v] of Object.entries(fields)) fd.append(k, v);
-    if (file) fd.append('document', new Blob([file.data], { type: file.type }), file.name);
+    if (file) fd.append(file.field || 'document', new Blob([file.data], { type: file.type }), file.name);
     const res = await fetch(base + url, { method: 'POST', body: fd, headers: cookie ? { Cookie: cookie } : {} });
     const set = res.headers.get('set-cookie');
     if (set) cookie = set.split(';')[0];
@@ -2586,4 +2586,72 @@ test('admin corrige os dados do profissional e do paciente (nome, CPF, carteirin
   assert.equal((await client().post('/api/auth/patient/login', { cpf: cpfOf(805), password: '123456' })).status, 200, 'entra com o CPF corrigido');
   assert.equal((await admin.post(`/api/admin/patients/${pid}/edit`, { cpf: CPF_A })).status, 409, 'CPF de outra conta de paciente');
   assert.equal((await admin.post(`/api/admin/patients/${pid}/edit`, { birth_date: '2999-01-01' })).status, 400);
+});
+
+test('clínicas (1.3): pré-cadastro com logo, um por CPF/CNPJ, aprovação com senha, login, painel, perfil público e apagar libera o documento', async () => {
+  const { db } = require('../server/db');
+  const LOGO = { field: 'photo', data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), type: 'image/png', name: 'logo.png' };
+  const CNPJ = '11.222.333/0001-81';
+  const base0 = { name: 'Clínica Bem Viver', responsible: 'Rosa Maria Lima', doc: CNPJ, email: 'contato@bemviver.example.com', phone: '(11) 3333-4444',
+    state: 'SP', city: 'Campinas', address: 'Rua das Flores, 100 - Centro', maps_url: 'https://maps.app.goo.gl/abc123', has_doctors: '1', doctors: JSON.stringify(['Clínico geral', 'Inventado']), plan: 'clinica-4990' };
+  const cl = client();
+  let r = await cl.form('/api/auth/clinic/register', base0);
+  assert.equal(r.status, 400, 'sem logo');
+  assert.match(r.data.error, /logo/);
+  r = await cl.form('/api/auth/clinic/register', { ...base0, doc: '11.222.333/0001-00' }, LOGO);
+  assert.equal(r.status, 400, 'CNPJ inválido');
+  r = await cl.form('/api/auth/clinic/register', { ...base0, has_doctors: '1', doctors: '[]' }, LOGO);
+  assert.equal(r.status, 400, 'tem médicos mas não escolheu');
+  r = await cl.form('/api/auth/clinic/register', base0, LOGO);
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const code = r.data.code;
+  assert.match(code, /^C[A-Z0-9]{7}$/);
+  r = await client().form('/api/auth/clinic/register', { ...base0, email: 'outro@bemviver.example.com' }, LOGO);
+  assert.equal(r.status, 409, 'mesmo CNPJ');
+  assert.equal(r.data.doc_exists, true);
+  // Em análise: login avisa
+  r = await cl.post('/api/auth/clinic/login', { login: code, password: 'x' });
+  assert.equal(r.status, 403);
+  assert.equal(r.data.pending, true);
+  assert.equal((await client().get('/api/clinics')).data.items.some((c) => c.name === 'Clínica Bem Viver'), false, 'não aparece antes de aprovar');
+  // Admin aprova: senha uma vez
+  const id = db.prepare('SELECT id FROM clinics WHERE code = ?').get(code).id;
+  assert.ok((await admin.get('/api/admin/clinics?status=pendente')).data.items.some((c) => c.id === id));
+  r = await admin.post(`/api/admin/clinics/${id}/status`, { status: 'aprovado' });
+  assert.equal(r.status, 200);
+  assert.ok(r.data.new_password);
+  r = await cl.post('/api/auth/clinic/login', { login: 'contato@bemviver.example.com', password: r.data.new_password });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  let me = (await cl.get('/api/auth/me')).data;
+  assert.equal(me.role, 'clinic');
+  assert.equal(me.user.name, 'Clínica Bem Viver');
+  assert.deepEqual(me.user.doctors, ['Clínico geral'], 'só especialidades da lista');
+  assert.equal(me.user.doc, '11.222.333/0001-81');
+  // Painel: muda bio, endereço, médicos e redes; nome e documento só o admin
+  r = await cl.put('/api/clinic/profile', { bio: 'Cuidado integral.', has_doctors: false, instagram: '@bemviver', name: 'Outro Nome' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.name, 'Clínica Bem Viver');
+  assert.equal(r.data.has_doctors, false);
+  assert.equal(r.data.bio, 'Cuidado integral.');
+  // Perfil público e "clínicas perto"
+  const pt = client();
+  await pt.post('/api/auth/patient/register', { name: 'Paula Perto Lima', cpf: cpfOf(901), state: 'SP', city: 'Campinas', birth_date: '1990-01-01', password: '123456', handle: 'paula.perto' });
+  const list = (await pt.get('/api/clinics')).data;
+  const it = list.items.find((c) => c.id === id);
+  assert.ok(it && it.near, 'mesmo município aparece como perto');
+  assert.equal(it.address, 'Rua das Flores, 100 - Centro', 'com conta vê o endereço');
+  const anon = (await client().get(`/api/clinics/${me.user.slug}`)).data;
+  assert.equal(anon.address, '', 'visitante não vê o endereço');
+  const html = await (await fetch(`${base}/${me.user.slug}`)).text();
+  assert.match(html, /Clínica Bem Viver/);
+  // Admin corrige o nome e o documento
+  r = await admin.post(`/api/admin/clinics/${id}/edit`, { name: 'Clínica Bem Viver Campinas', doc: '529.982.247-25' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.doc_type, 'cpf');
+  // Apagar: some e o documento fica livre
+  assert.equal((await cl.post('/api/clinic/delete', { code: 'ERRADO' })).status, 400);
+  assert.equal((await cl.post('/api/clinic/delete', { code })).status, 200);
+  assert.equal((await cl.get('/api/auth/me')).data.role, null);
+  r = await client().form('/api/auth/clinic/register', { ...base0, doc: '529.982.247-25' }, LOGO);
+  assert.equal(r.status, 201, 'documento livre de novo');
 });

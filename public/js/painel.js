@@ -15,6 +15,7 @@
   const cfg = await api('/api/config');
 
   $('[data-logo]').innerHTML = ICONS.logo;
+  if (window.AcoliaClinics && $('[data-clinics-btn]')) $('[data-clinics-btn]').innerHTML = AcoliaClinics.headerButton(); // clínicas perto
   $$('[data-i]').forEach((el) => { el.outerHTML = ICONS[el.dataset.i]; });
 
   function renderLink() {

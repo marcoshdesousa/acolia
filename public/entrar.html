@@ -21,6 +21,7 @@
     <div class="tabs" role="tablist" style="margin-bottom:20px">
       <button role="tab" data-tab="paciente" class="active">Sou paciente</button>
       <button role="tab" data-tab="profissional">Sou profissional</button>
+      <button role="tab" data-tab="clinica">Sou clínica</button>
     </div>
 
     <section data-panel="paciente" class="card">
@@ -42,6 +43,15 @@
       <p class="center small muted" style="margin:16px 0 0">Perdeu seu código ou senha? Fale com a administração da Acolia.<br><a href="/cadastro-profissional">Cadastrar-me como profissional</a></p>
     </section>
 
+    <section data-panel="clinica" class="card hidden">
+      <form data-login-clinic>
+        <div class="field"><label for="clogin">Código da clínica ou e-mail</label><input id="clogin" name="login" autocomplete="username" placeholder="Ex.: CK7M2QX9" required></div>
+        <div class="field"><label for="pw3">Senha</label><input id="pw3" name="password" type="password" autocomplete="current-password" required></div>
+        <button class="btn block" type="submit">Entrar no painel da clínica</button>
+      </form>
+      <p class="center small" style="margin:16px 0 0">Ainda não tem conta? <a href="/cadastro-clinica"><b>Criar conta da clínica</b></a></p>
+    </section>
+
     <div class="card flat get-app" data-install-card style="margin-top:16px">
       <img src="/img/app-icon-192.png" alt="">
       <div class="grow"><b>Baixe o app da Acolia</b><div class="small muted">Grátis, pelo próprio site. Receba as mensagens como notificação.</div></div>
@@ -59,6 +69,7 @@
     };
     $$('[data-tab]').forEach((b) => b.addEventListener('click', () => { show(b.dataset.tab); history.replaceState(null, '', '#' + b.dataset.tab); }));
     if (location.hash === '#profissional') show('profissional');
+    if (location.hash === '#clinica') show('clinica');
     maskCpf($('#cpf'));
     // Já entrou? Volta para a página inicial (lá tem o botão para abrir o app/sistema)
     api('/api/auth/me').then((m) => { if (m && m.role && !new URLSearchParams(location.search).get('next')) location.replace('/'); }).catch(() => {});
@@ -83,6 +94,20 @@
         throw e;
       }
       location.replace(safeNext || '/');
+    });
+    handleForm($('[data-login-clinic]'), async (d, f) => {
+      try {
+        await api('/api/auth/clinic/login', { method: 'POST', body: d });
+      } catch (e) {
+        if (e.data?.pending) {
+          let box = $('[data-pending-login]', f);
+          if (!box) { box = document.createElement('div'); box.dataset.pendingLogin = ''; box.style.marginTop = '14px'; f.appendChild(box); }
+          box.innerHTML = Acolia.pendingProBox(e.data);
+          return;
+        }
+        throw e;
+      }
+      location.replace(safeNext || '/clinica');
     });
     $('[data-recover]').addEventListener('click', async (e) => {
       e.preventDefault();

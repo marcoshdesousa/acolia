@@ -16,7 +16,7 @@
   <div class="app-shell">
     <header class="topbar"><div class="container">
       <a class="brand" href="/app"><span data-logo><img class="brand-mark" src="/img/logo-simbolo.png" alt="" width="34" height="34"></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
-      <nav><a class="btn ghost sm" href="/atendimento" target="_blank" rel="noopener">Entrar no atendimento</a><span data-me-avatar></span></nav>
+      <nav><a class="btn ghost sm" href="/atendimento" target="_blank" rel="noopener">Entrar no atendimento</a><span data-clinics-btn></span><span data-me-avatar></span></nav>
     </div></header>
 
     <main class="app-main">
@@ -100,6 +100,7 @@
   <script src="/js/specialties.js"></script>
   <script src="/js/catalog.js"></script>
   <script src="/js/profile-view.js"></script>
+  <script src="/js/clinic-view.js"></script>
   <script src="/js/social.js"></script>
   <script src="/js/voice.js"></script>
   <script src="/js/docs.js"></script>
@@ -121,6 +122,7 @@
 
     function renderMe() {
       $('[data-me-avatar]').innerHTML = '<a href="#config" aria-label="Configurações">' + avatar(me.name, me.photo, 'sm') + '</a>';
+      if (window.AcoliaClinics) $('[data-clinics-btn]').innerHTML = AcoliaClinics.headerButton(); // clínicas perto (ícone de hospital)
       $('[data-photo]').innerHTML = avatar(me.name, me.photo, 'lg');
       $('[data-name]').textContent = me.name;
       $('[data-handle]').textContent = me.handle ? '@' + me.handle : '';

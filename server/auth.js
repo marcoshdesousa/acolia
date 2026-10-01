@@ -52,6 +52,9 @@ function sessionFromCookie(cookieHeader, { allowBlocked = false } = {}) {
   else if (s.role === 'professional') {
     user = db.prepare('SELECT * FROM professionals WHERE id = ?').get(s.user_id);
     if (user && !['aprovado', 'restrito', 'bloqueado'].includes(user.status)) user = null;
+  } else if (s.role === 'clinic') {
+    user = db.prepare('SELECT * FROM clinics WHERE id = ?').get(s.user_id);
+    if (user && !['aprovado', 'bloqueado'].includes(user.status)) user = null;
   } else if (s.role === 'patient') {
     user = db.prepare('SELECT * FROM patients WHERE id = ?').get(s.user_id);
     if (user && !['ativo', 'bloqueado'].includes(user.status)) user = null;

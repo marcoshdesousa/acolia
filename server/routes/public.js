@@ -30,6 +30,34 @@ function popularity() {
   return new Map(rows.map((r) => [r.id, r.atend * 3 + r.conv]));
 }
 
+// ---------- Clínicas (versão 1.3): "clínicas perto de você" (ícone de hospital) e o perfil da clínica ----------
+router.get('/clinics', (req, res) => {
+  const C = require('../clinics');
+  const logged = !!req.auth && ['patient', 'professional', 'clinic'].includes(req.auth.role);
+  const me = req.auth?.user;
+  const state = U.isUf(req.query.state) ? req.query.state.toUpperCase() : (me?.state || '');
+  const city = U.norm(req.query.city || (req.query.state ? '' : me?.city || ''));
+  const q = U.norm(req.query.q || '').trim();
+  let rows = db.prepare(`SELECT * FROM clinics c WHERE ${C.VISIBLE_SQL}`).all();
+  if (q) rows = rows.filter((c) => U.norm(`${c.name} ${c.city}`).includes(q));
+  // Mesmo município primeiro, depois o mesmo estado, depois o resto
+  const score = (c) => (city && c.city_norm === city ? 0 : state && c.state === state ? 1 : 2);
+  rows.sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name, 'pt-BR'));
+  if (req.query.near === '1' && state) rows = rows.filter((c) => c.state === state);
+  res.json({ items: rows.slice(0, 200).map((c) => ({ ...C.publicClinic(c, { loggedIn: logged }), near: score(c) === 0 })), state, city: req.query.city || (req.query.state ? '' : me?.city || '') });
+});
+router.get('/clinics/:key', (req, res) => {
+  const C = require('../clinics');
+  const key = String(req.params.key);
+  const c = /^\d+$/.test(key) ? db.prepare(`SELECT * FROM clinics c WHERE id = ? AND ${C.VISIBLE_SQL}`).get(Number(key))
+    : db.prepare(`SELECT * FROM clinics c WHERE slug = ? AND ${C.VISIBLE_SQL}`).get(key.toLowerCase());
+  const own = req.auth?.role === 'clinic' && c && req.auth.user.id === c.id;
+  const cc = c || (req.auth?.role === 'clinic' && (/^\d+$/.test(key) ? Number(key) === req.auth.user.id : req.auth.user.slug === key.toLowerCase()) ? db.prepare('SELECT * FROM clinics WHERE id = ?').get(req.auth.user.id) : null);
+  if (!cc) throw new U.HttpError(404, 'Clínica não encontrada.');
+  const logged = !!req.auth && ['patient', 'professional', 'clinic'].includes(req.auth.role);
+  res.json({ ...C.publicClinic(cc, { loggedIn: logged }), is_self: own || (req.auth?.role === 'clinic' && req.auth.user.id === cc.id), viewer_role: req.auth?.role || null });
+});
+
 router.get('/professionals', (req, res) => {
   const isPatient = req.auth?.role === 'patient';
   const viewerIsPro = req.auth?.role === 'professional'; // profissional vê a vitrine completa (sem filtro automático)

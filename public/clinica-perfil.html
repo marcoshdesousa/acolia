@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <title>Clínica — Acolia</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#3f5550">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/img/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="topbar"><div class="container">
+    <a class="brand" href="/"><span data-logo><img class="brand-mark" src="/img/logo-simbolo.png" alt="" width="34" height="34"></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
+    <nav data-nav></nav>
+  </div></header>
+  <main class="container" style="padding-top:20px;padding-bottom:48px">
+    <a href="/" class="btn ghost sm" style="margin-bottom:12px">← Voltar</a>
+    <div data-clinic><div class="spinner"></div></div>
+  </main>
+  <script src="/js/common.js"></script>
+  <script src="/js/clinic-view.js"></script>
+  <script>
+  (async function () {
+    const { $, api, ICONS, esc } = Acolia;
+    $('[data-logo]').innerHTML = ICONS.logo;
+    const key = document.body.dataset.slug || new URLSearchParams(location.search).get('id');
+    const here = location.pathname + location.search;
+    const me = await api('/api/auth/me').catch(() => ({}));
+    const nav = $('[data-nav]');
+    if (me.role === 'patient') nav.innerHTML = '<a class="btn secondary sm" href="/app">Abrir meu app</a>';
+    else if (me.role === 'professional') nav.innerHTML = '<a class="btn secondary sm" href="/painel">Meu painel</a>';
+    else if (me.role === 'clinic') nav.innerHTML = '<a class="btn secondary sm" href="/clinica">Painel da clínica</a>';
+    else nav.innerHTML = '<a class="btn secondary sm" href="/entrar?next=' + encodeURIComponent(here) + '">Entrar</a>';
+    try {
+      const c = await api('/api/clinics/' + encodeURIComponent(key));
+      document.title = c.name + ' | Acolia';
+      $('[data-clinic]').innerHTML = AcoliaClinics.render(c, { next: here })
+        + (c.locked ? `<div class="notice info" style="margin-top:16px">Crie sua conta grátis para ver o endereço e o mapa da clínica.
+          <div class="row" style="margin-top:10px"><a class="btn sm" href="/cadastro-paciente?next=${encodeURIComponent(here)}">Criar conta grátis</a><a class="btn secondary sm" href="/entrar?next=${encodeURIComponent(here)}">Já tenho conta</a></div></div>` : '');
+    } catch (e) {
+      $('[data-clinic]').innerHTML = '<div class="empty">' + esc(e.message === 'Clínica não encontrada.' ? 'Esta clínica não está disponível no momento.' : e.message) + '</div>';
+    }
+  })();
+  </script>
+</body>
+</html>

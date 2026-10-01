@@ -58,7 +58,7 @@ function createApp() {
   // Respostas da API nunca ficam guardadas no navegador (ex.: depois de sair, não mostra a conta antiga)
   app.use('/api', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   // Conta bloqueada: só consegue ver quem é (tela de bloqueio), sair e excluir a própria conta
-  const BLOCKED_OK = ['/auth/me', '/auth/logout', '/config', '/professional/delete', '/patient/delete', '/push/unsubscribe'];
+  const BLOCKED_OK = ['/auth/me', '/auth/logout', '/config', '/professional/delete', '/patient/delete', '/clinic/delete', '/push/unsubscribe'];
   app.use('/api', (req, _res, next) => {
     if (req.auth?.blocked && !BLOCKED_OK.includes(req.path)) {
       return next(Object.assign(new U.HttpError(423, 'Perfil bloqueado. Fale com a administração.'), { blocked: true }));
@@ -78,10 +78,12 @@ function createApp() {
   const SEC = require('./secretary');
   app.use(SEC.guard);
   app.use((req, _res, next) => SEC.ctx.run({ secretaryId: req.auth?.secretary?.id || null }, next));
+  require('./clinics'); // tabela das clínicas (versão 1.3)
   require('./blocklist'); // lista de bloqueados (cria a tabela e inclui quem já estava bloqueado)
   app.use('/api/auth', require('./routes/auth').router);
   app.use('/api', require('./routes/public').router);
   app.use('/api/patient', require('./routes/patient').router);
+  app.use('/api/clinic', require('./routes/clinic').router); // painel da clínica (versão 1.3)
   app.use('/api/professional/finance', require('./routes/finance').router); // Financeiro (só o profissional)
   app.use('/api/professional', require('./routes/professional').router);
   app.use('/api/chat', require('./routes/chat').router);
@@ -133,11 +135,20 @@ function createApp() {
   app.get('/v/:code', (_req, res) => res.sendFile(path.join(pub, 'verificar.html')));
   // Link próprio do profissional: site.com/<slug> abre o perfil dele
   const profileHtml = require('node:fs').readFileSync(path.join(pub, 'profissional.html'), 'utf8');
+  const clinicHtml = require('node:fs').readFileSync(path.join(pub, 'clinica-perfil.html'), 'utf8');
   app.get(/^\/([a-zA-Z0-9-]{3,40})\/?$/, (req, res, next) => {
     const { db } = require('./db');
     const slug = req.params[0].toLowerCase();
     const p = db.prepare("SELECT name, profession, registry, city, state, status FROM professionals WHERE slug = ? AND status <> 'excluido'").get(slug);
-    if (!p) return next();
+    if (!p) {
+      // Clínica: site.com/<slug> abre o perfil da clínica
+      const c = db.prepare("SELECT name, city, state FROM clinics WHERE slug = ? AND status <> 'excluido'").get(slug);
+      if (!c) return next();
+      const title = U.cleanText(`${c.name} — clínica em ${c.city} - ${c.state} | Acolia`, 160).replace(/[<>&"]/g, '');
+      return res.type('html').send(clinicHtml.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>
+  <meta property="og:title" content="${title}">
+  <meta property="og:image" content="/img/app-icon-512.png">`).replace('<body>', `<body data-slug="${slug}">`));
+    }
     const official = p.status === 'oficial';
     const title = U.cleanText(official ? `${p.name} — perfil oficial | Acolia` : `${p.name} — ${p.profession} | Acolia`, 160).replace(/[<>&"]/g, '');
     const desc = U.cleanText(official ? 'Perfil oficial da Acolia: saúde mental ao seu alcance. Veja as publicações.'

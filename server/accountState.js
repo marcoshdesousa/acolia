@@ -33,6 +33,17 @@ function patientState(p) {
   return {};
 }
 
-const stateOf = (role, user) => (role === 'professional' ? proState(user) : role === 'patient' ? patientState(user) : {});
+// Clínica: bloqueada pelo admin ou com a mensalidade vencida (mesma regra do profissional)
+function clinicState(c) {
+  if (!c) return {};
+  if (c.status === 'bloqueado') return { blocked: 'admin' };
+  if (c.status !== 'aprovado' || !c.subscription_until) return {};
+  const today = U.todayISO();
+  if (today > U.addDaysISO(c.subscription_until, GRACE_DAYS)) return { blocked: 'vencido', until: c.subscription_until };
+  if (today >= U.addDaysISO(c.subscription_until, -WARN_DAYS)) return { warn: true, until: c.subscription_until, ended: today > c.subscription_until };
+  return { until: c.subscription_until };
+}
+
+const stateOf = (role, user) => (role === 'professional' ? proState(user) : role === 'patient' ? patientState(user) : role === 'clinic' ? clinicState(user) : {});
 
 module.exports = { needsCpf, proState, patientState, stateOf, GRACE_DAYS, WARN_DAYS, SUPPORT_WHATSAPP };

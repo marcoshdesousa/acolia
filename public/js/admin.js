@@ -72,10 +72,13 @@
     const box = (title, icon, list, rows) => `<div class="card acct-box"><div class="acct-h">${ICONS[icon] || ''}<b>${title}</b></div>
       <div class="acct-nums">${rows.map(([n, l, v, cls]) => `<a href="#${list}/${v}" class="${cls}"><span class="n">${n}</span><span class="l">${l}</span></a>`).join('')}</div></div>`;
     $('[data-acct-sum]').innerHTML = box('Profissionais', 'therapist', 'profissionais', [[s.pros_active, 'Ativos', 'ativos', 'ok'], [s.pros_blocked, 'Bloqueados', 'bloqueado', 'bad'], [s.pros_deleted, 'Apagados', 'excluido', 'gone']])
-      + box('Pacientes', 'user', 'pacientes', [[s.patients_active, 'Ativos', 'ativos', 'ok'], [s.patients_blocked, 'Bloqueados', 'bloqueado', 'bad'], [s.patients_deleted, 'Apagados', 'excluido', 'gone']]);
+      + box('Pacientes', 'user', 'pacientes', [[s.patients_active, 'Ativos', 'ativos', 'ok'], [s.patients_blocked, 'Bloqueados', 'bloqueado', 'bad'], [s.patients_deleted, 'Apagados', 'excluido', 'gone']])
+      + box('Clínicas', 'home', 'clinicas', [[s.clinics_active || 0, 'Ativas', 'ativos', 'ok'], [s.clinics_blocked || 0, 'Bloqueadas', 'bloqueado', 'bad'], [s.clinics_deleted || 0, 'Apagadas', 'excluido', 'gone']]);
+    $$('[data-clinic-pending]').forEach((el) => { el.textContent = s.clinics_pending || ''; });
     const tile = (n, l, href) => `<a class="card stat" href="${href}" style="text-decoration:none;color:inherit"><div class="n">${n}</div><div class="l">${l}</div></a>`;
     $('[data-stats]').innerHTML = [
       tile(s.pending, 'Aguardando aprovação', '#profissionais/pendente'),
+      ...(s.clinics_pending ? [tile(s.clinics_pending, 'Clínicas aguardando aprovação', '#clinicas/pendente')] : []),
       tile(s.visible, 'Profissionais na vitrine', '#profissionais/aprovado'),
       tile(s.overdue, 'Mensalidade vencida', '#profissionais/vencido'),
       tile(s.conversations, 'Conversas iniciadas', '#inicio'),
@@ -724,7 +727,7 @@
   async function route() {
     $$('dialog').forEach((d) => { d.close(); d.remove(); });
     const [view, arg] = (location.hash.slice(1) || 'inicio').split('/');
-    const v = ['inicio', 'profissionais', 'pacientes', 'novo', 'mensagens', 'acolia', 'conta'].includes(view) ? view : 'inicio';
+    const v = ['inicio', 'profissionais', 'pacientes', 'clinicas', 'novo', 'mensagens', 'acolia', 'conta'].includes(view) ? view : 'inicio';
     $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
     $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === v));
     try {
@@ -739,6 +742,7 @@
         await loadList('patients');
       }
       if (v === 'acolia') await loadOfficial();
+      if (v === 'clinicas') window.AcoliaAdminClinics?.show(arg);
       if (v === 'mensagens') window.AcoliaAdminMessages?.show(arg);
     } catch (e) { toast(e.message, 'error'); }
   }

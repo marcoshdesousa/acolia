@@ -1486,3 +1486,15 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .appt-bar.pres-ask { background: #eee8e2; border: 1px solid #c2ae9d; }
 .appt-bar.pres-ask .ab-ic { color: #8a7362; }
 .appt-bar.pres-ask .ab-txt b { white-space: normal; }
+
+/* Clínicas (versão 1.3) */
+.logo-prev { width: 72px; height: 72px; border-radius: 50%; background: #e5ebe8; border: 2px dashed #9db8b0; display: grid; place-items: center; overflow: hidden; flex: none; }
+.logo-prev img { width: 100%; height: 100%; object-fit: cover; }
+.clinic-logo { overflow: hidden; background: #fff; }
+.clinic-logo img { width: 100%; height: 100%; object-fit: cover; }
+.clinic-list { display: grid; gap: 10px; }
+.clinic-item { display: flex; align-items: center; gap: 14px; text-align: left; width: 100%; cursor: pointer; padding: 14px 16px; font: inherit; color: inherit; }
+.clinic-item b { display: block; }
+.clinic-item small { display: block; }
+.clinic-btn svg { width: 24px; height: 24px; }
+.doc-chips .chip-btn { font-size: .85rem; }

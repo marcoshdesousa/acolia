@@ -118,6 +118,11 @@ router.get('/stats', (_req, res) => {
     pros_active: g("SELECT COUNT(*) n FROM professionals WHERE status NOT IN ('oficial', 'bloqueado', 'excluido')"),
     pros_blocked: g("SELECT COUNT(*) n FROM professionals WHERE status = 'bloqueado'"),
     pros_deleted: g("SELECT COUNT(*) n FROM professionals WHERE status = 'excluido'"),
+    clinics_active: g("SELECT COUNT(*) n FROM clinics WHERE status NOT IN ('bloqueado', 'excluido')"),
+    clinics_blocked: g("SELECT COUNT(*) n FROM clinics WHERE status = 'bloqueado'"),
+    clinics_deleted: g("SELECT COUNT(*) n FROM clinics WHERE status = 'excluido'"),
+    clinics_pending: g("SELECT COUNT(*) n FROM clinics WHERE status = 'pendente'"),
+    clinics: g('SELECT COUNT(*) n FROM clinics'),
     patients_active: g("SELECT COUNT(*) n FROM patients WHERE status = 'ativo'"),
     patients_deleted: g("SELECT COUNT(*) n FROM patients WHERE status = 'excluido'"),
     conversations: g('SELECT COUNT(*) n FROM conversations'),
@@ -393,6 +398,112 @@ router.post('/patients/:id/delete-test', (req, res) => {
   if (!p.is_test) throw new U.HttpError(403, 'Só contas de teste podem ser apagadas pelo admin.');
   if (p.status === 'excluido') throw new U.HttpError(400, 'Esta conta já foi apagada.');
   require('./patient').wipePatient(p);
+  res.json({ ok: true });
+});
+
+// ---------- Clínicas (versão 1.3) ----------
+function adminClinic(c) {
+  const C = require('../clinics');
+  return { ...C.ownClinic(c), visible: C.isVisible(c), created_at: c.created_at, admin_note: c.admin_note, maps_query: undefined };
+}
+router.get('/clinics', (req, res) => {
+  let rows = db.prepare("SELECT * FROM clinics ORDER BY created_at DESC").all();
+  const st = req.query.status === 'ativos' ? null : req.query.status;
+  if (req.query.status === 'ativos') rows = rows.filter((r) => !['bloqueado', 'excluido'].includes(r.status));
+  else if (['pendente', 'aprovado', 'recusado', 'bloqueado', 'excluido'].includes(st)) rows = rows.filter((r) => r.status === st);
+  const q = U.norm(req.query.q || '').trim();
+  const digits = U.onlyDigits(req.query.q || '');
+  if (q) rows = rows.filter((r) => U.norm(`${r.name} ${r.email} ${r.code} ${r.city}`).includes(q) || (digits.length >= 3 && String(r.doc || '').includes(digits)));
+  res.json({ items: rows.map(adminClinic) });
+});
+const loadClinic = (id) => {
+  const c = db.prepare('SELECT * FROM clinics WHERE id = ?').get(Number(id));
+  if (!c) throw new U.HttpError(404, 'Clínica não encontrada.');
+  return c;
+};
+router.get('/clinics/:id', (req, res) => res.json(adminClinic(loadClinic(req.params.id))));
+router.post('/clinics/:id/status', (req, res) => {
+  const c = loadClinic(req.params.id);
+  const status = req.body.status;
+  if (!['aprovado', 'recusado', 'bloqueado'].includes(status)) throw new U.HttpError(400, 'Status inválido.');
+  if (c.status === 'excluido') throw new U.HttpError(400, 'Esta clínica foi excluída.');
+  let until = c.subscription_until;
+  if (status === 'aprovado' && !until) until = U.addDaysISO(U.todayISO(), 30);
+  db.prepare('UPDATE clinics SET status = ?, subscription_until = ? WHERE id = ?').run(status, until, c.id);
+  let newPassword = null;
+  if (status === 'aprovado' && c.password_hash === require('../clinics').NO_PASSWORD) {
+    newPassword = U.randomPassword(10);
+    db.prepare('UPDATE clinics SET password_hash = ? WHERE id = ?').run(U.hashPassword(newPassword), c.id);
+  }
+  if (status === 'bloqueado') require('../realtime').emit(`clinic:${c.id}`, 'account:blocked', {});
+  if (status === 'recusado') A.destroyUserSessions('clinic', c.id);
+  res.json({ ...adminClinic(loadClinic(c.id)), new_password: newPassword });
+});
+router.post('/clinics/:id/subscription', (req, res) => {
+  const c = loadClinic(req.params.id);
+  let until;
+  if (req.body.until) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.body.until)) throw new U.HttpError(400, 'Data inválida.');
+    until = req.body.until;
+  } else {
+    const days = Math.min(Math.max(Number(req.body.add_days) || 0, 1), 3650);
+    const base = c.subscription_until && c.subscription_until > U.todayISO() ? c.subscription_until : U.todayISO();
+    until = U.addDaysISO(base, days);
+  }
+  db.prepare('UPDATE clinics SET subscription_until = ? WHERE id = ?').run(until, c.id);
+  res.json(adminClinic(loadClinic(c.id)));
+});
+router.post('/clinics/:id/reset-password', (req, res) => {
+  const c = loadClinic(req.params.id);
+  const password = U.randomPassword(10);
+  db.prepare('UPDATE clinics SET password_hash = ? WHERE id = ?').run(U.hashPassword(password), c.id);
+  A.destroyUserSessions('clinic', c.id);
+  res.json({ password });
+});
+router.post('/clinics/:id/note', (req, res) => {
+  db.prepare('UPDATE clinics SET admin_note = ? WHERE id = ?').run(U.cleanText(req.body.note, 1000), loadClinic(req.params.id).id);
+  res.json({ ok: true });
+});
+// O admin corrige os dados da clínica (nome, CPF/CNPJ, responsável, contato, local)
+router.post('/clinics/:id/edit', async (req, res) => {
+  const C = require('../clinics');
+  const c = loadClinic(req.params.id);
+  if (c.status === 'excluido') throw new U.HttpError(400, 'Esta clínica foi excluída.');
+  const b = req.body || {};
+  const up = {};
+  if (b.name !== undefined) { up.name = U.cleanText(b.name, 120); if (up.name.length < 2) throw new U.HttpError(400, 'Informe o nome da clínica.'); }
+  if (b.responsible !== undefined) { up.responsible = U.cleanText(b.responsible, 120); if (!U.isFullName(up.responsible)) throw new U.HttpError(400, 'Informe o nome completo do responsável.'); }
+  if (b.doc !== undefined) {
+    const { type, doc } = C.parseDoc(b.doc);
+    if (C.docTaken(doc, c.id)) throw new U.HttpError(409, 'Já existe outra clínica com este CPF/CNPJ.');
+    up.doc_type = type; up.doc = doc;
+  }
+  if (b.email !== undefined) {
+    up.email = U.cleanText(b.email, 160).toLowerCase();
+    if (!U.isValidEmail(up.email)) throw new U.HttpError(400, 'E-mail inválido.');
+    if (db.prepare("SELECT 1 FROM clinics WHERE email = ? AND id <> ? AND status <> 'excluido'").get(up.email, c.id)) throw new U.HttpError(409, 'Este e-mail já está em uso em outra clínica.');
+  }
+  if (b.phone !== undefined) { up.phone = U.onlyDigits(b.phone); if (up.phone.length < 10 || up.phone.length > 13) throw new U.HttpError(400, 'Informe o WhatsApp com DDD.'); }
+  if (b.state !== undefined || b.city !== undefined) {
+    const { state, city } = require('./auth').validateLocation(b.state ?? c.state, b.city ?? c.city);
+    Object.assign(up, { state, city, city_norm: U.norm(city) });
+  }
+  if (b.address !== undefined) { up.address = U.cleanText(b.address, 250); if (up.address.length < 5) throw new U.HttpError(400, 'Informe o endereço completo.'); }
+  if (b.maps_url !== undefined) {
+    const maps = require('../maps');
+    up.maps_url = maps.cleanMapsUrl(b.maps_url);
+    if (!up.maps_url) throw new U.HttpError(400, 'Cole o link do Google Maps da clínica.');
+    up.maps_query = up.maps_url === c.maps_url && c.maps_query ? c.maps_query : maps.mapQuery(await maps.resolveShort(up.maps_url), `${up.address || c.address}, ${up.city || c.city} - ${up.state || c.state}`);
+  }
+  if (b.plan !== undefined) { if (!C.PLANS[b.plan]) throw new U.HttpError(400, 'Selecione um plano.'); up.plan = b.plan; }
+  const keys = Object.keys(up);
+  if (keys.length) db.prepare(`UPDATE clinics SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => up[k]), c.id);
+  res.json(adminClinic(loadClinic(c.id)));
+});
+router.post('/clinics/:id/delete', (req, res) => {
+  const c = loadClinic(req.params.id);
+  if (c.status === 'excluido') throw new U.HttpError(400, 'Esta clínica já foi apagada.');
+  require('./clinic').wipeClinic(c);
   res.json({ ok: true });
 });
 

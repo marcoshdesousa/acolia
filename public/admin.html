@@ -33,6 +33,7 @@
       <a href="#inicio" data-nav="inicio"><span data-i="chart"></span>Visão geral</a>
       <a href="#profissionais" data-nav="profissionais"><span data-i="therapist"></span>Profissionais<span class="nav-badge" data-pending></span></a>
       <a href="#pacientes" data-nav="pacientes"><span data-i="users"></span>Pacientes</a>
+      <a href="#clinicas" data-nav="clinicas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14"/><path d="M2 21h20M12 8v6M9 11h6M9 21v-3h6v3"/></svg>Clínicas<span class="nav-badge" data-clinic-pending></span></a>
       <a href="#novo" data-nav="novo"><span data-i="userPlus"></span>Cadastrar profissional</a>
       <a href="#mensagens" data-nav="mensagens"><span data-i="chat"></span>Mensagens<span class="nav-badge" data-sup-unread></span></a>
       <a href="#acolia" data-nav="acolia"><span data-i="gear"></span>Acolia Brasil</a>
@@ -97,6 +98,16 @@
         </form>
         <div class="table-wrap"><table><thead><tr><th>Paciente</th><th>CPF</th><th>Local</th><th>Cadastro</th><th>Situação</th><th></th></tr></thead><tbody data-rows="patients"></tbody></table></div>
         <p class="small muted" data-count="patients"></p>
+      </section>
+
+      <section data-view="clinicas" class="hidden">
+        <h1 style="font-size:1.5rem;margin:0">Clínicas</h1>
+        <div class="seg-filter" data-cseg role="group" aria-label="Filtrar por situação">
+          <button type="button" data-v="" class="active">Todas</button><button type="button" data-v="pendente">Aguardando aprovação</button><button type="button" data-v="ativos">Ativas</button><button type="button" data-v="bloqueado">Bloqueadas</button><button type="button" data-v="excluido">Apagadas</button>
+        </div>
+        <input type="search" data-cq placeholder="Nome, e-mail, código, cidade ou CPF/CNPJ" style="margin-top:12px" aria-label="Buscar clínica">
+        <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Clínica</th><th>CPF/CNPJ</th><th>Local</th><th>Situação</th><th>Mensalidade</th><th></th></tr></thead><tbody data-crows></tbody></table></div>
+        <p class="small muted" data-ccount></p>
       </section>
 
       <section data-view="novo" class="hidden" style="max-width:640px">
@@ -207,6 +218,7 @@
     <a href="#inicio" data-nav="inicio"><span data-i="chart"></span>Início</a>
     <a href="#profissionais" data-nav="profissionais"><span data-i="therapist"></span>Profissionais<span class="nav-badge" data-pending></span></a>
     <a href="#pacientes" data-nav="pacientes"><span data-i="users"></span>Pacientes</a>
+    <a href="#clinicas" data-nav="clinicas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14"/><path d="M2 21h20M12 8v6M9 11h6M9 21v-3h6v3"/></svg>Clínicas<span class="nav-badge" data-clinic-pending></span></a>
     <a href="#novo" data-nav="novo"><span data-i="userPlus"></span>Cadastrar</a>
     <a href="#mensagens" data-nav="mensagens"><span data-i="chat"></span>Mensagens<span class="nav-badge" data-sup-unread></span></a>
     <a href="#acolia" data-nav="acolia"><span data-i="gear"></span>Acolia</a>
@@ -219,6 +231,7 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/voice.js"></script>
   <script src="/js/admin.js"></script>
+  <script src="/js/admin-clinics.js"></script>
   <script src="/js/admin-messages.js"></script>
 </body>
 </html>

@@ -106,6 +106,7 @@
       patient: { href: '/app', label: 'Entrar no aplicativo' },
       professional: { href: '/painel', label: 'Entrar no sistema' },
       admin: { href: '/admin', label: 'Entrar no administrativo' },
+      clinic: { href: '/clinica', label: 'Entrar no painel da clínica' },
     }[me.role];
     if (ENTER) {
       const first = String((me.user && (me.user.display_name || me.user.name || me.user.username)) || '').trim().split(/\s+/)[0];

@@ -83,7 +83,8 @@
 
   function showBlocked(me) {
     const a = me.account || {};
-    const isPro = me.role === 'professional';
+    const isPro = me.role === 'professional' || me.role === 'clinic';
+    const isClinic = me.role === 'clinic';
     const u = me.user || {};
     const who = isPro ? `${u.name || ''}${u.code ? ` (código ${u.code})` : ''}` : (u.name || '');
     let text;
@@ -92,11 +93,11 @@
     if (isPro && a.blocked === 'vencido') {
       text = `Sua assinatura terminou em <b>${brDate(a.until)}</b> e não foi renovada. Seu perfil está bloqueado e não aparece para ninguém — seus dados continuam guardados.<br>Para reativar a conta, renove sua assinatura com a nossa equipe.`;
       btn = 'Renovar assinatura';
-      msg = `Olá! Sou ${who}, profissional da Acolia. Minha assinatura venceu e quero renovar para reativar a conta.`;
+      msg = isClinic ? `Olá! Sou da clínica ${who} na Acolia. A mensalidade venceu e quero renovar para reativar a conta.` : `Olá! Sou ${who}, profissional da Acolia. Minha assinatura venceu e quero renovar para reativar a conta.`;
     } else if (isPro) {
       text = 'Seu perfil foi bloqueado pela administração e não aparece para ninguém — seus dados continuam guardados.<br>Converse com o administrador para resolver o problema.';
       btn = 'Falar com o administrador';
-      msg = `Olá! Sou ${who}, profissional da Acolia. Meu perfil está bloqueado e quero resolver.`;
+      msg = isClinic ? `Olá! Sou da clínica ${who} na Acolia. O perfil da clínica está bloqueado e quero resolver.` : `Olá! Sou ${who}, profissional da Acolia. Meu perfil está bloqueado e quero resolver.`;
     } else {
       text = 'Seu perfil foi bloqueado. Converse com o administrador para resolver o problema.';
       btn = 'Falar com o administrador';
@@ -193,7 +194,7 @@
   //   1) "Excluir sua conta?"  2) "Tem certeza? Se apagar, já era"  3) digitar o CPF (paciente)
   //   ou o código de acesso (profissional). Só então apaga tudo.
   async function deleteAccountFlow(role) {
-    const isPro = role === 'professional';
+    const isPro = role === 'professional' || role === 'clinic';
     const plain = (title, html, ok) => modal({ title, html, actions: [{ label: 'Não', value: false, class: 'secondary' }, { label: ok, value: true, class: 'danger' }] });
     if (!await plain('Excluir sua conta?', '<p>Você quer mesmo excluir a sua conta da Acolia?</p>', 'Sim')) return;
     if (!await plain('Tem certeza?', `<p><b>Se apagar, já era.</b> Some tudo: seus dados, fotos${isPro ? ', publicações, reels, stories e o seu perfil' : ''}, curtidas, comentários e o conteúdo das mensagens que você enviou. <b>Não dá para recuperar.</b></p>`, 'Sim, quero apagar')) return;
@@ -211,7 +212,7 @@
           const err = dlg.querySelector('[data-err]');
           if (!v) { err.textContent = isPro ? 'Digite o seu código de acesso.' : 'Digite o seu CPF.'; err.classList.remove('hidden'); return false; }
           try {
-            await api(isPro ? '/api/professional/delete' : '/api/patient/delete', { method: 'POST', body: isPro ? { code: v } : { cpf: v } });
+            await api(role === 'clinic' ? '/api/clinic/delete' : isPro ? '/api/professional/delete' : '/api/patient/delete', { method: 'POST', body: isPro ? { code: v } : { cpf: v } });
             return true;
           } catch (e) { err.textContent = e.message; err.classList.remove('hidden'); return false; }
         },

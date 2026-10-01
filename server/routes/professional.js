@@ -262,7 +262,7 @@ function wipeProfessional(me) {
 
 router.post('/slug', (req, res) => {
   const slug = require('../slug').validateSlug(req.body.slug);
-  const taken = db.prepare('SELECT 1 FROM professionals WHERE slug = ? AND id <> ?').get(slug, req.auth.user.id);
+  const taken = require('../slug').slugTaken(db, slug, { proId: req.auth.user.id });
   if (taken) throw new U.HttpError(409, 'Este link já está em uso por outro profissional. Tente outro.');
   db.prepare('UPDATE professionals SET slug = ? WHERE id = ?').run(slug, req.auth.user.id);
   res.json(ownFor(req, db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
