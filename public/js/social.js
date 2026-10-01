@@ -288,8 +288,24 @@
     else location.href = `/profissional.html?id=${id}`;
   }
 
+  // Aviso antes de publicar (foto, reel, texto ou story): a Acolia é só da área da mente / saúde mental.
+  // "Estou ciente" publica; o X (Cancelar publicação) desiste. O perfil oficial da Acolia (admin) não vê.
+  async function contentPledge(official = false) {
+    if (official) return true;
+    const ok = await modal({
+      title: 'Antes de publicar',
+      html: `<p style="margin-top:0">A Acolia é uma plataforma <b>só da área da mente e da saúde mental</b>.</p>
+        <p>Publique apenas conteúdos dessa área. <b>Não é permitido</b> fazer propaganda de outros produtos, serviços ou assuntos que não sejam de saúde mental.</p>
+        <p class="small muted" style="margin-bottom:0">Conteúdo fora do tema pode ser removido pela administração.</p>`,
+      actions: [{ label: '✕ Cancelar publicação', value: false, class: 'secondary' }, { label: 'Estou ciente', value: true }],
+    });
+    if (!ok) toast('Publicação cancelada.');
+    return ok === true;
+  }
+
   // Só o dono: coloca a publicação no próprio story (quem vê o story toca e abre a publicação)
   async function postToStory(id, btn) {
+    if (!await contentPledge()) return;
     btn.disabled = true;
     try {
       await api(`/api/social/posts/${id}/story`, { method: 'POST' });
@@ -494,6 +510,7 @@
         label: 'Publicar',
         handler: async (dlg) => {
           if (!items.length) { toast('Escolha pelo menos uma foto.', 'error'); return false; }
+          if (!await contentPledge(base !== '/api/social/posts')) return true; // cancelou: fecha sem publicar
           const btn = $$('.dlg-actions .btn', dlg).at(-1);
           btn.disabled = true;
           btn.textContent = 'Preparando…';
@@ -1091,6 +1108,7 @@
           if (pending) meta = await pending; // tocou em Publicar enquanto o vídeo ainda era preparado
           if (!file || !meta) { toast('Escolha um vídeo.', 'error'); return false; }
           if (meta.duration && meta.duration > REEL_MAX_SECS + 1) { toast(`O vídeo pode ter no máximo 1 minuto e 30 segundos. Este tem ${fmtSecs(meta.duration)}.`, 'error'); return false; }
+          if (!await contentPledge()) return true; // cancelou: fecha sem publicar
           Uploads.add({ type: 'reel', label: 'Reel', file, poster: meta.poster, caption: $('[data-cap]', dlg).value,
             duration: meta.duration ? Math.round(meta.duration * 10) / 10 : null, onDone });
           return true;
@@ -1608,6 +1626,7 @@
           const text = $('[data-text]', dlg).value.trim();
           const err = $('[data-err]', dlg);
           if (!text) { err.textContent = 'Escreva o texto da publicação.'; err.classList.remove('hidden'); return false; }
+          if (!await contentPledge(base !== '/api/social/texts')) return true; // cancelou: fecha sem publicar
           try { await api(base, { method: 'POST', body: { text, font } }); } catch (e) { err.textContent = e.message; err.classList.remove('hidden'); return false; }
           toast('Texto publicado!');
           onDone?.();
@@ -1639,5 +1658,5 @@
     b.remove();
   });
 
-  window.AcoliaSocial = { readVideo, charCount, CAPTION_MAX, openNewText: newText, resumeUploads: () => Uploads.resume(), openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
+  window.AcoliaSocial = { contentPledge, readVideo, charCount, CAPTION_MAX, openNewText: newText, resumeUploads: () => Uploads.resume(), openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
 })();
