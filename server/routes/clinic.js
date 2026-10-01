@@ -27,8 +27,9 @@ router.put('/profile', async (req, res) => {
   if (address.length < 5) throw new U.HttpError(400, 'Informe o endereço completo da clínica.');
   const maps = require('../maps');
   const mapsUrl = maps.cleanMapsUrl(b.maps_url ?? cur.maps_url);
-  if (!mapsUrl) throw new U.HttpError(400, 'Cole o link do Google Maps da clínica.');
-  const mapsQuery = mapsUrl === cur.maps_url && cur.maps_query ? cur.maps_query : maps.mapQuery(await maps.resolveShort(mapsUrl), `${address}, ${city} - ${state}`);
+  // Link do Maps é opcional: sem ele, o mapa usa o endereço
+  const fallback = `${address}, ${city} - ${state}`;
+  const mapsQuery = mapsUrl && mapsUrl === cur.maps_url && cur.maps_query && address === cur.address ? cur.maps_query : maps.mapQuery(mapsUrl ? await maps.resolveShort(mapsUrl) : '', fallback);
   const hasDoctors = b.has_doctors === undefined ? cur.has_doctors : (b.has_doctors === true || b.has_doctors === '1' || b.has_doctors === 1 ? 1 : 0);
   const doctors = hasDoctors ? C.parseDoctors(b.doctors ?? cur.doctors) : [];
   if (hasDoctors && !doctors.length) throw new U.HttpError(400, 'Escolha quais médicos atendem na clínica (ou marque que não tem).');

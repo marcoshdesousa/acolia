@@ -322,6 +322,8 @@
   if ($('[data-finance]') && !isSec) {
     const reloadFin = () => { clearTimeout(finTimer); finTimer = setTimeout(() => loadFinance().catch((e) => toast(e.message, 'error')), 250); };
     const shift = (n) => { const [y, m] = finYm.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); finYm = d.toISOString().slice(0, 7); $('[data-fin-from]').value = ''; $('[data-fin-to]').value = ''; reloadFin(); };
+    // PDF com o mesmo filtro da tela (mês, período e busca)
+    $('[data-fin-pdf]').addEventListener('click', (e) => { e.preventDefault(); location.href = `/api/professional/finance/report.pdf?${finQuery()}`; });
     $('[data-fin-prev]').addEventListener('click', () => shift(-1));
     $('[data-fin-next]').addEventListener('click', () => shift(1));
     $('[data-fin-from]').addEventListener('change', reloadFin);

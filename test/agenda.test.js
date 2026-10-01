@@ -1100,6 +1100,13 @@ test('financeiro: recebido, a confirmar, reembolsado e não reembolsado; total; 
   d = (await F.cl.get(`/api/professional/finance?from=${from}&to=${to}`)).data;
   assert.equal(d.period.total_cents, 50000);
   await F.cl.post('/api/professional/finance/remove', { key: d.items.find((e) => e.name === 'Devolvido').key });
+  // PDF com o mesmo filtro
+  const pdf = await fetch(`${base}/api/professional/finance/report.pdf?from=${from}&to=${to}`, { headers: { Cookie: F.cl.cookie } });
+  assert.equal(pdf.status, 200);
+  assert.equal(pdf.headers.get('content-type'), 'application/pdf');
+  const pdfText = Buffer.from(await pdf.arrayBuffer()).toString('latin1');
+  assert.ok(pdfText.startsWith('%PDF') && pdfText.includes('Lan\xe7ado \xe0 m\xe3o') && pdfText.includes('Fora Da Acolia'));
+  assert.equal((await fetch(`${base}/api/professional/finance/report.pdf`)).status, 401, 'sem login não baixa');
   // Tirar da lista: o manual some; o da Acolia some só do financeiro
   assert.equal((await F.cl.post('/api/professional/finance/remove', { key: man.key })).status, 200);
   assert.equal((await F.cl.post('/api/professional/finance/remove', { key: `a${ids[2]}` })).status, 200);

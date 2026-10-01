@@ -458,7 +458,7 @@ router.post('/clinics/:id/edit', async (req, res) => {
   const b = req.body || {};
   const up = {};
   if (b.name !== undefined) { up.name = U.cleanText(b.name, 120); if (up.name.length < 2) throw new U.HttpError(400, 'Informe o nome da clínica.'); }
-  if (b.responsible !== undefined) { up.responsible = U.cleanText(b.responsible, 120); if (!U.isFullName(up.responsible)) throw new U.HttpError(400, 'Informe o nome completo do responsável.'); }
+  if (b.responsible !== undefined) { up.responsible = U.cleanText(b.responsible, 120); if (up.responsible && !U.isFullName(up.responsible)) throw new U.HttpError(400, 'Informe o nome completo do responsável.'); }
   if (b.doc !== undefined) {
     const { type, doc } = C.parseDoc(b.doc);
     if (C.docTaken(doc, c.id)) throw new U.HttpError(409, 'Já existe outra clínica com este CPF/CNPJ.');
@@ -477,9 +477,8 @@ router.post('/clinics/:id/edit', async (req, res) => {
   if (b.address !== undefined) { up.address = U.cleanText(b.address, 250); if (up.address.length < 5) throw new U.HttpError(400, 'Informe o endereço completo.'); }
   if (b.maps_url !== undefined) {
     const maps = require('../maps');
-    up.maps_url = maps.cleanMapsUrl(b.maps_url);
-    if (!up.maps_url) throw new U.HttpError(400, 'Cole o link do Google Maps da clínica.');
-    up.maps_query = up.maps_url === c.maps_url && c.maps_query ? c.maps_query : maps.mapQuery(await maps.resolveShort(up.maps_url), `${up.address || c.address}, ${up.city || c.city} - ${up.state || c.state}`);
+    up.maps_url = maps.cleanMapsUrl(b.maps_url); // opcional: sem link, o mapa usa o endereço
+    up.maps_query = up.maps_url && up.maps_url === c.maps_url && c.maps_query ? c.maps_query : maps.mapQuery(up.maps_url ? await maps.resolveShort(up.maps_url) : '', `${up.address || c.address}, ${up.city || c.city} - ${up.state || c.state}`);
   }
   if (b.plan !== undefined) { if (!C.PLANS[b.plan]) throw new U.HttpError(400, 'Selecione um plano.'); up.plan = b.plan; }
   const keys = Object.keys(up);

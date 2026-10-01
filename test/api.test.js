@@ -2606,6 +2606,13 @@ test('clínicas (1.3): pré-cadastro com logo, um por CPF/CNPJ, aprovação com 
   assert.equal(r.status, 201, JSON.stringify(r.data));
   const code = r.data.code;
   assert.match(code, /^C[A-Z0-9]{7}$/);
+  // Cadastro simples: sem responsável, sem link do mapa e sem médicos (completa no painel)
+  r = await client().form('/api/auth/clinic/register', { name: 'Clínica Simples', doc: cpfOf(902), email: 'simples@example.com', phone: '(11) 3333-5555',
+    state: 'SP', city: 'Campinas', address: 'Rua Simples, 5', plan: 'clinica-4990' }, LOGO);
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const simples = db.prepare('SELECT * FROM clinics WHERE code = ?').get(r.data.code);
+  assert.equal(simples.maps_url, '');
+  assert.match(simples.maps_query, /Rua Simples, 5/, 'o mapa usa o endereço');
   r = await client().form('/api/auth/clinic/register', { ...base0, email: 'outro@bemviver.example.com' }, LOGO);
   assert.equal(r.status, 409, 'mesmo CNPJ');
   assert.equal(r.data.doc_exists, true);

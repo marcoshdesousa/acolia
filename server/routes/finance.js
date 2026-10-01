@@ -78,7 +78,7 @@ function summarize(list) {
 }
 
 // ?ym=AAAA-MM (padrão: mês atual) ou ?from=&to= (período); ?q= nome ou CPF
-router.get('/', (req, res) => {
+function filtered(req) {
   const all = entries(req.auth.user.id);
   const today = G.localDate(G.now());
   const ym = /^\d{4}-\d{2}$/.test(req.query.ym || '') ? req.query.ym : today.slice(0, 7);
@@ -88,7 +88,41 @@ router.get('/', (req, res) => {
   const q = U.norm(req.query.q || '').trim();
   const digits = U.onlyDigits(req.query.q || '');
   if (q) list = list.filter((e) => U.norm(e.name).includes(q) || (digits.length >= 3 && U.onlyDigits(e.cpf).includes(digits)));
+  return { all, ym, from, to, list };
+}
+router.get('/', (req, res) => {
+  const { all, ym, from, to, list } = filtered(req);
   res.json({ ym, from, to, items: list, period: summarize(list), all_time: summarize(all) });
+});
+
+// PDF do financeiro (igual ao de Meus pacientes): mesmo filtro da tela, montado na hora e enviado direto
+const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const STATE_LABEL = { recebido: 'Recebido', a_confirmar: 'A confirmar', reembolsado: 'Reembolsado', nao_reembolsado: 'Não reembolsado' };
+const br = (d) => d.split('-').reverse().join('/');
+const brl = (c) => `R$ ${(c / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+router.get('/report.pdf', (req, res) => {
+  const me = req.auth.user;
+  const { ym, from, to, list } = filtered(req);
+  const ranged = isDate(req.query.from) || isDate(req.query.to);
+  const [y, m] = ym.split('-').map(Number);
+  const period = ranged ? (from && to ? `de ${br(from)} a ${br(to)}` : from ? `a partir de ${br(from)}` : `até ${br(to)}`)
+    : `${MONTHS[m - 1].charAt(0).toUpperCase()}${MONTHS[m - 1].slice(1)} de ${y}`;
+  const P = summarize(list);
+  const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
+  const pdf = require('../pdfTable').makeTablePdf({
+    title: 'Financeiro',
+    subtitle: `${me.legal_name || me.name} · ${me.profession}${me.registry ? ` · ${me.registry}` : ''} · Período: ${period} · ${n(P.clientes, 'cliente', 'clientes')} · ${n(P.realizadas, 'consulta realizada', 'consultas realizadas')}${req.query.q ? ` · busca: "${String(req.query.q).slice(0, 40)}"` : ''}`,
+    columns: [{ label: 'Data', key: 'data', width: 10 }, { label: 'Paciente', key: 'name', width: 26 }, { label: 'CPF', key: 'cpf', width: 13 },
+      { label: 'Origem', key: 'origem', width: 19 }, { label: 'Valor', key: 'valor', width: 12 }, { label: 'Situação', key: 'situacao', width: 14 }],
+    rows: list.map((e) => ({ data: br(e.date), name: e.name, cpf: e.cpf || '—', origem: e.kind === 'manual' ? 'Lançado à mão' : `Acolia · ${e.modality === 'presencial' ? 'presencial' : 'online'}`,
+      valor: brl(e.amount_cents), situacao: STATE_LABEL[e.state] })),
+    footer: `Gerado pela plataforma Acolia em ${now}. Documento confidencial: contém dados pessoais de pacientes (LGPD).`,
+    summary: `Recebido: ${brl(P.recebido_cents)} · A confirmar: ${brl(P.a_confirmar_cents)} · Reembolsado: ${brl(P.reembolsado_cents)} · Não reembolsado: ${brl(P.nao_reembolsado_cents)} · Período: ${period}`,
+  });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="financeiro.pdf"');
+  res.send(pdf);
 });
 
 // Lançamento manual (consulta atendida fora da Acolia ou paga por fora)

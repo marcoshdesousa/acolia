@@ -58,7 +58,7 @@
         <h2>Dados da clínica</h2>
         <div class="field"><label>Nome da clínica</label><input data-ro-name readonly class="ro"></div>
         <div class="grid-2">
-          <div class="field"><label>Responsável</label><input data-ro-resp readonly class="ro"></div>
+          <div class="field"><label>Dono / responsável</label><input data-ro-resp readonly class="ro"></div>
           <div class="field"><label>CPF/CNPJ</label><input data-ro-doc readonly class="ro"></div>
         </div>
         <p class="small muted" style="margin:-6px 0 12px">Nome, responsável e CPF/CNPJ só a administração da Acolia muda. Precisa corrigir? Fale com a gente no WhatsApp.</p>
@@ -68,7 +68,8 @@
         </div>
         <div class="field"><label>Estado e município</label><div class="grid-uf"><select name="state" aria-label="Estado"></select><input name="city" aria-label="Município"></div></div>
         <div class="field"><label for="address">Endereço completo</label><input id="address" name="address" maxlength="250"></div>
-        <div class="field"><label for="maps">Link do Google Maps</label><input id="maps" name="maps_url" inputmode="url"></div>
+        <div class="field"><label for="maps">Link do Google Maps (opcional)</label><input id="maps" name="maps_url" inputmode="url" placeholder="https://maps.app.goo.gl/...">
+          <div class="hint">Sem o link, o mapa usa o endereço. <button type="button" class="link-btn" data-maps-help>Como pegar o link?</button></div></div>
         <div class="field"><label for="bio">Sobre a clínica</label><textarea id="bio" name="bio" rows="4" maxlength="1500"></textarea></div>
         <div class="field"><label>A clínica tem médicos, além dos profissionais da mente?</label>
           <div class="row" style="gap:8px"><button type="button" class="chip-btn" data-doc-yes>Sim</button><button type="button" class="chip-btn" data-doc-no>Não</button></div>
@@ -126,7 +127,7 @@
       $('[data-status]').innerHTML = me.visible
         ? `<div class="notice ok">A clínica está <b>visível</b> para os pacientes (em "Clínicas perto de você" e pelo link).</div>`
         : `<div class="notice warn">A clínica ainda <b>não aparece</b> para os pacientes. Confira a mensalidade com a administração.</div>`;
-      $('[data-ro-name]').value = me.name; $('[data-ro-resp]').value = me.responsible; $('[data-ro-doc]').value = me.doc;
+      $('[data-ro-name]').value = me.name; $('[data-ro-resp]').value = me.responsible || '—'; $('[data-ro-doc]').value = me.doc;
       f.email.value = me.email; f.phone.value = fmtPhone(me.phone); f.state.innerHTML = ufOptions(me.state, 'UF'); f.city.value = me.city;
       f.address.value = me.address; f.maps_url.value = me.maps_url; f.bio.value = me.bio;
       $('[data-social]').innerHTML = Acolia.socialFields(me.social_values || {});
@@ -159,6 +160,15 @@
       e.target.value = '';
     });
     handleForm($('[data-pw-form]'), async (d, form) => { await api('/api/clinic/password', { method: 'POST', body: d }); form.reset(); toast('Senha alterada!'); });
+    $('[data-maps-help]').addEventListener('click', () => Acolia.modal({
+      title: 'Como pegar o link do Google Maps',
+      html: `<ol class="install-steps">
+        <li>Abra o <b>Google Maps</b> e procure o nome ou o endereço da clínica.</li>
+        <li>Toque no <b>local da clínica</b> no mapa.</li>
+        <li>Toque em <b>Compartilhar</b> e depois em <b>Copiar link</b>.</li>
+        <li>Volte aqui, <b>cole o link</b> e toque em Salvar.</li></ol>`,
+      actions: [{ label: 'Entendi' }],
+    }));
     $('[data-logout]').addEventListener('click', () => logout('/'));
     $('[data-delete]').addEventListener('click', () => Acolia.deleteAccountFlow('clinic'));
   })();

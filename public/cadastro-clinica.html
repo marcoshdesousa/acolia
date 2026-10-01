@@ -27,11 +27,8 @@
           <div class="row" style="gap:14px;flex-wrap:nowrap"><span class="logo-prev" data-logo-prev aria-hidden="true"></span>
             <label class="btn secondary sm" style="margin:0">Escolher a logo<input type="file" name="photo" accept="image/jpeg,image/png,image/webp" data-logo-input hidden></label></div>
           <div class="hint">Obrigatória. Aparece no perfil da clínica (JPG, PNG ou WEBP, até 3 MB).</div></div>
-        <div class="grid-2">
-          <div class="field"><label for="responsible">Nome completo do responsável</label><input id="responsible" name="responsible" required maxlength="120"></div>
-          <div class="field"><label for="doc">CPF ou CNPJ do responsável</label><input id="doc" name="doc" inputmode="numeric" required placeholder="CPF ou CNPJ">
-            <div class="hint">Cada CPF/CNPJ pode ter só uma clínica.</div></div>
-        </div>
+        <div class="field"><label for="doc">CPF ou CNPJ do dono da clínica</label><input id="doc" name="doc" inputmode="numeric" required placeholder="CPF ou CNPJ">
+          <div class="hint">Cada CPF/CNPJ pode ter só uma clínica.</div></div>
         <div class="grid-2">
           <div class="field"><label for="email">E-mail</label><input id="email" name="email" type="email" required autocomplete="email"></div>
           <div class="field"><label for="phone">WhatsApp da clínica</label><input id="phone" name="phone" inputmode="tel" required placeholder="(11) 99999-9999">
@@ -40,15 +37,7 @@
         <div class="field"><label>Estado e município</label>
           <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
         <div class="field"><label for="address">Endereço completo</label><input id="address" name="address" required maxlength="250" placeholder="Rua, número, bairro"></div>
-        <div class="field"><label for="maps">Link do Google Maps da clínica</label><input id="maps" name="maps_url" inputmode="url" required placeholder="https://maps.app.goo.gl/...">
-          <button type="button" class="link-btn" data-maps-help style="margin-top:6px">Como pegar o link?</button></div>
-        <div class="field"><label>A sua clínica tem médicos, além dos profissionais da mente?</label>
-          <div class="row" style="gap:8px"><button type="button" class="chip-btn" data-doc-yes>Sim</button><button type="button" class="chip-btn on" data-doc-no>Não</button></div>
-          <div data-doctors class="hidden" style="margin-top:10px">
-            <div class="hint" style="margin:0 0 8px">Quais médicos atendem na clínica? (por exemplo: médicos, clínico geral, ortopedista, cirurgião e outros)</div>
-            <div class="row doc-chips" style="gap:6px;flex-wrap:wrap" data-doc-chips></div>
-          </div></div>
-        <div class="field"><label for="bio">Sobre a clínica (opcional)</label><textarea id="bio" name="bio" rows="3" maxlength="1500"></textarea></div>
+        <p class="small muted" style="margin:0 0 14px">O link do mapa, os médicos, as redes sociais e o "Sobre a clínica" você completa depois, no painel da clínica.</p>
         <button class="btn block" type="submit">Próximo</button>
         <p class="center small" style="margin:16px 0 0">Já tem cadastro? <a href="/entrar#clinica">Entrar</a></p>
       </form>
@@ -86,7 +75,7 @@
   <script src="/js/common.js"></script>
   <script>
   (async function () {
-    const { $, $$, api, ICONS, handleForm, maskPhone, ufOptions, bindUfCity, esc, copyText, modal, toast } = Acolia;
+    const { $, api, ICONS, handleForm, maskPhone, ufOptions, bindUfCity, esc, copyText, modal } = Acolia;
     $('[data-logo]').innerHTML = ICONS.logo;
     const form = $('[data-form]');
     form.state.innerHTML = ufOptions('', 'UF');
@@ -110,27 +99,6 @@
       logoFile = await Acolia.shrinkImage(f, 640);
       $('[data-logo-prev]').innerHTML = `<img src="${URL.createObjectURL(logoFile)}" alt="">`;
     });
-    // Médicos: só a área médica (sem fisioterapia, pilates etc.)
-    const DOCTORS = ['Clínico geral', 'Cardiologista', 'Cirurgião geral', 'Dermatologista', 'Endocrinologista', 'Gastroenterologista', 'Geriatra', 'Ginecologista e obstetra', 'Infectologista', 'Nefrologista', 'Neurologista', 'Nutrólogo', 'Oftalmologista', 'Oncologista', 'Ortopedista', 'Otorrinolaringologista', 'Pediatra', 'Pneumologista', 'Reumatologista', 'Urologista'];
-    const chosen = new Set();
-    let hasDoctors = false;
-    $('[data-doc-chips]').innerHTML = DOCTORS.map((d) => `<button type="button" class="chip-btn" data-doc="${esc(d)}">${esc(d)}</button>`).join('');
-    $('[data-doc-chips]').addEventListener('click', (e) => { const b = e.target.closest('[data-doc]'); if (!b) return; const d = b.dataset.doc; if (chosen.has(d)) chosen.delete(d); else chosen.add(d); b.classList.toggle('on', chosen.has(d)); });
-    const setDoctors = (on) => { hasDoctors = on; $('[data-doc-yes]').classList.toggle('on', on); $('[data-doc-no]').classList.toggle('on', !on); $('[data-doctors]').classList.toggle('hidden', !on); };
-    $('[data-doc-yes]').addEventListener('click', () => setDoctors(true));
-    $('[data-doc-no]').addEventListener('click', () => setDoctors(false));
-    // Como pegar o link do Google Maps: abre por cima, sem sair da página
-    $('[data-maps-help]').addEventListener('click', () => modal({
-      title: 'Como pegar o link do Google Maps',
-      html: `<ol class="install-steps">
-        <li>Abra o <b>Google Maps</b> e procure o nome ou o endereço da sua clínica.</li>
-        <li>Toque no <b>local da clínica</b> no mapa para abrir o perfil dela.</li>
-        <li>Toque em <b>Compartilhar</b> (o ícone com a setinha).</li>
-        <li>Toque em <b>Copiar link</b>.</li>
-        <li>Volte aqui e <b>cole o link</b> no campo "Link do Google Maps da clínica".</li></ol>
-        <p class="small muted">O link começa com <b>https://maps.app.goo.gl/</b> ou <b>https://www.google.com/maps/</b>. Só aceitamos links do Google Maps.</p>`,
-      actions: [{ label: 'Entendi' }],
-    }));
     const show = (step) => {
       $('[data-step1]').classList.toggle('hidden', step !== 1);
       $('[data-plan-step]').classList.toggle('hidden', step !== 2);
@@ -141,15 +109,12 @@
       const v = (n) => String(form.elements[n].value || '').trim();
       if (v('name').length < 2) throw new Error('Informe o nome da clínica.');
       if (!logoFile) throw new Error('Escolha a logo da clínica.');
-      if (v('responsible').split(/\s+/).length < 2) throw new Error('Informe o nome completo do responsável.');
       const d = v('doc').replace(/\D/g, '');
-      if (!(d.length === 11 ? Acolia.isValidCpf(d) : d.length === 14)) throw new Error('Informe um CPF ou CNPJ válido do responsável.');
+      if (!(d.length === 11 ? Acolia.isValidCpf(d) : d.length === 14)) throw new Error('Informe um CPF ou CNPJ válido do dono da clínica.');
       if (!/^\S+@\S+\.\S+$/.test(v('email'))) throw new Error('Confira o e-mail.');
       if (v('phone').replace(/\D/g, '').length < 10) throw new Error('Informe o WhatsApp com DDD.');
       if (!v('state') || v('city').length < 2) throw new Error('Informe o estado e o município.');
       if (v('address').length < 5) throw new Error('Informe o endereço completo.');
-      if (!/google\.[a-z.]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps/.test(v('maps_url'))) throw new Error('Cole o link do Google Maps da clínica (veja "Como pegar o link?").');
-      if (hasDoctors && !chosen.size) throw new Error('Escolha quais médicos atendem na clínica (ou marque "Não").');
       show(2);
     });
     $('[data-plan-back]').addEventListener('click', () => show(1));
@@ -161,18 +126,16 @@
       go.disabled = true; go.textContent = 'Criando a conta…';
       try {
         const fd = new FormData();
-        for (const n of ['name', 'responsible', 'doc', 'email', 'phone', 'state', 'city', 'address', 'maps_url', 'bio']) fd.append(n, form.elements[n].value);
-        fd.append('has_doctors', hasDoctors ? '1' : '0');
-        fd.append('doctors', JSON.stringify([...chosen]));
+        for (const n of ['name', 'doc', 'email', 'phone', 'state', 'city', 'address']) fd.append(n, form.elements[n].value);
         fd.append('plan', plan.value);
         fd.append('photo', logoFile, 'logo.jpg');
         const r = await api('/api/auth/clinic/register', { method: 'POST', form: fd });
         $('[data-code]').textContent = r.code;
         const val = (n) => String(form.elements[n].value || '').trim();
         const msg = ['Olá, Acolia! Quero finalizar o cadastro da minha clínica.', '',
-          `Clínica: ${val('name')}`, `Responsável: ${val('responsible')}`, `CPF/CNPJ: ${val('doc')}`, `Endereço: ${val('address')} — ${val('city')} - ${val('state')}`,
-          `E-mail: ${val('email')}`, `WhatsApp: ${val('phone')}`, hasDoctors ? `Médicos: ${[...chosen].join(', ')}` : '', 'Plano: Plano Clínica (R$ 49,90 a cada 30 dias)', `Código: ${r.code}`]
-          .filter((l, i) => l || i === 1).join('\n');
+          `Clínica: ${val('name')}`, `CPF/CNPJ do dono: ${val('doc')}`, `Endereço: ${val('address')} — ${val('city')} - ${val('state')}`,
+          `E-mail: ${val('email')}`, `WhatsApp: ${val('phone')}`, 'Plano: Plano Clínica (R$ 49,90 a cada 30 dias)', `Código: ${r.code}`]
+          .join('\n');
         $('[data-pending-box]').innerHTML = `<div class="notice info" style="text-align:left"><b>Para terminar o cadastro, toque em "Finalizar cadastro".</b><br>Você vai para o nosso WhatsApp com a mensagem pronta e os dados da clínica: é só enviar.</div>
           <a class="btn block" href="${esc(Acolia.supportLink(r.support, msg))}" target="_blank" rel="noopener">${ICONS.send} Finalizar cadastro</a>`;
         $('[data-copy]').onclick = () => copyText(r.code);

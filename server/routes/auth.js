@@ -234,8 +234,9 @@ router.post('/clinic/register', async (req, res) => {
     const b = req.body || {};
     const name = U.cleanText(b.name, 120);
     if (name.length < 2) throw new HttpError(400, 'Informe o nome da clínica.');
+    // Cadastro simples: nome, logo, CPF/CNPJ do dono, contato e endereço. O resto (mapa, médicos, sobre) ela completa no painel.
     const responsible = U.cleanText(b.responsible, 120);
-    if (!U.isFullName(responsible)) throw new HttpError(400, 'Informe o nome completo do responsável.');
+    if (responsible && !U.isFullName(responsible)) throw new HttpError(400, 'Informe o nome completo do responsável.');
     const { type, doc } = C.parseDoc(b.doc);
     if (C.docTaken(doc)) throw Object.assign(new HttpError(409, 'Já existe uma clínica com este CPF/CNPJ.'), { extra: { doc_exists: true, role: 'clinic' } });
     const email = U.cleanText(b.email, 160).toLowerCase();
@@ -247,14 +248,13 @@ router.post('/clinic/register', async (req, res) => {
     const address = U.cleanText(b.address, 250);
     if (address.length < 5) throw new HttpError(400, 'Informe o endereço completo da clínica.');
     const maps = require('../maps');
-    const mapsUrl = maps.cleanMapsUrl(b.maps_url);
-    if (!mapsUrl) throw new HttpError(400, 'Cole o link do Google Maps da clínica (veja "Como pegar o link").');
+    const mapsUrl = maps.cleanMapsUrl(b.maps_url); // opcional: sem link, o mapa usa o endereço
     const hasDoctors = b.has_doctors === '1' || b.has_doctors === 'true' || b.has_doctors === true ? 1 : 0;
     const doctors = hasDoctors ? C.parseDoctors(b.doctors) : [];
     if (hasDoctors && !doctors.length) throw new HttpError(400, 'Escolha quais médicos atendem na clínica (ou marque que não tem).');
     const plan = String(b.plan || 'clinica-4990');
     if (!C.PLANS[plan]) throw new HttpError(400, 'Selecione um plano.');
-    const mapsQuery = maps.mapQuery(await maps.resolveShort(mapsUrl), `${address}, ${city} - ${state}`);
+    const mapsQuery = maps.mapQuery(mapsUrl ? await maps.resolveShort(mapsUrl) : '', `${address}, ${city} - ${state}`);
     const code = C.newCode();
     db.prepare(`INSERT INTO clinics (code, password_hash, status, name, doc_type, doc, responsible, email, phone, logo, bio, state, city, city_norm, address, maps_url, maps_query, has_doctors, doctors, slug, plan)
       VALUES (?, ?, 'pendente', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
