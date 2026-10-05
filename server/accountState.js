@@ -51,4 +51,17 @@ function clinicState(c) {
 
 const stateOf = (role, user) => (role === 'professional' ? proState(user) : role === 'patient' ? patientState(user) : role === 'clinic' ? clinicState(user) : {});
 
-module.exports = { needsCpf, needsPassword, proState, patientState, stateOf, GRACE_DAYS, WARN_DAYS, SUPPORT_WHATSAPP };
+// Pedido do dono (uma vez só): todos os profissionais que já tinham conta entraram com a senha de acesso único
+// enviada pela equipe; no próximo acesso cada um cria a própria senha. Só marca isso: perfil, publicações,
+// conversas, agenda e tudo o mais continuam iguais. Contas de teste ficam de fora.
+function requireNewPasswordOnce(key = 'first_password_all_v1') {
+  const { db } = require('./db');
+  db.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+  if (db.prepare('SELECT 1 FROM settings WHERE key = ?').get(key)) return 0;
+  const n = db.prepare("UPDATE professionals SET must_change_password = 1 WHERE status IN ('aprovado', 'restrito', 'bloqueado') AND is_test = 0").run().changes;
+  db.prepare("INSERT INTO settings (key, value) VALUES (?, datetime('now'))").run(key);
+  console.log(`[senha] ${n} profissional(is) vão criar a própria senha no próximo acesso`);
+  return n;
+}
+
+module.exports = { requireNewPasswordOnce, needsCpf, needsPassword, proState, patientState, stateOf, GRACE_DAYS, WARN_DAYS, SUPPORT_WHATSAPP };

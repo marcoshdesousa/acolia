@@ -209,6 +209,8 @@ async function start(port = Number(process.env.PORT) || 3000) {
   // Pedido do dono (depois de testar o pagamento): apaga de novo, UMA vez, as contas de teste
   require('./testAccounts').removeTestAccountsOnce('test_accounts_removed_v3');
   require('./handles').backfill(); // todo paciente tem um @ (o Paciente Teste é @pacienteteste)
+  // Pedido do dono (uma vez): quem já tinha conta de profissional cria a própria senha no próximo acesso
+  require('./accountState').requireNewPasswordOnce();
   // Stories somem depois de 24 h
   const { cleanupStories } = require('./routes/social');
   cleanupStories();

@@ -2771,5 +2771,22 @@ test('senha de acesso único: no 1º acesso o profissional e a clínica criam a 
       assert.equal((await cl.post('/api/clinic/first-password', { password: 'clinica123', confirm: 'clinica123' })).status, 200);
       assert.equal((await cl.get('/api/clinic/me')).status, 200);
     }
+    // Contas que já existiam (pedido do dono, uma vez): todo profissional cria a própria senha no próximo acesso,
+    // sem mexer em mais nada; conta de teste fica de fora
+    const A = require('../server/accountState');
+    db.prepare('UPDATE professionals SET must_change_password = 0').run();
+    const before = db.prepare("SELECT id, name, bio, slug, (SELECT COUNT(*) FROM posts WHERE professional_id = p.id) AS posts FROM professionals p WHERE status = 'aprovado' AND is_test = 0 ORDER BY id").all();
+    db.prepare("UPDATE professionals SET is_test = 1 WHERE id = ?").run(before[0].id);
+    assert.ok(A.requireNewPasswordOnce('teste_senha_todos') > 0);
+    assert.equal(A.requireNewPasswordOnce('teste_senha_todos'), 0, 'uma vez só');
+    const after = db.prepare("SELECT id, name, bio, slug, must_change_password, (SELECT COUNT(*) FROM posts WHERE professional_id = p.id) AS posts FROM professionals p WHERE id IN (" + before.map((x) => x.id).join(',') + ') ORDER BY id').all();
+    assert.equal(after[0].must_change_password, 0, 'conta de teste fica de fora');
+    db.prepare("UPDATE professionals SET is_test = 0 WHERE id = ?").run(before[0].id);
+    after.slice(1).forEach((x, i) => {
+      assert.equal(x.must_change_password, 1);
+      const b = before[i + 1];
+      assert.deepEqual([x.name, x.bio, x.slug, x.posts], [b.name, b.bio, b.slug, b.posts], 'perfil e publicações iguais');
+    });
+    db.prepare('UPDATE professionals SET must_change_password = 0').run();
   } finally { process.env.FIRST_PASSWORD = 'off'; }
 });

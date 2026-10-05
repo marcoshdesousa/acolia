@@ -220,6 +220,13 @@
     needsPasswordShown = true;
     try { const me = await api('/api/auth/me'); if (me.account?.needs_password && !me.secretary) showNeedsPassword(me); } catch { /* ignora */ }
   }
+  // Voltou para a aba do painel (ex.: o site foi atualizado com a página aberta): confere se precisa criar a senha
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || needsPasswordShown || !/^\/(painel|clinica)/.test(location.pathname)) return;
+    fetch('/api/auth/me', { cache: 'no-store' }).then((r) => r.json()).then((me) => {
+      if (me.account?.needs_password && !me.secretary && !needsPasswordShown) { needsPasswordShown = true; showNeedsPassword(me); }
+    }).catch(() => {});
+  });
   let needsCpfShown = false;
   async function onNeedsCpf() {
     if (needsCpfShown) return;
