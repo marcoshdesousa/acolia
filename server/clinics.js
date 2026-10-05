@@ -1,6 +1,6 @@
 'use strict';
 // Clínicas (versão 1.3): conta própria (login com código único ou e-mail + senha), pré-cadastro pelo
-// site e aprovação pela administração, como o profissional. Plano: R$ 49,90 a cada 30 dias.
+// site e aprovação pela administração, como o profissional. Plano: R$ 30,00 a cada 30 dias.
 // Cada clínica tem nome, CPF ou CNPJ do responsável (um cadastro de clínica por documento), logo,
 // endereço escrito, município/estado e o link do Google Maps. Pode dizer se também tem médicos
 // (e quais especialidades). Os profissionais da mente entram na clínica por convite (etapa seguinte).
@@ -38,7 +38,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS clinics (
 CREATE INDEX IF NOT EXISTS idx_clinics_place ON clinics(state, city_norm);
 CREATE INDEX IF NOT EXISTS idx_clinics_doc ON clinics(doc);`);
 
-const PLANS = { 'clinica-4990': 'Clínica — R$ 49,90 a cada 30 dias' };
+// (a chave continua 'clinica-4990' para não mexer nas clínicas já cadastradas; o valor é R$ 30,00)
+const PLANS = { 'clinica-4990': 'Clínica — R$ 30,00 a cada 30 dias' };
 const NO_PASSWORD = '!sem-senha';
 // Especialidades médicas (só médicos) que a clínica pode dizer que tem, além dos profissionais da mente
 const DOCTORS = ['Clínico geral', 'Cardiologista', 'Cirurgião geral', 'Dermatologista', 'Endocrinologista', 'Gastroenterologista', 'Geriatra',

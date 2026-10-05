@@ -21,7 +21,8 @@ const fake = () => process.env.SYNCPAY_FAKE === '1';
 const configured = () => fake() || (!!process.env.SYNCPAY_CLIENT_ID && !!process.env.SYNCPAY_CLIENT_SECRET);
 
 // Valor de cada plano (em centavos) e quantos dias cada pagamento libera
-const PRICES = { 'mensal-30': 3000, 'clinica-4990': 4990 };
+// Mesmo valor para todos por enquanto: R$ 30,00 (a chave 'clinica-4990' é só o nome antigo do plano da clínica)
+const PRICES = { 'mensal-30': 3000, 'clinica-4990': 3000 };
 const DAYS = 30;
 
 db.exec(`CREATE TABLE IF NOT EXISTS platform_payments (
@@ -107,11 +108,9 @@ async function providerStatus(identifier) {
   return 'pendente';
 }
 
-// Quem paga o Pix da clínica: o dono (CPF) ou, com CNPJ, o responsável com o CPF dele
+// Quem paga o Pix da clínica: os dados que ela já colocou no cadastro (CPF ou CNPJ do dono, e-mail e WhatsApp)
 function clinicPayer(c) {
-  const cpf = c.doc_type === 'cpf' && c.doc ? c.doc : (c.responsible_cpf || '');
-  if (!U.isValidCpf(cpf)) return null;
-  return { name: c.responsible || c.name, cpf, email: c.email, phone: c.phone };
+  return { name: c.responsible || c.name, cpf: c.responsible_cpf || c.doc || '', email: c.email, phone: c.phone };
 }
 
 // ---------- Cobranças ----------

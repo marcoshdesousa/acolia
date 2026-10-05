@@ -272,14 +272,6 @@ router.post('/clinic/register', async (req, res) => {
     if (hasDoctors && !doctors.length) throw new HttpError(400, 'Escolha quais médicos atendem na clínica (ou marque que não tem).');
     const plan = String(b.plan || 'clinica-4990');
     if (!C.PLANS[plan]) throw new HttpError(400, 'Selecione um plano.');
-    // Pix da Acolia ligado e clínica com CNPJ: precisa do CPF (e do nome) do responsável, que é quem paga
-    const PP = require('../platformPay');
-    let responsibleCpf = null;
-    if (PP.configured() && type === 'cnpj') {
-      responsibleCpf = U.onlyDigits(b.responsible_cpf);
-      if (!U.isValidCpf(responsibleCpf)) throw new HttpError(400, 'Informe o CPF do responsável pela clínica (para o Pix).');
-      if (!responsible) throw new HttpError(400, 'Informe o nome completo do responsável pela clínica.');
-    }
     const mapsQuery = maps.mapQuery(mapsUrl ? await maps.resolveShort(mapsUrl) : '', `${address}, ${city} - ${state}`);
     const code = C.newCode();
     db.prepare(`INSERT INTO clinics (code, password_hash, status, name, doc_type, doc, responsible, email, phone, logo, bio, state, city, city_norm, address, maps_url, maps_query, has_doctors, doctors, slug, plan)
@@ -287,13 +279,13 @@ router.post('/clinic/register', async (req, res) => {
       .run(code, C.NO_PASSWORD, name, type, doc, responsible, email, phone, logo, U.cleanText(b.bio, 1500), state, city, U.norm(city), address, mapsUrl, mapsQuery,
         hasDoctors, JSON.stringify(doctors), require('../slug').uniqueSlug(db, name, 0, { clinic: true }), plan);
     const created = db.prepare('SELECT * FROM clinics WHERE code = ?').get(code);
-    if (responsibleCpf) db.prepare('UPDATE clinics SET responsible_cpf = ? WHERE id = ?').run(responsibleCpf, created.id);
     // Pagamento pelo Pix (SyncPay): pago → clínica liberada na hora. Sem a SyncPay: finaliza no WhatsApp.
     let pay = null;
+    const PP = require('../platformPay');
     if (PP.configured()) {
       try {
         pay = await PP.create({ role: 'clinic', userId: created.id, kind: 'cadastro', plan, withToken: true,
-          payer: PP.clinicPayer({ ...created, responsible_cpf: responsibleCpf }) });
+          payer: PP.clinicPayer(created) });
       } catch (e) { console.warn('[syncpay] clínica sem Pix:', e.message); }
     }
     res.status(201).json({ ok: true, code, support: require('../accountState').SUPPORT_WHATSAPP, pay });

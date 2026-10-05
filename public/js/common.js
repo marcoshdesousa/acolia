@@ -587,28 +587,9 @@
     return { stop: () => { stop = true; clearInterval(t); } };
   }
   // Renovar a mensalidade (profissional ou clínica): gera o Pix e, pago, recarrega a página com a conta em dia
-  async function renewPix(extra = {}) {
+  async function renewPix() {
     let pay;
-    try { pay = await api('/api/plataforma/pagamento/renovar', { method: 'POST', body: extra }); } catch (e) {
-      // Clínica com CNPJ: pede o CPF (e o nome) do responsável uma vez e tenta de novo
-      if (e.data?.need_cpf) {
-        const body = await modal({
-          title: 'Quem paga o Pix?',
-          html: `<p class="small">Com CNPJ, o Pix da mensalidade sai no nome do responsável pela clínica. Isso é pedido uma vez só.</p>
-            ${e.data.has_responsible ? '' : '<div class="field"><label>Nome completo do responsável</label><input data-rn maxlength="120"></div>'}
-            <div class="field"><label>CPF do responsável</label><input data-rc inputmode="numeric" placeholder="000.000.000-00"></div>`,
-          onOpen: (dlg) => maskCpf($('[data-rc]', dlg)),
-          actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, { label: 'Gerar o Pix', handler: (dlg) => {
-            const cpf = $('[data-rc]', dlg).value;
-            if (!isValidCpf(cpf.replace(/\D/g, ''))) { toast('CPF inválido.', 'error'); return false; }
-            return { responsible_cpf: cpf, responsible: $('[data-rn]', dlg)?.value || '' };
-          } }],
-        });
-        if (body) return renewPix(body);
-        return;
-      }
-      toast(e.message, 'error'); return;
-    }
+    try { pay = await api('/api/plataforma/pagamento/renovar', { method: 'POST', body: {} }); } catch (e) { toast(e.message, 'error'); return; }
     let box = null;
     await modal({
       title: 'Pagar mensalidade (Pix)', html: '<div data-pix-host></div>', actions: [{ label: 'Fechar', value: false, class: 'secondary' }],

@@ -378,7 +378,7 @@ router.post('/syncpay/test', async (req, res) => {
   const PP = require('../platformPay');
   const b = req.body || {};
   if (!b.charge) return res.json(await PP.testKeys());
-  if (!U.isValidCpf(U.onlyDigits(b.cpf))) throw new U.HttpError(400, 'Informe um CPF válido (o seu).');
+  if (!U.isValidCpf(U.onlyDigits(b.cpf)) && U.onlyDigits(b.cpf).length !== 14) throw new U.HttpError(400, 'Informe um CPF ou CNPJ válido.');
   if (!U.isValidEmail(String(b.email || ''))) throw new U.HttpError(400, 'Informe um e-mail válido.');
   if (U.onlyDigits(b.phone).length < 10) throw new U.HttpError(400, 'Informe o WhatsApp com DDD.');
   if (String(b.name || '').trim().split(/\s+/).length < 2) throw new U.HttpError(400, 'Informe o nome completo.');

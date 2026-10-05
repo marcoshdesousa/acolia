@@ -29,12 +29,6 @@
           <div class="hint">Obrigatória. Aparece no perfil da clínica (JPG, PNG ou WEBP, até 3 MB).</div></div>
         <div class="field"><label for="doc">CPF ou CNPJ do dono da clínica</label><input id="doc" name="doc" inputmode="numeric" required placeholder="CPF ou CNPJ">
           <div class="hint">Cada CPF/CNPJ pode ter só uma clínica.</div></div>
-        <!-- Com o Pix da Acolia e CNPJ: quem paga é o responsável (o Pix pede um CPF) -->
-        <div class="grid-2 hidden" data-resp-fields>
-          <div class="field"><label for="responsible">Nome completo do responsável</label><input id="responsible" name="responsible" maxlength="120" autocomplete="name"></div>
-          <div class="field"><label for="responsible_cpf">CPF do responsável</label><input id="responsible_cpf" name="responsible_cpf" inputmode="numeric" placeholder="000.000.000-00">
-            <div class="hint">Com CNPJ, o Pix da mensalidade sai no nome do responsável.</div></div>
-        </div>
         <div class="grid-2">
           <div class="field"><label for="email">E-mail</label><input id="email" name="email" type="email" required autocomplete="email"></div>
           <div class="field"><label for="phone">WhatsApp da clínica</label><input id="phone" name="phone" inputmode="tel" required placeholder="(11) 99999-9999">
@@ -56,7 +50,7 @@
           <span class="plan-check" aria-hidden="true"></span>
           <span class="plan-body">
             <span class="plan-top"><span class="plan-name">Plano Clínica</span><span class="plan-tag">Mensal</span></span>
-            <span class="plan-price"><b>R$ 49,90</b> <small>a cada 30 dias</small></span>
+            <span class="plan-price"><b>R$ 30,00</b> <small>a cada 30 dias</small></span>
             <span class="plan-chips"><span class="pc">Perfil da clínica</span><span class="pc">Endereço e mapa</span><span class="pc">Publicações</span></span>
           </span>
         </label>
@@ -132,12 +126,9 @@
     };
     // Pix da Acolia ligado: paga no cadastro e a clínica é liberada na hora
     const pix = !!cfg.platform_pix;
-    const isCnpj = () => form.doc.value.replace(/\D/g, '').length > 11;
     if (pix) {
       $('[data-pix-note]').classList.remove('hidden');
       $('[data-step1] > p.center.muted').textContent = 'Coloque a sua clínica na Acolia: perfil próprio com endereço e mapa, seus profissionais da mente e publicações. Pagou o Pix, a clínica já aparece.';
-      Acolia.maskCpf(form.responsible_cpf);
-      form.doc.addEventListener('input', () => $('[data-resp-fields]').classList.toggle('hidden', !isCnpj()));
     }
     function startPay(pay, code) {
       show('pay');
@@ -163,10 +154,6 @@
       if (!logoFile) throw new Error('Escolha a logo da clínica.');
       const d = v('doc').replace(/\D/g, '');
       if (!(d.length === 11 ? Acolia.isValidCpf(d) : d.length === 14)) throw new Error('Informe um CPF ou CNPJ válido do dono da clínica.');
-      if (pix && d.length === 14) {
-        if (v('responsible').split(/\s+/).length < 2) throw new Error('Informe o nome completo do responsável.');
-        if (!Acolia.isValidCpf(v('responsible_cpf').replace(/\D/g, ''))) throw new Error('Informe o CPF do responsável.');
-      }
       if (!/^\S+@\S+\.\S+$/.test(v('email'))) throw new Error('Confira o e-mail.');
       if (v('phone').replace(/\D/g, '').length < 10) throw new Error('Informe o WhatsApp com DDD.');
       if (!v('state') || v('city').length < 2) throw new Error('Informe o estado e o município.');
@@ -183,7 +170,6 @@
       try {
         const fd = new FormData();
         for (const n of ['name', 'doc', 'email', 'phone', 'state', 'city', 'address']) fd.append(n, form.elements[n].value);
-        if (pix && isCnpj()) { fd.append('responsible', form.responsible.value); fd.append('responsible_cpf', form.responsible_cpf.value); }
         fd.append('plan', plan.value);
         fd.append('photo', logoFile, 'logo.jpg');
         const r = await api('/api/auth/clinic/register', { method: 'POST', form: fd });
@@ -196,7 +182,7 @@
         const val = (n) => String(form.elements[n].value || '').trim();
         const msg = ['Olá, Acolia! Quero finalizar o cadastro da minha clínica.', '',
           `Clínica: ${val('name')}`, `CPF/CNPJ do dono: ${val('doc')}`, `Endereço: ${val('address')} — ${val('city')} - ${val('state')}`,
-          `E-mail: ${val('email')}`, `WhatsApp: ${val('phone')}`, 'Plano: Plano Clínica (R$ 49,90 a cada 30 dias)', `Código: ${r.code}`]
+          `E-mail: ${val('email')}`, `WhatsApp: ${val('phone')}`, 'Plano: Plano Clínica (R$ 30,00 a cada 30 dias)', `Código: ${r.code}`]
           .join('\n');
         $('[data-pending-box]').innerHTML = `<div class="notice info" style="text-align:left"><b>Para terminar o cadastro, toque em "Finalizar cadastro".</b><br>Você vai para o nosso WhatsApp com a mensagem pronta e os dados da clínica: é só enviar.</div>
           <a class="btn block" href="${esc(Acolia.supportLink(r.support, msg))}" target="_blank" rel="noopener">${ICONS.send} Finalizar cadastro</a>`;

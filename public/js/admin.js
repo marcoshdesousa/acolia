@@ -405,7 +405,6 @@
       try { const r = await api('/api/admin/syncpay/test', { method: 'POST', body: {} }); say($('[data-sp-keys-out]', card), r.ok, r.ok ? '<b>Chaves certas.</b> A SyncPay aceitou o Client ID e o Client Secret.' : esc(r.message)); }
       catch (ex) { say($('[data-sp-keys-out]', card), false, esc(ex.message)); } finally { b.disabled = false; }
     });
-    Acolia.maskCpf($('[data-sp-form]', card).cpf);
     maskPhone($('[data-sp-form]', card).phone);
     let poll = null;
     $('[data-sp-form]', card).addEventListener('submit', async (e) => {
