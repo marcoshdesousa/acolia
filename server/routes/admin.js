@@ -507,6 +507,11 @@ router.post('/clinics/:id/edit', async (req, res) => {
   const up = {};
   if (b.name !== undefined) { up.name = U.cleanText(b.name, 120); if (up.name.length < 2) throw new U.HttpError(400, 'Informe o nome da clínica.'); }
   if (b.responsible !== undefined) { up.responsible = U.cleanText(b.responsible, 120); if (up.responsible && !U.isFullName(up.responsible)) throw new U.HttpError(400, 'Informe o nome completo do responsável.'); }
+  if (b.owner_cpf !== undefined && String(b.owner_cpf).trim()) {
+    const cpf = U.onlyDigits(b.owner_cpf);
+    if (!U.isValidCpf(cpf)) throw new U.HttpError(400, 'CPF do proprietário inválido.');
+    up.responsible_cpf = cpf;
+  }
   if (b.doc !== undefined) {
     const { type, doc } = C.parseDoc(b.doc);
     if (C.docTaken(doc, c.id)) throw new U.HttpError(409, 'Já existe outra clínica com este CPF/CNPJ.');

@@ -144,7 +144,7 @@ test('clínica com Pix: usa os dados do cadastro (CNPJ), R$ 49,90, liberada na h
   const LOGO = { field: 'photo', data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), type: 'image/png', name: 'logo.png' };
   const base0 = { name: 'Clínica Pix Teste', email: 'pix@clinica.example.com', phone: '(11) 98888-7777', state: 'SP', city: 'Campinas', address: 'Rua das Flores, 10', plan: 'clinica-4990' };
   const anon = client();
-  const r = await anon.form('/api/auth/clinic/register', { ...base0, doc: '11.222.333/0001-81' }, LOGO);
+  const r = await anon.form('/api/auth/clinic/register', { ...base0, doc: '11.222.333/0001-81', owner_cpf: cpfOf(5151) }, LOGO);
   assert.equal(r.status, 201, JSON.stringify(r.data));
   assert.equal(r.data.pay.amount_cents, 4990);
   const row = db.prepare('SELECT * FROM platform_payments WHERE id = ?').get(r.data.pay.id);
@@ -156,6 +156,7 @@ test('clínica com Pix: usa os dados do cadastro (CNPJ), R$ 49,90, liberada na h
   assert.equal(c.status, 'aprovado');
   assert.equal(c.review_pending, 1);
   assert.equal(c.must_change_password, 1);
+  assert.equal(PP().clinicPayer(c).cpf, cpfOf(5151), 'o Pix sai com o CPF do proprietário');
 
   const cl = client();
   assert.equal((await cl.post('/api/auth/clinic/login', { login: r.data.code, password: s.data.password })).status, 200);

@@ -27,8 +27,11 @@
           <div class="row" style="gap:14px;flex-wrap:nowrap"><span class="logo-prev" data-logo-prev aria-hidden="true"></span>
             <label class="btn secondary sm" style="margin:0">Escolher a logo<input type="file" name="photo" accept="image/jpeg,image/png,image/webp" data-logo-input hidden></label></div>
           <div class="hint">Obrigatória. Aparece no perfil da clínica (JPG, PNG ou WEBP, até 3 MB).</div></div>
-        <div class="field"><label for="doc">CPF ou CNPJ do dono da clínica</label><input id="doc" name="doc" inputmode="numeric" required placeholder="CPF ou CNPJ">
-          <div class="hint">Cada CPF/CNPJ pode ter só uma clínica.</div></div>
+        <div class="grid-2">
+          <div class="field"><label for="doc">CNPJ da clínica</label><input id="doc" name="doc" inputmode="numeric" required placeholder="00.000.000/0000-00">
+            <div class="hint">Cada CNPJ pode ter só uma clínica.</div></div>
+          <div class="field"><label for="owner_cpf">CPF do proprietário</label><input id="owner_cpf" name="owner_cpf" inputmode="numeric" required placeholder="000.000.000-00"></div>
+        </div>
         <div class="grid-2">
           <div class="field"><label for="email">E-mail</label><input id="email" name="email" type="email" required autocomplete="email"></div>
           <div class="field"><label for="phone">WhatsApp da clínica</label><input id="phone" name="phone" inputmode="tel" required placeholder="(11) 99999-9999">
@@ -102,7 +105,8 @@
     const help = $('[data-help]');
     help.querySelector('.help-wa-ic').innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2z"/></svg>';
     help.href = Acolia.supportLink(cfg.support, 'Olá, Acolia! Tenho uma dúvida sobre o cadastro de clínica.');
-    // CPF (11) ou CNPJ (14): máscara conforme a quantidade de números
+    Acolia.maskCpf(form.owner_cpf);
+    // CNPJ: máscara (com 11 números ainda mostra como CPF, até completar)
     form.doc.addEventListener('input', () => {
       const d = form.doc.value.replace(/\D/g, '').slice(0, 14);
       form.doc.value = d.length <= 11 ? d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2')
@@ -153,7 +157,8 @@
       if (v('name').length < 2) throw new Error('Informe o nome da clínica.');
       if (!logoFile) throw new Error('Escolha a logo da clínica.');
       const d = v('doc').replace(/\D/g, '');
-      if (!(d.length === 11 ? Acolia.isValidCpf(d) : d.length === 14)) throw new Error('Informe um CPF ou CNPJ válido do dono da clínica.');
+      if (d.length !== 14) throw new Error('Informe o CNPJ da clínica.');
+      if (!Acolia.isValidCpf(v('owner_cpf').replace(/\D/g, ''))) throw new Error('Informe o CPF do proprietário da clínica.');
       if (!/^\S+@\S+\.\S+$/.test(v('email'))) throw new Error('Confira o e-mail.');
       if (v('phone').replace(/\D/g, '').length < 10) throw new Error('Informe o WhatsApp com DDD.');
       if (!v('state') || v('city').length < 2) throw new Error('Informe o estado e o município.');
@@ -169,7 +174,7 @@
       go.disabled = true; go.textContent = 'Criando a conta…';
       try {
         const fd = new FormData();
-        for (const n of ['name', 'doc', 'email', 'phone', 'state', 'city', 'address']) fd.append(n, form.elements[n].value);
+        for (const n of ['name', 'doc', 'owner_cpf', 'email', 'phone', 'state', 'city', 'address']) fd.append(n, form.elements[n].value);
         fd.append('plan', plan.value);
         fd.append('photo', logoFile, 'logo.jpg');
         const r = await api('/api/auth/clinic/register', { method: 'POST', form: fd });
@@ -181,7 +186,7 @@
         }
         const val = (n) => String(form.elements[n].value || '').trim();
         const msg = ['Olá, Acolia! Quero finalizar o cadastro da minha clínica.', '',
-          `Clínica: ${val('name')}`, `CPF/CNPJ do dono: ${val('doc')}`, `Endereço: ${val('address')} — ${val('city')} - ${val('state')}`,
+          `Clínica: ${val('name')}`, `CNPJ: ${val('doc')}`, `CPF do proprietário: ${val('owner_cpf')}`, `Endereço: ${val('address')} — ${val('city')} - ${val('state')}`,
           `E-mail: ${val('email')}`, `WhatsApp: ${val('phone')}`, 'Plano: Plano Clínica (R$ 49,90 a cada 30 dias)', `Código: ${r.code}`]
           .join('\n');
         $('[data-pending-box]').innerHTML = `<div class="notice info" style="text-align:left"><b>Para terminar o cadastro, toque em "Finalizar cadastro".</b><br>Você vai para o nosso WhatsApp com a mensagem pronta e os dados da clínica: é só enviar.</div>
@@ -191,7 +196,7 @@
       } catch (e) {
         if (e.data?.doc_exists) {
           show(1);
-          modal({ title: 'Esta clínica já tem conta', html: '<p>Já existe uma clínica com este CPF/CNPJ. Cada CPF/CNPJ pode ter só uma clínica.</p>',
+          modal({ title: 'Esta clínica já tem conta', html: '<p>Já existe uma clínica com este CNPJ. Cada CNPJ pode ter só uma clínica.</p>',
             actions: [{ label: 'Falar com a Acolia', value: 'wa', class: 'secondary' }, { label: 'Entrar', value: 'in' }] })
             .then((v) => { if (v === 'in') location.href = '/entrar#clinica'; if (v === 'wa') window.open(Acolia.supportLink(cfg.support, 'Olá, Acolia! Preciso de ajuda com a conta da minha clínica.'), '_blank', 'noopener'); });
         } else { err.textContent = e.message; err.classList.remove('hidden'); }

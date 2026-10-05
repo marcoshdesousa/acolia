@@ -49,7 +49,7 @@
           <tr><th>WhatsApp</th><td><a href="https://wa.me/${c.phone.length <= 11 ? '55' + c.phone : c.phone}" target="_blank" rel="noopener">${esc(fmtPhone(c.phone))}</a></td></tr>
           <tr><th>Endereço</th><td>${esc(c.address)}<div class="small muted">${esc(c.city)} - ${esc(c.state)}</div>${c.maps_url ? `<a class="small" href="${esc(c.maps_url)}" target="_blank" rel="noopener">Abrir no Google Maps</a>` : ''}</td></tr>
           <tr><th>Médicos</th><td>${c.has_doctors ? esc(c.doctors.join(' · ')) : 'Não'}</td></tr>
-          ${c.responsible_cpf ? `<tr><th>CPF do responsável</th><td>${esc(c.responsible_cpf)}</td></tr>` : ''}
+          ${c.responsible_cpf ? `<tr><th>CPF do proprietário</th><td>${esc(c.responsible_cpf)}</td></tr>` : ''}
           <tr><th>Plano</th><td>${esc(c.plan_label)}</td></tr>
           ${c.payments?.length ? `<tr><th>Pagamentos (Pix)</th><td>${c.payments.map((x) => `<div class="small">${esc(String(x.paid_at || x.created_at).slice(0, 10).split('-').reverse().join('/'))} · ${x.kind === 'cadastro' ? 'Cadastro' : 'Renovação'} · ${window.Acolia.money(x.amount_cents)} · ${PAY[x.status] || esc(x.status)}
             <div class="muted" style="word-break:break-all">SyncPay: ${esc(x.identifier || '—')}</div></div>`).join('')}</td></tr>` : ''}
@@ -111,7 +111,8 @@
       title: 'Editar dados da clínica',
       html: `<div class="form-error hidden" data-err></div>
         ${fld('Nome da clínica', `<input data-f="name" value="${esc(c.name)}" maxlength="120">`)}
-        <div class="grid-2">${fld('Responsável', `<input data-f="responsible" value="${esc(c.responsible)}" maxlength="120">`)}${fld('CPF ou CNPJ', `<input data-f="doc" value="${esc(c.doc || '')}">`)}</div>
+        <div class="grid-2">${fld('Responsável', `<input data-f="responsible" value="${esc(c.responsible)}" maxlength="120">`)}${fld('CNPJ (ou CPF)', `<input data-f="doc" value="${esc(c.doc || '')}">`)}</div>
+        ${fld('CPF do proprietário', `<input data-f="owner_cpf" value="${esc(c.responsible_cpf || '')}" placeholder="000.000.000-00">`)}
         <div class="grid-2">${fld('E-mail', `<input data-f="email" value="${esc(c.email)}">`)}${fld('WhatsApp', `<input data-f="phone" value="${esc(fmtPhone(c.phone))}">`)}</div>
         ${fld('Estado e município', `<div class="grid-uf"><select data-f="state"></select><input data-f="city" value="${esc(c.city)}"></div>`)}
         ${fld('Endereço', `<input data-f="address" value="${esc(c.address)}" maxlength="250">`)}
@@ -119,7 +120,7 @@
       onOpen: (dlg) => { const f = (k) => $(`[data-f="${k}"]`, dlg); f('state').innerHTML = ufOptions(c.state, 'UF'); bindUfCity(f('state'), f('city')); maskPhone(f('phone')); },
       actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, { label: 'Salvar alterações', handler: async (dlg) => {
         const body = {};
-        for (const k of ['name', 'responsible', 'doc', 'email', 'phone', 'state', 'city', 'address', 'maps_url']) body[k] = $(`[data-f="${k}"]`, dlg).value;
+        for (const k of ['name', 'responsible', 'doc', 'owner_cpf', 'email', 'phone', 'state', 'city', 'address', 'maps_url']) body[k] = $(`[data-f="${k}"]`, dlg).value;
         try { await api(`/api/admin/clinics/${c.id}/edit`, { method: 'POST', body }); toast('Dados atualizados'); return true; }
         catch (ex) { const e = $('[data-err]', dlg); e.textContent = ex.message; e.classList.remove('hidden'); return false; }
       } }],

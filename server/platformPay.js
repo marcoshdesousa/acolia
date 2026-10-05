@@ -108,7 +108,8 @@ async function providerStatus(identifier) {
   return 'pendente';
 }
 
-// Quem paga o Pix da clínica: os dados que ela já colocou no cadastro (CPF ou CNPJ do dono, e-mail e WhatsApp)
+// Quem paga o Pix da clínica: os dados que ela já colocou no cadastro (CPF do proprietário; nas clínicas antigas,
+// o CPF/CNPJ do cadastro), e-mail e WhatsApp
 function clinicPayer(c) {
   return { name: c.responsible || c.name, cpf: c.responsible_cpf || c.doc || '', email: c.email, phone: c.phone };
 }

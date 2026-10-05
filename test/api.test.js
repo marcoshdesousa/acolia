@@ -45,6 +45,8 @@ function client() {
   const form = async (url, fields, file) => {
     if (SP_URLS.includes(url) && !('specialties' in fields)) fields = { ...fields, specialties: JSON.stringify(['Ansiedade']) };
     // Autocadastro do profissional pede data de nascimento e a assinatura do termo: quando o teste não manda, vão automáticos
+    // Cadastro de clínica pede o CPF do proprietário: quando o teste não manda, vai um válido
+    if (url === '/api/auth/clinic/register' && !('owner_cpf' in fields)) fields = { ...fields, owner_cpf: cpfOf(990) };
     if (url === '/api/auth/professional/register' && !('terms_accept' in fields)) {
       fields = { birth_date: '1988-05-10', terms_accept: '1', terms_version: require('../server/terms').VERSION, terms_name: fields.name || '', ...fields };
     }
@@ -83,6 +85,12 @@ after(() => {
 const CPF_A = '529.982.247-25';
 let AUTO_CPF = 0;
 // CPF válido a partir de um número (para os cadastros de profissional nos testes)
+function cnpjOf(n) {
+  const base = String(10000000 + n).slice(-8) + '0001';
+  const dv = (b) => { const w = b.length === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]; const r = b.split('').reduce((t, c, i) => t + c * w[i], 0) % 11; return r < 2 ? 0 : 11 - r; };
+  const x = base + dv(base);
+  return x + dv(x);
+}
 function cpfOf(n) {
   const d = String(100000000 + n).slice(-9);
   const dv = (s) => { let t = 0; for (let i = 0; i < s.length; i++) t += +s[i] * (s.length + 1 - i); const r = (t * 10) % 11; return r === 10 ? 0 : r; };
@@ -2630,7 +2638,7 @@ test('clínicas (1.3): pré-cadastro com logo, um por CPF/CNPJ, aprovação com 
   const code = r.data.code;
   assert.match(code, /^C[A-Z0-9]{7}$/);
   // Cadastro simples: sem responsável, sem link do mapa e sem médicos (completa no painel)
-  r = await client().form('/api/auth/clinic/register', { name: 'Clínica Simples', doc: cpfOf(902), email: 'simples@example.com', phone: '(11) 3333-5555',
+  r = await client().form('/api/auth/clinic/register', { name: 'Clínica Simples', doc: cnpjOf(902), email: 'simples@example.com', phone: '(11) 3333-5555',
     state: 'SP', city: 'Campinas', address: 'Rua Simples, 5', plan: 'clinica-4990' }, LOGO);
   assert.equal(r.status, 201, JSON.stringify(r.data));
   const simples = db.prepare('SELECT * FROM clinics WHERE code = ?').get(r.data.code);
@@ -2724,8 +2732,12 @@ test('clínicas (1.3): pré-cadastro com logo, um por CPF/CNPJ, aprovação com 
   assert.equal(db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ?').get(authorId).n, 0, 'apagar a clínica apaga as publicações');
   assert.equal(db.prepare('SELECT COUNT(*) n FROM follows WHERE professional_id = ?').get(authorId).n, 0);
   assert.equal((await cl.get('/api/auth/me')).data.role, null);
-  r = await client().form('/api/auth/clinic/register', { ...base0, doc: '529.982.247-25' }, LOGO);
+  r = await client().form('/api/auth/clinic/register', base0, LOGO);
   assert.equal(r.status, 201, 'documento livre de novo');
+  r = await client().form('/api/auth/clinic/register', { ...base0, doc: cnpjOf(903), email: 'cpf@bemviver.example.com', owner_cpf: '123' }, LOGO);
+  assert.equal(r.status, 400, 'CPF do proprietário obrigatório');
+  r = await client().form('/api/auth/clinic/register', { ...base0, doc: cpfOf(904), email: 'cpf2@bemviver.example.com' }, LOGO);
+  assert.equal(r.status, 400, 'precisa ser CNPJ');
 });
 
 test('senha de acesso único: no 1º acesso o profissional e a clínica criam a própria senha; depois trocam com a atual + repetir', async () => {
