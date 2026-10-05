@@ -2736,8 +2736,10 @@ test('clínicas (1.3): pré-cadastro com logo, um por CPF/CNPJ, aprovação com 
   assert.equal(r.status, 201, 'documento livre de novo');
   r = await client().form('/api/auth/clinic/register', { ...base0, doc: cnpjOf(903), email: 'cpf@bemviver.example.com', owner_cpf: '123' }, LOGO);
   assert.equal(r.status, 400, 'CPF do proprietário obrigatório');
-  r = await client().form('/api/auth/clinic/register', { ...base0, doc: cpfOf(904), email: 'cpf2@bemviver.example.com' }, LOGO);
-  assert.equal(r.status, 400, 'precisa ser CNPJ');
+  // Sem CNPJ: só o CPF do dono (ele mesmo é o CPF do Pix)
+  r = await client().form('/api/auth/clinic/register', { ...base0, doc: cpfOf(904), email: 'cpf2@bemviver.example.com', owner_cpf: '' }, LOGO);
+  assert.equal(r.status, 201, 'só CPF');
+  assert.equal(require('../server/db').db.prepare('SELECT responsible_cpf FROM clinics WHERE code = ?').get(r.data.code).responsible_cpf, cpfOf(904));
 });
 
 test('senha de acesso único: no 1º acesso o profissional e a clínica criam a própria senha; depois trocam com a atual + repetir', async () => {

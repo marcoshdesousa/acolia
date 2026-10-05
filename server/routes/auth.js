@@ -255,10 +255,9 @@ router.post('/clinic/register', async (req, res) => {
     // Cadastro simples: nome, logo, CPF/CNPJ do dono, contato e endereço. O resto (mapa, médicos, sobre) ela completa no painel.
     const responsible = U.cleanText(b.responsible, 120);
     if (responsible && !U.isFullName(responsible)) throw new HttpError(400, 'Informe o nome completo do responsável.');
-    // CNPJ da clínica e CPF do proprietário (os dois): o Pix da mensalidade sai com esses dados
+    // Sem CNPJ: só o CPF do dono. Com CNPJ: o CNPJ e o CPF do proprietário. O Pix da mensalidade sai com o CPF.
     const { type, doc } = C.parseDoc(b.doc);
-    if (type !== 'cnpj') throw new HttpError(400, 'Informe o CNPJ da clínica.');
-    const ownerCpf = U.onlyDigits(b.owner_cpf);
+    const ownerCpf = type === 'cpf' ? doc : U.onlyDigits(b.owner_cpf);
     if (!U.isValidCpf(ownerCpf)) throw new HttpError(400, 'Informe o CPF do proprietário da clínica.');
     if (C.docTaken(doc)) throw Object.assign(new HttpError(409, 'Já existe uma clínica com este CPF/CNPJ.'), { extra: { doc_exists: true, role: 'clinic' } });
     const email = U.cleanText(b.email, 160).toLowerCase();
