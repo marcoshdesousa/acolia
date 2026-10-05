@@ -26,14 +26,15 @@
         <div class="field"><label for="name">Nome completo</label><input id="name" name="name" autocomplete="name" required maxlength="120"></div>
         <div class="field"><label for="cpf">CPF</label><input id="cpf" name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" required>
           <div class="hint" data-cpf-hint>Cada CPF pode ter só um cadastro de profissional.</div></div>
+        <div class="field"><label for="birth">Data de nascimento</label><input id="birth" name="birth_date" type="date" required></div>
         <div class="grid-2">
           <div class="field"><label for="profession">Profissão</label><select id="profession" name="profession" required><option value="">Selecione</option></select></div>
           <div class="field hidden" data-reg-field><label for="registry">Número da carteirinha</label><input id="registry" name="registry" placeholder="Ex.: CRP 10/12345" maxlength="40">
             <div class="hint" data-reg-hint>CRP, CRM ou registro da sua área.</div></div>
         </div>
-        <div class="field hidden" data-doc-field><label for="doc">Foto da carteirinha profissional</label>
+        <div class="field hidden" data-doc-field><label for="doc">Carteirinha profissional (foto ou PDF)</label>
           <input id="doc" name="document" type="file" accept="image/jpeg,image/png,image/webp,application/pdf">
-          <div class="hint">Frente da carteirinha, com nome e número legíveis (JPG, PNG ou PDF, até 8 MB). Só a administração vê este arquivo.</div></div>
+          <div class="hint">Foto da carteirinha (frente, com nome e número legíveis) <b>ou o PDF</b> do documento digital do conselho, se ainda não recebeu a carteirinha física (JPG, PNG ou PDF, até 8 MB). Só a administração vê este arquivo.</div></div>
         <div class="field" data-sp-field><label>Suas especialidades (escolha pelo menos uma)</label>
           <div class="hint" style="margin:0 0 8px">Ex.: TEA, crianças, adultos, casais, ansiedade, TCC… Escolha quantas quiser. Depois dá para acrescentar ou tirar no seu perfil.</div>
           <div data-sp-picker></div></div>
@@ -48,6 +49,18 @@
       <div class="help-wa-row"><a class="help-wa" data-help="dados" href="#" target="_blank" rel="noopener"><span class="help-wa-ic" aria-hidden="true"></span><span>Alguma dúvida? <b>Fale no WhatsApp</b></span></a></div>
         <p class="center small" style="margin:16px 0 0">Já tem cadastro? <a href="/entrar#profissional">Entrar</a></p>
       </form>
+    </div>
+    <!-- Confira seus dados: antes do plano (muita gente erra o nome, o e-mail ou o número) -->
+    <div data-confirm-step class="hidden">
+      <h1 class="center">Confira se os seus dados estão certos</h1>
+      <p class="center muted">Confira com calma. Nome e CPF vão nos seus documentos e não dá para mudar depois.</p>
+      <div class="card stack">
+        <div class="table-wrap"><table class="confirm-table"><tbody data-confirm-list></tbody></table></div>
+        <div class="row" style="gap:10px;flex-wrap:wrap">
+          <button class="btn secondary" type="button" data-confirm-no>Não, corrigir</button>
+          <button class="btn grow" type="button" data-confirm-yes>Sim, está tudo correto</button>
+        </div>
+      </div>
     </div>
     <div data-plan-step class="hidden">
       <h1 class="center">Escolha o seu plano</h1>
@@ -68,6 +81,22 @@
         <div class="row" style="gap:10px;margin-top:16px">
           <button class="btn secondary" type="button" data-plan-back>Voltar</button>
           <button class="btn grow" type="button" data-plan-go>Avançar</button>
+        </div>
+      </div>
+    </div>
+    <!-- Termo de Adesão e Responsabilidade: depois do plano, antes de criar a conta -->
+    <div data-terms-step class="hidden">
+      <h1 class="center" data-terms-title>Termo de Adesão e Responsabilidade</h1>
+      <p class="center muted">Leia o termo até o fim. Para assinar, marque "Li e concordo" e digite o seu nome completo.</p>
+      <div class="card stack">
+        <div class="terms-box" data-terms-box tabindex="0" aria-label="Texto do termo"><div class="spinner"></div></div>
+        <label class="check" style="margin:4px 0 0"><input type="checkbox" data-terms-ok> <span>Li e concordo com o Termo de Adesão e Responsabilidade.</span></label>
+        <div class="field" style="margin:0"><label for="termsName">Assinatura: digite o seu nome completo</label><input id="termsName" data-terms-name autocomplete="off" maxlength="120">
+          <div class="hint">Igual ao nome do cadastro: <b data-terms-expected></b></div></div>
+        <div class="form-error hidden" data-terms-err></div>
+        <div class="row" style="gap:10px">
+          <button class="btn secondary" type="button" data-terms-back>Voltar</button>
+          <button class="btn grow" type="button" data-terms-go>Assinar e continuar</button>
         </div>
       </div>
     </div>
@@ -128,11 +157,10 @@
       $('[data-reg-hint]').textContent = HINTS[form.profession.value] || 'Número do seu registro na entidade de classe.';
       form.registry.placeholder = form.profession.value === 'Psiquiatra' ? 'Ex.: CRM-PA 12345' : HINTS[form.profession.value] ? 'Ex.: CRP 10/12345' : 'Número do registro';
     });
-    // Passo 1 (dados) → Próximo → passo 2 (plano) → Avançar → cria a conta → passo 3 (código)
+    // Dados → Próximo → Confira seus dados (Sim / Não, corrigir) → Plano → Avançar → Termo (assinar) → cria a conta → código
+    const STEPS = { 1: '[data-step1]', confirm: '[data-confirm-step]', 2: '[data-plan-step]', terms: '[data-terms-step]', 3: '[data-step2]' };
     const show = (step) => {
-      $('[data-step1]').classList.toggle('hidden', step !== 1);
-      $('[data-plan-step]').classList.toggle('hidden', step !== 2);
-      $('[data-step2]').classList.toggle('hidden', step !== 3);
+      Object.entries(STEPS).forEach(([k, sel]) => $(sel).classList.toggle('hidden', String(k) !== String(step)));
       scrollTo(0, 0);
     };
     const sp = await AcoliaSpecialties.picker($('[data-sp-picker]'), { name: 'specialties' });
@@ -148,8 +176,20 @@
       if (needsCard() && !form.registry.value.trim()) throw new Error(form.profession.value === 'Psiquiatra' ? 'Informe o número do seu CRM.' : 'Informe o número do seu CRP.');
       if (needsCard() && !form.document.files.length) throw new Error('Envie a foto da sua carteirinha profissional.');
       if (!sp.value().length) throw new Error('Escolha pelo menos uma especialidade (em "Suas especialidades").');
-      show(2);
+      if (!form.birth_date.value) { form.birth_date.focus(); throw new Error('Informe sua data de nascimento.'); }
+      const age = (Date.now() - Date.parse(form.birth_date.value)) / (365.25 * 864e5);
+      if (!(age >= 18 && age < 110)) { form.birth_date.focus(); throw new Error('Confira a sua data de nascimento.'); }
+      // Confira seus dados
+      const v = (n) => (form.elements[n]?.value || '').trim();
+      const rows = [['Nome completo', v('name')], ['CPF', v('cpf')], ['Data de nascimento', v('birth_date').split('-').reverse().join('/')],
+        ['Profissão', v('profession')], needsCard() ? [form.profession.value === 'Psiquiatra' ? 'CRM' : 'CRP', v('registry')] : null,
+        needsCard() ? ['Carteirinha', form.document.files[0]?.name || ''] : null,
+        ['E-mail', v('email')], ['WhatsApp', v('phone')], ['Estado e município', `${v('city')} - ${v('state')}`], ['Especialidades', sp.value().join(', ')]].filter(Boolean);
+      $('[data-confirm-list]').innerHTML = rows.map(([k, x]) => `<tr><th>${esc(k)}</th><td>${esc(x)}</td></tr>`).join('');
+      show('confirm');
     });
+    $('[data-confirm-no]').addEventListener('click', () => { show(1); form.name.focus(); });
+    $('[data-confirm-yes]').addEventListener('click', () => show(2));
     // "?" de cada vantagem: um balãozinho com a explicação; some ao tocar em qualquer outro lugar
     const tip = document.createElement('div');
     tip.className = 'pb-tip hidden'; tip.setAttribute('role', 'tooltip'); document.body.appendChild(tip);
@@ -192,15 +232,38 @@
     guide.querySelectorAll('[data-guide-close]').forEach((b) => b.addEventListener('click', closeGuide));
     const planErr = $('[data-plan-err]');
     $('[data-plan]').addEventListener('change', () => { planErr.classList.add('hidden'); $('[data-plan-card]').classList.add('on'); });
-    $('[data-plan-back]').addEventListener('click', () => show(1));
+    $('[data-plan-back]').addEventListener('click', () => show('confirm'));
+    // Termo: o texto vem do servidor (com a versão que vai ficar registrada na assinatura)
+    let terms = null;
+    const loadTerms = async () => {
+      if (terms) return;
+      terms = await api('/api/auth/terms/professional');
+      $('[data-terms-title]').textContent = terms.title;
+      $('[data-terms-box]').innerHTML = terms.sections.map((x, i) => `<h3>${i + 1}. ${esc(x.title)}</h3><p>${esc(x.text)}</p>`).join('');
+    };
     const go = $('[data-plan-go]');
     go.addEventListener('click', async () => {
       const plan = $('[data-plan]:checked');
       if (!plan) { planErr.textContent = 'Selecione o plano para continuar.'; planErr.classList.remove('hidden'); return; }
+      try { await loadTerms(); } catch (e) { planErr.textContent = e.message; planErr.classList.remove('hidden'); return; }
+      $('[data-terms-expected]').textContent = form.name.value.trim();
+      show('terms');
+    });
+    $('[data-terms-back]').addEventListener('click', () => show(2));
+    const tgo = $('[data-terms-go]');
+    const terr = $('[data-terms-err]');
+    tgo.addEventListener('click', async () => {
+      terr.classList.add('hidden');
+      const plan = $('[data-plan]:checked');
+      const norm = (x) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+      if (!$('[data-terms-ok]').checked) { terr.textContent = 'Marque "Li e concordo" para continuar.'; terr.classList.remove('hidden'); return; }
+      if (norm($('[data-terms-name]').value) !== norm(form.name.value)) { terr.textContent = 'Para assinar, digite o seu nome completo igual ao do cadastro.'; terr.classList.remove('hidden'); $('[data-terms-name]').focus(); return; }
+      const go = tgo;
       go.disabled = true; go.textContent = 'Criando sua conta…';
       try {
         const fd = new FormData(form);
         fd.append('plan', plan.value);
+        fd.append('terms_accept', '1'); fd.append('terms_version', terms.version); fd.append('terms_name', $('[data-terms-name]').value.trim());
         const r = await api('/api/auth/professional/register', { method: 'POST', form: fd });
         $('[data-code]').textContent = r.code;
         // Mensagem pronta com os dados do cadastro (a pessoa só aperta enviar)
@@ -210,6 +273,7 @@
           'Olá, Acolia! Quero finalizar o meu cadastro.', '',
           `Nome completo: ${val('name')}`,
           `CPF: ${val('cpf')}`,
+          `Data de nascimento: ${val('birth_date').split('-').reverse().join('/')}`,
           `Profissão: ${val('profession')}`,
           val('registry') ? `Carteirinha: ${val('registry')}` : '',
           spec.length ? `Especialidades: ${spec.join(', ')}` : '',
@@ -218,6 +282,7 @@
           `WhatsApp: ${val('phone')}`,
           'Plano escolhido: Plano Mensal (R$ 30,00 a cada 30 dias)',
           `Código: ${r.code}`,
+          'Termo de Adesão e Responsabilidade: assinado',
         ].filter((l, i) => l || i === 1);
         const msg = lines.join('\n');
         $('[data-pending-box]').innerHTML = r.blocked
@@ -234,7 +299,7 @@
         Acolia.toast(e.message, 'error');
         const fe = form.querySelector('.form-error');
         if (fe) { fe.textContent = e.message; fe.classList.remove('hidden'); }
-      } finally { go.disabled = false; go.textContent = 'Avançar'; }
+      } finally { go.disabled = false; go.textContent = 'Assinar e continuar'; }
     });
   })();
   </script>

@@ -44,6 +44,10 @@ function client() {
   };
   const form = async (url, fields, file) => {
     if (SP_URLS.includes(url) && !('specialties' in fields)) fields = { ...fields, specialties: JSON.stringify(['Ansiedade']) };
+    // Autocadastro do profissional pede data de nascimento e a assinatura do termo: quando o teste não manda, vão automáticos
+    if (url === '/api/auth/professional/register' && !('terms_accept' in fields)) {
+      fields = { birth_date: '1988-05-10', terms_accept: '1', terms_version: require('../server/terms').VERSION, terms_name: fields.name || '', ...fields };
+    }
     const fd = new FormData();
     for (const [k, v] of Object.entries(fields)) fd.append(k, v);
     if (file) fd.append(file.field || 'document', new Blob([file.data], { type: file.type }), file.name);
@@ -1912,7 +1916,7 @@ test('feed: novidade primeiro (a mais nova no topo); as já vistas vêm misturad
 test('cadastro do profissional: escolhe o plano mensal de R$ 30 (plano inválido não passa) e o admin vê o plano', async () => {
   const mk = (plan, email, phone) => {
     const fd = new FormData();
-    for (const [k, v] of Object.entries({ name: 'Paulo Plano Silva', profession: 'Psicanalista', cpf: cpfOf(Number(phone.slice(-4))), email, phone, state: 'SP', city: 'Campinas', specialties: '["Luto"]' })) fd.append(k, v);
+    for (const [k, v] of Object.entries({ name: 'Paulo Plano Silva', profession: 'Psicanalista', cpf: cpfOf(Number(phone.slice(-4))), email, phone, state: 'SP', city: 'Campinas', specialties: '["Luto"]', birth_date: '1985-01-20', terms_accept: '1', terms_version: require('../server/terms').VERSION, terms_name: 'Paulo Plano Silva' })) fd.append(k, v);
     if (plan) fd.append('plan', plan);
     return fetch(`${base}/api/auth/professional/register`, { method: 'POST', body: fd });
   };
@@ -2789,4 +2793,35 @@ test('senha de acesso único: no 1º acesso o profissional e a clínica criam a 
     });
     db.prepare('UPDATE professionals SET must_change_password = 0').run();
   } finally { process.env.FIRST_PASSWORD = 'off'; }
+});
+
+test('cadastro do profissional: data de nascimento e Termo de Adesão assinado (nome completo), guardado com data e IP', async () => {
+  const { db } = require('../server/db');
+  const T = require('../server/terms');
+  const t = (await client().get('/api/auth/terms/professional')).data;
+  assert.equal(t.version, T.VERSION);
+  assert.ok(t.sections.length >= 8 && t.sections.some((x) => /não presta serviços de saúde/.test(x.text)));
+  const base0 = { name: 'Tais Termo Lima', cpf: cpfOf(960), profession: 'Psicanalista', registry: '', email: 'tais.termo@example.com', phone: '11966660000', state: 'SP', city: 'Campinas', plan: 'mensal-30', birth_date: '1990-04-02' };
+  const sign = { terms_accept: '1', terms_version: T.VERSION, terms_name: 'Tais Termo Lima' };
+  let r = await client().form('/api/auth/professional/register', { ...base0, terms_accept: '0', terms_version: T.VERSION, terms_name: 'Tais Termo Lima' });
+  assert.equal(r.status, 400, 'sem "Li e concordo"');
+  r = await client().form('/api/auth/professional/register', { ...base0, ...sign, terms_name: 'Tais Lima' });
+  assert.equal(r.status, 400, 'assinatura diferente do nome completo');
+  r = await client().form('/api/auth/professional/register', { ...base0, ...sign, terms_version: 'velha' });
+  assert.equal(r.status, 409, 'versão antiga do termo');
+  r = await client().form('/api/auth/professional/register', { ...base0, ...sign, birth_date: '' });
+  assert.equal(r.status, 400, 'sem data de nascimento');
+  r = await client().form('/api/auth/professional/register', { ...base0, ...sign, terms_name: 'tais termo lima' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const p = db.prepare('SELECT id, birth_date FROM professionals WHERE code = ?').get(r.data.code);
+  assert.equal(p.birth_date, '1990-04-02');
+  const acc = T.lastAcceptance('professional', p.id);
+  assert.equal(acc.version, T.VERSION);
+  assert.equal(acc.signed_name, 'tais termo lima');
+  assert.ok(acc.accepted_at);
+  // O admin vê o termo assinado e a data de nascimento
+  const list = (await admin.get('/api/admin/professionals?status=pendente')).data.items;
+  const item = list.find((x) => x.id === p.id);
+  assert.equal(item.birth_date, '1990-04-02');
+  assert.equal(item.terms.version, T.VERSION);
 });

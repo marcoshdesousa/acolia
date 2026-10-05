@@ -1518,3 +1518,11 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .name-picker .chip-btn { text-transform: none; }
 .name-preview { margin-top: 8px; font-size: .92rem; color: #4d5f59; }
 .name-preview b { color: #2e403c; }
+
+/* Cadastro do profissional: confira seus dados e termo de adesão */
+.confirm-table th { width: 42%; white-space: normal; color: #4d5f59; font-weight: 700; text-align: left; vertical-align: top; }
+.confirm-table td { font-weight: 700; color: #26322f; word-break: break-word; }
+.terms-box { max-height: 52vh; overflow-y: auto; border: 1px solid var(--line, #e3e2dc); border-radius: 14px; padding: 14px 16px; background: #faf9f5; }
+.terms-box h3 { font-size: .98rem; margin: 12px 0 4px; color: #2e403c; }
+.terms-box h3:first-child { margin-top: 0; }
+.terms-box p { margin: 0 0 6px; font-size: .92rem; line-height: 1.5; color: #3b4a46; }

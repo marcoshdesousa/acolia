@@ -153,12 +153,20 @@ function insertProfessional(d, passwordHash, status, subscriptionUntil = null) {
 // Planos que o profissional escolhe no cadastro (por enquanto, um só)
 const PLANS = { 'mensal-30': 'Mensal — R$ 30,00 a cada 30 dias' };
 
+// Texto do Termo de Adesão e Responsabilidade (aparece no cadastro, antes de assinar)
+router.get('/terms/professional', (_req, res) => res.json(require('../terms').publicTerms()));
+
 router.post('/professional/register', async (req, res) => {
   const documentFile = await handleDocument(req, res);
   try {
     const d = validateProfessionalInput(req.body);
+    const birth = String(req.body.birth_date || '');
+    if (!U.isValidBirthDate(birth)) throw new HttpError(400, 'Informe sua data de nascimento.');
     const plan = String(req.body.plan || 'mensal-30');
     if (!PLANS[plan]) throw new HttpError(400, 'Selecione um plano.');
+    // Termo de Adesão e Responsabilidade: assinado antes de criar a conta (nome completo digitado)
+    const T = require('../terms');
+    const signedName = T.checkSignature(req.body, d.name);
     // O profissional não cria senha no cadastro: a administração gera a primeira senha ao aprovar
     // e manda pelo WhatsApp. Depois de entrar, ele pode trocar em Conta.
     const needsCard = !!require('../registry').councilFor(d.profession);
@@ -177,7 +185,8 @@ router.post('/professional/register', async (req, res) => {
     const blocked = require('../blocklist').isBlocked('professional', { cpf: d.cpf, email: d.email, registry: reg.registry, phone: d.phone });
     const { id, code } = insertProfessional({ ...d, registry: reg.registry, document_file: needsCard ? documentFile : null, registry_verified: verified },
       NO_PASSWORD, blocked ? 'bloqueado' : 'pendente');
-    db.prepare('UPDATE professionals SET plan = ? WHERE id = ?').run(plan, id);
+    db.prepare('UPDATE professionals SET plan = ?, birth_date = ? WHERE id = ?').run(plan, birth, id);
+    T.record('professional', id, signedName, req);
     res.status(201).json({ ok: true, code, blocked, support: require('../accountState').SUPPORT_WHATSAPP });
   } catch (e) {
     removeDocument(documentFile);

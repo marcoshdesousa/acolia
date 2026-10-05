@@ -37,6 +37,8 @@ function adminPro(p) {
     plan: p.plan ? (require('./auth').PLANS[p.plan] || p.plan) : null, plan_key: p.plan || '',
     maps_url: p.maps_url || '',
     cpf: p.cpf ? U.formatCpf(p.cpf) : '',
+    birth_date: p.birth_date || '',
+    terms: require('../terms').lastAcceptance('professional', p.id), // Termo de Adesão assinado no cadastro
   };
 }
 

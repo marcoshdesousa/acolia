@@ -417,6 +417,8 @@
           <tr><th>Link</th><td>${p.slug ? `<a href="/${esc(p.slug)}" target="_blank" rel="noopener">${esc(location.host)}/${esc(p.slug)}</a>` : '—'}</td></tr>
           <tr><th>Nome completo</th><td>${esc(p.legal_name)}</td></tr>
           <tr><th>CPF</th><td>${p.cpf ? esc(p.cpf) : '<span class="muted">Não informado (cadastro antigo)</span>'}</td></tr>
+          <tr><th>Nascimento</th><td>${p.birth_date ? esc(p.birth_date.split('-').reverse().join('/')) : '<span class="muted">Não informado (cadastro antigo)</span>'}</td></tr>
+          <tr><th>Termo de Adesão</th><td>${p.terms ? `<span class="badge ok">Assinado</span> <span class="small">por <b>${esc(p.terms.signed_name)}</b> em ${esc(new Date(p.terms.accepted_at.replace(' ', 'T') + 'Z').toLocaleString('pt-BR'))} · IP ${esc(p.terms.ip || '—')} · versão ${esc(p.terms.version)}</span>` : '<span class="muted">Não assinado (cadastro antigo ou feito pelo admin)</span>'}</td></tr>
           ${p.plan ? `<tr><th>Plano escolhido</th><td>${esc(p.plan)}</td></tr>` : ''}
           ${council || p.registry ? `<tr><th>Registro</th><td><div class="row" style="gap:6px"><input data-registry value="${esc(p.registry)}" maxlength="40" style="width:auto;min-height:34px;padding:4px 8px">
             <button type="button" class="btn ghost sm" data-save-registry>Salvar</button></div>
