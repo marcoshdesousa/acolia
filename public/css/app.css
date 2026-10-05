@@ -1513,3 +1513,8 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .updating-dots span:nth-child(2) { animation-delay: .2s; } .updating-dots span:nth-child(3) { animation-delay: .4s; }
 @keyframes upd-dot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-4px); } }
 @media (prefers-reduced-motion: reduce) { .updating-breath::before, .updating-breath::after, .updating-dots span { animation: none; } }
+
+/* Nome no perfil: palavras do nome completo para escolher */
+.name-picker .chip-btn { text-transform: none; }
+.name-preview { margin-top: 8px; font-size: .92rem; color: #4d5f59; }
+.name-preview b { color: #2e403c; }

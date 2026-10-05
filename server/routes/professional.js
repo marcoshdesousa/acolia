@@ -113,10 +113,10 @@ router.put('/profile', async (req, res) => {
   }
   const name = U.cleanText(b.name, 120);
   if (!U.isFullName(name)) throw new U.HttpError(400, 'Informe nome e sobrenome.');
-  // Pode encurtar o nome (ex.: só nome e sobrenome), mas só com palavras do nome da carteirinha
-  const legal = new Set(U.norm(req.auth.user.legal_name || req.auth.user.name).split(' '));
-  if (!U.norm(name).split(' ').every((w) => legal.has(w))) {
-    throw new U.HttpError(400, `Use apenas partes do seu nome registrado (${req.auth.user.legal_name || req.auth.user.name}).`);
+  // Nome no perfil: escolhido entre as palavras do nome completo, na mesma ordem (os documentos usam o nome completo)
+  const fullName = req.auth.user.legal_name || req.auth.user.name;
+  if (!U.isNameFrom(name, fullName)) {
+    throw new U.HttpError(400, `Escolha pelo menos 2 palavras do seu nome completo (${fullName}), na mesma ordem.`);
   }
   // Profissão, registro (carteirinha) e código só a administração altera. WhatsApp e e-mail ele muda.
   const { profession, registry } = req.auth.user;

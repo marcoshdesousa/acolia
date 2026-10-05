@@ -325,7 +325,8 @@
     return modal({
       title: 'Editar dados do profissional',
       html: `<div class="form-error hidden" data-err></div>
-        ${fld('Nome completo', `<input data-f="name" value="${esc(p.legal_name || p.name)}" maxlength="120">`, 'É o nome que aparece no perfil e nos documentos.')}
+        ${fld('Nome completo', `<input data-f="name" value="${esc(p.legal_name || p.name)}" maxlength="120">`, 'Vai nos documentos (atestado, receita, encaminhamento e declaração).')}
+        ${fld('Nome no perfil', '<input type="hidden" data-f="display_name"><div data-name-picker></div>', 'Toque nas palavras do nome completo para escolher como aparece no perfil e nas mensagens (pelo menos 2).')}
         <div class="grid-2">${fld('CPF', `<input data-f="cpf" inputmode="numeric" value="${esc(p.cpf || '')}" placeholder="000.000.000-00">`)}
           ${fld('Profissão', `<select data-f="profession">${cfg.professions.map((x) => `<option ${x === p.profession ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`)}</div>
         <div class="grid-2">${fld('Carteirinha (CRP/CRM)', `<input data-f="registry" value="${esc(p.registry || '')}" maxlength="40" placeholder="Ex.: CRP 06/12345">`)}
@@ -343,6 +344,10 @@
         const f = (k) => $(`[data-f="${k}"]`, dlg);
         Acolia.maskCpf(f('cpf')); maskPhone(f('phone'));
         f('state').innerHTML = ufOptions(p.state, 'UF'); bindUfCity(f('state'), f('city'));
+        // Nome no perfil: palavras do nome completo (se mudar o nome completo, as palavras mudam junto)
+        const pick = () => Acolia.namePicker($('[data-name-picker]', dlg), { full: f('name').value, value: f('display_name').value || p.name, input: f('display_name') });
+        pick();
+        f('name').addEventListener('change', pick);
         f('has_clinic').addEventListener('change', () => $('[data-clinic]', dlg).classList.toggle('hidden', !f('has_clinic').checked));
       },
       actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, {
@@ -350,7 +355,7 @@
           const f = (k) => $(`[data-f="${k}"]`, dlg);
           const err = $('[data-err]', dlg);
           const body = {};
-          for (const k of ['name', 'cpf', 'profession', 'registry', 'plan', 'email', 'phone', 'state', 'city', 'clinic_name', 'clinic_address', 'maps_url']) body[k] = f(k).value;
+          for (const k of ['name', 'display_name', 'cpf', 'profession', 'registry', 'plan', 'email', 'phone', 'state', 'city', 'clinic_name', 'clinic_address', 'maps_url']) body[k] = f(k).value;
           body.has_clinic = f('has_clinic').checked;
           try { await api(`/api/admin/professionals/${p.id}/edit`, { method: 'POST', body }); toast('Dados atualizados'); return true; }
           catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); err.scrollIntoView({ block: 'nearest' }); return false; }

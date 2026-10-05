@@ -113,7 +113,8 @@
   // Especialidades: escolhe na lista (pode acrescentar e tirar; as 2 primeiras aparecem no perfil)
   const spPicker = AcoliaSpecialties.picker($('[data-sp-picker]', form), { name: 'specialties', hint: 'As <b>2 primeiras</b> aparecem no seu perfil; as outras ficam no botão <b>+</b>. Para mudar a ordem, tire e escolha de novo.' });
   function fillProfile() {
-    form.name.value = me.name;
+    $('[data-legal-name]').textContent = me.legal_name || me.name;
+    Acolia.namePicker($('[data-name-picker]'), { full: me.legal_name || me.name, value: me.name, input: form.name });
     form.profession.value = me.profession;
     form.registry.value = me.registry;
     form.registry.closest('.field').classList.toggle('hidden', !me.registry); // psicanalista, psicoterapeuta e terapeuta: sem conselho

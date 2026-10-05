@@ -260,10 +260,19 @@ router.post('/professionals/:id/edit', async (req, res) => {
   const b = req.body || {};
   const has = (k) => b[k] !== undefined;
   const up = {};
+  // name = nome completo (documentos); display_name = nome no perfil e nas mensagens (palavras do nome completo)
   if (has('name')) {
     const name = U.cleanText(b.name, 120);
     if (!U.isFullName(name)) throw new U.HttpError(400, 'Informe o nome completo (nome e sobrenome).');
-    up.name = name; up.legal_name = name;
+    up.legal_name = name;
+    // Mudou o nome completo e o nome do perfil não cabe mais nele: o perfil passa a mostrar o nome completo
+    if (!U.isNameFrom(p.name, name)) up.name = name;
+  }
+  if (has('display_name') && String(b.display_name).trim()) {
+    const display = U.cleanText(b.display_name, 120);
+    const full = up.legal_name || p.legal_name || p.name;
+    if (!U.isNameFrom(display, full)) throw new U.HttpError(400, `O nome no perfil precisa usar pelo menos 2 palavras do nome completo (${full}), na mesma ordem.`);
+    up.name = display;
   }
   if (has('cpf')) {
     const cpf = U.onlyDigits(b.cpf);

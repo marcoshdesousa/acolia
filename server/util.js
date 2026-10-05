@@ -84,6 +84,17 @@ function isFullName(name) {
   return parts.length >= 2 && parts.every((p) => p.length >= 1) && /^[\p{L}' .-]+$/u.test(name.trim());
 }
 
+// Nome no perfil: escolhido entre as palavras do nome completo, na mesma ordem, com pelo menos 2
+// (ex.: "Débora Alice Gonzaga dos Santos" → "Débora Gonzaga" ou "Débora Alice"). Os documentos usam o nome completo.
+function isNameFrom(display, full) {
+  const d = norm(display).split(' ').filter(Boolean);
+  const f = norm(full).split(' ').filter(Boolean);
+  if (d.length < 2) return false;
+  let i = 0;
+  for (const w of f) if (i < d.length && w === d[i]) i++;
+  return i === d.length;
+}
+
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
 function isUf(uf) {
@@ -121,6 +132,6 @@ class HttpError extends Error {
 
 module.exports = {
   randomCode, randomMixedCode, randomPassword, hashPassword, verifyPassword,
-  onlyDigits, isValidCpf, formatCpf, norm, cleanText, isFullName, UFS, isUf,
+  onlyDigits, isValidCpf, formatCpf, norm, cleanText, isFullName, isNameFrom, UFS, isUf,
   todayISO, addDaysISO, isValidBirthDate, isValidEmail, HttpError,
 };

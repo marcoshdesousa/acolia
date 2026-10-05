@@ -179,6 +179,7 @@ function ownProfessional(p) {
     slug: p.slug,
     code: p.code,
     name: p.name,
+    legal_name: p.legal_name || p.name, // nome completo (vai nos documentos)
     profession: p.profession,
     registry: p.registry,
     email: p.email,

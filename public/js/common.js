@@ -244,6 +244,41 @@
     try { const me = await api('/api/auth/me'); if (me.account?.blocked) showBlocked(me); } catch { /* ignora */ }
   }
 
+  // ---------- Nome no perfil (profissional) ----------
+  // Toca nas palavras do nome completo para escolher como aparece no perfil e nas mensagens
+  // (ex.: "Débora Alice Gonzaga dos Santos" → "Débora Gonzaga"). Pelo menos 2 palavras, na mesma ordem.
+  // Os documentos (atestado, receita, encaminhamento, declaração) continuam com o nome completo.
+  const normWord = (w) => w.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  function namePicker(host, { full, value, input }) {
+    const words = String(full || '').trim().split(/\s+/).filter(Boolean);
+    // Marca as palavras do nome atual na ordem (se não bater, começa com o nome completo)
+    let on = words.map(() => false);
+    const cur = String(value || '').trim().split(/\s+/).filter(Boolean).map(normWord);
+    let i = 0;
+    words.forEach((w, k) => { if (i < cur.length && normWord(w) === cur[i]) { on[k] = true; i++; } });
+    if (i !== cur.length || cur.length < 2) on = words.map(() => true);
+    host.classList.add('name-picker');
+    const render = () => {
+      const chosen = words.filter((_, k) => on[k]).join(' ');
+      if (input) input.value = chosen;
+      host.innerHTML = `<div class="row" style="gap:6px;flex-wrap:wrap" role="group" aria-label="Palavras do nome completo">${words.map((w, k) => `<button type="button" class="chip-btn ${on[k] ? 'on' : ''}" data-word="${k}" aria-pressed="${on[k]}">${esc(w)}</button>`).join('')}</div>
+        <div class="name-preview">Aparece no perfil e nas mensagens: <b>${esc(chosen || '—')}</b></div>`;
+    };
+    const onClick = (e) => {
+      const b = e.target.closest('[data-word]');
+      if (!b || input?.disabled) return;
+      const k = Number(b.dataset.word);
+      if (on[k] && on.filter(Boolean).length <= 2) { toast('Escolha pelo menos 2 palavras do nome.', 'error'); return; }
+      on[k] = !on[k];
+      render();
+    };
+    if (host._nameClick) host.removeEventListener('click', host._nameClick); // chamado de novo: não duplica
+    host._nameClick = onClick;
+    host.addEventListener('click', onClick);
+    render();
+    return { value: () => words.filter((_, k) => on[k]).join(' ') };
+  }
+
   // ---------- Site atualizando / servidor reiniciando ----------
   // No lugar de erro, aparece "Estamos preparando tudo para você" por cima da página; quando o site
   // responder de novo, a página recarrega sozinha. (Na chamada de vídeo não aparece: não atrapalha a consulta.)
@@ -854,7 +889,7 @@
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
     supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
-    handleForm, logout, showBlocked, showNeedsCpf, installBanner, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
+    handleForm, logout, showBlocked, showNeedsCpf, installBanner, namePicker, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
     SOCIAL, socialLinks, socialFields,
   };
 })();

@@ -220,7 +220,10 @@ test('profissional entra (código ou e-mail) e edita o perfil', async () => {
   assert.equal(r.data.profession, 'Psicólogo(a)');
   r = await pro.put('/api/professional/profile', { ...full, name: 'Carlos Silva' });
   assert.equal(r.status, 400);
+  r = await pro.put('/api/professional/profile', { ...full, name: 'Pereira João' });
+  assert.equal(r.status, 400, 'nome no perfil na mesma ordem do nome completo');
   r = await pro.get('/api/professional/me');
+  assert.equal(r.data.legal_name, r.data.name, 'o painel recebe o nome completo para escolher as palavras');
   assert.equal(r.data.packages, undefined, 'pacotes saíram (consulta avulsa; pacote se combina pelo chat)');
   assert.equal(r.data.name, 'João Pereira');
 });
@@ -2559,6 +2562,21 @@ test('admin corrige os dados do profissional e do paciente (nome, CPF, carteirin
   assert.equal(row.city, 'Santos');
   assert.equal(row.profession, 'Psicanalista');
   assert.doesNotMatch(row.specialties, /Luto/, 'especialidades ficam com o profissional');
+  // Nome no perfil: palavras do nome completo, na ordem (o nome completo continua nos documentos)
+  r = await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { name: 'Marta Certa Silva', display_name: 'Marta Silva' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  let row2 = db.prepare('SELECT name, legal_name FROM professionals WHERE id = ?').get(c.data.id);
+  assert.equal(row2.name, 'Marta Silva');
+  assert.equal(row2.legal_name, 'Marta Certa Silva');
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { display_name: 'Silva Marta' })).status, 400, 'fora de ordem');
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { display_name: 'Ana Silva' })).status, 400, 'palavra de fora');
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { display_name: 'Marta' })).status, 400, 'uma palavra só');
+  // Corrigir o nome completo mantém o nome do perfil quando ele ainda cabe
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { name: 'Marta Certa da Silva' })).status, 200);
+  row2 = db.prepare('SELECT name, legal_name FROM professionals WHERE id = ?').get(c.data.id);
+  assert.equal(row2.name, 'Marta Silva');
+  assert.equal(row2.legal_name, 'Marta Certa da Silva');
+  assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { name: 'Marta Certa Silva', display_name: 'Marta Certa Silva' })).status, 200);
   // Não aceita dado inválido nem repetido
   assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { cpf: '123' })).status, 400);
   assert.equal((await admin.post(`/api/admin/professionals/${c.data.id}/edit`, { name: 'Marta' })).status, 400);

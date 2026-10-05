@@ -162,7 +162,10 @@
         </div>
         <form class="card" data-profile-form style="margin-top:16px" novalidate>
           <h2>Dados profissionais</h2>
-          <div class="field"><label for="name">Nome exibido (nome completo ou nome e sobrenome)</label><input id="name" name="name" required maxlength="120"></div>
+          <div class="field"><label>Nome no perfil</label>
+            <input type="hidden" name="name">
+            <div data-name-picker></div>
+            <div class="hint">Nome completo: <b data-legal-name></b>. Toque nas palavras para escolher como você aparece no perfil e nas mensagens (pelo menos 2). Nos documentos (atestado, receita, encaminhamento e declaração) vai o nome completo.</div></div>
           <div class="grid-2">
             <div class="field"><label for="profession">Profissão</label><select id="profession" name="profession" disabled></select></div>
             <div class="field"><label for="registry">Registro profissional (CRP, CRM…)</label><input id="registry" name="registry" readonly maxlength="40">
