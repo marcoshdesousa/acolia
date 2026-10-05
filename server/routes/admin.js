@@ -39,6 +39,7 @@ function adminPro(p) {
     cpf: p.cpf ? U.formatCpf(p.cpf) : '',
     birth_date: p.birth_date || '',
     terms: require('../terms').lastAcceptance('professional', p.id), // Termo de Adesão assinado no cadastro
+    review_pending: !!p.review_pending, // pagou o Pix no cadastro e entrou direto: a equipe confere os dados
   };
 }
 
@@ -160,7 +161,26 @@ router.get('/professionals', (req, res) => {
 router.get('/professionals/:id', (req, res) => {
   const p = db.prepare("SELECT * FROM professionals WHERE id = ? AND status NOT IN ('oficial', 'clinica')").get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
-  res.json(adminPro(p));
+  // Pagamentos da mensalidade pelo Pix (SyncPay)
+  const payments = db.prepare("SELECT id, kind, amount_cents, identifier, status, created_at, paid_at FROM platform_payments WHERE role = 'professional' AND user_id = ? ORDER BY id DESC LIMIT 24").all(p.id);
+  res.json({ ...adminPro(p), payments });
+});
+
+// Conferência depois do pagamento: "Conferido" (tudo certo) ou "Reprovar" (dados errados: tira o acesso;
+// o reembolso é feito pelo dono no painel da SyncPay)
+router.post('/professionals/:id/review', (req, res) => {
+  const p = db.prepare("SELECT * FROM professionals WHERE id = ? AND status NOT IN ('oficial', 'clinica')").get(Number(req.params.id));
+  if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
+  if (req.body.ok === true) {
+    db.prepare('UPDATE professionals SET review_pending = 0 WHERE id = ?').run(p.id);
+  } else {
+    const note = `${p.admin_note ? `${p.admin_note}\n` : ''}[${U.todayISO()}] Reprovado na conferência dos dados: reembolsar o Pix pelo painel da SyncPay.`.slice(0, 1000);
+    db.prepare("UPDATE professionals SET review_pending = 0, status = 'recusado', admin_note = ? WHERE id = ?").run(note, p.id);
+    A.destroyUserSessions('professional', p.id);
+    const active = db.prepare("SELECT * FROM calls WHERE professional_id = ? AND status = 'ativo'").get(p.id);
+    if (active) endCall(active);
+  }
+  res.json(adminPro(db.prepare('SELECT * FROM professionals WHERE id = ?').get(p.id)));
 });
 
 // Administrador cadastra um profissional diretamente (já aprovado)

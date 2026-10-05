@@ -187,7 +187,16 @@ router.post('/professional/register', async (req, res) => {
       NO_PASSWORD, blocked ? 'bloqueado' : 'pendente');
     db.prepare('UPDATE professionals SET plan = ?, birth_date = ? WHERE id = ?').run(plan, birth, id);
     T.record('professional', id, signedName, req);
-    res.status(201).json({ ok: true, code, blocked, support: require('../accountState').SUPPORT_WHATSAPP });
+    // Pagamento pelo Pix (SyncPay): pago → conta liberada na hora. Sem a SyncPay configurada: finaliza no WhatsApp.
+    let pay = null;
+    const PP = require('../platformPay');
+    if (!blocked && PP.configured()) {
+      try {
+        pay = await PP.create({ role: 'professional', userId: id, kind: 'cadastro', plan, withToken: true,
+          payer: { name: d.name, cpf: d.cpf, email: d.email, phone: d.phone } });
+      } catch (e) { console.warn('[syncpay] cadastro sem Pix:', e.message); }
+    }
+    res.status(201).json({ ok: true, code, blocked, support: require('../accountState').SUPPORT_WHATSAPP, pay });
   } catch (e) {
     removeDocument(documentFile);
     throw e;

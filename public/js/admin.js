@@ -194,7 +194,7 @@
       <td><div class="row" style="flex-wrap:nowrap">${avatar(p.name, p.photo, 'sm')}<div><b>${esc(p.name)}</b>${p.is_test ? ' <span class="badge warn">Teste</span>' : ''}<div class="small muted">${esc(p.profession)} · ${esc(p.email)}</div></div></div></td>
       <td>${esc(p.registry)}</td>
       <td>${esc(p.city)} - ${esc(p.state)}</td>
-      <td>${p.status === 'excluido' ? '<span class="badge">Apagada</span>' : (STATUS_BADGE[p.status] || esc(p.status))}</td>
+      <td>${p.status === 'excluido' ? '<span class="badge">Apagada</span>' : (STATUS_BADGE[p.status] || esc(p.status))}${p.review_pending ? ' <span class="badge warn" title="Pagou o Pix e entrou direto: confira os dados">Conferir dados</span>' : ''}</td>
       <td>${subBadge(p)}</td>
       <td><button class="btn secondary sm" data-pro="${p.id}">Gerenciar</button></td></tr>`;
   }
@@ -394,6 +394,7 @@
     });
   }
 
+  const PAY_BADGE = { pago: '<span class="badge ok">Pago</span>', pendente: '<span class="badge">Esperando</span>', reembolsado: '<span class="badge warn">Reembolsado</span>', cancelado: '<span class="badge">Cancelado</span>' };
   async function openPro(id) {
     const p = await api(`/api/admin/professionals/${id}`);
     const btn = (status, label, cls = 'secondary') => `<button type="button" class="btn sm ${cls}" data-set="${status}">${label}</button>`;
@@ -412,6 +413,9 @@
           <div><b>${esc(p.profession)}</b>${p.registry ? ` · ${esc(p.registry)}` : ''}</div>
           <div class="small">${STATUS_BADGE[p.status]}${p.is_test ? ' <span class="badge warn">Teste</span>' : ''} ${p.visible ? '<span class="badge primary">Na vitrine</span>' : '<span class="badge">Fora da vitrine</span>'}</div>
         </div></div>
+        ${p.review_pending ? `<div class="notice warn" style="margin-bottom:12px"><b>Pago, aguardando conferência.</b> Pagou o Pix no cadastro e a conta foi liberada na hora. Confira os dados e a carteirinha abaixo.
+          <div class="row" style="margin-top:8px"><button type="button" class="btn sm" data-review-ok>Conferido, está tudo certo</button>
+          <button type="button" class="btn danger sm" data-review-no>Dados errados: tirar o acesso</button></div></div>` : ''}
         <table class="kv-table" style="font-size:.9rem"><tbody>
           <tr><th>Código único</th><td><code style="font-size:1.05rem;font-weight:800">${esc(p.code)}</code> <button type="button" class="btn ghost sm" data-copy-code>Copiar</button></td></tr>
           <tr><th>Link</th><td>${p.slug ? `<a href="/${esc(p.slug)}" target="_blank" rel="noopener">${esc(location.host)}/${esc(p.slug)}</a>` : '—'}</td></tr>
@@ -435,6 +439,8 @@
           <tr><th>Consulta</th><td>${p.price_cents != null ? money(p.price_cents) : '—'}</td></tr>
           <tr><th>Cadastro</th><td>${fmtDT(p.created_at)}</td></tr>
           <tr><th>Mensalidade</th><td>${subBadge(p)}</td></tr>
+          ${p.payments?.length ? `<tr><th>Pagamentos (Pix)</th><td>${p.payments.map((x) => `<div class="small">${fmtDT(x.paid_at || x.created_at)} · ${x.kind === 'cadastro' ? 'Cadastro' : 'Renovação'} · ${money(x.amount_cents)} · ${PAY_BADGE[x.status] || esc(x.status)}
+            <div class="muted" style="word-break:break-all">SyncPay: ${esc(x.identifier || '—')}</div></div>`).join('')}</td></tr>` : ''}
         </tbody></table>
         ${p.status !== 'excluido' && p.status !== 'oficial' ? '<button type="button" class="btn sm" data-edit-pro style="margin-top:10px">Editar dados</button>' : ''}
         <h3 style="margin-top:16px">Situação</h3>
@@ -459,6 +465,14 @@
       onOpen: (dlg) => {
         const refresh = async () => { dlg.close(); dlg.remove(); await reloadAll(); openPro(id); };
         $('[data-copy-code]', dlg).addEventListener('click', () => copyText(p.code));
+        $('[data-review-ok]', dlg)?.addEventListener('click', async () => {
+          try { await api(`/api/admin/professionals/${id}/review`, { method: 'POST', body: { ok: true } }); toast('Conferido.'); refresh(); } catch (e) { toast(e.message, 'error'); }
+        });
+        $('[data-review-no]', dlg)?.addEventListener('click', async () => {
+          const paid = (p.payments || []).find((x) => x.kind === 'cadastro' && x.status === 'pago');
+          if (!await confirmDialog(`Tirar o acesso de ${p.name}? A conta sai da vitrine e ele(a) não consegue mais entrar. Depois, faça o reembolso do Pix pelo painel da SyncPay${paid ? ` (identificador ${paid.identifier})` : ''}.`, { okLabel: 'Tirar o acesso', danger: true })) return;
+          try { await api(`/api/admin/professionals/${id}/review`, { method: 'POST', body: { ok: false } }); toast('Acesso retirado. Lembre de reembolsar pela SyncPay.'); refresh(); } catch (e) { toast(e.message, 'error'); }
+        });
         $('[data-edit-pro]', dlg)?.addEventListener('click', async () => {
           dlg.close(); dlg.remove();
           const saved = await editPro(p);

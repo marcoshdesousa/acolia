@@ -75,6 +75,16 @@ Sem conta, o visitante vê os profissionais na página inicial, mas **sem valore
 - 30 minutos depois do fim, a consulta fica **concluída** e a chamada é encerrada.
 - Uma varredura a cada 20 segundos cuida dos prazos. Conta apagada cancela as consultas futuras, com estorno automático quando é pelo Asaas.
 
+## Mensalidade pelo Pix (SyncPay, conta da Acolia)
+
+Só a **mensalidade da plataforma** (R$ 30,00 do profissional; R$ 49,90 da clínica). O dinheiro das **consultas** continua indo direto para o Asaas de cada profissional.
+
+- **Cadastro do profissional:** dados → "Confira seus dados" → plano → assina o Termo → **Pix** (QR Code e copia e cola). Pago: a conta é liberada na hora (aparece na vitrine), mostra o código e a **senha de acesso único** (uma vez só) e no primeiro acesso ele cria a própria senha.
+- **Conferência depois:** no admin aparece **"Conferir dados"**. "Conferido, está tudo certo" tira o aviso; "Dados errados: tirar o acesso" recusa a conta. O **reembolso** é feito no painel da SyncPay (o identificador aparece em "Pagamentos (Pix)").
+- **Renovação:** "Pagar (Pix)" no aviso de vencimento, "Pagar mensalidade (Pix)" em Conta e na tela de bloqueio (mensalidade vencida). Cada pagamento soma **30 dias**. A secretária não paga.
+- O site **pergunta para a SyncPay** se foi pago (a cada 4 s com a tela aberta e numa varredura a cada 2 min). O aviso (webhook) da SyncPay só serve para conferir na hora.
+- Para ligar: no Render → Environment, `SYNCPAY_CLIENT_ID` e `SYNCPAY_CLIENT_SECRET`; no painel da SyncPay, autorizar os IPs de saída do Render (Render → Connect → Outbound) e o webhook `https://acolia.onrender.com/api/plataforma/pagamento/webhook`.
+
 ## Atendimento (chamada)
 
 1. A chamada de cada consulta é criada sozinha 5 minutos antes (ver acima). O código do paciente começa com os **2 primeiros caracteres do código do profissional** + 6 caracteres aleatórios.
@@ -213,6 +223,7 @@ Testes: `npm test`
 | `ICE_SERVERS` | JSON com servidores STUN/TURN para as chamadas (ver abaixo) |
 | `CPF_API_URL`, `CPF_API_TOKEN`, `CPF_API_NAME_FIELD` | Conferência do nome com o CPF na Receita (ver abaixo) |
 | `REGISTRY_API_URL`, `REGISTRY_API_TOKEN`, `REGISTRY_API_NAME_FIELD`, `REGISTRY_API_ACTIVE_FIELD` | Consulta automática do CRP/CRM no conselho (ver abaixo) |
+| `SYNCPAY_CLIENT_ID`, `SYNCPAY_CLIENT_SECRET` | Mensalidade da Acolia pelo Pix na SyncPay (ver "Mensalidade pelo Pix"). Sem elas, o cadastro termina no WhatsApp como antes |
 
 ## Importante antes de colocar no ar
 

@@ -91,7 +91,7 @@
     let btn;
     let msg;
     if (isPro && a.blocked === 'vencido') {
-      text = `Sua assinatura terminou em <b>${brDate(a.until)}</b> e não foi renovada. Seu perfil está bloqueado e não aparece para ninguém — seus dados continuam guardados.<br>Para reativar a conta, renove sua assinatura com a nossa equipe.`;
+      text = `Sua assinatura terminou em <b>${brDate(a.until)}</b> e não foi renovada. Seu perfil está bloqueado e não aparece para ninguém — seus dados continuam guardados.<br>Para reativar a conta, renove sua assinatura.`;
       btn = 'Renovar assinatura';
       msg = isClinic ? `Olá! Sou da clínica ${who} na Acolia. A mensalidade venceu e quero renovar para reativar a conta.` : `Olá! Sou ${who}, profissional da Acolia. Minha assinatura venceu e quero renovar para reativar a conta.`;
     } else if (isPro) {
@@ -111,13 +111,25 @@
           <span class="blocked-ic">${ICONS.lock}</span>
           <h1>Perfil bloqueado</h1>
           <p>${text}</p>
-          <a class="btn block" href="${esc(supportLink(a.support, msg))}" target="_blank" rel="noopener">${ICONS.send} ${btn}</a>
+          <span data-renew-pix></span>
+          <a class="btn block" data-renew-wa href="${esc(supportLink(a.support, msg))}" target="_blank" rel="noopener">${ICONS.send} ${btn}</a>
           <button type="button" class="btn ghost sm" data-blocked-logout>Sair</button>
           <button type="button" class="link-danger" data-blocked-delete>Excluir conta permanentemente</button>
         </div>
       </main>`;
     $('[data-blocked-logout]').onclick = () => logout('/');
     $('[data-blocked-delete]').onclick = () => deleteAccountFlow(me.role);
+    // Mensalidade vencida: paga o Pix aqui mesmo e a conta volta na hora (a secretária não paga)
+    if (isPro && a.blocked === 'vencido' && !me.secretary) {
+      platformPixOn().then((on) => {
+        if (!on) return;
+        $('[data-renew-pix]').innerHTML = `<button type="button" class="btn block" data-pay-pix>Pagar mensalidade (Pix)</button>`;
+        $('[data-pay-pix]').onclick = () => renewPix();
+        const wa = $('[data-renew-wa]');
+        wa.classList.add('secondary');
+        wa.lastChild.textContent = ' Falar com a equipe';
+      });
+    }
   }
   // Aviso com "?" quando o profissional não recebe mensagens/agendamentos ou está sem agenda.
   // kind: 'msg' (não recebe mensagens), 'agenda' (não faz agendamentos), 'closed' (sem agenda aberta)
@@ -277,8 +289,16 @@
     el.className = 'notice warn renew-banner';
     el.innerHTML = `<div class="grow"><b>${a.ended ? 'Sua assinatura terminou' : 'Sua assinatura está acabando'}</b>
         <div class="small">${a.ended ? `O plano finalizou em <b>${brDate(a.until)}</b>. Renove agora para continuar aparecendo para os pacientes.` : `O plano finaliza em <b>${brDate(a.until)}</b>. Renove para continuar aparecendo para os pacientes.`}</div></div>
-      <a class="btn sm" target="_blank" rel="noopener" href="${esc(supportLink(a.support, `Olá! Sou ${u.name || ''}${u.code ? ` (código ${u.code})` : ''}, profissional da Acolia, e quero renovar minha assinatura.`))}">Renovar</a>`;
+      <a class="btn sm" data-renew-btn target="_blank" rel="noopener" href="${esc(supportLink(a.support, `Olá! Sou ${u.name || ''}${u.code ? ` (código ${u.code})` : ''}, ${me.role === 'clinic' ? 'da clínica' : 'profissional da'} Acolia, e quero renovar minha assinatura.`))}">Renovar</a>`;
     where.prepend(el);
+    // Com o Pix da Acolia ligado: "Renovar" abre o Pix (a secretária só vê o aviso)
+    if (me.secretary) { el.querySelector('[data-renew-btn]').remove(); return; }
+    platformPixOn().then((on) => {
+      if (!on) return;
+      const b = el.querySelector('[data-renew-btn]');
+      b.removeAttribute('href'); b.removeAttribute('target'); b.setAttribute('role', 'button'); b.textContent = 'Pagar (Pix)';
+      b.addEventListener('click', (e) => { e.preventDefault(); renewPix(); });
+    });
   }
   // Qualquer chamada respondeu "bloqueado": mostra a tela de bloqueio (uma vez só)
   let blockedShown = false;
@@ -533,6 +553,59 @@
 
   async function copyText(text) {
     try { await navigator.clipboard.writeText(text); toast('Copiado!'); } catch { toast('Não foi possível copiar. Selecione e copie manualmente.', 'error'); }
+  }
+
+
+  // ---------- Mensalidade da Acolia pelo Pix (SyncPay) ----------
+  // Mostra o QR Code e o "copia e cola" e confere sozinho a cada 4 s. Pago → onPaid(resposta).
+  function pixBox(host, pay, { poll, onPaid }) {
+    host.innerHTML = `<div class="stack center pix-card">
+        <div class="pix-value">${money(pay.amount_cents)}</div>
+        <div class="small muted">Libera ${pay.days || 30} dias de uso da plataforma</div>
+        ${pay.qr ? `<img class="pix-qr" src="${esc(pay.qr)}" alt="QR Code do Pix">` : ''}
+        <button type="button" class="btn block" data-copy-pix>${ICONS.copy} Copiar código Pix</button>
+        <p class="small muted" style="margin:0">Abra o app do seu banco, escolha <b>Pix → Pix copia e cola</b> (ou leia o QR Code) e pague. Depois volte aqui: a liberação é automática.</p>
+        <div class="pix-wait" data-wait><span class="spinner sm"></span> Aguardando o pagamento…</div>
+      </div>`;
+    $('[data-copy-pix]', host).addEventListener('click', () => copyText(pay.pix_code));
+    let stop = false;
+    let busy = false;
+    const tick = async () => {
+      if (stop || busy || !host.isConnected) { if (!host.isConnected) clearInterval(t); return; }
+      busy = true;
+      try {
+        const r = await api(poll);
+        if (r.status === 'pago') { stop = true; clearInterval(t); onPaid(r); }
+        else if (r.status !== 'pendente') {
+          stop = true; clearInterval(t);
+          $('[data-wait]', host).innerHTML = 'Este Pix não vale mais. Feche e gere outro.';
+        }
+      } catch { /* tenta de novo */ } finally { busy = false; }
+    };
+    const t = setInterval(tick, 4000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+    return { stop: () => { stop = true; clearInterval(t); } };
+  }
+  // Renovar a mensalidade (profissional ou clínica): gera o Pix e, pago, recarrega a página com a conta em dia
+  async function renewPix() {
+    let pay;
+    try { pay = await api('/api/plataforma/pagamento/renovar', { method: 'POST', body: {} }); } catch (e) { toast(e.message, 'error'); return; }
+    let box = null;
+    await modal({
+      title: 'Pagar mensalidade (Pix)', html: '<div data-pix-host></div>', actions: [{ label: 'Fechar', value: false, class: 'secondary' }],
+      onOpen(dlg) {
+        box = pixBox($('[data-pix-host]', dlg), pay, {
+          poll: `/api/plataforma/pagamento/renovar/${pay.id}`,
+          onPaid: () => { toast('Pagamento confirmado! Sua conta está em dia.'); setTimeout(() => location.reload(), 1200); },
+        });
+      },
+    });
+    box?.stop();
+  }
+  let pixOn = null; // a SyncPay está configurada? (vem do /api/config)
+  async function platformPixOn() {
+    if (pixOn === null) { try { pixOn = !!(await api('/api/config')).platform_pix; } catch { pixOn = false; } }
+    return pixOn;
   }
 
   // ---------- Estados e municípios (IBGE) ----------
@@ -934,7 +1007,7 @@
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
     supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
-    handleForm, logout, showBlocked, showNeedsCpf, showNeedsPassword, installBanner, namePicker, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
+    handleForm, logout, showBlocked, pixBox, renewPix, platformPixOn, showNeedsCpf, showNeedsPassword, installBanner, namePicker, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
     SOCIAL, socialLinks, socialFields,
   };
 })();

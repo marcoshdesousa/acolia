@@ -60,6 +60,8 @@ function createApp() {
   // Conta bloqueada: só consegue ver quem é (tela de bloqueio), sair e excluir a própria conta
   const BLOCKED_OK = ['/auth/me', '/auth/logout', '/config', '/professional/delete', '/patient/delete', '/clinic/delete', '/push/unsubscribe'];
   app.use('/api', (req, _res, next) => {
+    // Mensalidade vencida: pode pagar o Pix da renovação (e a conta volta na hora)
+    if (req.auth?.blocked === 'vencido' && req.path.startsWith('/plataforma/pagamento/renovar')) return next();
     if (req.auth?.blocked && !BLOCKED_OK.includes(req.path)) {
       return next(Object.assign(new U.HttpError(423, 'Perfil bloqueado. Fale com a administração.'), { blocked: true }));
     }
@@ -91,6 +93,7 @@ function createApp() {
   require('./clinics'); // tabela das clínicas (versão 1.3)
   require('./blocklist'); // lista de bloqueados (cria a tabela e inclui quem já estava bloqueado)
   app.use('/api/auth', require('./routes/auth').router);
+  app.use('/api/plataforma', require('./routes/platformPay').router); // mensalidade da Acolia pelo Pix (SyncPay)
   app.use('/api', require('./routes/public').router);
   app.use('/api/patient', require('./routes/patient').router);
   app.use('/api/clinic', require('./routes/clinic').router); // painel da clínica (versão 1.3)
@@ -218,6 +221,8 @@ async function start(port = Number(process.env.PORT) || 3000) {
   // Agenda: prazos do Pix, chamada automática, ausência do profissional, consultas concluídas
   const agenda = require('./agenda');
   setInterval(() => agenda.sweep(), 20 * 1000).unref();
+  // Mensalidade da Acolia (SyncPay): confere os Pix que ainda estão esperando
+  setInterval(() => require('./platformPay').sweep().catch((e) => console.warn('[syncpay]', e.message)), 2 * 60 * 1000).unref();
   // Fotos antigas: grava o formato do feed (4:5, 1:1 ou 1,91:1) para aparecerem recortadas certinho
   require('./routes/social').fixOldAspects().catch((e) => console.error('[formatos]', e.message));
   const app = createApp();

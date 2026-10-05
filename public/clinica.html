@@ -87,6 +87,7 @@
         <div><div class="muted small" style="font-weight:700">CÓDIGO DA CLÍNICA (LOGIN)</div><div class="code-box" data-code></div></div>
         <div class="row between"><span>Plano</span><b data-plan></b></div>
         <div class="row between"><span>Mensalidade paga até</span><b data-sub></b></div>
+        <button type="button" class="btn hidden" data-pay-month>Pagar mensalidade (Pix)</button>
       </div>
       <form class="card stack" data-pw-form style="margin-top:16px">
         <h2>Trocar senha</h2>
@@ -162,6 +163,7 @@
       $('[data-social]').innerHTML = Acolia.socialFields(me.social_values || {});
       $('[data-code]').textContent = me.code; $('[data-plan]').textContent = me.plan_label;
       $('[data-sub]').textContent = me.subscription_until ? me.subscription_until.split('-').reverse().join('/') : '—';
+      Acolia.platformPixOn().then((on) => { if (!on) return; $('[data-pay-month]').classList.remove('hidden'); $('[data-pay-month]').onclick = () => Acolia.renewPix(); });
       syncDocs();
     }
     const syncDocs = () => {

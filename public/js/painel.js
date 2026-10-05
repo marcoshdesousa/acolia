@@ -72,6 +72,15 @@
     if ($('[data-my-code2]')) $('[data-my-code2]').textContent = me.code || '';
     // (a engrenagem da secretária não tem esses campos)
     if ($('[data-sub]')) $('[data-sub]').textContent = fmtDate(me.subscription_until);
+    // Mensalidade pelo Pix da Acolia (quando ligado): +30 dias na hora (a secretária não vê)
+    if ($('[data-pay-month]') && !auth.secretary) {
+      Acolia.platformPixOn().then((on) => {
+        if (!on) return;
+        $('[data-pay-month]').classList.remove('hidden');
+        $('[data-pay-month]').onclick = () => Acolia.renewPix();
+        $('[data-renew-note]').textContent = 'A presença na vitrine depende da mensalidade em dia. Pague pelo Pix aqui: cada pagamento soma 30 dias.';
+      });
+    }
     if ($('[data-visibility]')) $('[data-visibility]').innerHTML = me.visible ? '<span class="badge ok">Visível para pacientes</span>'
       : me.status === 'restrito' ? '<span class="badge danger">Restrito pela administração</span>'
         : '<span class="badge warn">Oculto — mensalidade vencida</span>';
