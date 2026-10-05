@@ -21,8 +21,8 @@ const fake = () => process.env.SYNCPAY_FAKE === '1';
 const configured = () => fake() || (!!process.env.SYNCPAY_CLIENT_ID && !!process.env.SYNCPAY_CLIENT_SECRET);
 
 // Valor de cada plano (em centavos) e quantos dias cada pagamento libera
-// Mesmo valor para todos por enquanto: R$ 30,00 (a chave 'clinica-4990' é só o nome antigo do plano da clínica)
-const PRICES = { 'mensal-30': 3000, 'clinica-4990': 3000 };
+// Profissional: R$ 30,00. Clínica: R$ 49,90.
+const PRICES = { 'mensal-30': 3000, 'clinica-4990': 4990 };
 const DAYS = 30;
 
 db.exec(`CREATE TABLE IF NOT EXISTS platform_payments (

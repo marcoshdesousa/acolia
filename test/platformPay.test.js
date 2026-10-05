@@ -144,13 +144,13 @@ test('cadastro com Pix: pago → aprovado na hora, senha única mostrada uma vez
   assert.equal((await anon.post('/api/plataforma/pagamento/renovar')).status, 403);
 });
 
-test('clínica com Pix: usa os dados do cadastro (CNPJ), R$ 30,00, liberada na hora; admin confere', async () => {
+test('clínica com Pix: usa os dados do cadastro (CNPJ), R$ 49,90, liberada na hora; admin confere', async () => {
   const LOGO = { field: 'photo', data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), type: 'image/png', name: 'logo.png' };
   const base0 = { name: 'Clínica Pix Teste', email: 'pix@clinica.example.com', phone: '(11) 98888-7777', state: 'SP', city: 'Campinas', address: 'Rua das Flores, 10', plan: 'clinica-4990' };
   const anon = client();
   const r = await anon.form('/api/auth/clinic/register', { ...base0, doc: '11.222.333/0001-81' }, LOGO);
   assert.equal(r.status, 201, JSON.stringify(r.data));
-  assert.equal(r.data.pay.amount_cents, 3000);
+  assert.equal(r.data.pay.amount_cents, 4990);
   const row = db.prepare('SELECT * FROM platform_payments WHERE id = ?').get(r.data.pay.id);
   PP()._fakePay(row.identifier);
   const s = await anon.get(`/api/plataforma/pagamento/cadastro/${r.data.pay.id}?token=${r.data.pay.token}`);
@@ -167,7 +167,7 @@ test('clínica com Pix: usa os dados do cadastro (CNPJ), R$ 30,00, liberada na h
   // renovação: um clique, com os dados que a clínica já tem
   const ren = await cl.post('/api/plataforma/pagamento/renovar');
   assert.equal(ren.status, 200, JSON.stringify(ren.data));
-  assert.equal(ren.data.amount_cents, 3000);
+  assert.equal(ren.data.amount_cents, 4990);
 
   const admin = client();
   await admin.post('/api/auth/admin/login', { username: 'admin', password: 'senha-admin-123' });

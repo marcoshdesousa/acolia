@@ -50,7 +50,7 @@
           <span class="plan-check" aria-hidden="true"></span>
           <span class="plan-body">
             <span class="plan-top"><span class="plan-name">Plano Clínica</span><span class="plan-tag">Mensal</span></span>
-            <span class="plan-price"><b>R$ 30,00</b> <small>a cada 30 dias</small></span>
+            <span class="plan-price"><b>R$ 49,90</b> <small>a cada 30 dias</small></span>
             <span class="plan-chips"><span class="pc">Perfil da clínica</span><span class="pc">Endereço e mapa</span><span class="pc">Publicações</span></span>
           </span>
         </label>
@@ -182,7 +182,7 @@
         const val = (n) => String(form.elements[n].value || '').trim();
         const msg = ['Olá, Acolia! Quero finalizar o cadastro da minha clínica.', '',
           `Clínica: ${val('name')}`, `CPF/CNPJ do dono: ${val('doc')}`, `Endereço: ${val('address')} — ${val('city')} - ${val('state')}`,
-          `E-mail: ${val('email')}`, `WhatsApp: ${val('phone')}`, 'Plano: Plano Clínica (R$ 30,00 a cada 30 dias)', `Código: ${r.code}`]
+          `E-mail: ${val('email')}`, `WhatsApp: ${val('phone')}`, 'Plano: Plano Clínica (R$ 49,90 a cada 30 dias)', `Código: ${r.code}`]
           .join('\n');
         $('[data-pending-box]').innerHTML = `<div class="notice info" style="text-align:left"><b>Para terminar o cadastro, toque em "Finalizar cadastro".</b><br>Você vai para o nosso WhatsApp com a mensagem pronta e os dados da clínica: é só enviar.</div>
           <a class="btn block" href="${esc(Acolia.supportLink(r.support, msg))}" target="_blank" rel="noopener">${ICONS.send} Finalizar cadastro</a>`;
