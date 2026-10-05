@@ -395,6 +395,42 @@
   }
 
   const PAY_BADGE = { pago: '<span class="badge ok">Pago</span>', pendente: '<span class="badge">Esperando</span>', reembolsado: '<span class="badge warn">Reembolsado</span>', cancelado: '<span class="badge">Cancelado</span>' };
+  // Testar a SyncPay (chaves + Pix de R$ 1,00)
+  (function syncpayTest() {
+    const card = $('[data-syncpay-card]');
+    if (!card) return;
+    const say = (el, ok, text) => { el.innerHTML = `<div class="notice ${ok ? 'info' : 'danger'} small" style="margin:0">${text}</div>`; };
+    $('[data-sp-keys]', card).addEventListener('click', async (e) => {
+      const b = e.currentTarget; b.disabled = true;
+      try { const r = await api('/api/admin/syncpay/test', { method: 'POST', body: {} }); say($('[data-sp-keys-out]', card), r.ok, r.ok ? '<b>Chaves certas.</b> A SyncPay aceitou o Client ID e o Client Secret.' : esc(r.message)); }
+      catch (ex) { say($('[data-sp-keys-out]', card), false, esc(ex.message)); } finally { b.disabled = false; }
+    });
+    Acolia.maskCpf($('[data-sp-form]', card).cpf);
+    maskPhone($('[data-sp-form]', card).phone);
+    let poll = null;
+    $('[data-sp-form]', card).addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.currentTarget; const out = $('[data-sp-out]', card);
+      const btn = f.querySelector('button'); btn.disabled = true;
+      clearInterval(poll);
+      try {
+        const r = await api('/api/admin/syncpay/test', { method: 'POST', body: { charge: true, name: f.name.value, cpf: f.cpf.value, email: f.email.value, phone: f.phone.value } });
+        if (!r.ok) { say(out, false, esc(r.message)); return; }
+        out.innerHTML = `<div class="notice info small" style="margin:0"><b>Pix gerado! A ligação com a SyncPay está funcionando.</b> Pague para ver a confirmação chegar.</div>
+          <div class="stack center pix-card" style="margin-top:10px"><img class="pix-qr" src="${esc(r.qr)}" alt="QR Code do Pix de teste">
+          <button type="button" class="btn sm" data-sp-copy>Copiar código Pix</button><div class="pix-wait" data-sp-wait><span class="spinner sm"></span> Aguardando o pagamento…</div></div>`;
+        $('[data-sp-copy]', out).onclick = () => copyText(r.pix_code);
+        poll = setInterval(async () => {
+          if (!out.isConnected) return clearInterval(poll);
+          try {
+            const s = await api(`/api/admin/syncpay/test/${encodeURIComponent(r.identifier)}`);
+            if (s.status === 'pago') { clearInterval(poll); $('[data-sp-wait]', out).innerHTML = '<span class="badge ok">Pagamento confirmado</span> Tudo funcionando: o site recebe a confirmação da SyncPay.'; }
+          } catch { /* tenta de novo */ }
+        }, 5000);
+      } catch (ex) { say(out, false, esc(ex.message)); } finally { btn.disabled = false; }
+    });
+  })();
+
   async function openPro(id) {
     const p = await api(`/api/admin/professionals/${id}`);
     const btn = (status, label, cls = 'secondary') => `<button type="button" class="btn sm ${cls}" data-set="${status}">${label}</button>`;

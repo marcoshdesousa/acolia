@@ -128,6 +128,10 @@ test('cadastro com Pix: pago → aprovado na hora, senha única mostrada uma vez
   // admin: aparece "conferir"; reprovar tira o acesso
   const admin = client();
   await admin.post('/api/auth/admin/login', { username: 'admin', password: 'senha-admin-123' });
+  assert.equal((await admin.post('/api/admin/syncpay/test', {})).data.ok, true);
+  assert.equal((await admin.post('/api/admin/syncpay/test', { charge: true, name: 'Dono Teste', cpf: '529.982.247-25', email: 'x@y.com', phone: '11999998888' })).data.ok, true);
+  assert.equal((await admin.post('/api/admin/syncpay/test', { charge: true, name: 'Dono Teste', cpf: '111', email: 'x@y.com', phone: '11999998888' })).status, 400);
+  assert.equal((await anon.post('/api/admin/syncpay/test', {})).status, 401);
   const det = await admin.get(`/api/admin/professionals/${p.id}`);
   assert.equal(det.data.review_pending, true);
   assert.equal(det.data.payments.length, 3);
