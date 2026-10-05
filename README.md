@@ -81,6 +81,8 @@ Só a **mensalidade da plataforma** (R$ 30,00 do profissional; R$ 49,90 da clín
 
 - **Cadastro do profissional:** dados → "Confira seus dados" → plano → assina o Termo → **Pix** (QR Code e copia e cola). Pago: a conta é liberada na hora (aparece na vitrine), mostra o código e a **senha de acesso único** (uma vez só) e no primeiro acesso ele cria a própria senha.
 - **Conferência depois:** no admin aparece **"Conferir dados"**. "Conferido, está tudo certo" tira o aviso; "Dados errados: tirar o acesso" recusa a conta. O **reembolso** é feito no painel da SyncPay (o identificador aparece em "Pagamentos (Pix)").
+- **Cadastro da clínica:** dados → plano → **Pix** (R$ 49,90). Pago: a clínica é liberada na hora, com o código e a senha de acesso único. Com **CNPJ**, pede o nome e o CPF do responsável (o Pix sai no nome dele); clínica antiga com CNPJ informa o CPF uma vez, na primeira renovação. No admin, a mesma conferência ("Conferir dados").
+- **Quem paga o quê:** só a mensalidade de profissionais e clínicas passa pela Acolia. Consultas vão direto para o profissional (Asaas dele ou Pix manual) e o paciente não paga nada para a Acolia.
 - **Renovação:** "Pagar (Pix)" no aviso de vencimento, "Pagar mensalidade (Pix)" em Conta e na tela de bloqueio (mensalidade vencida). Cada pagamento soma **30 dias**. A secretária não paga.
 - O site **pergunta para a SyncPay** se foi pago (a cada 4 s com a tela aberta e numa varredura a cada 2 min). O aviso (webhook) da SyncPay só serve para conferir na hora.
 - Para ligar: no Render → Environment, `SYNCPAY_CLIENT_ID` e `SYNCPAY_CLIENT_SECRET`; no painel da SyncPay, autorizar os IPs de saída do Render (Render → Connect → Outbound) e o webhook `https://acolia.onrender.com/api/plataforma/pagamento/webhook`.

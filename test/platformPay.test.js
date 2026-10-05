@@ -28,9 +28,10 @@ function client() {
     if (set) cookie = set.split(';')[0];
     return { status: res.status, data: await res.json().catch(() => null) };
   };
-  const form = async (url, fields) => {
+  const form = async (url, fields, file) => {
     const fd = new FormData();
     for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+    if (file) fd.append(file.field, new Blob([file.data], { type: file.type }), file.name);
     const res = await fetch(base + url, { method: 'POST', body: fd });
     return { status: res.status, data: await res.json().catch(() => null) };
   };
@@ -141,4 +142,50 @@ test('cadastro com Pix: pago → aprovado na hora, senha única mostrada uma vez
   assert.equal((await pro.get('/api/professional/me')).status, 401);
   // paciente não paga mensalidade
   assert.equal((await anon.post('/api/plataforma/pagamento/renovar')).status, 403);
+});
+
+test('clínica com Pix: pago → liberada na hora; CNPJ pede o CPF do responsável; admin confere', async () => {
+  const LOGO = { field: 'photo', data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), type: 'image/png', name: 'logo.png' };
+  const base0 = { name: 'Clínica Pix Teste', email: 'pix@clinica.example.com', phone: '(11) 98888-7777', state: 'SP', city: 'Campinas', address: 'Rua das Flores, 10', plan: 'clinica-4990' };
+  const anon = client();
+  // CNPJ sem o CPF do responsável: não deixa
+  let r = await anon.form('/api/auth/clinic/register', { ...base0, doc: '11.222.333/0001-81', responsible: 'Paula Dias Reis' }, LOGO);
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /CPF do respons/);
+  r = await anon.form('/api/auth/clinic/register', { ...base0, doc: '11.222.333/0001-81', responsible: 'Paula Dias Reis', responsible_cpf: cpfOf(5151) }, LOGO);
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.pay.amount_cents, 4990);
+  const row = db.prepare('SELECT * FROM platform_payments WHERE id = ?').get(r.data.pay.id);
+  PP()._fakePay(row.identifier);
+  const s = await anon.get(`/api/plataforma/pagamento/cadastro/${r.data.pay.id}?token=${r.data.pay.token}`);
+  assert.equal(s.data.status, 'pago');
+  assert.ok(s.data.password);
+  const c = db.prepare('SELECT * FROM clinics WHERE code = ?').get(r.data.code);
+  assert.equal(c.status, 'aprovado');
+  assert.equal(c.review_pending, 1);
+  assert.equal(c.must_change_password, 1);
+
+  const cl = client();
+  assert.equal((await cl.post('/api/auth/clinic/login', { login: r.data.code, password: s.data.password })).status, 200);
+  assert.equal((await cl.post('/api/clinic/first-password', { password: 'clinica123', confirm: 'clinica123' })).status, 200);
+  // renovação: já tem o CPF do responsável
+  const ren = await cl.post('/api/plataforma/pagamento/renovar');
+  assert.equal(ren.status, 200, JSON.stringify(ren.data));
+  assert.equal(ren.data.amount_cents, 4990);
+  // clínica antiga com CNPJ e sem CPF do responsável: pede uma vez
+  db.prepare("UPDATE clinics SET responsible_cpf = NULL, responsible = '' WHERE id = ?").run(c.id);
+  db.prepare("UPDATE platform_payments SET status = 'cancelado' WHERE id = ?").run(ren.data.id);
+  let n = await cl.post('/api/plataforma/pagamento/renovar');
+  assert.equal(n.status, 400);
+  assert.equal(n.data.need_cpf, true);
+  n = await cl.post('/api/plataforma/pagamento/renovar', { responsible_cpf: cpfOf(5151), responsible: 'Paula Dias Reis' });
+  assert.equal(n.status, 200, JSON.stringify(n.data));
+  assert.equal(db.prepare('SELECT responsible FROM clinics WHERE id = ?').get(c.id).responsible, 'Paula Dias Reis');
+
+  const admin = client();
+  await admin.post('/api/auth/admin/login', { username: 'admin', password: 'senha-admin-123' });
+  const det = await admin.get(`/api/admin/clinics/${c.id}`);
+  assert.equal(det.data.review_pending, true);
+  assert.ok(det.data.payments.length >= 2);
+  assert.equal((await admin.post(`/api/admin/clinics/${c.id}/review`, { ok: true })).data.review_pending, false);
 });

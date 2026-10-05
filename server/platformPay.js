@@ -42,6 +42,9 @@ db.exec(`CREATE TABLE IF NOT EXISTS platform_payments (
 )`);
 db.exec('CREATE INDEX IF NOT EXISTS idx_pp_user ON platform_payments(role, user_id, id)');
 try { db.exec('ALTER TABLE professionals ADD COLUMN review_pending INTEGER NOT NULL DEFAULT 0'); } catch { /* já existe */ }
+try { db.exec('ALTER TABLE clinics ADD COLUMN review_pending INTEGER NOT NULL DEFAULT 0'); } catch { /* já existe */ }
+// Clínica com CNPJ: o Pix pede um CPF de quem paga (o responsável)
+try { db.exec('ALTER TABLE clinics ADD COLUMN responsible_cpf TEXT'); } catch { /* já existe */ }
 
 // ---------- SyncPay ----------
 let tok = null; // { value, until } — o token vale 1 hora: só pede outro quando vencer
@@ -104,6 +107,13 @@ async function providerStatus(identifier) {
   return 'pendente';
 }
 
+// Quem paga o Pix da clínica: o dono (CPF) ou, com CNPJ, o responsável com o CPF dele
+function clinicPayer(c) {
+  const cpf = c.doc_type === 'cpf' && c.doc ? c.doc : (c.responsible_cpf || '');
+  if (!U.isValidCpf(cpf)) return null;
+  return { name: c.responsible || c.name, cpf, email: c.email, phone: c.phone };
+}
+
 // ---------- Cobranças ----------
 const siteUrl = () => (process.env.SITE_URL || 'https://acolia.onrender.com').replace(/\/+$/, '');
 const QR = (code) => require('qrcode').toDataURL(code, { margin: 1, width: 360 });
@@ -143,8 +153,7 @@ function apply(p) {
   const until = U.addDaysISO(from, DAYS);
   if (p.kind === 'cadastro' && u.status === 'pendente') {
     const password = U.randomPassword();
-    const extra = table === 'professionals' ? ', review_pending = 1' : '';
-    db.prepare(`UPDATE ${table} SET status = 'aprovado', subscription_until = ?, password_hash = ?, must_change_password = 1${extra} WHERE id = ?`)
+    db.prepare(`UPDATE ${table} SET status = 'aprovado', subscription_until = ?, password_hash = ?, must_change_password = 1, review_pending = 1 WHERE id = ?`)
       .run(until, U.hashPassword(password), u.id);
     db.prepare('UPDATE platform_payments SET reveal = ? WHERE id = ?').run(require('./secretBox').seal(password), p.id);
   } else {
@@ -225,4 +234,4 @@ const testStatus = (identifier) => providerStatus(String(identifier));
 
 const _fakePay = (identifier, status = 'completed') => { if (FAKE.has(identifier)) FAKE.get(identifier).status = status; };
 
-module.exports = { configured, PRICES, DAYS, create, out, check, sweep, onWebhook, testKeys, testCharge, testStatus, _fakePay };
+module.exports = { configured, PRICES, DAYS, create, out, check, sweep, onWebhook, testKeys, testCharge, testStatus, clinicPayer, _fakePay };

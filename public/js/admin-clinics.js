@@ -4,6 +4,7 @@
   const { $, $$, api, esc, toast, modal, confirmDialog, copyText, fmtPhone, ufOptions, bindUfCity, maskPhone } = window.Acolia;
   const BADGE = { pendente: ['Aguardando', 'warn'], aprovado: ['Aprovada', 'ok'], recusado: ['Recusada', 'danger'], bloqueado: ['Bloqueada', 'danger'], excluido: ['Apagada', ''] };
   const badge = (st) => `<span class="badge ${BADGE[st]?.[1] || ''}">${BADGE[st]?.[0] || esc(st)}</span>`;
+  const PAY = { pago: '<span class="badge ok">Pago</span>', pendente: '<span class="badge">Esperando</span>', reembolsado: '<span class="badge warn">Reembolsado</span>', cancelado: '<span class="badge">Cancelado</span>' };
   const br = (d) => (d ? d.split('-').reverse().join('/') : '—');
   let status = '';
   let timer = null;
@@ -18,7 +19,7 @@
     items.forEach((c) => ITEMS.set(c.id, c));
     $('[data-crows]').innerHTML = items.length ? items.map((c) => `<tr>
         <td><div class="row" style="flex-wrap:nowrap">${window.AcoliaClinicsLogo(c)}<div><b>${esc(c.name)}</b><div class="small muted">${esc(c.email)} · <code>${esc(c.code)}</code></div></div></div></td>
-        <td style="white-space:nowrap">${esc(c.doc || '—')}</td><td>${esc(c.city)} - ${esc(c.state)}</td><td>${badge(c.status)}</td>
+        <td style="white-space:nowrap">${esc(c.doc || '—')}</td><td>${esc(c.city)} - ${esc(c.state)}</td><td>${badge(c.status)}${c.review_pending ? ' <span class="badge warn" title="Pagou o Pix e entrou direto: confira os dados">Conferir dados</span>' : ''}</td>
         <td>${c.status === 'aprovado' ? (c.visible ? `<span class="badge ok">Até ${br(c.subscription_until)}</span>` : `<span class="badge danger">Vencida ${br(c.subscription_until)}</span>`) : '—'}</td>
         <td><button class="btn secondary sm" data-copen="${c.id}">Gerenciar</button></td></tr>`).join('')
       : '<tr><td colspan="6" class="center muted">Nenhuma clínica encontrada.</td></tr>';
@@ -36,6 +37,9 @@
     await modal({
       title: c.name,
       html: `<div class="row" style="margin-bottom:12px">${c.logo ? `<span class="avatar lg clinic-logo"><img src="${esc(c.logo)}" alt=""></span>` : ''}<div>${badge(c.status)} ${c.visible ? '<span class="badge primary">Aparece para os pacientes</span>' : ''}</div></div>
+        ${c.review_pending ? `<div class="notice warn" style="margin-bottom:12px"><b>Pago, aguardando conferência.</b> Pagou o Pix no cadastro e a clínica foi liberada na hora. Confira os dados abaixo.
+          <div class="row" style="margin-top:8px"><button type="button" class="btn sm" data-creview-ok>Conferido, está tudo certo</button>
+          <button type="button" class="btn danger sm" data-creview-no>Dados errados: tirar o acesso</button></div></div>` : ''}
         <table class="kv-table" style="font-size:.9rem"><tbody>
           <tr><th>Código</th><td><code style="font-weight:800">${esc(c.code)}</code> <button type="button" class="btn ghost sm" data-ccopy>Copiar</button></td></tr>
           <tr><th>Link</th><td>${c.slug ? `<a href="/${esc(c.slug)}" target="_blank" rel="noopener">${esc(location.host)}/${esc(c.slug)}</a>` : '—'}</td></tr>
@@ -45,7 +49,10 @@
           <tr><th>WhatsApp</th><td><a href="https://wa.me/${c.phone.length <= 11 ? '55' + c.phone : c.phone}" target="_blank" rel="noopener">${esc(fmtPhone(c.phone))}</a></td></tr>
           <tr><th>Endereço</th><td>${esc(c.address)}<div class="small muted">${esc(c.city)} - ${esc(c.state)}</div>${c.maps_url ? `<a class="small" href="${esc(c.maps_url)}" target="_blank" rel="noopener">Abrir no Google Maps</a>` : ''}</td></tr>
           <tr><th>Médicos</th><td>${c.has_doctors ? esc(c.doctors.join(' · ')) : 'Não'}</td></tr>
+          ${c.responsible_cpf ? `<tr><th>CPF do responsável</th><td>${esc(c.responsible_cpf)}</td></tr>` : ''}
           <tr><th>Plano</th><td>${esc(c.plan_label)}</td></tr>
+          ${c.payments?.length ? `<tr><th>Pagamentos (Pix)</th><td>${c.payments.map((x) => `<div class="small">${esc(String(x.paid_at || x.created_at).slice(0, 10).split('-').reverse().join('/'))} · ${x.kind === 'cadastro' ? 'Cadastro' : 'Renovação'} · ${window.Acolia.money(x.amount_cents)} · ${PAY[x.status] || esc(x.status)}
+            <div class="muted" style="word-break:break-all">SyncPay: ${esc(x.identifier || '—')}</div></div>`).join('')}</td></tr>` : ''}
           <tr><th>Cadastro</th><td>${esc(String(c.created_at).slice(0, 10).split('-').reverse().join('/'))}</td></tr>
         </tbody></table>
         ${c.status !== 'excluido' ? '<button type="button" class="btn sm" data-cedit style="margin-top:10px">Editar dados</button>' : ''}
@@ -59,6 +66,14 @@
       onOpen: (dlg) => {
         const again = async () => { dlg.close(); dlg.remove(); await load(); open(id); };
         $('[data-ccopy]', dlg).addEventListener('click', () => copyText(c.code));
+        $('[data-creview-ok]', dlg)?.addEventListener('click', async () => {
+          try { await api(`/api/admin/clinics/${id}/review`, { method: 'POST', body: { ok: true } }); toast('Conferido.'); again(); } catch (ex) { toast(ex.message, 'error'); }
+        });
+        $('[data-creview-no]', dlg)?.addEventListener('click', async () => {
+          const paid = (c.payments || []).find((x) => x.kind === 'cadastro' && x.status === 'pago');
+          if (!await confirmDialog(`Tirar o acesso da clínica ${c.name}? Ela sai da plataforma e não consegue mais entrar. Depois, faça o reembolso do Pix pelo painel da SyncPay${paid ? ` (identificador ${paid.identifier})` : ''}.`, { okLabel: 'Tirar o acesso', danger: true })) return;
+          try { await api(`/api/admin/clinics/${id}/review`, { method: 'POST', body: { ok: false } }); toast('Acesso retirado. Lembre de reembolsar pela SyncPay.'); again(); } catch (ex) { toast(ex.message, 'error'); }
+        });
         $$('[data-cset]', dlg).forEach((x) => x.addEventListener('click', async () => {
           const st = x.dataset.cset;
           if (!await confirmDialog({ aprovado: 'Aprovar esta clínica?', recusado: 'Recusar o cadastro desta clínica?', bloqueado: 'Bloquear esta clínica? Ela entra, mas só vê a tela de bloqueio, e some para os pacientes.' }[st], { danger: st !== 'aprovado' })) return;

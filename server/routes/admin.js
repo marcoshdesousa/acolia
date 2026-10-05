@@ -437,7 +437,8 @@ router.post('/patients/:id/delete-test', (req, res) => {
 // ---------- Clínicas (versão 1.3) ----------
 function adminClinic(c) {
   const C = require('../clinics');
-  return { ...C.ownClinic(c), visible: C.isVisible(c), created_at: c.created_at, admin_note: c.admin_note, maps_query: undefined };
+  return { ...C.ownClinic(c), visible: C.isVisible(c), created_at: c.created_at, admin_note: c.admin_note, maps_query: undefined,
+    review_pending: !!c.review_pending, responsible_cpf: c.responsible_cpf ? U.formatCpf(c.responsible_cpf) : '' };
 }
 router.get('/clinics', (req, res) => {
   let rows = db.prepare("SELECT * FROM clinics ORDER BY created_at DESC").all();
@@ -454,7 +455,22 @@ const loadClinic = (id) => {
   if (!c) throw new U.HttpError(404, 'Clínica não encontrada.');
   return c;
 };
-router.get('/clinics/:id', (req, res) => res.json(adminClinic(loadClinic(req.params.id))));
+router.get('/clinics/:id', (req, res) => {
+  const c = loadClinic(req.params.id);
+  const payments = db.prepare("SELECT id, kind, amount_cents, identifier, status, created_at, paid_at FROM platform_payments WHERE role = 'clinic' AND user_id = ? ORDER BY id DESC LIMIT 24").all(c.id);
+  res.json({ ...adminClinic(c), payments });
+});
+// Conferência depois do pagamento (igual à do profissional): "Conferido" ou "Reprovar" (tira o acesso; reembolso na SyncPay)
+router.post('/clinics/:id/review', (req, res) => {
+  const c = loadClinic(req.params.id);
+  if (req.body.ok === true) db.prepare('UPDATE clinics SET review_pending = 0 WHERE id = ?').run(c.id);
+  else {
+    const note = `${c.admin_note ? `${c.admin_note}\n` : ''}[${U.todayISO()}] Reprovada na conferência dos dados: reembolsar o Pix pelo painel da SyncPay.`.slice(0, 1000);
+    db.prepare("UPDATE clinics SET review_pending = 0, status = 'recusado', admin_note = ? WHERE id = ?").run(note, c.id);
+    A.destroyUserSessions('clinic', c.id);
+  }
+  res.json(adminClinic(loadClinic(c.id)));
+});
 router.post('/clinics/:id/status', (req, res) => {
   const c = loadClinic(req.params.id);
   const status = req.body.status;

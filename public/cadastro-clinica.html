@@ -29,6 +29,12 @@
           <div class="hint">Obrigatória. Aparece no perfil da clínica (JPG, PNG ou WEBP, até 3 MB).</div></div>
         <div class="field"><label for="doc">CPF ou CNPJ do dono da clínica</label><input id="doc" name="doc" inputmode="numeric" required placeholder="CPF ou CNPJ">
           <div class="hint">Cada CPF/CNPJ pode ter só uma clínica.</div></div>
+        <!-- Com o Pix da Acolia e CNPJ: quem paga é o responsável (o Pix pede um CPF) -->
+        <div class="grid-2 hidden" data-resp-fields>
+          <div class="field"><label for="responsible">Nome completo do responsável</label><input id="responsible" name="responsible" maxlength="120" autocomplete="name"></div>
+          <div class="field"><label for="responsible_cpf">CPF do responsável</label><input id="responsible_cpf" name="responsible_cpf" inputmode="numeric" placeholder="000.000.000-00">
+            <div class="hint">Com CNPJ, o Pix da mensalidade sai no nome do responsável.</div></div>
+        </div>
         <div class="grid-2">
           <div class="field"><label for="email">E-mail</label><input id="email" name="email" type="email" required autocomplete="email"></div>
           <div class="field"><label for="phone">WhatsApp da clínica</label><input id="phone" name="phone" inputmode="tel" required placeholder="(11) 99999-9999">
@@ -55,12 +61,29 @@
           </span>
         </label>
         <p class="small muted" style="margin:12px 0 0">Cada profissional da clínica tem a própria conta na Acolia (com o plano dele).</p>
+        <p class="small muted hidden" style="margin:8px 0 0" data-pix-note>Depois de avançar, você paga pelo <b>Pix</b> e a clínica é liberada na hora. A equipe Acolia confere os dados depois; se algo estiver errado, o acesso é encerrado e o valor é devolvido.</p>
         <div class="form-error hidden" data-plan-err style="margin-top:12px"></div>
         <div class="row" style="gap:10px;margin-top:16px">
           <button class="btn secondary" type="button" data-plan-back>Voltar</button>
           <button class="btn grow" type="button" data-plan-go>Avançar</button>
         </div>
       </div>
+    </div>
+    <div data-pay-step class="hidden">
+      <h1 class="center">Pagamento do plano</h1>
+      <p class="center muted">Pague o Pix e a clínica é liberada na hora. Não feche esta página.</p>
+      <div class="card" data-pay-box></div>
+    </div>
+    <div data-paid-step class="hidden card stack center">
+      <h1>Pagamento confirmado! A clínica está liberada.</h1>
+      <p>A clínica já aparece para os pacientes. Anote os dados de acesso (tire um print):</p>
+      <div class="muted small" style="font-weight:700">CÓDIGO DA CLÍNICA (LOGIN)</div>
+      <div class="code-box" data-paid-code></div>
+      <div class="muted small" style="font-weight:700">SENHA DE ACESSO ÚNICO</div>
+      <div class="code-box" data-paid-pw></div>
+      <div class="notice info" style="text-align:left">Esta senha só vale para o <b>primeiro acesso</b>: ao entrar, vocês criam a própria senha. Depois, completem o perfil no painel (mapa, médicos, redes sociais e "Sobre a clínica").</div>
+      <div class="row" style="justify-content:center"><button class="btn secondary" type="button" data-copy-paid>Copiar código e senha</button></div>
+      <a class="btn block" href="/entrar#clinica">Entrar agora</a>
     </div>
     <div data-step2 class="hidden card stack center">
       <h1>A conta da clínica está quase pronta!</h1>
@@ -103,14 +126,47 @@
       $('[data-step1]').classList.toggle('hidden', step !== 1);
       $('[data-plan-step]').classList.toggle('hidden', step !== 2);
       $('[data-step2]').classList.toggle('hidden', step !== 3);
+      $('[data-pay-step]').classList.toggle('hidden', step !== 'pay');
+      $('[data-paid-step]').classList.toggle('hidden', step !== 'paid');
       scrollTo(0, 0);
     };
+    // Pix da Acolia ligado: paga no cadastro e a clínica é liberada na hora
+    const pix = !!cfg.platform_pix;
+    const isCnpj = () => form.doc.value.replace(/\D/g, '').length > 11;
+    if (pix) {
+      $('[data-pix-note]').classList.remove('hidden');
+      $('[data-step1] > p.center.muted').textContent = 'Coloque a sua clínica na Acolia: perfil próprio com endereço e mapa, seus profissionais da mente e publicações. Pagou o Pix, a clínica já aparece.';
+      Acolia.maskCpf(form.responsible_cpf);
+      form.doc.addEventListener('input', () => $('[data-resp-fields]').classList.toggle('hidden', !isCnpj()));
+    }
+    function startPay(pay, code) {
+      show('pay');
+      Acolia.pixBox($('[data-pay-box]'), pay, {
+        poll: `/api/plataforma/pagamento/cadastro/${pay.id}?token=${encodeURIComponent(pay.token)}`,
+        onPaid(x) {
+          try { localStorage.removeItem('acolia_cad_pay_cl'); } catch { /* nada */ }
+          $('[data-paid-code]').textContent = x.code || code;
+          $('[data-paid-pw]').textContent = x.password || '(já mostrada antes)';
+          $('[data-copy-paid]').onclick = () => copyText(`Código: ${x.code || code}\nSenha de acesso único: ${x.password || ''}`);
+          show('paid');
+        },
+      });
+    }
+    try {
+      const saved = JSON.parse(localStorage.getItem('acolia_cad_pay_cl') || 'null');
+      if (saved && Date.now() - saved.at < 12 * 3600e3) startPay(saved, saved.code);
+      else localStorage.removeItem('acolia_cad_pay_cl');
+    } catch { /* nada */ }
     handleForm(form, async () => {
       const v = (n) => String(form.elements[n].value || '').trim();
       if (v('name').length < 2) throw new Error('Informe o nome da clínica.');
       if (!logoFile) throw new Error('Escolha a logo da clínica.');
       const d = v('doc').replace(/\D/g, '');
       if (!(d.length === 11 ? Acolia.isValidCpf(d) : d.length === 14)) throw new Error('Informe um CPF ou CNPJ válido do dono da clínica.');
+      if (pix && d.length === 14) {
+        if (v('responsible').split(/\s+/).length < 2) throw new Error('Informe o nome completo do responsável.');
+        if (!Acolia.isValidCpf(v('responsible_cpf').replace(/\D/g, ''))) throw new Error('Informe o CPF do responsável.');
+      }
       if (!/^\S+@\S+\.\S+$/.test(v('email'))) throw new Error('Confira o e-mail.');
       if (v('phone').replace(/\D/g, '').length < 10) throw new Error('Informe o WhatsApp com DDD.');
       if (!v('state') || v('city').length < 2) throw new Error('Informe o estado e o município.');
@@ -127,10 +183,16 @@
       try {
         const fd = new FormData();
         for (const n of ['name', 'doc', 'email', 'phone', 'state', 'city', 'address']) fd.append(n, form.elements[n].value);
+        if (pix && isCnpj()) { fd.append('responsible', form.responsible.value); fd.append('responsible_cpf', form.responsible_cpf.value); }
         fd.append('plan', plan.value);
         fd.append('photo', logoFile, 'logo.jpg');
         const r = await api('/api/auth/clinic/register', { method: 'POST', form: fd });
         $('[data-code]').textContent = r.code;
+        if (r.pay) {
+          try { localStorage.setItem('acolia_cad_pay_cl', JSON.stringify({ ...r.pay, code: r.code, at: Date.now() })); } catch { /* sem armazenamento */ }
+          startPay(r.pay, r.code);
+          return;
+        }
         const val = (n) => String(form.elements[n].value || '').trim();
         const msg = ['Olá, Acolia! Quero finalizar o cadastro da minha clínica.', '',
           `Clínica: ${val('name')}`, `CPF/CNPJ do dono: ${val('doc')}`, `Endereço: ${val('address')} — ${val('city')} - ${val('state')}`,

@@ -43,9 +43,20 @@ router.post('/pagamento/renovar', async (req, res) => {
   const { role, user } = owner(req);
   if (!['aprovado', 'restrito'].includes(user.status)) throw new U.HttpError(400, 'A conta ainda não foi liberada.');
   const plan = role === 'clinic' ? 'clinica-4990' : (PP.PRICES[user.plan] ? user.plan : 'mensal-30');
-  const payer = role === 'clinic'
-    ? { name: user.responsible || user.name, cpf: user.doc || '', email: user.email, phone: user.phone }
-    : { name: user.legal_name || user.name, cpf: user.cpf, email: user.email, phone: user.phone };
+  let payer;
+  if (role === 'clinic') {
+    // Clínica com CNPJ e sem o CPF do responsável: pede uma vez (fica guardado para as próximas)
+    if (!PP.clinicPayer(user) && req.body?.responsible_cpf !== undefined) {
+      const cpf = U.onlyDigits(req.body.responsible_cpf);
+      if (!U.isValidCpf(cpf)) throw new U.HttpError(400, 'CPF inválido.');
+      const name = U.cleanText(req.body.responsible || '', 120);
+      if (!user.responsible && !U.isFullName(name)) throw new U.HttpError(400, 'Informe o nome completo do responsável.');
+      db.prepare('UPDATE clinics SET responsible_cpf = ?, responsible = CASE WHEN responsible = \'\' THEN ? ELSE responsible END WHERE id = ?').run(cpf, name, user.id);
+      Object.assign(user, db.prepare('SELECT * FROM clinics WHERE id = ?').get(user.id));
+    }
+    payer = PP.clinicPayer(user);
+    if (!payer) throw Object.assign(new U.HttpError(400, 'Para gerar o Pix, informe o CPF do responsável pela clínica.'), { extra: { need_cpf: true, has_responsible: !!user.responsible } });
+  } else payer = { name: user.legal_name || user.name, cpf: user.cpf, email: user.email, phone: user.phone };
   res.json(await PP.create({ role, userId: user.id, kind: 'renovacao', plan, payer }));
 });
 router.get('/pagamento/renovar/:id', async (req, res) => {
