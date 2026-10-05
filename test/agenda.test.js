@@ -12,6 +12,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'acolia-agenda-'));
 process.env.DATA_DIR = tmp;
 process.env.ADMIN_USER = 'admin';
 process.env.ADMIN_PASSWORD = 'senha-admin-123';
+process.env.FIRST_PASSWORD = 'off'; // senha de acesso único: testada à parte (os outros testes entram direto)
 process.env.TEST_ACCOUNTS = '0';
 process.env.SKIP_OWNER_TEST = '1';
 delete process.env.PAYMENT_SECRET;

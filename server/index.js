@@ -65,8 +65,18 @@ function createApp() {
     }
     next();
   });
+  // Senha de acesso único (gerada pelo admin): só vê a tela "Crie a sua senha" até criar a própria.
+  // A secretária não é barrada (a senha é do profissional).
+  const FIRST_PW_OK = [...BLOCKED_OK, '/professional/first-password', '/clinic/first-password'];
+  app.use('/api', (req, _res, next) => {
+    const r = req.auth?.role;
+    if ((r === 'professional' || r === 'clinic') && !req.auth.secretary && require('./accountState').needsPassword(req.auth.user) && !FIRST_PW_OK.includes(req.path)) {
+      return next(Object.assign(new U.HttpError(428, 'Crie a sua senha para continuar.'), { extra: { needs_password: true } }));
+    }
+    next();
+  });
   // Profissional sem CPF (conta antiga): só vê a tela "Coloque seu CPF" até informar
-  const NEEDS_CPF_OK = [...BLOCKED_OK, '/professional/cpf'];
+  const NEEDS_CPF_OK = [...BLOCKED_OK, '/professional/cpf', '/professional/first-password'];
   app.use('/api', (req, _res, next) => {
     if (req.auth?.role === 'professional' && require('./accountState').needsCpf(req.auth.user) && !NEEDS_CPF_OK.includes(req.path)) {
       return next(Object.assign(new U.HttpError(428, 'Informe o seu CPF para liberar a plataforma.'), { extra: { needs_cpf: true } }));

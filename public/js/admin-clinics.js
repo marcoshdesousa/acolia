@@ -66,7 +66,7 @@
             const r = await api(`/api/admin/clinics/${id}/status`, { method: 'POST', body: { status: st } });
             if (r.new_password) {
               dlg.close(); dlg.remove();
-              await modal({ title: 'Senha da clínica', html: `<p>Clínica aprovada! Mande esta senha pelo WhatsApp (${esc(fmtPhone(c.phone))}). Login: código ${esc(c.code)} ou e-mail ${esc(c.email)}. Ela não fica guardada.</p><div class="code-box">${esc(r.new_password)}</div>`,
+              await modal({ title: 'Senha da clínica', html: `<p>Clínica aprovada! Mande esta senha pelo WhatsApp (${esc(fmtPhone(c.phone))}). Login: código ${esc(c.code)} ou e-mail ${esc(c.email)}. É uma senha de acesso único: no primeiro acesso a clínica cria a própria senha. Ela não fica guardada.</p><div class="code-box">${esc(r.new_password)}</div>`,
                 actions: [{ label: 'Copiar', class: 'secondary', handler: () => { copyText(r.new_password); return false; } }, { label: 'Fechar' }] });
               await load(); return open(id);
             }
@@ -78,7 +78,7 @@
         $('[data-creset]', dlg)?.addEventListener('click', async () => {
           if (!await confirmDialog('Gerar uma nova senha para a clínica? A senha antiga deixa de funcionar.')) return;
           const r = await api(`/api/admin/clinics/${id}/reset-password`, { method: 'POST' });
-          modal({ title: 'Nova senha', html: `<div class="code-box">${esc(r.password)}</div>`, actions: [{ label: 'Copiar', class: 'secondary', handler: () => { copyText(r.password); return false; } }, { label: 'Fechar' }] });
+          modal({ title: 'Nova senha', html: `<p>Senha de acesso único: no primeiro acesso a clínica cria a própria senha.</p><div class="code-box">${esc(r.password)}</div>`, actions: [{ label: 'Copiar', class: 'secondary', handler: () => { copyText(r.password); return false; } }, { label: 'Fechar' }] });
         });
         $('[data-cdel]', dlg)?.addEventListener('click', async () => {
           if (!await confirmDialog(`Apagar a clínica ${c.name}? Some tudo e o CPF/CNPJ fica livre. Não dá para desfazer.`, { danger: true, okLabel: 'Apagar' })) return;

@@ -316,9 +316,11 @@ router.get('/me', (req, res) => {
   if (role === 'professional') {
     // Secretária: usa o painel do profissional, sem o código único (e a tela sabe que é ela)
     if (req.auth.secretary) {
+      // A senha de acesso único é do profissional: a secretária não vê a tela de criar senha
+      const acc = { ...require('../accountState').stateOf(role, { ...user, must_change_password: 0 }), support: account.support };
       const u = ownProfessional(user);
       delete u.code; delete u.pix_key;
-      return res.json({ role, user: u, account, secretary: { login: req.auth.secretary.login } });
+      return res.json({ role, user: u, account: acc, secretary: { login: req.auth.secretary.login } });
     }
     return res.json({ role, user: ownProfessional(user), account });
   }

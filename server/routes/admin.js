@@ -182,6 +182,7 @@ router.post('/professionals', async (req, res) => {
   requirePassword(password);
   const until = U.addDaysISO(U.todayISO(), Number(req.body.days) > 0 ? Math.min(Number(req.body.days), 3650) : 30);
   const { id, code } = insertProfessional(d, U.hashPassword(password), 'aprovado', until);
+  db.prepare('UPDATE professionals SET must_change_password = 1 WHERE id = ?').run(id); // senha de acesso único
   res.status(201).json({ id, code, password });
 });
 
@@ -199,7 +200,7 @@ router.post('/professionals/:id/status', (req, res) => {
   let newPassword = null;
   if (status === 'aprovado' && p.password_hash === require('./auth').NO_PASSWORD) {
     newPassword = U.randomPassword(10);
-    db.prepare('UPDATE professionals SET password_hash = ? WHERE id = ?').run(U.hashPassword(newPassword), p.id);
+    db.prepare('UPDATE professionals SET password_hash = ?, must_change_password = 1 WHERE id = ?').run(U.hashPassword(newPassword), p.id);
   }
   // Bloqueado fica na lista (mesmo que apague a conta e crie outra); qualquer outro status libera
   if (status === 'bloqueado') require('../blocklist').block('professional', p);
@@ -335,7 +336,7 @@ router.post('/professionals/:id/reset-password', (req, res) => {
   const p = db.prepare('SELECT id FROM professionals WHERE id = ?').get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
   const password = U.randomPassword(10);
-  db.prepare('UPDATE professionals SET password_hash = ? WHERE id = ?').run(U.hashPassword(password), p.id);
+  db.prepare('UPDATE professionals SET password_hash = ?, must_change_password = 1 WHERE id = ?').run(U.hashPassword(password), p.id);
   A.destroyUserSessions('professional', p.id);
   res.json({ password });
 });
@@ -428,7 +429,7 @@ router.post('/clinics/:id/status', (req, res) => {
   let newPassword = null;
   if (status === 'aprovado' && c.password_hash === require('../clinics').NO_PASSWORD) {
     newPassword = U.randomPassword(10);
-    db.prepare('UPDATE clinics SET password_hash = ? WHERE id = ?').run(U.hashPassword(newPassword), c.id);
+    db.prepare('UPDATE clinics SET password_hash = ?, must_change_password = 1 WHERE id = ?').run(U.hashPassword(newPassword), c.id);
   }
   if (status === 'bloqueado') require('../realtime').emit(`clinic:${c.id}`, 'account:blocked', {});
   if (status === 'recusado') A.destroyUserSessions('clinic', c.id);
@@ -451,7 +452,7 @@ router.post('/clinics/:id/subscription', (req, res) => {
 router.post('/clinics/:id/reset-password', (req, res) => {
   const c = loadClinic(req.params.id);
   const password = U.randomPassword(10);
-  db.prepare('UPDATE clinics SET password_hash = ? WHERE id = ?').run(U.hashPassword(password), c.id);
+  db.prepare('UPDATE clinics SET password_hash = ?, must_change_password = 1 WHERE id = ?').run(U.hashPassword(password), c.id);
   A.destroyUserSessions('clinic', c.id);
   res.json({ password });
 });

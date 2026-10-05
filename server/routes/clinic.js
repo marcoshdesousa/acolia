@@ -62,7 +62,19 @@ router.post('/password', (req, res) => {
   const cur = me(req);
   if (!U.verifyPassword(req.body.current || '', cur.password_hash)) throw new U.HttpError(400, 'A senha atual está incorreta.');
   require('./auth').requirePassword(req.body.password);
-  db.prepare('UPDATE clinics SET password_hash = ? WHERE id = ?').run(U.hashPassword(req.body.password), cur.id);
+  if (req.body.confirm !== undefined && req.body.confirm !== req.body.password) throw new U.HttpError(400, 'A nova senha e a repetição não são iguais.');
+  if (U.verifyPassword(req.body.password, cur.password_hash)) throw new U.HttpError(400, 'A nova senha precisa ser diferente da atual.');
+  db.prepare('UPDATE clinics SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(U.hashPassword(req.body.password), cur.id);
+  res.json({ ok: true });
+});
+// 1º acesso com a senha de acesso único (enviada pela equipe Acolia): cria a própria senha
+router.post('/first-password', (req, res) => {
+  const cur = me(req);
+  if (!cur.must_change_password) throw new U.HttpError(400, 'A senha já foi criada. Para trocar, use Conta → Trocar senha.');
+  require('./auth').requirePassword(req.body.password);
+  if (req.body.confirm !== req.body.password) throw new U.HttpError(400, 'A nova senha e a repetição não são iguais.');
+  if (U.verifyPassword(req.body.password, cur.password_hash)) throw new U.HttpError(400, 'Crie uma senha diferente da senha de acesso único.');
+  db.prepare('UPDATE clinics SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(U.hashPassword(req.body.password), cur.id);
   res.json({ ok: true });
 });
 

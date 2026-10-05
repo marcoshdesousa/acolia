@@ -268,10 +268,23 @@ router.post('/slug', (req, res) => {
   res.json(ownFor(req, db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id)));
 });
 
+// Trocar a senha: senha atual + nova + repetir a nova
 router.post('/password', (req, res) => {
   if (!U.verifyPassword(req.body.current || '', req.auth.user.password_hash)) throw new U.HttpError(400, 'Senha atual incorreta.');
   requirePassword(req.body.password);
-  db.prepare('UPDATE professionals SET password_hash = ? WHERE id = ?').run(U.hashPassword(req.body.password), req.auth.user.id);
+  if (req.body.confirm !== undefined && req.body.confirm !== req.body.password) throw new U.HttpError(400, 'A nova senha e a repetição não são iguais.');
+  if (U.verifyPassword(req.body.password, req.auth.user.password_hash)) throw new U.HttpError(400, 'A nova senha precisa ser diferente da atual.');
+  db.prepare('UPDATE professionals SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(U.hashPassword(req.body.password), req.auth.user.id);
+  res.json({ ok: true });
+});
+// 1º acesso com a senha de acesso único (enviada pela equipe Acolia): cria a própria senha
+router.post('/first-password', (req, res) => {
+  const u = req.auth.user;
+  if (!u.must_change_password) throw new U.HttpError(400, 'A sua senha já foi criada. Para trocar, use Configurações → Trocar senha.');
+  requirePassword(req.body.password);
+  if (req.body.confirm !== req.body.password) throw new U.HttpError(400, 'A nova senha e a repetição não são iguais.');
+  if (U.verifyPassword(req.body.password, u.password_hash)) throw new U.HttpError(400, 'Crie uma senha diferente da senha de acesso único.');
+  db.prepare('UPDATE professionals SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(U.hashPassword(req.body.password), u.id);
   res.json({ ok: true });
 });
 

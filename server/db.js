@@ -132,7 +132,8 @@ function addColumn(table, col, def) {
   if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
 }
 addColumn('professionals', 'document_file', 'TEXT');              // foto/PDF da carteirinha (pasta privada)
-addColumn('professionals', 'legal_name', 'TEXT');                 // nome completo da carteirinha (não muda)
+addColumn('professionals', 'legal_name', 'TEXT');
+addColumn('professionals', 'must_change_password', 'INTEGER NOT NULL DEFAULT 0'); // senha de acesso único (gerada pelo admin): troca no 1º acesso                 // nome completo da carteirinha (não muda)
 addColumn('professionals', 'registry_verified', 'INTEGER NOT NULL DEFAULT 0'); // conferido no conselho por API
 addColumn('professionals', 'slug', 'TEXT');                        // link próprio: site.com/<slug>
 addColumn('professionals', 'is_test', 'INTEGER NOT NULL DEFAULT 0');  // conta de teste (o admin pode apagar)

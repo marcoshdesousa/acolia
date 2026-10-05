@@ -9,6 +9,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'acolia-test-'));
 process.env.DATA_DIR = tmp;
 process.env.ADMIN_USER = 'admin';
 process.env.ADMIN_PASSWORD = 'senha-admin-123';
+process.env.FIRST_PASSWORD = 'off'; // senha de acesso único: testada à parte (os outros testes entram direto)
 delete process.env.CPF_API_URL;
 process.env.TEST_ACCOUNTS = '0';
 process.env.SKIP_OWNER_TEST = '1';
@@ -2721,4 +2722,54 @@ test('clínicas (1.3): pré-cadastro com logo, um por CPF/CNPJ, aprovação com 
   assert.equal((await cl.get('/api/auth/me')).data.role, null);
   r = await client().form('/api/auth/clinic/register', { ...base0, doc: '529.982.247-25' }, LOGO);
   assert.equal(r.status, 201, 'documento livre de novo');
+});
+
+test('senha de acesso único: no 1º acesso o profissional e a clínica criam a própria senha; depois trocam com a atual + repetir', async () => {
+  const { db } = require('../server/db');
+  process.env.FIRST_PASSWORD = 'on';
+  try {
+    const c = await admin.post('/api/admin/professionals', { name: 'Sara Senha Nova', profession: 'Terapeuta', email: 'sara.senha@example.com', phone: '11966661999', state: 'SP', city: 'Campinas', cpf: cpfOf(950) });
+    assert.equal(c.status, 201, JSON.stringify(c.data));
+    const pro = client();
+    assert.equal((await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password })).status, 200);
+    let me = (await pro.get('/api/auth/me')).data;
+    assert.equal(me.account.needs_password, true);
+    let r = await pro.get('/api/professional/me');
+    assert.equal(r.status, 428, 'só a tela de criar senha');
+    assert.equal(r.data.needs_password, true);
+    assert.equal((await pro.post('/api/professional/first-password', { password: 'minhasenha1', confirm: 'outra' })).status, 400, 'repetição diferente');
+    assert.equal((await pro.post('/api/professional/first-password', { password: c.data.password, confirm: c.data.password })).status, 400, 'igual à de acesso único');
+    assert.equal((await pro.post('/api/professional/first-password', { password: 'minhasenha1', confirm: 'minhasenha1' })).status, 200);
+    assert.equal((await pro.get('/api/professional/me')).status, 200, 'liberado');
+    assert.equal((await client().post('/api/auth/professional/login', { login: c.data.code, password: c.data.password })).status, 401, 'a senha de acesso único não vale mais');
+    assert.equal((await client().post('/api/auth/professional/login', { login: 'sara.senha@example.com', password: 'minhasenha1' })).status, 200, 'entra pelo e-mail com a senha dela');
+    assert.equal((await pro.post('/api/professional/first-password', { password: 'x123456', confirm: 'x123456' })).status, 400, 'só no 1º acesso');
+    // Trocar depois: atual + nova + repetir
+    assert.equal((await pro.post('/api/professional/password', { current: 'errada', password: 'nova12345', confirm: 'nova12345' })).status, 400);
+    assert.equal((await pro.post('/api/professional/password', { current: 'minhasenha1', password: 'nova12345', confirm: 'nova1234' })).status, 400);
+    assert.equal((await pro.post('/api/professional/password', { current: 'minhasenha1', password: 'nova12345', confirm: 'nova12345' })).status, 200);
+    // Admin gera nova senha: volta a ser de acesso único
+    r = await admin.post(`/api/admin/professionals/${c.data.id}/reset-password`);
+    assert.equal(r.status, 200);
+    const pro2 = client();
+    await pro2.post('/api/auth/professional/login', { login: c.data.code, password: r.data.password });
+    assert.equal((await pro2.get('/api/professional/me')).status, 428);
+    // Clínica: mesma regra
+    let clinic = db.prepare("SELECT id, code FROM clinics WHERE status = 'aprovado' LIMIT 1").get();
+    if (!clinic) {
+      const pend = db.prepare("SELECT id FROM clinics WHERE status = 'pendente' LIMIT 1").get();
+      assert.ok(pend, 'há uma clínica para testar');
+      await admin.post(`/api/admin/clinics/${pend.id}/status`, { status: 'aprovado' });
+      clinic = db.prepare('SELECT id, code FROM clinics WHERE id = ?').get(pend.id);
+    }
+    {
+      r = await admin.post(`/api/admin/clinics/${clinic.id}/reset-password`);
+      assert.equal(r.status, 200);
+      const cl = client();
+      assert.equal((await cl.post('/api/auth/clinic/login', { login: clinic.code, password: r.data.password })).status, 200);
+      assert.equal((await cl.get('/api/clinic/me')).status, 428);
+      assert.equal((await cl.post('/api/clinic/first-password', { password: 'clinica123', confirm: 'clinica123' })).status, 200);
+      assert.equal((await cl.get('/api/clinic/me')).status, 200);
+    }
+  } finally { process.env.FIRST_PASSWORD = 'off'; }
 });

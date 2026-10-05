@@ -183,6 +183,43 @@
       setTimeout(() => location.reload(), 700);
     });
   }
+  // 1º acesso com a senha de acesso único (enviada pela equipe Acolia): cria a própria senha antes de usar.
+  // O código (e o e-mail) para entrar continuam os mesmos; só a senha muda.
+  function showNeedsPassword(me) {
+    const clinic = me.role === 'clinic';
+    const u = me.user || {};
+    document.body.className = 'blocked-page';
+    document.body.innerHTML = `
+      <header class="topbar"><div class="container"><a class="brand" href="/">${ICONS.logo}<img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a></div></header>
+      <main class="blocked-wrap">
+        <div class="card blocked-card cpf-card">
+          <span class="blocked-ic">${ICONS.lock}</span>
+          <h1>Crie a sua senha</h1>
+          <p>Você entrou com a <b>senha de acesso único</b> enviada pela equipe Acolia. Agora crie a sua própria senha.</p>
+          <p class="small muted" style="margin-top:-4px">Para entrar, você continua usando ${u.code ? `o ${clinic ? 'código da clínica' : 'seu código'} <b>${esc(u.code)}</b>` : 'o seu código'}${u.email ? ` ou o e-mail <b>${esc(u.email)}</b>` : ''}. O código não muda; a senha você troca quando quiser.</p>
+          <form data-first-pw novalidate style="text-align:left">
+            <div class="field"><label for="fpw1">Nova senha</label><input id="fpw1" name="password" type="password" minlength="6" required autocomplete="new-password"></div>
+            <div class="field"><label for="fpw2">Repita a nova senha</label><input id="fpw2" name="confirm" type="password" minlength="6" required autocomplete="new-password"></div>
+            <button class="btn block" type="submit">Salvar minha senha</button>
+          </form>
+          <button type="button" class="btn ghost sm" data-blocked-logout>Sair</button>
+        </div>
+      </main>`;
+    $('[data-blocked-logout]').onclick = () => logout('/');
+    handleForm($('[data-first-pw]'), async (d) => {
+      if ((d.password || '').length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+      if (d.password !== d.confirm) throw new Error('A nova senha e a repetição não são iguais.');
+      await api(clinic ? '/api/clinic/first-password' : '/api/professional/first-password', { method: 'POST', body: d });
+      toast('Senha criada! Agora é só usar a sua senha.');
+      setTimeout(() => location.reload(), 700);
+    });
+  }
+  let needsPasswordShown = false;
+  async function onNeedsPassword() {
+    if (needsPasswordShown) return;
+    needsPasswordShown = true;
+    try { const me = await api('/api/auth/me'); if (me.account?.needs_password && !me.secretary) showNeedsPassword(me); } catch { /* ignora */ }
+  }
   let needsCpfShown = false;
   async function onNeedsCpf() {
     if (needsCpfShown) return;
@@ -327,6 +364,7 @@
     const data = await res.json().catch(() => ({}));
     if (res.status === 423 && data.blocked) onBlocked();
     if (res.status === 428 && data.needs_cpf) onNeedsCpf();
+    if (res.status === 428 && data.needs_password) onNeedsPassword();
     if (!res.ok) throw Object.assign(new Error(data.error || 'Algo deu errado.'), { status: res.status, data });
     return data;
   }
@@ -889,7 +927,7 @@
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
     supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
-    handleForm, logout, showBlocked, showNeedsCpf, installBanner, namePicker, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
+    handleForm, logout, showBlocked, showNeedsCpf, showNeedsPassword, installBanner, namePicker, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
     SOCIAL, socialLinks, socialFields,
   };
 })();

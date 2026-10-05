@@ -478,7 +478,7 @@
           // Primeira aprovação de quem se cadastrou pelo site: a senha aparece uma vez para mandar no WhatsApp
           if (r.new_password) {
             dlg.close(); dlg.remove();
-            await showSecret('Senha do profissional', r.new_password, `Cadastro aprovado! Mande esta senha para o profissional pelo WhatsApp (${fmtPhone(p.phone)}). Login: código ${p.code} ou e-mail ${p.email}. Ela não fica guardada: se ele esquecer, gere uma nova.`);
+            await showSecret('Senha do profissional', r.new_password, `Cadastro aprovado! Mande esta senha para o profissional pelo WhatsApp (${fmtPhone(p.phone)}). Login: código ${p.code} ou e-mail ${p.email}. É uma senha de acesso único: no primeiro acesso ele cria a própria senha. Ela não fica guardada: se ele esquecer, gere uma nova.`);
           }
           refresh();
         }));
@@ -507,7 +507,7 @@
         $('[data-reset-pw]', dlg).addEventListener('click', async () => {
           if (!await confirmDialog('Gerar nova senha para este profissional? A atual deixará de funcionar.')) return;
           const r = await api(`/api/admin/professionals/${id}/reset-password`, { method: 'POST' });
-          showSecret('Nova senha do profissional', r.password, `Repasse ao profissional. Login: código ${p.code} ou e-mail ${p.email}.`);
+          showSecret('Nova senha do profissional', r.password, `Repasse ao profissional. Login: código ${p.code} ou e-mail ${p.email}. É uma senha de acesso único: no primeiro acesso ele cria a própria senha.`);
         });
       },
     });
@@ -551,7 +551,7 @@
       title: 'Profissional cadastrado',
       html: `<p>Repasse os dados de acesso ao profissional:</p>
         <p class="small muted" style="margin:0">Código único (login e atendimentos)</p><div class="code-box">${esc(r.code)}</div>
-        <p class="small muted" style="margin:12px 0 0">Senha</p><div class="code-box" style="font-size:1.4rem">${esc(r.password)}</div>`,
+        <p class="small muted" style="margin:12px 0 0">Senha de acesso único (no primeiro acesso o profissional cria a própria senha)</p><div class="code-box" style="font-size:1.4rem">${esc(r.password)}</div>`,
       actions: [{ label: 'Copiar tudo', class: 'secondary', handler: () => { copyText(`Código: ${r.code}\nSenha: ${r.password}`); return false; } }, { label: 'Fechar' }],
     });
     reloadAll();

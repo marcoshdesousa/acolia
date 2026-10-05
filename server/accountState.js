@@ -14,10 +14,14 @@ const SUPPORT_WHATSAPP = process.env.SUPPORT_WHATSAPP || '5511939023938'; // can
 
 // Profissional sem CPF (conta antiga): precisa informar para liberar a plataforma. Conta de teste não precisa.
 const needsCpf = (p) => !!p && !p.cpf && !p.is_test && !['oficial', 'clinica', 'excluido'].includes(p.status);
+// Entrou com a senha de acesso único (gerada pelo admin): precisa criar a própria senha antes de usar.
+// FIRST_PASSWORD=off desliga a regra (usado nos testes automáticos).
+const needsPassword = (u) => !!u && !!u.must_change_password && process.env.FIRST_PASSWORD !== 'off';
 
 function proState(p) {
   if (!p) return {};
   if (p.status === 'bloqueado') return { blocked: 'admin' };
+  if (needsPassword(p)) return { needs_password: true };
   if (needsCpf(p)) return { needs_cpf: true };
   const until = p.subscription_until;
   if (p.status !== 'aprovado' && p.status !== 'restrito') return {};
@@ -37,6 +41,7 @@ function patientState(p) {
 function clinicState(c) {
   if (!c) return {};
   if (c.status === 'bloqueado') return { blocked: 'admin' };
+  if (needsPassword(c)) return { needs_password: true };
   if (c.status !== 'aprovado' || !c.subscription_until) return {};
   const today = U.todayISO();
   if (today > U.addDaysISO(c.subscription_until, GRACE_DAYS)) return { blocked: 'vencido', until: c.subscription_until };
@@ -46,4 +51,4 @@ function clinicState(c) {
 
 const stateOf = (role, user) => (role === 'professional' ? proState(user) : role === 'patient' ? patientState(user) : role === 'clinic' ? clinicState(user) : {});
 
-module.exports = { needsCpf, proState, patientState, stateOf, GRACE_DAYS, WARN_DAYS, SUPPORT_WHATSAPP };
+module.exports = { needsCpf, needsPassword, proState, patientState, stateOf, GRACE_DAYS, WARN_DAYS, SUPPORT_WHATSAPP };

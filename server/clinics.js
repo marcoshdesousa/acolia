@@ -89,6 +89,8 @@ const isVisible = (c) => c.status === 'aprovado' && !!c.subscription_until && c.
 // assim as publicações, reels, stories, curtidas, comentários e seguidores usam o mesmo caminho dos
 // profissionais. Essa linha não aparece na vitrine, não entra no admin e ninguém faz login nela.
 try { db.exec('ALTER TABLE clinics ADD COLUMN author_id INTEGER'); } catch { /* já existe */ }
+// Senha de acesso único (gerada pelo admin): a clínica cria a dela no 1º acesso
+try { db.exec('ALTER TABLE clinics ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0'); } catch { /* já existe */ }
 // Profissionais que trabalham na clínica (os convites chegam na etapa 3)
 db.exec(`CREATE TABLE IF NOT EXISTS clinic_members (
   clinic_id INTEGER NOT NULL,

@@ -92,6 +92,8 @@
         <h2>Trocar senha</h2>
         <div class="field"><label for="cur">Senha atual</label><input id="cur" name="current" type="password" required autocomplete="current-password"></div>
         <div class="field"><label for="npw">Nova senha</label><input id="npw" name="password" type="password" minlength="6" required autocomplete="new-password"></div>
+        <div class="field"><label for="npw2">Repita a nova senha</label><input id="npw2" name="confirm" type="password" minlength="6" required autocomplete="new-password"></div>
+        <p class="small muted" style="margin:0">Vocês continuam entrando com o código da clínica ou o e-mail; só a senha muda.</p>
         <button class="btn" type="submit">Alterar senha</button>
       </form>
       <button class="btn secondary block" style="margin-top:16px" data-logout>Sair</button>
@@ -110,6 +112,7 @@
     const auth = await api('/api/auth/me').catch(() => ({}));
     if (auth.role !== 'clinic') { location.replace('/entrar#clinica'); return; }
     if (auth.account?.blocked) { Acolia.showBlocked(auth); return; }
+    if (auth.account?.needs_password) { Acolia.showNeedsPassword(auth); return; } // 1º acesso: cria a própria senha
     let me = auth.user;
     const cfg = await api('/api/config');
     // Feed: a clínica publica e vê as publicações de quem segue (mesmo Início dos profissionais)
@@ -186,7 +189,7 @@
       try { me = await api('/api/clinic/logo', { method: 'POST', form: fd }); render(); toast('Logo atualizada!'); } catch (ex) { toast(ex.message, 'error'); }
       e.target.value = '';
     });
-    handleForm($('[data-pw-form]'), async (d, form) => { await api('/api/clinic/password', { method: 'POST', body: d }); form.reset(); toast('Senha alterada!'); });
+    handleForm($('[data-pw-form]'), async (d, form) => { if (d.password !== d.confirm) throw new Error('A nova senha e a repetição não são iguais.'); await api('/api/clinic/password', { method: 'POST', body: d }); form.reset(); toast('Senha alterada!'); });
     $('[data-maps-help]').addEventListener('click', () => Acolia.modal({
       title: 'Como pegar o link do Google Maps',
       html: `<ol class="install-steps">
