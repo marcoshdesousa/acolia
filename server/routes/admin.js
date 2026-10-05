@@ -373,21 +373,6 @@ router.post('/test-accounts', (_req, res) => {
 
 // Teste da agenda do dono: ver o que está pronto e preparar de novo (não mexe nos horários)
 router.get('/test-agenda', (_req, res) => res.json(require('../testAgenda').status()));
-// Testar a SyncPay (mensalidade pelo Pix): chaves e um Pix de R$ 1,00 com os dados do dono
-router.post('/syncpay/test', async (req, res) => {
-  const PP = require('../platformPay');
-  const b = req.body || {};
-  if (!b.charge) return res.json(await PP.testKeys());
-  if (!U.isValidCpf(U.onlyDigits(b.cpf)) && U.onlyDigits(b.cpf).length !== 14) throw new U.HttpError(400, 'Informe um CPF ou CNPJ válido.');
-  if (!U.isValidEmail(String(b.email || ''))) throw new U.HttpError(400, 'Informe um e-mail válido.');
-  if (U.onlyDigits(b.phone).length < 10) throw new U.HttpError(400, 'Informe o WhatsApp com DDD.');
-  if (String(b.name || '').trim().split(/\s+/).length < 2) throw new U.HttpError(400, 'Informe o nome completo.');
-  res.json(await PP.testCharge({ name: String(b.name).trim().slice(0, 120), cpf: b.cpf, email: String(b.email).trim(), phone: b.phone }));
-});
-router.get('/syncpay/test/:identifier', async (req, res) => {
-  res.json({ status: await require('../platformPay').testStatus(req.params.identifier) });
-});
-
 router.post('/test-agenda/prepare', (_req, res) => {
   require('../testAgenda').provision({ withHours: false });
   res.json(require('../testAgenda').status());

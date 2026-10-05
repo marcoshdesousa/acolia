@@ -195,42 +195,6 @@ async function onWebhook(body) {
   }
 }
 
-// ---------- Teste pelo admin (botão "Testar SyncPay") ----------
-// 1) confere as chaves pedindo um token; 2) gera um Pix de R$ 1,00 com os dados do dono, para pagar e ver chegar.
-// Nada disso mexe em contas: o Pix de teste não fica na tabela de mensalidades.
-async function testKeys() {
-  if (fake()) return { ok: true, fake: true };
-  if (!configured()) return { ok: false, message: 'As chaves SYNCPAY_CLIENT_ID e SYNCPAY_CLIENT_SECRET não estão no Render (Environment).' };
-  tok = null;
-  let r;
-  try {
-    r = await fetch(`${BASE}/api/partner/v1/auth-token`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ client_id: process.env.SYNCPAY_CLIENT_ID, client_secret: process.env.SYNCPAY_CLIENT_SECRET }),
-    });
-  } catch (e) { return { ok: false, message: `Não deu para falar com a SyncPay (${e.message}).` }; }
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok || !d.access_token) return { ok: false, message: `A SyncPay recusou as chaves (erro ${r.status}${d.message ? `: ${d.message}` : ''}). Confira o Client ID e o Client Secret no Render.` };
-  tok = { value: d.access_token, until: Date.parse(d.expires_at) || Date.now() + 3600e3 };
-  return { ok: true };
-}
-async function testCharge(payer) {
-  if (fake()) { const c = fakeCreate(); return { ok: true, identifier: c.identifier, pix_code: c.pix_code, qr: await QR(c.pix_code) }; }
-  const keys = await testKeys();
-  if (!keys.ok) return keys;
-  const phone = U.onlyDigits(payer.phone).replace(/^55(?=\d{10,11}$)/, '');
-  const r = await call('POST', '/api/partner/v1/cash-in', {
-    amount: 1, description: 'Acolia - teste da integração',
-    client: { name: payer.name, cpf: U.onlyDigits(payer.cpf), email: payer.email, phone },
-  });
-  if (r.status >= 300 || !r.data.pix_code) {
-    const msg = r.data?.message || (r.data?.errors ? JSON.stringify(r.data.errors) : '');
-    return { ok: false, message: `As chaves estão certas, mas a SyncPay não gerou o Pix (erro ${r.status}${msg ? `: ${msg}` : ''}).${r.status === 403 ? ' Pode ser o IP: autorize os IPs do Render no painel da SyncPay.' : ''}${r.status === 422 ? ' Pode ser a conta da SyncPay ainda não aprovada, ou algum dado do pagador.' : ''}` };
-  }
-  return { ok: true, identifier: String(r.data.identifier), pix_code: String(r.data.pix_code), qr: await QR(String(r.data.pix_code)) };
-}
-const testStatus = (identifier) => providerStatus(String(identifier));
-
 const _fakePay = (identifier, status = 'completed') => { if (FAKE.has(identifier)) FAKE.get(identifier).status = status; };
 
-module.exports = { configured, PRICES, DAYS, create, out, check, sweep, onWebhook, testKeys, testCharge, testStatus, clinicPayer, _fakePay };
+module.exports = { configured, PRICES, DAYS, create, out, check, sweep, onWebhook, clinicPayer, _fakePay };

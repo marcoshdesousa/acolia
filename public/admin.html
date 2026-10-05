@@ -54,22 +54,6 @@
             <button class="btn" type="submit">Salvar limite</button>
           </div>
         </form>
-        <h2 style="margin-top:28px">Mensalidade pelo Pix (SyncPay)</h2>
-        <div class="card stack" style="padding:16px" data-syncpay-card>
-          <p class="small" style="margin:0">Confere se a ligação com a SyncPay está funcionando. <b>1)</b> Testar as chaves. <b>2)</b> Gerar um Pix de <b>R$ 1,00</b> com os seus dados (dá para testar com um CNPJ também), pagar e ver a confirmação chegar (o dinheiro cai na sua conta da SyncPay).</p>
-          <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn sm" data-sp-keys>1) Testar as chaves</button></div>
-          <div data-sp-keys-out></div>
-          <form class="stack" data-sp-form style="gap:8px">
-            <div class="row" style="gap:8px;flex-wrap:wrap">
-              <input name="name" placeholder="Seu nome completo" required style="flex:2 1 220px">
-              <input name="cpf" placeholder="CPF ou CNPJ" required style="flex:1 1 140px">
-              <input name="email" type="email" placeholder="Seu e-mail" required style="flex:1 1 180px">
-              <input name="phone" placeholder="WhatsApp com DDD" required style="flex:1 1 150px">
-            </div>
-            <div><button class="btn secondary sm" type="submit">2) Gerar Pix de teste (R$ 1,00)</button></div>
-          </form>
-          <div data-sp-out></div>
-        </div>
         <h2 style="margin-top:28px">Aguardando aprovação</h2>
         <div data-pending-list></div>
         <h2 style="margin-top:28px">Contas de teste</h2>
