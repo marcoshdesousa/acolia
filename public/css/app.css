@@ -1526,3 +1526,8 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .terms-box h3 { font-size: .98rem; margin: 12px 0 4px; color: #2e403c; }
 .terms-box h3:first-child { margin-top: 0; }
 .terms-box p { margin: 0 0 6px; font-size: .92rem; line-height: 1.5; color: #3b4a46; }
+
+/* Aviso da Acolia no meio da conversa (ex.: novo paciente pelo link do profissional) */
+.msg-notice { align-self: center; display: flex; align-items: flex-start; gap: 8px; max-width: 92%; background: #e5ebe8; color: #2e403c; border-radius: 12px; padding: 10px 14px; margin: 8px 0; font-size: .9rem; font-weight: 700; line-height: 1.35; }
+.msg-notice svg { flex: none; margin-top: 1px; }
+.msg-notice small { font-weight: 600; color: #3f5550; }

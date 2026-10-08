@@ -24,17 +24,9 @@ router.get('/pro/:id/next', (req, res) => {
   res.json({ next: sameKind(pro, req.auth?.user) ? G.nextAvailableFor(pro, isPatient(req) ? req.auth.user.id : null) : null });
 });
 
-router.use(A.requireRole('patient', 'professional'));
-// Secretária (versão 1.1.3): não vê a chave Pix do profissional
-router.use((req, res, next) => {
-  if (!req.auth.secretary) return next();
-  const send = res.json.bind(res);
-  res.json = (b) => send(b && typeof b === 'object' && 'pix_key' in b ? { ...b, pix_key: '' } : b);
-  next();
-});
-
 // ---------- Calendário (paciente escolhe; profissional usa para propor no chat) ----------
 function bookablePro(req, id) {
+  if (req.auth && !['patient', 'professional'].includes(req.auth.role)) throw new U.HttpError(403, 'Só pacientes e profissionais usam a agenda.');
   const pro = isPro(req) && Number(id) === req.auth.user.id ? req.auth.user : visiblePro(id);
   if (!pro) throw new U.HttpError(404, 'Profissional não encontrado.');
   return pro;
@@ -43,9 +35,10 @@ function bookablePro(req, id) {
 router.get('/pro/:id/month', (req, res) => {
   const pro = bookablePro(req, req.params.id);
   const ym = /^\d{4}-\d{2}$/.test(req.query.ym || '') ? req.query.ym : G.localDate(G.now()).slice(0, 7);
-  const patientId = isPatient(req) ? req.auth.user.id : (req.query.patient_id ? Number(req.query.patient_id) : null);
+  const patientId = isPatient(req) ? req.auth.user.id : (isPro(req) && req.query.patient_id ? Number(req.query.patient_id) : null);
   const pat = patientId ? db.prepare('SELECT is_test FROM patients WHERE id = ?').get(patientId) : null;
-  const ready = sameKind(pro, pat || (isPatient(req) ? req.auth.user : pro)) ? G.readiness(pro) : { ok: false, mode: 'manual' };
+  const viewer = pat || (isPatient(req) ? req.auth.user : req.auth ? pro : {}); // visitor: conta comum (não de teste)
+  const ready = sameKind(pro, viewer) ? G.readiness(pro) : { ok: false, mode: 'manual' };
   // Pelo convênio o profissional marca sem valor nem Pix (só precisa dos horários)
   const agendaOk = ready.ok || (isPro(req) && !!pro.accepts_insurance && ready.missing.every((m) => ['valor', 'pix'].includes(m)) && sameKind(pro, pat || pro));
   let patient = null;
@@ -67,12 +60,23 @@ router.get('/pro/:id/day', (req, res) => {
   const pro = bookablePro(req, req.params.id);
   const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : null;
   if (!date) throw new U.HttpError(400, 'Escolha um dia.');
-  const patientId = isPatient(req) ? req.auth.user.id : (req.query.patient_id ? Number(req.query.patient_id) : null);
+  const patientId = isPatient(req) ? req.auth.user.id : (isPro(req) && req.query.patient_id ? Number(req.query.patient_id) : null);
   const pat = patientId ? db.prepare('SELECT is_test FROM patients WHERE id = ?').get(patientId) : null;
   const exclude = Number(req.query.exclude) || 0;
   const rd = G.readiness(pro);
-  const ok = (rd.ok || (isPro(req) && !!pro.accepts_insurance && rd.missing.every((m) => ['valor', 'pix'].includes(m)))) && sameKind(pro, pat || (isPatient(req) ? req.auth.user : pro));
+  const ok = (rd.ok || (isPro(req) && !!pro.accepts_insurance && rd.missing.every((m) => ['valor', 'pix'].includes(m)))) && sameKind(pro, pat || (isPatient(req) ? req.auth.user : req.auth ? pro : {}));
   res.json({ date, label: G.dayLabel(date), slots: ok ? G.slotsForDay(pro, date, { patientId, exclude }) : [] });
+});
+
+// Daqui para baixo, só com conta (o calendário acima também abre para o visitante que veio pelo link do
+// profissional: ele escolhe o dia e o horário e cria a conta na hora de pagar)
+router.use(A.requireRole('patient', 'professional'));
+// Secretária (versão 1.1.3): não vê a chave Pix do profissional
+router.use((req, res, next) => {
+  if (!req.auth.secretary) return next();
+  const send = res.json.bind(res);
+  res.json = (b) => send(b && typeof b === 'object' && 'pix_key' in b ? { ...b, pix_key: '' } : b);
+  next();
 });
 
 // ---------- Paciente marca ----------

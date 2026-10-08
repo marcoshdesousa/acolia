@@ -87,6 +87,12 @@ Só a **mensalidade da plataforma** (R$ 30,00 do profissional; R$ 49,90 da clín
 - O site **pergunta para a SyncPay** se foi pago (a cada 4 s com a tela aberta e numa varredura a cada 2 min). O aviso (webhook) da SyncPay só serve para conferir na hora.
 - Para ligar: no Render → Environment, `SYNCPAY_CLIENT_ID` e `SYNCPAY_CLIENT_SECRET`; no painel da SyncPay, autorizar os IPs de saída do Render (Render → Connect → Outbound) e o webhook `https://acolia.onrender.com/api/plataforma/pagamento/webhook`.
 
+## Link do profissional (site.com/<link>)
+
+- **Agendar sem conta:** quem abre o link do profissional escolhe o tipo, o dia e o horário e aceita a política sem ter conta. Na hora de pagar aparece **"Criar conta e ir para o pagamento"**: cria a conta (ou entra) e volta direto para o pagamento daquele horário (guardado no aparelho por 30 minutos; se alguém pegou o horário, escolhe outro).
+- **Novo paciente pelo link:** quem cria a conta a partir da página do profissional gera um aviso para ele, nas Conversas ("Fulano criou uma conta na Acolia pelo seu link") e no aparelho. O profissional já pode mandar mensagem, mesmo que o paciente ainda não tenha escrito. O paciente não vê o aviso. Cadastro feito pelo site, sem o link, não avisa ninguém.
+- O paciente não paga nada para a Acolia: só a consulta, direto para o profissional.
+
 ## Atendimento (chamada)
 
 1. A chamada de cada consulta é criada sozinha 5 minutos antes (ver acima). O código do paciente começa com os **2 primeiros caracteres do código do profissional** + 6 caracteres aleatórios.

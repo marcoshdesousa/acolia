@@ -152,7 +152,14 @@ test('agenda: profissional abre a agenda e aparece o próximo dia disponível (a
   r = await anon.get(`/api/agenda/pro/${P.id}/next`);
   assert.equal(r.data.next.label, 'Hoje');
   assert.equal(r.data.next.first, '09:40', 'horário que já passou (ou em menos de 30 min) não aparece');
-  assert.equal((await anon.get(`/api/agenda/pro/${P.id}/month`)).status, 401, 'calendário só com conta');
+  // Visitante (link do profissional) também vê o calendário: escolhe o horário e cria a conta na hora de pagar
+  let v = await anon.get(`/api/agenda/pro/${P.id}/month?ym=2030-01`);
+  assert.equal(v.status, 200);
+  assert.ok(v.data.days.find((x) => x.date === '2030-01-08').free >= 8);
+  assert.equal(v.data.patient, null);
+  v = await anon.get(`/api/agenda/pro/${P.id}/day?date=2030-01-08`);
+  assert.equal(v.data.slots.length, 8);
+  assert.equal((await anon.post('/api/agenda/book', { professional_id: P.id, start: v.data.slots[0].start, accept: true })).status, 401, 'marcar e pagar só com conta');
   r = await ana.get(`/api/agenda/pro/${P.id}/month?ym=2030-01`);
   const day = (d) => r.data.days.find((x) => x.date === d).free;
   assert.equal(day('2030-01-06'), 0, 'dia que passou');
@@ -1121,4 +1128,37 @@ test('financeiro: recebido, a confirmar, reembolsado e não reembolsado; total; 
   assert.ok(d.all_time.total_cents >= 15000);
   // Outro profissional não mexe
   assert.equal((await P.cl.post('/api/professional/finance/remove', { key: `a${ids[0]}` })).status, 404);
+});
+
+test('link do profissional: visitante cria a conta pelo link → o profissional recebe o aviso e pode mandar mensagem', async () => {
+  const slug = (await P.cl.get('/api/professional/me')).data.slug;
+  assert.ok(slug);
+  // Cadastro sem link: ninguém é avisado
+  const semLink = client();
+  assert.equal((await semLink.post('/api/auth/patient/register', { name: 'Caio Sem Link', cpf: nextCpf(), state: 'SP', city: 'Campinas', birth_date: '1991-02-03', password: 'senha123', ref: '/app' })).status, 201);
+  const before = (await P.cl.get('/api/chat/conversations')).data.items.length;
+  // Pelo link do profissional
+  const lia = client();
+  const r = await lia.post('/api/auth/patient/register', { name: 'Lia Pelo Link', cpf: nextCpf(), state: 'SP', city: 'Campinas', birth_date: '1992-03-04', password: 'senha123', ref: `/${slug}` });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const list = (await P.cl.get('/api/chat/conversations')).data.items;
+  assert.equal(list.length, before + 1);
+  const c = list.find((x) => x.peer.name === 'Lia Pelo Link');
+  assert.ok(c, 'a conversa aparece para o profissional');
+  assert.equal(c.unread, 1);
+  assert.equal(c.last_message.kind, 'notice');
+  assert.match(c.last_message.body, /Lia Pelo Link criou uma conta na Acolia pelo seu link/);
+  // O paciente não vê o aviso (nem a conversa vazia)
+  assert.equal((await lia.get('/api/chat/conversations')).data.items.length, 0);
+  // O profissional manda mensagem primeiro
+  const m = await P.cl.post(`/api/chat/conversations/${c.id}/messages`, { body: 'Olá, Lia! Vi que você criou a sua conta. Posso ajudar?' });
+  assert.equal(m.status, 201, JSON.stringify(m.data));
+  const mine = (await lia.get('/api/chat/conversations')).data.items;
+  assert.equal(mine.length, 1);
+  const seen = await msgs(lia, mine[0].id);
+  assert.deepEqual(seen.map((x) => x.kind), ['text'], 'o aviso é só do profissional');
+  // Também pelo endereço antigo (profissional.html?id=)
+  const leo = client();
+  await leo.post('/api/auth/patient/register', { name: 'Leo Link Antigo', cpf: nextCpf(), state: 'SP', city: 'Campinas', birth_date: '1993-04-05', password: 'senha123', ref: `/profissional.html?id=${P.id}` });
+  assert.ok((await P.cl.get('/api/chat/conversations')).data.items.some((x) => x.peer.name === 'Leo Link Antigo'));
 });

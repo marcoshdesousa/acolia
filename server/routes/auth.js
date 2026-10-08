@@ -65,6 +65,12 @@ router.post('/patient/register', async (req, res) => {
   const info = db.prepare(`INSERT INTO patients (name, cpf, cpf_name_verified, birth_date, state, city, city_norm, password_hash, status, handle, phone)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name, cpf, verified, birth, state, city, U.norm(city), U.hashPassword(req.body.password), status, handle, phone);
   A.createSession(res, 'patient', Number(info.lastInsertRowid));
+  // Veio pelo link de um profissional: ele recebe o aviso e pode mandar mensagem
+  try {
+    const R = require('../referral');
+    const pro = R.resolve(req.body.ref);
+    if (pro) R.notify(Number(info.lastInsertRowid), pro);
+  } catch (e) { console.warn('[link do profissional]', e.message); }
   res.status(201).json({ ok: true });
 });
 

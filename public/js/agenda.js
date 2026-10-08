@@ -178,6 +178,7 @@
           // Paciente: pausou (não recebe mensagens nem agendamentos) ou está sem agenda (pode mandar mensagem)
           : `${head}<div class="empty-agenda">${ic('calendar', 28)}${Acolia.pauseNote(info.paused ? 'agenda' : 'closed')}${!info.paused && mode === 'book' ? `<button type="button" class="btn secondary sm" data-ins-chat>${ic('chat', 16)} Mandar mensagem</button>` : ''}</div>`;
         $$('[data-ins-chat]', page.body).forEach((b) => b.addEventListener('click', async () => {
+          if (opts.visitor) { opts.onNeedAccount?.(); return; }
           try { const c = await api('/api/chat/conversations', { method: 'POST', body: { professional_id: proId } }); await page.close(); goChat(c.id); } catch (ex) { toast(ex.message, 'error'); }
         }));
         return;
@@ -202,6 +203,7 @@
       $$('[data-mod]', page.body).forEach((b) => b.addEventListener('click', () => { modality = b.dataset.mod; placeChecked = false; renderMonth(); }));
       $$('[data-bill]', page.body).forEach((b) => b.addEventListener('click', () => { billing = b.dataset.bill; renderMonth(); }));
       $('[data-ins-chat]', page.body)?.addEventListener('click', async () => {
+        if (opts.visitor) { opts.onNeedAccount?.(); return; }
         try {
           const c = await api('/api/chat/conversations', { method: 'POST', body: { professional_id: proId } });
           await page.close();
@@ -252,7 +254,7 @@
     }
 
     async function confirmStep() {
-      if (!rules) { try { rules = (await api('/api/agenda/appointments')).rules; } catch { /* usa o padrão */ } }
+      if (!rules && !opts.visitor) { try { rules = (await api('/api/agenda/appointments')).rules; } catch { /* usa o padrão */ } }
       page.setTitle(mode === 'reschedule' ? 'Confirmar remarcação' : 'Confirmar consulta');
       const when = `${sel.dayLabel} às ${sel.label}`;
       const loc = modality === 'presencial' ? (info.presencial || opts.appt?.location) : null;
@@ -268,7 +270,8 @@
         ${mode === 'propose' && billing !== 'convenio' ? `<p class="notice info small" style="margin-top:14px">O paciente recebe na conversa <b>"Sua consulta está quase pronta"</b>, aceita a política de agendamento e tem ${rules?.PAY_MIN || 10} minutos para pagar. ${info.mode === 'auto' ? 'Ele toca em "Pagar agora" e paga o Pix da sua conta Asaas: quando cair, a consulta é confirmada sozinha.' : 'Ele toca em "Copiar Pix" (sua chave e o valor já vão juntos). Quando o dinheiro cair, toque em <b>Sim</b> em "O paciente fez o pagamento?", em cima do campo de mensagem.'}</p>` : ''}
         <div class="form-error hidden" data-err></div>
         <div class="row" style="gap:10px;margin-top:10px"><button type="button" class="btn secondary" data-back2>Voltar</button>
-          <button type="button" class="btn grow" data-ok ${mode === 'book' ? 'disabled' : ''}>${mode === 'reschedule' ? 'Remarcar' : mode === 'propose' ? (billing === 'convenio' ? 'Agendar pelo convênio' : 'Enviar para o paciente') : `Ir para o pagamento (${info.mode === 'auto' ? 'Pix' : 'Pix pelo chat'})`}</button></div>`;
+          <button type="button" class="btn grow" data-ok ${mode === 'book' ? 'disabled' : ''}>${mode === 'reschedule' ? 'Remarcar' : mode === 'propose' ? (billing === 'convenio' ? 'Agendar pelo convênio' : 'Enviar para o paciente') : opts.visitor ? 'Criar conta e ir para o pagamento' : `Ir para o pagamento (${info.mode === 'auto' ? 'Pix' : 'Pix pelo chat'})`}</button></div>
+        ${opts.visitor ? '<p class="small muted center" style="margin-top:8px">Para confirmar e pagar, crie a sua conta grátis (ou entre). Depois você volta direto para o pagamento deste horário.</p>' : ''}`;
       $('[data-accept]', page.body)?.addEventListener('change', (e) => { $('[data-ok]', page.body).disabled = !e.target.checked; });
       $('[data-back2]', page.body).addEventListener('click', () => { page.setTitle(mode === 'reschedule' ? 'Remarcar consulta' : 'Agendar consulta'); renderMonth(); });
       $('[data-ok]', page.body).addEventListener('click', async (e) => {
@@ -310,6 +313,14 @@
             opts.onDone?.(a);
             return;
           }
+          // Visitante (veio pelo link do profissional): guarda o horário escolhido, cria a conta (ou entra)
+          // e volta direto para o pagamento
+          if (opts.visitor) {
+            savePending({ pro_id: proId, start: sel.start, modality, when: `${sel.dayLabel} às ${sel.label}` });
+            btn.disabled = false;
+            opts.onNeedAccount?.({ booking: true });
+            return;
+          }
           const a = await api('/api/agenda/book', { method: 'POST', body: { professional_id: proId, start: sel.start, accept: true, modality, confirm_place: modality === 'presencial' } });
           if (a.mode === 'auto') payScreen(page, a);
           else manualSent(page, a);
@@ -324,6 +335,33 @@
 
     loadMonth();
   }
+  // ---------- Horário escolhido antes de ter conta (guardado no aparelho por 30 min) ----------
+  const PENDING_KEY = 'acolia_pending_booking';
+  function savePending(p) { try { localStorage.setItem(PENDING_KEY, JSON.stringify({ ...p, at: Date.now() })); } catch { /* sem armazenamento */ } }
+  function takePending(proId) {
+    let p = null;
+    try { p = JSON.parse(localStorage.getItem(PENDING_KEY) || 'null'); } catch { /* nada */ }
+    if (!p || Number(p.pro_id) !== Number(proId)) return null;
+    try { localStorage.removeItem(PENDING_KEY); } catch { /* nada */ }
+    return Date.now() - p.at < 30 * 60e3 ? p : null;
+  }
+  // Depois de criar a conta (ou entrar): marca o horário guardado e vai direto para o pagamento.
+  // (A política já foi aceita antes de criar a conta.)
+  async function resumeBooking(pro, p) {
+    const page = fullPage('Pagamento');
+    page.body.innerHTML = `<div class="card stack center"><div class="spinner"></div><p class="muted">Reservando ${esc(p.when || 'o seu horário')}…</p></div>`;
+    try {
+      const a = await api('/api/agenda/book', { method: 'POST', body: { professional_id: pro.id, start: p.start, accept: true, modality: p.modality, confirm_place: p.modality === 'presencial' } });
+      if (a.mode === 'auto') payScreen(page, a);
+      else manualSent(page, a);
+    } catch (e) {
+      page.setTitle('Agendar consulta');
+      page.body.innerHTML = `<div class="card stack center"><div class="big-ic warn">${ic('clock', 30)}</div><h2 style="margin:0">Não deu para reservar este horário</h2>
+        <p class="muted">${esc(e.message)}</p><button type="button" class="btn" data-again>Escolher outro horário</button></div>`;
+      $('[data-again]', page.body).addEventListener('click', async () => { await page.close(); openBooking({ mode: 'book', pro }); });
+    }
+  }
+
   const shiftYm = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
 
   // Pedido manual: o profissional manda a chave Pix no chat
@@ -922,7 +960,7 @@
   const onChange = (f) => listeners.add(f);
 
   window.AcoliaAgenda = {
-    setContext, openBooking, openDetail, locationHtml, payScreen, acceptAndPay, act, buttons, bindActions, chatCardHtml, previewText,
+    setContext, openBooking, takePending, resumeBooking, openDetail, locationHtml, payScreen, acceptAndPay, act, buttons, bindActions, chatCardHtml, previewText,
     mountBar, refreshBar, openList, loadUpcoming, findAppt, onChange, refreshAll, countdown, policyHtml, badge, STATUS,
     get cache() { return cache; },
   };

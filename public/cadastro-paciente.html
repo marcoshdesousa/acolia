@@ -80,7 +80,8 @@
       if (d.password !== d.password2) throw new Error('As senhas não são iguais.');
       if (!d.terms) throw new Error('Para continuar, aceite o uso dos dados.');
       try {
-        await api('/api/auth/patient/register', { method: 'POST', body: d });
+        // Veio do link de um profissional (a página dele): ele recebe o aviso do novo paciente
+        await api('/api/auth/patient/register', { method: 'POST', body: { ...d, ref: safeNext || '' } });
       } catch (e) {
         if (e.data?.cpf_exists) { Acolia.cpfExistsDialog({ role: 'patient', cpf: d.cpf }); return; }
         throw e;

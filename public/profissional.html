@@ -25,6 +25,7 @@
   <script src="/js/specialties.js"></script>
   <script src="/js/profile-view.js"></script>
   <script src="/js/social.js"></script>
+  <script src="/js/agenda.js"></script>
   <script>
   (async function () {
     const { $, api, ICONS, esc, modal, toast } = Acolia;
@@ -51,6 +52,21 @@
       });
     }
 
+    AcoliaAgenda.setContext({ role: me.role });
+    // Agendar sem conta (link do profissional): escolhe o dia e o horário; na hora de pagar, cria a conta
+    // (ou entra) e volta direto para o pagamento
+    function needAccountToPay() {
+      modal({
+        title: 'Falta só criar a sua conta',
+        html: '<p>O seu horário fica guardado. Crie a sua conta grátis (ou entre, se já tiver) e você volta direto para o <b>pagamento</b> da consulta.</p>',
+        actions: [{ label: 'Já tenho conta', value: 'entrar', class: 'secondary' }, { label: 'Criar conta', value: 'criar' }],
+      }).then((v) => {
+        if (v === 'criar') location.href = '/cadastro-paciente?next=' + encodeURIComponent(here);
+        if (v === 'entrar') location.href = '/entrar?next=' + encodeURIComponent(here);
+      });
+    }
+    if (!me.role) window.AcoliaVisitorBooking = (pro) => AcoliaAgenda.openBooking({ mode: 'book', pro, visitor: true, onNeedAccount: (o) => (o?.booking ? needAccountToPay() : needAccount()) });
+
     try {
       const p = await api('/api/professionals/' + encodeURIComponent(key));
       document.title = p.official ? p.name + ' | Acolia' : p.name + ' — ' + p.profession + ' | Acolia';
@@ -62,6 +78,8 @@
       });
       AcoliaSocial.setContext({ role: me.role, me: me.user, onOpenProfile: (id) => { location.href = '/profissional.html?id=' + id; }, onMessage: (id) => { location.href = '/app#conversar/' + id; } });
       AcoliaSocial.bindProfile($('[data-profile]'), p, { onNeedAccount: needAccount });
+      // Acabou de criar a conta (ou entrar) depois de escolher um horário: vai direto para o pagamento
+      if (patient) { const pend = AcoliaAgenda.takePending(p.id); if (pend) AcoliaAgenda.resumeBooking(p, pend); }
       if (pro || p.official) return;
       $('[data-msg]').addEventListener('click', () => {
         if (!patient) return needAccount();

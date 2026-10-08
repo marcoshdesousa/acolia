@@ -81,7 +81,9 @@
     if (book) {
       const pro = PRO_CACHE.get(Number(book.dataset.book));
       if (!pro) return;
-      if (pro.locked) {
+      // Página do link do profissional: o visitante escolhe o dia e o horário e cria a conta na hora de pagar
+      if (pro.locked && window.AcoliaVisitorBooking) window.AcoliaVisitorBooking(pro);
+      else if (pro.locked) {
         if (window.AcoliaSpecialties) AcoliaSpecialties.needAccount('agendar sua consulta');
         else location.href = '/cadastro-paciente?next=' + encodeURIComponent(location.pathname);
       } else if (window.AcoliaAgenda) AcoliaAgenda.openBooking({ mode: 'book', pro });

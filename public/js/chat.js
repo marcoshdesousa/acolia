@@ -87,6 +87,7 @@
       if (m.kind === 'doc') return `${prefix}📄 ${String(m.body).split('|')[1] || 'Documento'}`;
       if (m.kind === 'post') return `${prefix}Publicação compartilhada`;
       if (m.kind === 'booking') return prefix + (window.AcoliaAgenda ? AcoliaAgenda.previewText(m) : '📅 Consulta');
+      if (m.kind === 'notice') return 'Novo paciente pelo seu link';
       return prefix + m.body;
     }
 
@@ -610,6 +611,10 @@
     }
 
     function msgHtml(m) {
+      // Aviso da Acolia (ex.: "Fulano criou uma conta pelo seu link"): no meio da conversa, sem balão
+      if (m.kind === 'notice') {
+        return `<div class="msg-notice" data-mid="${m.id}">${ICONS.userPlus.replace('<svg', '<svg style="width:18px;height:18px"')}<span>${esc(m.body)}<br><small>Você já pode mandar mensagem para ${role === 'professional' ? 'ele(a)' : 'o profissional'}.</small></span></div>`;
+      }
       const mine = m.sender_role === role;
       const ticks = mine ? `<span class="tick ${m.read_at ? 'read' : ''}" title="${m.read_at ? 'Lida' : 'Enviada'}">${m.read_at ? ICONS.checks : ICONS.check}</span>` : '';
       let inner;
