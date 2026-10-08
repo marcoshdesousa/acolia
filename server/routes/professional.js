@@ -390,6 +390,14 @@ const totalsOf = (rows) => ({ patients: rows.length, consultations: rows.reduce(
 
 const PATIENT_COLS = [['Nome completo', 'name', 27], ['CPF', 'cpf', 13], ['Nascimento', 'birth_date', 10], ['Município', 'place', 18], ['Modalidade', 'modalidade', 10], ['Consultas', 'consultas', 8], ['Última', 'ultima', 10]];
 
+// "Ver dados do paciente": termo de sigilo (aceito uma vez) e os dados dos pacientes do profissional
+router.get('/patient-data/terms', (req, res) => {
+  const D = require('../patientData');
+  res.json({ ...D.publicTerms(), accepted: D.accepted(req.auth.user.id), full_name: req.auth.user.legal_name || req.auth.user.name });
+});
+router.post('/patient-data/terms', (req, res) => res.json({ ok: true, accepted: require('../patientData').accept(req.auth.user, req.body || {}, req) }));
+router.get('/patient-data/:patientId', (req, res) => res.json(require('../patientData').dataFor(req.auth.user, req.params.patientId, req)));
+
 router.get('/patients', (req, res) => {
   const items = myPatients(req.auth.user.id, filtersOf(req.query));
   res.json({ items, totals: totalsOf(items), period: periodText(req.query) });

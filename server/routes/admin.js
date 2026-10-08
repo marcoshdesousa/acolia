@@ -39,6 +39,8 @@ function adminPro(p) {
     cpf: p.cpf ? U.formatCpf(p.cpf) : '',
     birth_date: p.birth_date || '',
     terms: require('../terms').lastAcceptance('professional', p.id), // Termo de Adesão assinado no cadastro
+    data_terms: require('../patientData').accepted(p.id), // Termo de Sigilo dos Dados dos Pacientes ("Ver dados")
+    data_accesses: db.prepare('SELECT COUNT(*) n FROM patient_data_access WHERE professional_id = ?').get(p.id).n,
     review_pending: !!p.review_pending, // pagou o Pix no cadastro e entrou direto: a equipe confere os dados
   };
 }

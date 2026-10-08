@@ -149,7 +149,7 @@
       const maxYm = info.max_date.slice(0, 7);
       const pt = info.patient;
       const head = mode === 'propose' ? `<div class="card flat pat-data"><div class="small muted" style="font-weight:700">PACIENTE</div><b>${esc(pt?.name || opts.peerName || 'Paciente')}</b>
-            ${pt ? `<div class="small muted">CPF ${esc(pt.cpf)}${pt.birth_date ? ` · nascimento ${esc(pt.birth_date)}` : ''}${pt.place ? ` · ${esc(pt.place)}` : ''}</div>` : ''}</div>`
+            ${pt?.cpf ? `<div class="small muted">CPF ${esc(pt.cpf)}${pt.birth_date ? ` · nascimento ${esc(pt.birth_date)}` : ''}${pt.place ? ` · ${esc(pt.place)}` : ''}</div>` : ''}</div>`
         : mode === 'reschedule' ? `<p class="muted" style="margin-top:0">Consulta atual: <b>${esc(opts.appt.when)}</b> (${opts.appt.modality === 'presencial' ? 'presencial' : 'online'}). Escolha o novo dia e horário${info.presencial ? ' e, se quiser, troque entre online e presencial' : ''}.${opts.appt.status === 'confirmada' ? ' <b>Você só pode remarcar uma vez.</b>' : ''}</p>`
           : `<div class="row" style="gap:12px;margin-bottom:12px">${avatar(proName, opts.pro.photo, 'md')}<div><b>${esc(proName)}</b><div class="muted small">${esc(opts.pro.profession || '')}</div></div></div>`;
       const loc = info.presencial;

@@ -45,7 +45,11 @@ router.get('/pro/:id/month', (req, res) => {
   if (isPro(req) && patientId) {
     const p = db.prepare('SELECT name, cpf, birth_date, city, state FROM patients WHERE id = ?').get(patientId);
     const mine = db.prepare('SELECT 1 FROM conversations WHERE professional_id = ? AND patient_id = ?').get(pro.id, patientId);
-    if (p && mine) patient = { name: p.name, cpf: U.formatCpf(p.cpf), birth_date: p.birth_date ? p.birth_date.split('-').reverse().join('/') : '', place: [p.city, p.state].filter(Boolean).join(' - ') };
+    // CPF e nascimento: só o profissional (não a secretária) que aceitou o termo de sigilo, e só dos pacientes dele
+    const D = require('../patientData');
+    const full = !req.auth.secretary && D.accepted(pro.id) && D.isMine(pro.id, patientId);
+    if (p && mine) patient = full ? { name: p.name, cpf: U.formatCpf(p.cpf), birth_date: p.birth_date ? p.birth_date.split('-').reverse().join('/') : '', place: [p.city, p.state].filter(Boolean).join(' - ') }
+      : { name: p.name, cpf: '', birth_date: '', place: '' };
   }
   res.json({
     ym, today: G.localDate(G.now()), max_date: G.maxDate(pro),

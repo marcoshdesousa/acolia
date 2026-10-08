@@ -65,6 +65,8 @@ const DENY = [
   ['POST', /^\/api\/professional\/(photo|gallery\/[^/]+|slug|password|delete)$/, 'mudar o perfil, a senha ou a conta'],
   ['DELETE', /^\/api\/professional\/gallery\/[^/]+$/, 'mudar o perfil'],
   [null, /^\/api\/professional\/secretary(\/.*)?$/, 'mexer na secretária'],
+  // dados dos pacientes (CPF, nascimento): só o profissional, que assinou o termo de sigilo
+  [null, /^\/api\/professional\/patient-data(\/.*)?$/, 'ver os dados dos pacientes (CPF e nascimento): só o profissional, que assinou o termo de sigilo'],
   // pagamento automático (Asaas)
   [null, /^\/api\/agenda\/asaas$/, 'mexer no pagamento automático pelo Pix'],
   // mensalidade da Acolia

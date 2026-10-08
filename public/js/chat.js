@@ -207,7 +207,8 @@
       if (c.support) { renderSupportThread(); return; }
       const proActions = role === 'professional' ? `
         <button class="icon-btn" title="Enviar chave Pix" aria-label="Enviar chave Pix" data-pix>${ICONS.pix}</button>
-        ${secretary ? '' : `<button class="icon-btn" title="Documentos: atestado, receita, encaminhamento" aria-label="Documentos" data-docs>${ICONS.doc}</button>`}` : ''; // secretária não emite documentos (assinatura do profissional)
+        ${secretary ? '' : `<button class="icon-btn" title="Ver dados do paciente" aria-label="Ver dados do paciente" data-patient-data>${ICONS.user}</button>`}
+        ${secretary ? '' : `<button class="icon-btn" title="Documentos: atestado, receita, encaminhamento" aria-label="Documentos" data-docs>${ICONS.doc}</button>`}` : ''; // secretária não emite documentos nem vê os dados (assinatura e termo são do profissional)
       threadWrap.innerHTML = `
         <div class="thread-head">
           <button class="icon-btn back-btn" aria-label="Voltar" data-close>${ICONS.back}</button>
@@ -259,6 +260,7 @@
       $('[data-block]', threadWrap).addEventListener('click', () => { pop.classList.add('hidden'); toggleBlock(); });
       $('[data-unblock-here]', threadWrap)?.addEventListener('click', toggleBlock);
       $('[data-pix]', threadWrap)?.addEventListener('click', sendPix);
+      $('[data-patient-data]', threadWrap)?.addEventListener('click', () => openPatientData(state.current.peer.id));
       $('[data-docs]', threadWrap)?.addEventListener('click', () => {
         if (!canWrite(state.current)) { toast('Não é possível enviar nesta conversa.', 'error'); return; }
         window.AcoliaDocs.openForm(state.current.id, (msg) => addMessage(msg));
@@ -608,6 +610,50 @@
         renderThread();
         loadList();
       } catch (ex) { toast(ex.message, 'error'); }
+    }
+
+    // "Ver dados do paciente": na primeira vez, o termo de sigilo (lê, marca e assina com o nome completo)
+    async function openPatientData(patientId) {
+      try {
+        const t = await api('/api/professional/patient-data/terms');
+        if (!t.accepted && !(await signDataTerms(t))) return;
+        const d = await api(`/api/professional/patient-data/${patientId}`);
+        const br = (x) => (x ? x.split('-').reverse().join('/') : '—');
+        await modal({
+          title: 'Dados do paciente',
+          html: `<div class="notice info small" style="margin:0 0 12px">${ICONS.lock.replace('<svg', '<svg style="width:15px;height:15px;vertical-align:-2px"')} Confidencial: use só para o atendimento (termo de sigilo aceito).</div>
+            <table class="kv-table" style="font-size:.95rem"><tbody>
+              <tr><th>Nome completo</th><td><b>${esc(d.name)}</b></td></tr>
+              ${d.handle ? `<tr><th>Na Acolia</th><td>@${esc(d.handle)}</td></tr>` : ''}
+              <tr><th>CPF</th><td>${esc(d.cpf)} <button type="button" class="btn ghost sm" data-copy-cpf>Copiar</button></td></tr>
+              <tr><th>Nascimento</th><td>${br(d.birth_date)}${d.age != null ? ` <span class="muted">(${d.age} anos)</span>` : ''}</td></tr>
+              <tr><th>Cidade</th><td>${esc(d.city)} - ${esc(d.state)}</td></tr>
+              <tr><th>Conta desde</th><td>${br(d.since)}</td></tr>
+              ${d.via.length ? `<tr><th>Com você</th><td>${d.via.map(esc).join('<br>')}</td></tr>` : ''}
+            </tbody></table>
+            <p class="small muted" style="margin:10px 0 0">WhatsApp e e-mail do paciente não aparecem: a conversa é aqui na Acolia.</p>`,
+          onOpen: (dlg) => $('[data-copy-cpf]', dlg).addEventListener('click', () => Acolia.copyText(d.cpf)),
+          actions: [{ label: 'Fechar' }],
+        });
+      } catch (e) { toast(e.message, 'error'); }
+    }
+    function signDataTerms(t) {
+      return modal({
+        title: t.title,
+        html: `<p class="small" style="margin-top:0">Para ver os dados dos seus pacientes, leia e assine o termo. É uma vez só.</p>
+          <div class="terms-box" tabindex="0">${t.sections.map((x) => `<h3>${esc(x.title)}</h3><p>${esc(x.text)}</p>`).join('')}</div>
+          <label class="check" style="margin:12px 0 6px"><input type="checkbox" data-dt-ok> <span>Li e aceito o Termo de Responsabilidade e Sigilo dos Dados dos Pacientes.</span></label>
+          <div class="field" style="margin:0"><label>Assinatura: digite o seu nome completo</label><input data-dt-name autocomplete="off" maxlength="120">
+            <div class="hint">Igual ao do cadastro: <b>${esc(t.full_name)}</b></div></div>
+          <div class="form-error hidden" data-dt-err></div>`,
+        actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, { label: 'Assinar e ver os dados', handler: async (dlg) => {
+          const err = $('[data-dt-err]', dlg);
+          try {
+            await api('/api/professional/patient-data/terms', { method: 'POST', body: { accept: $('[data-dt-ok]', dlg).checked, version: t.version, name: $('[data-dt-name]', dlg).value } });
+            return true;
+          } catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); return false; }
+        } }],
+      });
     }
 
     function msgHtml(m) {

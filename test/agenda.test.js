@@ -1162,3 +1162,39 @@ test('link do profissional: visitante cria a conta pelo link → o profissional 
   await leo.post('/api/auth/patient/register', { name: 'Leo Link Antigo', cpf: nextCpf(), state: 'SP', city: 'Campinas', birth_date: '1993-04-05', password: 'senha123', ref: `/profissional.html?id=${P.id}` });
   assert.ok((await P.cl.get('/api/chat/conversations')).data.items.some((x) => x.peer.name === 'Leo Link Antigo'));
 });
+
+test('Ver dados do paciente: só dos pacientes dele (link, conversa ou consulta) e depois de assinar o termo de sigilo', async () => {
+  const list = (await P.cl.get('/api/chat/conversations')).data.items;
+  const lia = list.find((x) => x.peer.name === 'Lia Pelo Link').peer.id;
+  const anaId = list.find((x) => x.peer.name === 'Ana Lima Castro')?.peer.id;
+  const { db } = require('../server/db');
+  const caio = db.prepare("SELECT id FROM patients WHERE name = 'Caio Sem Link'").get().id;
+  // Antes do termo: não vê
+  let r = await P.cl.get(`/api/professional/patient-data/${lia}`);
+  assert.equal(r.status, 428);
+  assert.equal(r.data.needs_terms, true);
+  const t = (await P.cl.get('/api/professional/patient-data/terms')).data;
+  assert.equal(t.accepted, null);
+  assert.ok(t.sections.some((s) => /art\. 154/.test(s.title)));
+  assert.equal((await P.cl.post('/api/professional/patient-data/terms', { accept: true, version: t.version, name: 'Outro Nome' })).status, 400, 'nome diferente');
+  assert.equal((await P.cl.post('/api/professional/patient-data/terms', { accept: false, version: t.version, name: t.full_name })).status, 400, 'sem marcar');
+  r = await P.cl.post('/api/professional/patient-data/terms', { accept: true, version: t.version, name: t.full_name });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  // Paciente que veio pelo link
+  r = await P.cl.get(`/api/professional/patient-data/${lia}`);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.name, 'Lia Pelo Link');
+  assert.match(r.data.cpf, /^\d{3}\.\d{3}\.\d{3}-\d{2}$/);
+  assert.equal(r.data.birth_date, '1992-03-04');
+  assert.ok(r.data.via.includes('Criou a conta pelo seu link'));
+  assert.equal(r.data.phone, undefined, 'WhatsApp nunca aparece');
+  assert.equal(r.data.email, undefined);
+  // Paciente que marcou consulta com ele
+  if (anaId) assert.equal((await P.cl.get(`/api/professional/patient-data/${anaId}`)).status, 200);
+  // Paciente que não é dele: não vê
+  assert.equal((await P.cl.get(`/api/professional/patient-data/${caio}`)).status, 404);
+  // Fica registrado
+  assert.ok(db.prepare('SELECT COUNT(*) n FROM patient_data_access WHERE professional_id = ?').get(P.id).n >= 1);
+  // Paciente não usa
+  assert.notEqual((await ana.get(`/api/professional/patient-data/${lia}`)).status, 200);
+});
