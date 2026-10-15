@@ -83,6 +83,16 @@ router.use((req, res, next) => {
   next();
 });
 
+// ---------- Avaliação (1 a 5 estrelas) depois da consulta ----------
+router.get('/to-rate', (req, res) => {
+  if (!isPatient(req)) return res.json({ items: [], labels: require('../ratings').LABELS });
+  res.json({ items: require('../ratings').pending(req.auth.user.id), labels: require('../ratings').LABELS });
+});
+router.post('/appointments/:id/rate', (req, res) => {
+  if (!isPatient(req)) throw new U.HttpError(403, 'Só o paciente avalia a consulta.');
+  res.json(require('../ratings').rate(req.auth.user.id, req.params.id, req.body.stars));
+});
+
 // ---------- Paciente marca ----------
 router.post('/book', async (req, res) => {
   if (!isPatient(req)) throw new U.HttpError(403, 'Só pacientes marcam consultas por aqui.');

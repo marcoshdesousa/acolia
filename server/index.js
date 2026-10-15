@@ -23,6 +23,8 @@ function ensureAdmin() {
 
 function createApp() {
   const { attachSession } = require('./auth');
+  require('./trial'); // 7 dias grátis e selo de verificado (colunas e tabela)
+  require('./ratings'); // avaliações das consultas (tabela)
   const { UPLOAD_DIR } = require('./upload');
   const app = express();
   app.disable('x-powered-by');

@@ -90,7 +90,11 @@
     let text;
     let btn;
     let msg;
-    if (isPro && a.blocked === 'vencido') {
+    if (isPro && a.blocked === 'vencido' && a.trial) {
+      text = `Os seus <b>7 dias grátis</b> terminaram em <b>${brDate(a.until)}</b>. O seu perfil saiu da vitrine — os seus dados, conversas e publicações continuam guardados.<br>Pague a mensalidade e tudo volta ao normal na hora.`;
+      btn = 'Falar com a equipe';
+      msg = `Olá! Sou ${who}, profissional da Acolia. Meus 7 dias grátis terminaram e quero continuar.`;
+    } else if (isPro && a.blocked === 'vencido') {
       text = `Sua assinatura terminou em <b>${brDate(a.until)}</b> e não foi renovada. Seu perfil está bloqueado e não aparece para ninguém — seus dados continuam guardados.<br>Para reativar a conta, renove sua assinatura.`;
       btn = 'Renovar assinatura';
       msg = isClinic ? `Olá! Sou da clínica ${who} na Acolia. A mensalidade venceu e quero renovar para reativar a conta.` : `Olá! Sou ${who}, profissional da Acolia. Minha assinatura venceu e quero renovar para reativar a conta.`;
@@ -287,7 +291,10 @@
     const u = me.user || {};
     const el = document.createElement('div');
     el.className = 'notice warn renew-banner';
-    el.innerHTML = `<div class="grow"><b>${a.ended ? 'Sua assinatura terminou' : 'Sua assinatura está acabando'}</b>
+    el.innerHTML = a.trial
+      ? `<div class="grow"><b>${a.ended ? 'Os seus 7 dias grátis terminaram' : 'Os seus 7 dias grátis estão acabando'}</b>
+        <div class="small">${a.ended ? `Terminaram em <b>${brDate(a.until)}</b>.` : `Terminam em <b>${brDate(a.until)}</b>.`} Pague a mensalidade (R$ 30,00 a cada 30 dias) para continuar aparecendo para os pacientes.</div></div>`
+      : `<div class="grow"><b>${a.ended ? 'Sua assinatura terminou' : 'Sua assinatura está acabando'}</b>
         <div class="small">${a.ended ? `O plano finalizou em <b>${brDate(a.until)}</b>. Renove agora para continuar aparecendo para os pacientes.` : `O plano finaliza em <b>${brDate(a.until)}</b>. Renove para continuar aparecendo para os pacientes.`}</div></div>
       <a class="btn sm" data-renew-btn target="_blank" rel="noopener" href="${esc(supportLink(a.support, `Olá! Sou ${u.name || ''}${u.code ? ` (código ${u.code})` : ''}, ${me.role === 'clinic' ? 'da clínica' : 'profissional da'} Acolia, e quero renovar minha assinatura.`))}">Renovar</a>`;
     where.prepend(el);
@@ -606,6 +613,16 @@
   async function platformPixOn() {
     if (pixOn === null) { try { pixOn = !!(await api('/api/config')).platform_pix; } catch { pixOn = false; } }
     return pixOn;
+  }
+
+  // ---------- Selo de verificado (azul) e estrelas da avaliação ----------
+  // Azul: profissional que a equipe conferiu. (O da Acolia Brasil é dourado: .official-badge)
+  const verifiedBadge = '<span class="verified-badge" title="Verificado pela Acolia" aria-label="Verificado"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.5l2.6 1.9 3.2-.1 1 3 2.6 1.9-1 3.1 1 3.1-2.6 1.9-1 3-3.2-.1L12 22.5l-2.6-1.9-3.2.1-1-3-2.6-1.9 1-3.1-1-3.1 2.6-1.9 1-3 3.2.1z"/><path d="M8 12.2l2.7 2.7L16.2 9.4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+  const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.8l2.8 5.7 6.3.9-4.6 4.4 1.1 6.2L12 17.1 6.4 20l1.1-6.2L2.9 9.4l6.3-.9z"/></svg>';
+  // "★ 4,8 (23 avaliações)" — só aparece quando já tem avaliação
+  function ratingHtml(r, { short = false } = {}) {
+    if (!r || !r.count) return '';
+    return `<span class="rating-line" title="Média de ${r.count} avaliação(ões)"><span class="rl-star">${STAR}</span><b>${r.avg.toFixed(1).replace('.', ',')}</b>${short ? ` <span class="muted">(${r.count})</span>` : ` <span class="muted">(${r.count} ${r.count === 1 ? 'avaliação' : 'avaliações'})</span>`}</span>`;
   }
 
   // ---------- Estados e municípios (IBGE) ----------
@@ -1007,7 +1024,7 @@
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
     supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
-    handleForm, logout, showBlocked, pixBox, renewPix, platformPixOn, showNeedsCpf, showNeedsPassword, installBanner, namePicker, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
+    handleForm, logout, showBlocked, verifiedBadge, ratingHtml, STAR, pixBox, renewPix, platformPixOn, showNeedsCpf, showNeedsPassword, installBanner, namePicker, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
     SOCIAL, socialLinks, socialFields,
   };
 })();

@@ -20,7 +20,7 @@
   const officialBadge = '<span class="official-badge" title="Perfil oficial da Acolia" aria-label="Perfil oficial"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.5l2.6 1.9 3.2-.1 1 3 2.6 1.9-1 3.1 1 3.1-2.6 1.9-1 3-3.2-.1L12 22.5l-2.6-1.9-3.2.1-1-3-2.6-1.9 1-3.1-1-3.1 2.6-1.9 1-3 3.2.1z"/><path d="M8 12.2l2.7 2.7L16.2 9.4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
 
   function authorLink(a, extra = '') {
-    const inner = `${avatar(a.name, a.photo, 'sm')}<span class="who"><b>${esc(a.name)}${a.official ? officialBadge : ''}</b>${a.subtitle ? `<small>${esc(a.subtitle)}</small>` : ''}${extra}</span>`;
+    const inner = `${avatar(a.name, a.photo, 'sm')}<span class="who"><b>${esc(a.name)}${a.official ? officialBadge : a.verified ? Acolia.verifiedBadge : ''}</b>${a.subtitle ? `<small>${esc(a.subtitle)}</small>` : ''}${extra}</span>`;
     return a.clinic
       ? `<a class="post-author" href="#" data-open-clinic="${esc(a.clinic)}">${inner}</a>`
       : a.role === 'professional'

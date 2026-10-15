@@ -23,7 +23,8 @@
     const pro = viewerRole === 'professional'; // profissional vê a vitrine, mas não manda mensagem
     return `<article class="card pro-card" data-id="${p.id}">
       <div class="head">${avatar(p.name, p.photo, 'lg')}
-        <div style="min-width:0;padding-right:28px"><div class="name">${esc(p.name)}</div><div class="muted small">${esc(p.profession)}</div>
+        <div style="min-width:0;padding-right:28px"><div class="name">${esc(p.name)}${p.verified ? Acolia.verifiedBadge : ''}</div><div class="muted small">${esc(p.profession)}</div>
+        ${p.rating ? `<div class="small">${Acolia.ratingHtml(p.rating, { short: true })}</div>` : ''}
         ${p.registry ? `<div class="small">${ICONS.badge.replace('<svg', '<svg style="width:15px;height:15px;vertical-align:-3px"')} ${esc(p.registry)}</div>` : ''}</div>
       </div>
       ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}

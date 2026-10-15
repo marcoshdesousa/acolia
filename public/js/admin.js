@@ -194,7 +194,7 @@
       <td><div class="row" style="flex-wrap:nowrap">${avatar(p.name, p.photo, 'sm')}<div><b>${esc(p.name)}</b>${p.is_test ? ' <span class="badge warn">Teste</span>' : ''}<div class="small muted">${esc(p.profession)} · ${esc(p.email)}</div></div></div></td>
       <td>${esc(p.registry)}</td>
       <td>${esc(p.city)} - ${esc(p.state)}</td>
-      <td>${p.status === 'excluido' ? '<span class="badge">Apagada</span>' : (STATUS_BADGE[p.status] || esc(p.status))}${p.review_pending ? ' <span class="badge warn" title="Pagou o Pix e entrou direto: confira os dados">Conferir dados</span>' : ''}</td>
+      <td>${p.status === 'excluido' ? '<span class="badge">Apagada</span>' : (STATUS_BADGE[p.status] || esc(p.status))}${p.review_pending ? ' <span class="badge warn" title="Entrou direto (7 dias grátis ou Pix): confira os dados">Conferir dados</span>' : ''}${p.verified ? ' <span class="badge" style="background:#e3f1fd;color:#1565c0">Verificado</span>' : ''}</td>
       <td>${subBadge(p)}</td>
       <td><button class="btn secondary sm" data-pro="${p.id}">Gerenciar</button></td></tr>`;
   }
@@ -411,10 +411,10 @@
       html: `
         <div class="row" style="margin-bottom:12px">${avatar(p.name, p.photo, 'lg')}<div>
           <div><b>${esc(p.profession)}</b>${p.registry ? ` · ${esc(p.registry)}` : ''}</div>
-          <div class="small">${STATUS_BADGE[p.status]}${p.is_test ? ' <span class="badge warn">Teste</span>' : ''} ${p.visible ? '<span class="badge primary">Na vitrine</span>' : '<span class="badge">Fora da vitrine</span>'}</div>
+          <div class="small">${STATUS_BADGE[p.status]}${p.verified ? ' <span class="badge" style="background:#e3f1fd;color:#1565c0">Verificado</span>' : ''}${p.trial ? ' <span class="badge warn">7 dias grátis</span>' : ''}${p.is_test ? ' <span class="badge warn">Teste</span>' : ''} ${p.visible ? '<span class="badge primary">Na vitrine</span>' : '<span class="badge">Fora da vitrine</span>'}</div>
         </div></div>
-        ${p.review_pending ? `<div class="notice warn" style="margin-bottom:12px"><b>Pago, aguardando conferência.</b> Pagou o Pix no cadastro e a conta foi liberada na hora. Confira os dados e a carteirinha abaixo.
-          <div class="row" style="margin-top:8px"><button type="button" class="btn sm" data-review-ok>Conferido, está tudo certo</button>
+        ${p.review_pending ? `<div class="notice warn" style="margin-bottom:12px"><b>${p.trial ? 'Cadastro novo (7 dias grátis), aguardando conferência.' : 'Pago, aguardando conferência.'}</b> ${p.trial ? 'A conta foi liberada na hora, com os 7 dias grátis.' : 'Pagou o Pix no cadastro e a conta foi liberada na hora.'} Confira os dados e a carteirinha abaixo. Conferido, ele ganha o <b>selo azul de verificado</b>.
+          <div class="row" style="margin-top:8px"><button type="button" class="btn sm" data-review-ok>Conferido: dar o selo de verificado</button>
           <button type="button" class="btn danger sm" data-review-no>Dados errados: tirar o acesso</button></div></div>` : ''}
         <table class="kv-table" style="font-size:.9rem"><tbody>
           <tr><th>Código único</th><td><code style="font-size:1.05rem;font-weight:800">${esc(p.code)}</code> <button type="button" class="btn ghost sm" data-copy-code>Copiar</button></td></tr>
@@ -458,7 +458,8 @@
         <h3 style="margin-top:16px">Observações internas</h3>
         <textarea data-note rows="2" maxlength="1000">${esc(p.admin_note)}</textarea>
         <div class="row" style="margin-top:6px"><button type="button" class="btn secondary sm" data-save-note>Salvar observação</button>
-          <button type="button" class="btn ghost sm" data-reset-pw>Gerar nova senha</button></div>
+          <button type="button" class="btn ghost sm" data-reset-pw>Gerar nova senha</button>
+          ${p.status !== 'excluido' ? `<button type="button" class="btn ghost sm" data-verify="${p.verified ? '0' : '1'}">${p.verified ? 'Tirar o selo de verificado' : 'Dar o selo de verificado'}</button>` : ''}</div>
         ${p.status !== 'excluido' ? `<h3 style="margin-top:16px">Apagar conta</h3>
           <p class="small muted" style="margin:0 0 8px">Apaga tudo: dados, fotos, publicações, reels, stories, curtidas, comentários e o conteúdo das mensagens que ele mandou. Não dá para desfazer. Ele pode criar uma conta nova depois.</p>
           <button type="button" class="btn danger sm" data-del-test>Apagar conta</button>` : ''}`,
@@ -466,12 +467,15 @@
       onOpen: (dlg) => {
         const refresh = async () => { dlg.close(); dlg.remove(); await reloadAll(); openPro(id); };
         $('[data-copy-code]', dlg).addEventListener('click', () => copyText(p.code));
+        $('[data-verify]', dlg)?.addEventListener('click', async (e) => {
+          try { await api(`/api/admin/professionals/${id}/verified`, { method: 'POST', body: { verified: e.currentTarget.dataset.verify === '1' } }); toast('Selo atualizado.'); refresh(); } catch (ex) { toast(ex.message, 'error'); }
+        });
         $('[data-review-ok]', dlg)?.addEventListener('click', async () => {
           try { await api(`/api/admin/professionals/${id}/review`, { method: 'POST', body: { ok: true } }); toast('Conferido.'); refresh(); } catch (e) { toast(e.message, 'error'); }
         });
         $('[data-review-no]', dlg)?.addEventListener('click', async () => {
           const paid = (p.payments || []).find((x) => x.kind === 'cadastro' && x.status === 'pago');
-          if (!await confirmDialog(`Tirar o acesso de ${p.name}? A conta sai da vitrine e ele(a) não consegue mais entrar. Depois, faça o reembolso do Pix pelo painel da SyncPay${paid ? ` (identificador ${paid.identifier})` : ''}.`, { okLabel: 'Tirar o acesso', danger: true })) return;
+          if (!await confirmDialog(`Tirar o acesso de ${p.name}? A conta sai da vitrine e ele(a) não consegue mais entrar.${paid ? ` Depois, faça o reembolso do Pix pelo painel da SyncPay (identificador ${paid.identifier}).` : ''}`, { okLabel: 'Tirar o acesso', danger: true })) return;
           try { await api(`/api/admin/professionals/${id}/review`, { method: 'POST', body: { ok: false } }); toast('Acesso retirado. Lembre de reembolsar pela SyncPay.'); refresh(); } catch (e) { toast(e.message, 'error'); }
         });
         $('[data-edit-pro]', dlg)?.addEventListener('click', async () => {

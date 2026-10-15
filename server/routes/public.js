@@ -126,12 +126,16 @@ router.get('/professionals', (req, res) => {
   const pop = popularity();
   const near = (p) => (me ? (p.city_norm === me.city_norm && p.state === me.state ? 0 : p.state === me.state ? 1 : 2) : 0);
   const byPop = (a, b) => (pop.get(b.id) || 0) - (pop.get(a.id) || 0);
+  // Mais bem avaliados primeiro (média das estrelas, puxada para o meio enquanto há poucas avaliações)
+  const R = require('../ratings');
+  const rat = R.allSummaries();
+  const byRating = (a, b) => R.score(rat.get(b.id)) - R.score(rat.get(a.id));
   const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
   const price = (p, dir) => (p.price_cents == null ? Infinity : dir * p.price_cents); // sem valor vai para o fim
   const sort = me || viewerIsPro ? req.query.sort : ''; // ordenar por valor também só com conta
   if (sort === 'preco_menor') rows.sort((a, b) => price(a, 1) - price(b, 1) || byPop(a, b) || byName(a, b));
   else if (sort === 'preco_maior') rows.sort((a, b) => price(a, -1) - price(b, -1) || byPop(a, b) || byName(a, b));
-  else rows.sort((a, b) => near(a) - near(b) || byPop(a, b) || byName(a, b));
+  else rows.sort((a, b) => near(a) - near(b) || byRating(a, b) || byPop(a, b) || byName(a, b));
 
   res.json({
     loggedIn: !!me,

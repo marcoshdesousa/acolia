@@ -77,6 +77,8 @@ function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest 
     bio: p.bio,
     specialties: p.specialties,
     photo: p.photo,
+    verified: !!p.verified, // selo azul (a equipe conferiu os dados)
+    rating: require('./ratings').summary(p.id), // { avg, count } ou null
   };
   const { db } = require('./db');
   const { recent, recentReels, photosCount, reelsCount, gallery, social: socialCounts } = postsSummary(p.id);
@@ -210,6 +212,10 @@ function ownProfessional(p) {
     subscription_until: p.subscription_until,
     visible: isVisible(p),
     created_at: p.created_at,
+    verified: !!p.verified,
+    verified_seen: p.verified_seen !== 0,
+    trial: !!p.trial,
+    rating: require('./ratings').summary(p.id),
   };
 }
 

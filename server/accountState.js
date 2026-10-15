@@ -27,9 +27,10 @@ function proState(p) {
   if (p.status !== 'aprovado' && p.status !== 'restrito') return {};
   if (!until) return {};
   const today = U.todayISO();
-  if (today > U.addDaysISO(until, GRACE_DAYS)) return { blocked: 'vencido', until };
-  if (today >= U.addDaysISO(until, -WARN_DAYS)) return { warn: true, until, ended: today > until };
-  return { until };
+  const trial = !!p.trial; // ainda nos 7 dias grátis (nunca pagou)
+  if (today > U.addDaysISO(until, GRACE_DAYS)) return { blocked: 'vencido', until, trial };
+  if (today >= U.addDaysISO(until, -WARN_DAYS)) return { warn: true, until, ended: today > until, trial };
+  return { until, trial };
 }
 
 function patientState(p) {

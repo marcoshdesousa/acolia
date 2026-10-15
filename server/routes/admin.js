@@ -41,7 +41,8 @@ function adminPro(p) {
     terms: require('../terms').lastAcceptance('professional', p.id), // Termo de Adesão assinado no cadastro
     data_terms: require('../patientData').accepted(p.id), // Termo de Sigilo dos Dados dos Pacientes ("Ver dados")
     data_accesses: db.prepare('SELECT COUNT(*) n FROM patient_data_access WHERE professional_id = ?').get(p.id).n,
-    review_pending: !!p.review_pending, // pagou o Pix no cadastro e entrou direto: a equipe confere os dados
+    review_pending: !!p.review_pending, // entrou direto (7 dias grátis ou pagou o Pix): a equipe confere os dados
+    verified: !!p.verified, trial: !!p.trial,
   };
 }
 
@@ -168,15 +169,23 @@ router.get('/professionals/:id', (req, res) => {
   res.json({ ...adminPro(p), payments });
 });
 
+// Dar ou tirar o selo azul de verificado
+router.post('/professionals/:id/verified', (req, res) => {
+  const p = db.prepare("SELECT * FROM professionals WHERE id = ? AND status NOT IN ('oficial', 'clinica')").get(Number(req.params.id));
+  if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
+  require('../trial').setVerified(p.id, req.body.verified === true);
+  res.json(adminPro(db.prepare('SELECT * FROM professionals WHERE id = ?').get(p.id)));
+});
+
 // Conferência depois do pagamento: "Conferido" (tudo certo) ou "Reprovar" (dados errados: tira o acesso;
 // o reembolso é feito pelo dono no painel da SyncPay)
 router.post('/professionals/:id/review', (req, res) => {
   const p = db.prepare("SELECT * FROM professionals WHERE id = ? AND status NOT IN ('oficial', 'clinica')").get(Number(req.params.id));
   if (!p) throw new U.HttpError(404, 'Profissional não encontrado.');
   if (req.body.ok === true) {
-    db.prepare('UPDATE professionals SET review_pending = 0 WHERE id = ?').run(p.id);
+    require('../trial').setVerified(p.id, true); // conferido: ganha o selo azul de verificado
   } else {
-    const note = `${p.admin_note ? `${p.admin_note}\n` : ''}[${U.todayISO()}] Reprovado na conferência dos dados: reembolsar o Pix pelo painel da SyncPay.`.slice(0, 1000);
+    const note = `${p.admin_note ? `${p.admin_note}\n` : ''}[${U.todayISO()}] Reprovado na conferência dos dados${p.trial ? ' (estava nos 7 dias grátis, sem pagamento)' : ': reembolsar o Pix pelo painel da SyncPay'}.`.slice(0, 1000);
     db.prepare("UPDATE professionals SET review_pending = 0, status = 'recusado', admin_note = ? WHERE id = ?").run(note, p.id);
     A.destroyUserSessions('professional', p.id);
     const active = db.prepare("SELECT * FROM calls WHERE professional_id = ? AND status = 'ativo'").get(p.id);
@@ -206,7 +215,7 @@ router.post('/professionals', async (req, res) => {
   requirePassword(password);
   const until = U.addDaysISO(U.todayISO(), Number(req.body.days) > 0 ? Math.min(Number(req.body.days), 3650) : 30);
   const { id, code } = insertProfessional(d, U.hashPassword(password), 'aprovado', until);
-  db.prepare('UPDATE professionals SET must_change_password = 1 WHERE id = ?').run(id); // senha de acesso único
+  db.prepare('UPDATE professionals SET must_change_password = 1, verified = 1 WHERE id = ?').run(id); // senha de acesso único; cadastrado pela equipe: verificado
   res.status(201).json({ id, code, password });
 });
 
@@ -220,6 +229,8 @@ router.post('/professionals/:id/status', (req, res) => {
   // Na primeira aprovação, libera o primeiro período de mensalidade
   if (status === 'aprovado' && !until) until = U.addDaysISO(U.todayISO(), 30);
   db.prepare('UPDATE professionals SET status = ?, subscription_until = ? WHERE id = ?').run(status, until, p.id);
+  // Aprovado pela equipe (cadastro que estava esperando): ganha o selo de verificado
+  if (status === 'aprovado' && p.status === 'pendente') require('../trial').setVerified(p.id, true);
   // Aprovado e ainda sem senha (se cadastrou pelo site): gera a primeira senha para o admin mandar pelo WhatsApp
   let newPassword = null;
   if (status === 'aprovado' && p.password_hash === require('./auth').NO_PASSWORD) {

@@ -87,6 +87,13 @@ Só a **mensalidade da plataforma** (R$ 30,00 do profissional; R$ 49,90 da clín
 - O site **pergunta para a SyncPay** se foi pago (a cada 4 s com a tela aberta e numa varredura a cada 2 min). O aviso (webhook) da SyncPay só serve para conferir na hora.
 - Para ligar: no Render → Environment, `SYNCPAY_CLIENT_ID` e `SYNCPAY_CLIENT_SECRET`; no painel da SyncPay, autorizar os IPs de saída do Render (Render → Connect → Outbound) e o webhook `https://acolia.onrender.com/api/plataforma/pagamento/webhook`.
 
+## 7 dias grátis, selo de verificado e avaliações
+
+- **7 dias grátis (profissional novo):** no cadastro não tem plano para escolher nem pagamento: aparece "Comece com 7 dias grátis". A conta nasce liberada (aparece na vitrine, usa tudo), com a senha de acesso único na tela. Cada CPF de profissional ganha os 7 dias uma vez só (tabela `free_trials`; quem já tinha conta antes também não ganha): se usar o CPF de novo, o cadastro vai para o Pix. Acabou: some da vitrine e só usa depois de pagar (Pix na tela de bloqueio, no aviso ou em Conta), e tudo volta como estava. Pode pagar antes de acabar: os 30 dias somam depois do fim do período grátis. `FREE_TRIAL=off` desliga (testes antigos).
+- **Selo de verificado (azul):** no admin, "Conferido: dar o selo de verificado" (ou "Dar/Tirar o selo"). O profissional vê "Você é verificado!" uma vez e recebe a notificação. O selo aparece no perfil, na vitrine, nas publicações e nas conversas. Sem selo ele usa tudo normalmente. O selo da Acolia Brasil é dourado. Quem já estava aprovado pela equipe ganhou o selo.
+- **Avaliação (1 a 5 estrelas, sem texto):** depois de cada consulta concluída, o paciente vê "Como foi a sua consulta?" ao abrir o app (Péssimo, Ruim, Regular, Muito bom, Excelente). Uma por consulta; "Agora não" pergunta de novo no dia seguinte. A média aparece no perfil e na vitrine, e os mais bem avaliados vêm primeiro (a média é puxada para o meio enquanto há poucas notas). O profissional não vê quem avaliou.
+- **Reels desativados:** ninguém publica vídeo novo (nem a Acolia Brasil); os antigos continuam. Fotos e textos sem limite (o admin pode pôr um número em "Limite de publicações"; 0 = sem limite, sem aviso para o profissional).
+
 ## Link do profissional (site.com/<link>)
 
 - **Agendar sem conta:** quem abre o link do profissional escolhe o tipo, o dia e o horário e aceita a política sem ter conta. Na hora de pagar aparece **"Criar conta e ir para o pagamento"**: cria a conta (ou entra) e volta direto para o pagamento daquele horário (guardado no aparelho por 30 minutos; se alguém pegou o horário, escolhe outro).

@@ -390,6 +390,12 @@ const totalsOf = (rows) => ({ patients: rows.length, consultations: rows.reduce(
 
 const PATIENT_COLS = [['Nome completo', 'name', 27], ['CPF', 'cpf', 13], ['Nascimento', 'birth_date', 10], ['Município', 'place', 18], ['Modalidade', 'modalidade', 10], ['Consultas', 'consultas', 8], ['Última', 'ultima', 10]];
 
+// Já viu o aviso "Você é verificado!" (aparece uma vez, depois que a equipe dá o selo)
+router.post('/verified-seen', (req, res) => {
+  db.prepare('UPDATE professionals SET verified_seen = 1 WHERE id = ?').run(req.auth.user.id);
+  res.json({ ok: true });
+});
+
 // "Ver dados do paciente": termo de sigilo (aceito uma vez) e os dados dos pacientes do profissional
 router.get('/patient-data/terms', (req, res) => {
   const D = require('../patientData');

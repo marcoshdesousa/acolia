@@ -11,6 +11,7 @@ process.env.DATA_DIR = tmp;
 process.env.ADMIN_USER = 'admin';
 process.env.ADMIN_PASSWORD = 'senha-admin-123';
 process.env.SYNCPAY_FAKE = '1';
+process.env.FREE_TRIAL = 'off'; // ligado só no teste dos 7 dias grátis
 delete process.env.FIRST_PASSWORD; // aqui a senha de acesso único vale
 delete process.env.CPF_API_URL;
 process.env.TEST_ACCOUNTS = '0';
@@ -172,4 +173,114 @@ test('clínica com Pix: usa os dados do cadastro (CNPJ), R$ 49,90, liberada na h
   assert.equal(det.data.review_pending, true);
   assert.equal(det.data.payments.length, 2);
   assert.equal((await admin.post(`/api/admin/clinics/${c.id}/review`, { ok: true })).data.review_pending, false);
+});
+
+test('7 dias grátis: CPF novo entra direto (vitrine, tudo liberado), só uma vez por CPF; paga quando quiser; selo e avaliações', async () => {
+  process.env.FREE_TRIAL = 'on';
+  try {
+    const U = require('../server/util');
+    const anon = client();
+    const cpf = cpfOf(7777);
+    const reg = (email) => anon.form('/api/auth/professional/register', {
+      name: 'Bruno Teixeira Gomes', profession: 'Psicanalista', email, phone: '(94) 99999-3333', state: 'PA', city: 'Parauapebas',
+      cpf, specialties: JSON.stringify(['Ansiedade']), birth_date: '1987-07-07',
+      terms_accept: '1', terms_version: require('../server/terms').VERSION, terms_name: 'Bruno Teixeira Gomes', plan: 'mensal-30',
+    });
+    const r = await reg('bruno.trial@example.com');
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    assert.equal(r.data.pay, undefined, 'sem pagamento no cadastro');
+    assert.equal(r.data.trial.days, 7);
+    assert.equal(r.data.trial.until, U.addDaysISO(U.todayISO(), 7));
+    assert.ok(r.data.password);
+    const p = db.prepare('SELECT * FROM professionals WHERE code = ?').get(r.data.code);
+    assert.equal(p.status, 'aprovado');
+    assert.equal(p.trial, 1);
+    assert.equal(p.review_pending, 1);
+    assert.equal(p.verified, 0);
+    // Já aparece na vitrine, sem selo
+    const vit = (await client().get('/api/professionals')).data.items.find((x) => x.id === p.id);
+    assert.ok(vit, 'aparece na vitrine');
+    assert.equal(vit.verified, false);
+    // Entra com a senha de acesso único e cria a própria
+    const pro = client();
+    assert.equal((await pro.post('/api/auth/professional/login', { login: r.data.code, password: r.data.password })).status, 200);
+    assert.equal((await pro.post('/api/professional/first-password', { password: 'minhasenha7', confirm: 'minhasenha7' })).status, 200);
+    let me = (await pro.get('/api/auth/me')).data;
+    assert.equal(me.account.trial, true);
+    assert.equal(me.user.trial, true);
+    // Paga antes de acabar: soma 30 dias depois do fim dos 7 dias e sai do período grátis
+    const ren = await pro.post('/api/plataforma/pagamento/renovar');
+    assert.equal(ren.status, 200, JSON.stringify(ren.data));
+    PP()._fakePay(db.prepare('SELECT identifier FROM platform_payments WHERE id = ?').get(ren.data.id).identifier);
+    const st = await pro.get(`/api/plataforma/pagamento/renovar/${ren.data.id}`);
+    assert.equal(st.data.subscription_until, U.addDaysISO(U.todayISO(), 37));
+    me = (await pro.get('/api/auth/me')).data;
+    assert.equal(me.account.trial, false);
+    // O mesmo CPF não ganha os 7 dias de novo (ex.: apagou a conta e voltou): paga no cadastro
+    db.prepare('UPDATE professionals SET cpf = ?, email = ? WHERE id = ?').run(cpfOf(7799), 'outro.cpf@example.com', p.id); // (libera o CPF, como se tivesse apagado)
+    const again = await reg('bruno.denovo@example.com');
+    assert.equal(again.status, 201, JSON.stringify(again.data));
+    assert.equal(again.data.trial, undefined);
+    assert.ok(again.data.pay, 'vai para o Pix');
+    assert.equal(db.prepare('SELECT status FROM professionals WHERE code = ?').get(again.data.code).status, 'pendente');
+
+    // Período grátis acabou: sai da vitrine e só usa depois de pagar
+    const r2 = await anon.form('/api/auth/professional/register', {
+      name: 'Carla Nunes Prado', profession: 'Psicanalista', email: 'carla.trial@example.com', phone: '(94) 99999-4444', state: 'PA', city: 'Parauapebas',
+      cpf: cpfOf(7778), specialties: JSON.stringify(['Ansiedade']), birth_date: '1990-01-01',
+      terms_accept: '1', terms_version: require('../server/terms').VERSION, terms_name: 'Carla Nunes Prado', plan: 'mensal-30',
+    });
+    const carla = db.prepare('SELECT * FROM professionals WHERE code = ?').get(r2.data.code);
+    db.prepare("UPDATE professionals SET subscription_until = date('now', '-3 days'), must_change_password = 0 WHERE id = ?").run(carla.id);
+    assert.ok(!(await client().get('/api/professionals')).data.items.some((x) => x.id === carla.id), 'saiu da vitrine');
+    const cl = client();
+    await cl.post('/api/auth/professional/login', { login: r2.data.code, password: r2.data.password });
+    const meC = (await cl.get('/api/auth/me')).data;
+    assert.equal(meC.account.blocked, 'vencido');
+    assert.equal(meC.account.trial, true);
+    assert.equal((await cl.get('/api/professional/me')).status, 423);
+    assert.equal((await cl.post('/api/plataforma/pagamento/renovar')).status, 200, 'consegue pagar pela tela de bloqueio');
+
+    // Selo de verificado: a equipe confere e dá o selo; ele vê o aviso uma vez
+    const admin = client();
+    await admin.post('/api/auth/admin/login', { username: 'admin', password: 'senha-admin-123' });
+    const rv = await admin.post(`/api/admin/professionals/${p.id}/review`, { ok: true });
+    assert.equal(rv.data.verified, true);
+    assert.equal(rv.data.review_pending, false);
+    const pub = (await client().get(`/api/professionals/${p.id}`)).data;
+    assert.equal(pub.verified, true);
+    me = (await pro.get('/api/professional/me')).data;
+    assert.equal(me.verified, true);
+    assert.equal(me.verified_seen, false);
+    await pro.post('/api/professional/verified-seen');
+    assert.equal((await pro.get('/api/professional/me')).data.verified_seen, true);
+    assert.equal((await admin.post(`/api/admin/professionals/${p.id}/verified`, { verified: false })).data.verified, false, 'admin tira o selo');
+    await admin.post(`/api/admin/professionals/${p.id}/verified`, { verified: true });
+
+    // Avaliação: depois da consulta concluída, o paciente dá de 1 a 5 estrelas (uma vez)
+    const pt = client();
+    assert.equal((await pt.post('/api/auth/patient/register', { name: 'Paula Avalia Silva', cpf: cpfOf(8888), birth_date: '1991-01-01', state: 'PA', city: 'Parauapebas', phone: '94999995555', password: 'senha123' })).status, 201);
+    const ptId = db.prepare("SELECT id FROM patients WHERE name = 'Paula Avalia Silva'").get().id;
+    const t0 = new Date(Date.now() - 2 * 3600e3).toISOString();
+    const t1 = new Date(Date.now() - 3600e3).toISOString();
+    const mk = (status) => Number(db.prepare("INSERT INTO appointments (professional_id, patient_id, start_at, end_at, price_cents, mode, origin, status) VALUES (?, ?, ?, ?, 15000, 'manual', 'paciente', ?)").run(p.id, ptId, t0, t1, status).lastInsertRowid);
+    const done = mk('concluida');
+    const open = mk('confirmada');
+    const tr = (await pt.get('/api/agenda/to-rate')).data;
+    assert.deepEqual(tr.items.map((x) => x.id), [done]);
+    assert.equal(tr.labels[5], 'Excelente');
+    assert.equal((await pt.post(`/api/agenda/appointments/${done}/rate`, { stars: 6 })).status, 400);
+    assert.equal((await pt.post(`/api/agenda/appointments/${open}/rate`, { stars: 5 })).status, 409, 'só depois da consulta');
+    assert.equal((await client().post(`/api/agenda/appointments/${done}/rate`, { stars: 1 })).status, 401);
+    assert.equal((await pro.post(`/api/agenda/appointments/${done}/rate`, { stars: 5 })).status, 403, 'profissional não se avalia');
+    const ok = await pt.post(`/api/agenda/appointments/${done}/rate`, { stars: 5 });
+    assert.equal(ok.status, 200, JSON.stringify(ok.data));
+    assert.equal(ok.data.label, 'Excelente');
+    assert.equal((await pt.post(`/api/agenda/appointments/${done}/rate`, { stars: 1 })).status, 409, 'uma vez só');
+    assert.equal((await pt.get('/api/agenda/to-rate')).data.items.length, 0);
+    assert.deepEqual((await client().get(`/api/professionals/${p.id}`)).data.rating, { avg: 5, count: 1 });
+    // Na vitrine, os mais bem avaliados vêm primeiro
+    const ids = (await client().get('/api/professionals')).data.items.map((x) => x.id);
+    assert.equal(ids[0], p.id);
+  } finally { process.env.FREE_TRIAL = 'off'; }
 });

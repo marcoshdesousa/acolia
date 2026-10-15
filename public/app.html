@@ -180,6 +180,7 @@
     // Consultas: depois de pagar vai direto para a conversa; aviso fixo com a contagem regressiva
     AcoliaAgenda.setContext({ role: 'patient', onGoChat: (id) => { location.hash = 'chat/' + id; } });
     AcoliaAgenda.mountBar({ role: 'patient', socket });
+    setTimeout(() => AcoliaAgenda.askRatings(), 1500); // avaliar a consulta que acabou (1 a 5 estrelas)
     const chat = AcoliaChat.mount($('[data-chat]'), {
       role: 'patient', me, socket, onUnreadChange: setUnread,
       onNavigate: (id) => { const h = id ? '#chat/' + id : '#chat'; if (location.hash !== h && location.hash.startsWith('#chat')) history.replaceState(null, '', h); },

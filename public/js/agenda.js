@@ -362,6 +362,41 @@
     }
   }
 
+  // ---------- Avaliação da consulta (paciente): de 1 a 5 estrelas, sem texto ----------
+  // Aparece ao abrir o app depois de uma consulta concluída. "Agora não" pergunta de novo no dia seguinte.
+  async function askRatings() {
+    let d;
+    try { d = await api('/api/agenda/to-rate'); } catch { return; }
+    const skip = (() => { try { return JSON.parse(localStorage.getItem('acolia_rate_skip') || '{}'); } catch { return {}; } })();
+    const today = new Date().toISOString().slice(0, 10);
+    for (const a of d.items) {
+      if (skip[a.id] === today) continue;
+      let stars = 0;
+      const STAR = window.Acolia.STAR;
+      const v = await modal({
+        title: 'Como foi a sua consulta?',
+        html: `<div class="row" style="gap:12px;margin-bottom:6px">${avatar(a.professional.name, a.professional.photo, 'md')}<div><b>${esc(a.professional.name)}</b><div class="muted small">${esc(a.when)}</div></div></div>
+          <div class="rate-stars" role="radiogroup" aria-label="Nota de 1 a 5">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-star="${n}" role="radio" aria-checked="false" aria-label="${n} estrela${n > 1 ? 's' : ''}: ${esc(d.labels[n])}">${STAR}</button>`).join('')}</div>
+          <div class="rate-label" data-rate-label>Toque nas estrelas</div>
+          <p class="small muted center" style="margin:6px 0 0">A sua nota ajuda outros pacientes. O profissional não vê quem avaliou.</p>`,
+        onOpen: (dlg) => $$('[data-star]', dlg).forEach((b) => b.addEventListener('click', () => {
+          stars = Number(b.dataset.star);
+          $$('[data-star]', dlg).forEach((x) => { const on = Number(x.dataset.star) <= stars; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(Number(x.dataset.star) === stars)); });
+          $('[data-rate-label]', dlg).textContent = d.labels[stars];
+        })),
+        actions: [{ label: 'Agora não', value: 'skip', class: 'secondary' }, { label: 'Enviar avaliação', handler: async () => {
+          if (!stars) { toast('Toque nas estrelas para dar a sua nota.', 'error'); return false; }
+          try { await api(`/api/agenda/appointments/${a.id}/rate`, { method: 'POST', body: { stars } }); toast('Obrigado pela avaliação!'); return 'ok'; } catch (e) { toast(e.message, 'error'); return false; }
+        } }],
+      });
+      if (v !== 'ok') {
+        skip[a.id] = today;
+        try { localStorage.setItem('acolia_rate_skip', JSON.stringify(skip)); } catch { /* nada */ }
+        return; // uma por vez
+      }
+    }
+  }
+
   const shiftYm = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
 
   // Pedido manual: o profissional manda a chave Pix no chat
@@ -960,7 +995,7 @@
   const onChange = (f) => listeners.add(f);
 
   window.AcoliaAgenda = {
-    setContext, openBooking, takePending, resumeBooking, openDetail, locationHtml, payScreen, acceptAndPay, act, buttons, bindActions, chatCardHtml, previewText,
+    setContext, openBooking, askRatings, takePending, resumeBooking, openDetail, locationHtml, payScreen, acceptAndPay, act, buttons, bindActions, chatCardHtml, previewText,
     mountBar, refreshBar, openList, loadUpcoming, findAppt, onChange, refreshAll, countdown, policyHtml, badge, STATUS,
     get cache() { return cache; },
   };

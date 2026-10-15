@@ -485,6 +485,18 @@
   // Consultas: aviso fixo da próxima consulta ("Ver" abre a página Consultas) e a agenda
   AcoliaAgenda.setContext({ role: 'professional', onGoChat: (id) => { location.hash = `conversas/${id}`; } });
   AcoliaAgenda.mountBar({ role: 'professional', socket, onSee: () => { location.hash = 'atendimento'; }, secretary: isSec ? { proName: me.name } : null });
+  // A equipe conferiu os dados e deu o selo: "Você é verificado!" (aparece uma vez)
+  if (!isSec && me.verified && !me.verified_seen) {
+    setTimeout(async () => {
+      await Acolia.modal({
+        title: 'Você é verificado!',
+        html: `<div class="center" style="font-size:3rem;line-height:1">${Acolia.verifiedBadge}</div>
+          <p>A equipe Acolia conferiu os seus dados. O <b>selo azul de verificado</b> agora aparece ao lado do seu nome no perfil, na vitrine, nas publicações e nas conversas.</p>`,
+        actions: [{ label: 'Que bom!' }],
+      });
+      api('/api/professional/verified-seen', { method: 'POST' }).catch(() => {});
+    }, 1200);
+  }
   const agendaPro = AcoliaAgendaPro.mount({ appts: $('[data-appts]'), agenda: $('[data-agenda-card]'), asaas: $('[data-asaas-card]'), secretary: isSec });
   // Chamadas (câmera): só o profissional
   const callsPage = isSec ? null : AcoliaSecretary.mountCalls($('[data-calls-list]'));

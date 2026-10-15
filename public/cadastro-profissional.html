@@ -63,15 +63,15 @@
       </div>
     </div>
     <div data-plan-step class="hidden">
-      <h1 class="center">Escolha o seu plano</h1>
-      <p class="center muted">Um plano simples, sem comissão sobre as suas consultas.</p>
+      <h1 class="center">Comece com 7 dias grátis</h1>
+      <p class="center muted">Tudo liberado desde o primeiro dia, sem pagar nada agora e sem comissão sobre as suas consultas.</p>
       <div class="card">
-        <label class="plan-card" data-plan-card>
-          <input type="radio" name="plan" value="mensal-30" data-plan>
+        <label class="plan-card on" data-plan-card>
+          <input type="radio" name="plan" value="mensal-30" data-plan checked>
           <span class="plan-check" aria-hidden="true"></span>
           <span class="plan-body">
-            <span class="plan-top"><span class="plan-name">Plano Mensal</span><span class="plan-tag">Tudo incluso</span></span>
-            <span class="plan-price"><b>R$ 30,00</b> <small>a cada 30 dias</small></span>
+            <span class="plan-top"><span class="plan-name">7 dias grátis</span><span class="plan-tag">Tudo liberado</span></span>
+            <span class="plan-price"><b>Grátis</b> <small>por 7 dias · depois, R$ 30,00 a cada 30 dias pelo Pix</small></span>
             <span class="plan-chips"><span class="pc">Pacientes ilimitados</span><span class="pc">0% taxa</span><span class="pc">100% da consulta é sua</span></span>
             <span class="pb-five"><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="pb-t"><b>Vitrine para todo o Brasil</b></span><button type="button" class="pb-q" data-tip="Seu perfil aparece na vitrine da Acolia para pacientes de todo o país, e primeiro para quem é da sua cidade e do seu estado." aria-label="O que é: Vitrine para todo o Brasil">?</button></span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="pb-t"><b>Agenda automática 24h</b></span><button type="button" class="pb-q" data-tip="Você cadastra seus horários uma vez. O paciente escolhe o dia e o horário livres, paga e a consulta fica marcada sozinha, a qualquer hora." aria-label="O que é: Agenda automática 24h">?</button></span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="pb-t"><b>Online e presencial</b></span><button type="button" class="pb-q" data-tip="Atenda por videochamada, no seu consultório ou dos dois jeitos. No presencial, o seu endereço e o mapa aparecem no perfil." aria-label="O que é: Online e presencial">?</button></span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="pb-t"><b>Videochamada e chat</b></span><button type="button" class="pb-q" data-tip="Chamada de vídeo pelo navegador, sem o paciente instalar nada, e um chat só do consultório com texto, áudio e foto, sem expor o seu número." aria-label="O que é: Videochamada e chat">?</button></span><span class="pb-item"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="pb-t"><b>Pix integrado à sua conta</b></span><button type="button" class="pb-q" data-tip="Conecte a sua conta do Asaas: o paciente paga o Pix e a consulta é confirmada sozinha. O dinheiro cai direto na sua conta, sem passar pela Acolia." aria-label="O que é: Pix integrado à sua conta">?</button></span></span>
           </span>
@@ -104,11 +104,12 @@
     <div data-pay-step class="hidden">
       <h1 class="center">Pagamento do plano</h1>
       <p class="center muted">Pague o Pix e a sua conta é liberada na hora. Não feche esta página.</p>
+      <div class="notice warn small hidden" data-no-trial style="margin-bottom:12px">Este CPF já usou os 7 dias grátis. Para criar a conta de novo, é preciso pagar a mensalidade.</div>
       <div class="card" data-pay-box></div>
     </div>
     <div data-paid-step class="hidden card stack center">
-      <h1>Pagamento confirmado! Sua conta está liberada.</h1>
-      <p>Você já aparece na vitrine e pode usar tudo. Anote os dados de acesso (tire um print):</p>
+      <h1 data-paid-title>Pagamento confirmado! Sua conta está liberada.</h1>
+      <p data-paid-sub>Você já aparece na vitrine e pode usar tudo. Anote os dados de acesso (tire um print):</p>
       <div class="muted small" style="font-weight:700">SEU CÓDIGO (LOGIN)</div>
       <div class="code-box" data-paid-code></div>
       <div class="muted small" style="font-weight:700">SENHA DE ACESSO ÚNICO</div>
@@ -303,7 +304,19 @@
         const r = await api('/api/auth/professional/register', { method: 'POST', form: fd });
         $('[data-code]').textContent = r.code;
         // Pix da Acolia ligado: paga aqui e a conta é liberada na hora (sem WhatsApp)
+        // 7 dias grátis: a conta já está liberada; mostra o código e a senha de acesso único
+        if (r.trial) {
+          const br = r.trial.until.split('-').reverse().join('/');
+          $('[data-paid-title]').textContent = 'Pronto! Sua conta está liberada.';
+          $('[data-paid-sub]').innerHTML = `Você tem <b>7 dias grátis</b> (até <b>${br}</b>), com tudo liberado, e já aparece na vitrine. Anote os dados de acesso (tire um print):`;
+          $('[data-paid-code]').textContent = r.code;
+          $('[data-paid-pw]').textContent = r.password;
+          $('[data-copy-paid]').onclick = () => copyText(`Código: ${r.code}\nSenha de acesso único: ${r.password}`);
+          show('paid');
+          return;
+        }
         if (r.pay) {
+          $('[data-no-trial]').classList.remove('hidden');
           try { localStorage.setItem('acolia_cad_pay', JSON.stringify({ ...r.pay, code: r.code, at: Date.now() })); } catch { /* sem armazenamento */ }
           startPay(r.pay, r.code);
           return;

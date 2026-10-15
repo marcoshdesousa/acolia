@@ -60,13 +60,13 @@ function actor(role, id) {
     return { role: 'professional', id: C.authorOf(c.id), name: c.name, subtitle: 'Clínica', photo: c.logo, clinic: c.slug || String(c.id) };
   }
   if (role === 'professional') {
-    const p = db.prepare('SELECT id, name, photo, profession, slug, status FROM professionals WHERE id = ?').get(id);
+    const p = db.prepare('SELECT id, name, photo, profession, slug, status, verified FROM professionals WHERE id = ?').get(id);
     if (!p) return { role, id, name: 'Profissional', subtitle: '', photo: null };
     if (p.status === 'clinica') {
       const c = C.clinicOfAuthor(p.id);
       if (c) return { role, id: p.id, name: c.name, subtitle: 'Clínica', photo: c.logo, clinic: c.slug || String(c.id) };
     }
-    return { role, id: p.id, name: p.name, subtitle: p.profession, photo: p.photo, slug: p.slug };
+    return { role, id: p.id, name: p.name, subtitle: p.profession, photo: p.photo, slug: p.slug, verified: !!p.verified };
   }
   const p = db.prepare('SELECT id, name, handle, photo, city, state, status FROM patients WHERE id = ?').get(id);
   if (!p || p.status === 'excluido') return { role, id, name: 'Conta excluída', subtitle: '', photo: null };

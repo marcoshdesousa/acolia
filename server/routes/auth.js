@@ -189,6 +189,19 @@ router.post('/professional/register', async (req, res) => {
     if (!needsCard && documentFile) removeDocument(documentFile); // quem não tem conselho não precisa (nem guarda) carteirinha
     // Bloqueado pela administração antes (mesmo CPF, e-mail, registro ou WhatsApp): a conta nasce bloqueada
     const blocked = require('../blocklist').isBlocked('professional', { cpf: d.cpf, email: d.email, registry: reg.registry, phone: d.phone });
+    // 7 dias grátis (CPF novo de profissional): a conta já nasce liberada, na vitrine, com a senha de acesso único
+    const TR = require('../trial');
+    if (!blocked && TR.eligible(d.cpf)) {
+      const password = U.randomPassword(10);
+      const until = U.addDaysISO(U.todayISO(), TR.TRIAL_DAYS);
+      const t = insertProfessional({ ...d, registry: reg.registry, document_file: needsCard ? documentFile : null, registry_verified: verified },
+        U.hashPassword(password), 'aprovado', until);
+      db.prepare('UPDATE professionals SET plan = ?, birth_date = ?, trial = 1, review_pending = 1, must_change_password = 1 WHERE id = ?').run(plan, birth, t.id);
+      TR.markUsed(d.cpf);
+      T.record('professional', t.id, signedName, req);
+      return res.status(201).json({ ok: true, code: t.code, trial: { days: TR.TRIAL_DAYS, until }, password, support: require('../accountState').SUPPORT_WHATSAPP });
+    }
+    require('../trial').markUsed(d.cpf); // já usou (ou bloqueado): paga; e o CPF fica marcado
     const { id, code } = insertProfessional({ ...d, registry: reg.registry, document_file: needsCard ? documentFile : null, registry_verified: verified },
       NO_PASSWORD, blocked ? 'bloqueado' : 'pendente');
     db.prepare('UPDATE professionals SET plan = ?, birth_date = ? WHERE id = ?').run(plan, birth, id);

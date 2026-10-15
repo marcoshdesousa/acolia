@@ -159,6 +159,7 @@ function apply(p) {
   } else {
     db.prepare(`UPDATE ${table} SET subscription_until = ? WHERE id = ?`).run(until, u.id);
   }
+  if (table === 'professionals') db.prepare('UPDATE professionals SET trial = 0 WHERE id = ?').run(u.id); // pagou: saiu dos 7 dias grátis
 }
 
 // Confere na SyncPay (no máximo a cada 5 s por cobrança) e, se foi pago, libera (uma vez só)

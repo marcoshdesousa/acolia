@@ -238,7 +238,8 @@
         <div class="row" style="align-items:flex-start;gap:20px;flex-wrap:wrap">
           ${avatar(p.name, p.photo, 'xl')}
           <div class="grow" style="min-width:220px">
-            <h1 style="font-size:1.6rem;margin-bottom:4px">${esc(p.name)}</h1>
+            <h1 style="font-size:1.6rem;margin-bottom:4px">${esc(p.name)}${p.verified ? window.Acolia.verifiedBadge : ''}</h1>
+            ${p.rating ? `<div class="pv-rating">${window.Acolia.ratingHtml(p.rating)}</div>` : ''}
             ${counts}
             <div class="muted" style="font-weight:700">${esc(p.profession)}</div>
             <div class="row" style="margin-top:6px;gap:6px">${p.registry ? `<span class="badge ok">${ic('badge', 15)} ${esc(p.registry)}</span>` : ''}
