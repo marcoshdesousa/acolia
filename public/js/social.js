@@ -491,6 +491,7 @@
   async function limitNote(el, kind) {
     try {
       const l = (await api('/api/social/limits'))[kind];
+      if (!l || !l.max) { el.classList.add('hidden'); return; } // sem limite: não aparece nenhum aviso
       const word = kind === 'reel' ? ['vídeo', 'vídeos'] : ['publicação de fotos', 'publicações de fotos'];
       el.innerHTML = l.used >= l.max
         ? `${ic('image', 14)} Você já tem <b>${l.used} de ${l.max}</b> ${word[1]}. Ao publicar, ${kind === 'reel' ? 'o vídeo mais antigo é apagado' : 'a publicação mais antiga é apagada'} para ${kind === 'reel' ? 'este entrar' : 'esta entrar'}.`
@@ -654,10 +655,9 @@
       title: 'Criar',
       html: `<div class="create-menu">
         <button type="button" data-v="post">${ic('image', 30)}<b>Publicar fotos</b><small>No feed e no seu perfil (até ${MAX_PHOTOS} fotos)</small></button>
-        <button type="button" data-v="reel">${ic('reel', 30)}<b>Publicar reel</b><small>Vídeo de até 1 min e 30 s, no feed, nos Reels e no seu perfil</small></button>
         <button type="button" data-v="text">${ic('text', 30)}<b>Publicar texto</b><small>Reflexões, dicas e avisos — escolha entre 4 fontes</small></button>
         </div>
-        <p class="small muted" style="margin:12px 4px 0">Para colocar no seu story, toque na estrela ${ic('storyAdd', 16)} em uma publicação sua (foto, reel ou texto). O story some em 24 h.</p>`,
+        <p class="small muted" style="margin:12px 4px 0">Para colocar no seu story, toque na estrela ${ic('storyAdd', 16)} em uma publicação sua (foto ou texto). O story some em 24 h.</p>`,
       actions: [],
       onOpen: (dlg) => {
         dlg.classList.add('sheet');
@@ -1337,14 +1337,9 @@
       <div class="home">
         <div class="home-top">
           <div class="ht-side left">${isPro ? `<button type="button" class="icon-btn create-btn" data-create aria-label="Criar: publicar fotos ou story" title="Publicar fotos ou story">${ic('plus', 28)}</button>` : ''}</div>
-          <h1 class="ht-title"><button type="button" class="feed-logo" data-home-top title="Acolia Feed / Reels — voltar ao topo e atualizar">
-            <span class="fl-words"><img class="fl-name brand-word" src="/img/logo-nome.png" alt="Acolia"><span class="fl-feed">Feed / Reels</span></span></button></h1>
+          <h1 class="ht-title"><button type="button" class="feed-logo" data-home-top title="Acolia Feed — voltar ao topo e atualizar">
+            <span class="fl-words"><img class="fl-name brand-word" src="/img/logo-nome.png" alt="Acolia"><span class="fl-feed">Feed</span></span></button></h1>
           <div class="ht-side right"><button type="button" class="icon-btn bell" data-bell aria-label="Notificações" title="Notificações">${ic('bell', 27)}<span class="nav-badge" data-bell-count></span></button></div>
-          <!-- Feed | Reels: ficam sempre à mão no topo (encolhem ao rolar) -->
-          <div class="home-tabs" role="tablist" aria-label="Feed ou Reels">
-            <button type="button" class="active" role="tab" aria-selected="true" data-home-tab="feed">${ic('grid', 18)}<span>Feed</span></button>
-            <button type="button" role="tab" aria-selected="false" data-home-tab="reels">${ic('reel', 18)}<span>Reels</span></button>
-          </div>
         </div>
         <div class="stories-bar" data-stories></div>
         <div class="feed" data-feed></div>

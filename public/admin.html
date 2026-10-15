@@ -47,10 +47,10 @@
         <div class="stats" data-stats></div>
         <h2 style="margin-top:28px">Limite de publicações por profissional</h2>
         <form class="card limits-card" data-limits-form style="padding:16px">
-          <p class="small muted" style="margin-top:0">Cada profissional guarda no máximo esta quantidade. Quando ele publica além do limite, a publicação <b>mais antiga é apagada</b> sozinha para a nova entrar (libera espaço). A Acolia Brasil não tem limite.</p>
+          <p class="small muted" style="margin-top:0"><b>0 = sem limite</b> (como está agora). Com um número, cada profissional guarda no máximo essa quantidade: quando ele publica além do limite, a publicação <b>mais antiga é apagada</b> sozinha para a nova entrar. O profissional não vê aviso de limite enquanto for sem limite. A Acolia Brasil não tem limite.</p>
           <div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-end">
-            <div class="field" style="margin:0"><label for="lim-photo">Publicações de fotos</label><input id="lim-photo" name="photo" type="number" min="1" max="500" required style="width:130px"></div>
-            <div class="field" style="margin:0"><label for="lim-reel">Vídeos (reels)</label><input id="lim-reel" name="reel" type="number" min="1" max="500" required style="width:130px"></div>
+            <div class="field" style="margin:0"><label for="lim-photo">Publicações de fotos</label><input id="lim-photo" name="photo" type="number" min="0" max="500" required style="width:130px"></div>
+            <div class="field" style="margin:0"><label for="lim-text">Publicações de texto</label><input id="lim-text" name="text" type="number" min="0" max="500" required style="width:130px"></div>
             <button class="btn" type="submit">Salvar limite</button>
           </div>
         </form>
@@ -144,7 +144,6 @@
           <h1 style="font-size:1.5rem;margin:0">Perfil oficial Acolia Brasil</h1>
           <div class="row" style="gap:8px"><a class="btn secondary sm" href="/acolia" target="_blank" rel="noopener">Ver perfil público</a>
             <button type="button" class="btn sm" data-official-new><span data-i="plus"></span> Nova publicação</button>
-            <button type="button" class="btn sm" data-official-reel><span data-i="reel"></span> Novo vídeo</button>
             <button type="button" class="btn sm" data-official-text><span data-i="text"></span> Novo texto</button></div>
         </div>
         <p class="muted small" style="margin-top:6px">Todos que têm conta (pacientes e profissionais) seguem este perfil automaticamente e não conseguem deixar de seguir. As publicações daqui aparecem no feed de todo mundo.</p>

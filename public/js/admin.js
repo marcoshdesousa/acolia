@@ -168,20 +168,20 @@
   async function loadLimits() {
     const l = await api('/api/admin/limits');
     limForm.photo.value = l.photo;
-    limForm.reel.value = l.reel;
+    limForm.text.value = l.text;
   }
   limForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const photo = Number(limForm.photo.value);
-    const reel = Number(limForm.reel.value);
+    const text = Number(limForm.text.value);
     try {
-      const prev = await api(`/api/admin/limits?photo=${photo}&reel=${reel}`);
-      const w = prev.would_remove || { photo: 0, reel: 0 };
-      if (w.photo || w.reel) {
-        const parts = [w.photo ? `${w.photo} ${w.photo === 1 ? 'publicação de fotos' : 'publicações de fotos'}` : '', w.reel ? `${w.reel} ${w.reel === 1 ? 'vídeo' : 'vídeos'}` : ''].filter(Boolean).join(' e ');
+      const prev = await api(`/api/admin/limits?photo=${photo}&text=${text}`);
+      const w = prev.would_remove || { photo: 0, text: 0 };
+      if (w.photo || w.text) {
+        const parts = [w.photo ? `${w.photo} ${w.photo === 1 ? 'publicação de fotos' : 'publicações de fotos'}` : '', w.text ? `${w.text} ${w.text === 1 ? 'texto' : 'textos'}` : ''].filter(Boolean).join(' e ');
         if (!await confirmDialog(`Com esse limite, vai ser apagado agora: ${parts}. São as publicações mais antigas de quem passou do limite (com os arquivos). Não dá para desfazer. Continuar?`, { okLabel: 'Salvar e apagar', danger: true, title: 'Diminuir o limite' })) return;
       }
-      const r = await api('/api/admin/limits', { method: 'POST', body: { photo, reel } });
+      const r = await api('/api/admin/limits', { method: 'POST', body: { photo, text } });
       toast(r.removed ? `Limite salvo — ${r.removed} ${r.removed === 1 ? 'publicação antiga apagada' : 'publicações antigas apagadas'}` : 'Limite salvo');
       loadStats().catch(() => {});
     } catch (ex) { toast(ex.message, 'error'); }
@@ -613,7 +613,7 @@
   $('[data-official-new]').addEventListener('click', () => AcoliaSocial.openNewPost(() => loadOfficial(), { base: '/api/admin/official/posts', title: 'Nova publicação da Acolia Brasil' }));
   // Vídeo (reel) da Acolia Brasil: até 2 minutos, qualquer tamanho. O aparelho lê a duração e tira
   // a capa (se não conseguir, usa uma capa padrão) e o envio vai em pedaços, com a barrinha de progresso.
-  $('[data-official-reel]').addEventListener('click', () => {
+  $('[data-official-reel]')?.addEventListener('click', () => { // reels desligados: o botão saiu
     let file = null;
     let metaP = null;
     modal({

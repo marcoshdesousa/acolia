@@ -282,20 +282,26 @@ async function fixOldAspects() {
 // Cada profissional guarda no máximo N publicações de fotos e N vídeos (o admin define; começa
 // com 15 fotos e 10 vídeos). Ao publicar além do limite, a mais antiga é apagada (com os
 // arquivos) para a nova entrar. A Acolia Brasil (perfil oficial) não tem limite.
-const LIMIT_DEFAULTS = { photo: 15, reel: 10 };
+// 0 = sem limite (o padrão agora). Textos também têm limite próprio. Reels foram desligados (não contam mais).
+const LIMIT_DEFAULTS = { photo: 0, text: 0, reel: 0 };
 function getLimits() {
   db.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
   const read = (k, d) => {
     const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(k);
     const n = r ? Number(r.value) : d;
-    return Number.isInteger(n) && n > 0 ? n : d;
+    return Number.isInteger(n) && n >= 0 ? n : d;
   };
-  return { photo: read('limit_photo_posts', LIMIT_DEFAULTS.photo), reel: read('limit_reel_posts', LIMIT_DEFAULTS.reel) };
+  // Pedido do dono (uma vez): fotos e textos sem limite por enquanto (o admin pode mudar depois)
+  if (!db.prepare("SELECT 1 FROM settings WHERE key = 'limits_unlimited_v1'").get()) {
+    const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+    up.run('limit_photo_posts', '0'); up.run('limit_text_posts', '0'); up.run('limits_unlimited_v1', '1');
+  }
+  return { photo: read('limit_photo_posts', LIMIT_DEFAULTS.photo), text: read('limit_text_posts', LIMIT_DEFAULTS.text), reel: 0 };
 }
-function setLimits({ photo, reel }) {
+function setLimits({ photo, text }) {
   const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
   up.run('limit_photo_posts', String(photo));
-  up.run('limit_reel_posts', String(reel));
+  up.run('limit_text_posts', String(text));
 }
 // Publicações que passam do limite (as mais antigas) — de um profissional ou de todos
 function overLimit(kind, max, proId = null) {
@@ -306,7 +312,8 @@ function overLimit(kind, max, proId = null) {
 function enforceLimits(proId = null) {
   const lim = getLimits();
   let removed = 0;
-  for (const kind of ['photo', 'reel']) {
+  for (const kind of ['photo', 'text']) {
+    if (!lim[kind]) continue; // 0 = sem limite
     for (const p of overLimit(kind, lim[kind], proId)) { deletePostFully(p); removed++; }
   }
   return removed;
@@ -338,6 +345,7 @@ function createText(proId, text, font) {
   if (body.length > TEXT_MAX) throw new U.HttpError(400, `O texto pode ter no máximo ${TEXT_MAX.toLocaleString('pt-BR')} caracteres. Este tem ${body.length.toLocaleString('pt-BR')}.`);
   const info = db.prepare("INSERT INTO posts (professional_id, image, caption, kind, font) VALUES (?, '', ?, 'text', ?)")
     .run(proId, body, TEXT_FONTS.includes(font) ? font : 'padrao');
+  if (!O.isOfficial(proId)) enforceLimits(proId); // passou do limite de textos: o mais antigo sai
   return db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(info.lastInsertRowid));
 }
 router.post('/texts', (req, res) => {
@@ -345,7 +353,11 @@ router.post('/texts', (req, res) => {
   res.status(201).json(postOut(createText(author, req.body.text, req.body.font), who(req)));
 });
 
+// Reels desligados (pedido do dono): ninguém publica vídeo novo. Os que já existiam continuam onde estão.
+const REELS_OFF = 'A publicação de reels (vídeos) foi desativada. Publique fotos ou textos.';
 router.post('/reels', async (req, res) => {
+  posterId(req);
+  throw new U.HttpError(410, REELS_OFF);
   const author = posterId(req);
   const media = await handleReel(req, res);
   const secs = Number(req.body.duration) || 0;
@@ -369,6 +381,8 @@ function ownUpload(req) {
 }
 
 router.post('/uploads', (req, res) => {
+  posterId(req);
+  throw new U.HttpError(410, REELS_OFF);
   const author = posterId(req);
   const mime = String(req.body.mime || '').split(';')[0].toLowerCase();
   const size = Number(req.body.size);
@@ -430,7 +444,7 @@ function cleanupUploads() {
 router.get('/limits', (req, res) => {
   const lim = getLimits();
   const used = (kind) => (myAuthor(req) ? db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = ?').get(myAuthor(req), kind).n : 0);
-  res.json({ photo: { max: lim.photo, used: used('photo') }, reel: { max: lim.reel, used: used('reel') } });
+  res.json({ photo: { max: lim.photo, used: used('photo') }, text: { max: lim.text, used: used('text') } }); // max 0 = sem limite (sem aviso)
 });
 
 // Aba Reels: vídeos de todos os profissionais (e da Acolia Brasil) em ordem aleatória,

@@ -1225,7 +1225,7 @@ test('Acolia Brasil: o admin publica, todos seguem (sem deixar de seguir) e o pe
   assert.ok(!(await pt.get('/api/social/feed')).data.items.some((p) => p.id === op.id));
 });
 
-test('Reels: profissional publica vídeo de até 1 min 30 s; aparece no feed, na aba Reels e no perfil separado das fotos', async () => {
+test('Reels desativados: ninguém publica vídeo novo; os que já existiam continuam aparecendo (feed, perfil, story, apagar)', async () => {
   const c = await admin.post('/api/admin/professionals', { name: 'Rafa Reels', profession: 'Psicólogo(a)', registry: 'CRP 06/20021', email: 'rafareels@example.com', phone: '11944440000', state: 'SP', city: 'Campinas' });
   const pro = client();
   await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
@@ -1241,103 +1241,26 @@ test('Reels: profissional publica vídeo de até 1 min 30 s; aparece no feed, na
   const pt = client();
   await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
   assert.equal((await sendReel(pt, 10)).status, 403, 'paciente não publica');
-  assert.equal((await sendReel(pro, 95)).status, 400, 'profissional: no máximo 1 min 30 s');
-  const r = await sendReel(pro, 88);
-  assert.equal(r.status, 201, JSON.stringify(r.data));
-  assert.equal(r.data.kind, 'reel');
-  assert.ok(r.data.video.startsWith('/uploads/') && r.data.video.endsWith('.mp4'));
-  assert.ok(r.data.image.endsWith('.jpg'), 'capa do vídeo');
-
-  // Uma foto também, para ver a separação no perfil
+  const off = await sendReel(pro, 30);
+  assert.equal(off.status, 410, 'profissional também não');
+  assert.match(off.data.error, /desativada/);
+  assert.equal((await pro.post('/api/social/uploads', { mime: 'video/mp4', size: 1000 })).status, 410, 'nem em pedaços');
+  assert.equal((await pt.post('/api/social/uploads', { mime: 'video/mp4', size: 10 })).status, 403, 'paciente não envia');
+  // Um vídeo antigo (de antes de desligar)
+  const { db } = require('../server/db');
+  const rid = Number(db.prepare("INSERT INTO posts (professional_id, image, caption, kind, video, duration) VALUES (?, '/uploads/capa-antiga.jpg', 'Vídeo antigo', 'reel', '/uploads/antigo.mp4', 40)").run(c.data.id).lastInsertRowid);
   const fd = new FormData();
   fd.append('photos', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'f.png');
-  await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } });
-
-  // Aba Reels: só vídeos, de todo mundo (mesmo sem seguir), sem repetir o que já mostrou
-  const reels = (await pt.get('/api/social/reels')).data;
-  assert.ok(reels.items.some((p) => p.id === r.data.id));
-  assert.ok(reels.items.every((p) => p.kind === 'reel'));
-  assert.ok(!(await pt.get(`/api/social/reels?sug=${r.data.id}`)).data.items.some((p) => p.id === r.data.id));
-  // Aba "Seguindo": só de quem a pessoa segue (ainda não segue o Rafa)
-  assert.ok(!(await pt.get('/api/social/reels?scope=following')).data.items.some((p) => p.id === r.data.id));
-  await pt.post(`/api/social/follow/${c.data.id}`);
-  const fol = (await pt.get('/api/social/reels?scope=following&avatars=1')).data;
-  assert.ok(fol.items.some((p) => p.id === r.data.id), 'depois de seguir, aparece em Seguindo');
-  assert.equal(fol.following_avatars[0].id, c.data.id, 'fotinho de quem segue');
-  await pt.del(`/api/social/follow/${c.data.id}`);
-  // No feed (como sugestão) com o vídeo
-  const inFeed = (await pt.get('/api/social/feed')).data.items.find((p) => p.id === r.data.id);
-  assert.ok(inFeed && inFeed.video, 'reel aparece no feed');
-  // Curtir e comentar funcionam igual
-  assert.equal((await pt.post(`/api/social/posts/${r.data.id}/like`)).data.likes, 1);
-  assert.equal((await pt.post(`/api/social/posts/${r.data.id}/comments`, { body: 'Ótimo vídeo' })).status, 201);
-
-  // Perfil: fotos e vídeos separados (4 de cada)
+  assert.equal((await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } })).status, 201, 'fotos continuam');
+  assert.equal((await pro.post('/api/social/texts', { text: 'Texto continua', font: 'padrao' })).status, 201, 'textos continuam');
+  const inFeed = (await pt.get('/api/social/feed')).data.items.find((p) => p.id === rid);
+  assert.ok(inFeed && inFeed.video, 'o vídeo antigo continua no feed');
+  assert.equal((await pt.post(`/api/social/posts/${rid}/like`)).data.likes, 1);
   const prof = (await pt.get(`/api/professionals/${c.data.id}`)).data;
-  assert.equal(prof.posts_count, 2);
-  assert.equal(prof.photos_count, 1);
   assert.equal(prof.reels_count, 1);
-  assert.equal(prof.gallery_posts.length, 1);
-  assert.equal(prof.reels_posts[0].id, r.data.id);
-  const onlyReels = (await pt.get(`/api/social/professionals/${c.data.id}/posts?kind=reel`)).data.items;
-  assert.deepEqual(onlyReels.map((x) => x.kind), ['reel']);
-  const onlyPhotos = (await pt.get(`/api/social/professionals/${c.data.id}/posts?kind=photo`)).data.items;
-  assert.deepEqual(onlyPhotos.map((x) => x.kind), ['photo']);
-
-  // O dono coloca o vídeo no story (abre o vídeo)
-  const st = await pro.post(`/api/social/posts/${r.data.id}/story`);
+  const st = await pro.post(`/api/social/posts/${rid}/story`);
   assert.equal(st.status, 201);
-  assert.equal(st.data.post.kind, 'reel');
-
-  // Apagar remove o vídeo
-  assert.equal((await pro.del(`/api/social/posts/${r.data.id}`)).status, 200);
-  const file = require('node:path').join(tmp, 'uploads', require('node:path').basename(r.data.video));
-  await new Promise((ok) => setTimeout(ok, 50));
-  assert.equal(fs.existsSync(file), false, 'arquivo do vídeo apagado');
-});
-
-test('reel em pedaços: continua de onde parou (internet caiu / app no fundo) e publica no fim', async () => {
-  const c = await admin.post('/api/admin/professionals', { name: 'Pedro Pedaços', profession: 'Psicólogo(a)', registry: 'CRP 06/20022', email: 'pedaco@example.com', phone: '11955550000', state: 'SP', city: 'Campinas' });
-  const pro = client();
-  await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
-  const video = Buffer.from('0123456789'.repeat(1000)); // 10 KB
-  let r = await pro.post('/api/social/uploads', { mime: 'video/mp4', size: video.length });
-  assert.equal(r.status, 201);
-  const id = r.data.id;
-  const put = async (offset, buf) => {
-    const res = await fetch(`${base}/api/social/uploads/${id}?offset=${offset}`, { method: 'PUT', body: buf, headers: { Cookie: pro.cookie, 'Content-Type': 'application/octet-stream' } });
-    return { status: res.status, data: await res.json() };
-  };
-  assert.equal((await put(0, video.subarray(0, 4000))).data.received, 4000);
-  // Pedaço fora de ordem (ex.: reenvio depois da internet cair): responde quanto já chegou
-  const wrong = await put(1000, video.subarray(1000, 2000));
-  assert.equal(wrong.status, 409);
-  assert.equal(wrong.data.received, 4000);
-  // O aparelho pergunta quanto chegou e continua
-  assert.equal((await pro.get(`/api/social/uploads/${id}`)).data.received, 4000);
-  const finish = async () => {
-    const fd = new FormData();
-    fd.append('caption', 'Enviado aos poucos');
-    fd.append('duration', '42');
-    fd.append('photo', new Blob([Buffer.from([0xff, 0xd8, 0xff, 2])], { type: 'image/jpeg' }), 'capa.jpg');
-    const res = await fetch(`${base}/api/social/uploads/${id}/finish`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } });
-    return { status: res.status, data: await res.json() };
-  };
-  assert.equal((await finish()).status, 409, 'ainda não chegou inteiro');
-  assert.equal((await put(4000, video.subarray(4000))).data.received, video.length);
-  // Outro profissional não mexe no envio
-  const other = client();
-  await other.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
-  const done = await finish();
-  assert.equal(done.status, 201, JSON.stringify(done.data));
-  assert.equal(done.data.kind, 'reel');
-  assert.equal(done.data.caption, 'Enviado aos poucos');
-  const saved = fs.readFileSync(require('node:path').join(tmp, 'uploads', require('node:path').basename(done.data.video)));
-  assert.ok(saved.equals(video), 'o vídeo chegou inteiro e igual');
-  assert.equal((await pro.get(`/api/social/uploads/${id}`)).status, 404, 'envio encerrado');
-  const pt = client();
-  await pt.post('/api/auth/patient/login', { cpf: '453.178.287-91', password: '123456' });
-  assert.equal((await pt.post('/api/social/uploads', { mime: 'video/mp4', size: 10 })).status, 403, 'paciente não envia');
+  assert.equal((await pro.del(`/api/social/posts/${rid}`)).status, 200, 'o dono pode apagar');
 });
 
 test('fotos antigas: o sistema mede a foto e grava o formato do feed mais próximo (4:5, 1:1 ou 1,91:1)', async () => {
@@ -1431,11 +1354,11 @@ test('espaço do disco: só o administrador vê (paciente, profissional e visita
   }
 });
 
-test('limite de publicações: ao passar, a mais antiga sai; o admin muda o limite e o excesso é apagado', async () => {
+test('limite de publicações (fotos e textos): começa sem limite; o admin pode pôr um número e o excesso mais antigo sai', async () => {
   const { db } = require('../server/db');
   const path = require('node:path');
-  // Começa com 15 fotos e 10 vídeos
-  assert.deepEqual((await admin.get('/api/admin/limits')).data, { photo: 15, reel: 10 });
+  // Começa sem limite (0) e o profissional não vê aviso
+  assert.deepEqual((await admin.get('/api/admin/limits')).data, { photo: 0, text: 0 });
   const c = await admin.post('/api/admin/professionals', { name: 'Lia Limite', profession: 'Psicólogo(a)', registry: 'CRP 06/20023', email: 'lia.limite@example.com', phone: '11955554444', state: 'SP', city: 'Campinas' });
   const pro = client();
   await pro.post('/api/auth/professional/login', { login: c.data.code, password: c.data.password });
@@ -1445,45 +1368,32 @@ test('limite de publicações: ao passar, a mais antiga sai; o admin muda o limi
     fd.append('photos', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, i])], { type: 'image/png' }), 'f.png');
     return (await fetch(`${base}/api/social/posts`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } })).json();
   };
-  const reel = async (i) => {
-    const fd = new FormData();
-    fd.append('caption', `Vídeo ${i}`);
-    fd.append('poster', new Blob([Buffer.from([0xff, 0xd8, 0xff, i])], { type: 'image/jpeg' }), 'c.jpg');
-    fd.append('video', new Blob([Buffer.from(`video-${i}`)], { type: 'video/mp4' }), 'v.mp4');
-    return (await fetch(`${base}/api/social/reels`, { method: 'POST', body: fd, headers: { Cookie: pro.cookie } })).json();
-  };
-  // Admin baixa para 3 fotos e 2 vídeos (para o teste ser rápido)
-  assert.equal((await admin.post('/api/admin/limits', { photo: 3, reel: 2 })).status, 200);
-  const photos = [];
-  for (let i = 1; i <= 4; i++) photos.push(await photo(i));
+  const text = (i) => pro.post('/api/social/texts', { text: `Texto ${i}`, font: 'padrao' });
   const count = (kind) => db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = ?').get(c.data.id, kind).n;
-  assert.equal(count('photo'), 3, 'no máximo 3');
-  assert.equal(db.prepare('SELECT 1 FROM posts WHERE id = ?').get(photos[0].id), undefined, 'a 1ª (mais antiga) saiu');
+  for (let i = 1; i <= 5; i++) { await photo(100 + i); await text(100 + i); }
+  assert.equal(count('photo'), 5, 'sem limite: nada sai');
+  assert.equal(count('text'), 5);
+  assert.deepEqual((await pro.get('/api/social/limits')).data, { photo: { max: 0, used: 5 }, text: { max: 0, used: 5 } });
+  // Admin põe 3 fotos e 2 textos: mostra quantas vão sair e apaga as mais antigas
+  const prev = (await admin.get('/api/admin/limits?photo=3&text=2')).data;
+  assert.ok(prev.would_remove.photo >= 2 && prev.would_remove.text >= 3, JSON.stringify(prev)); // de todos os profissionais
+  const r = (await admin.post('/api/admin/limits', { photo: 3, text: 2 })).data;
+  assert.ok(r.removed >= 5);
+  assert.equal(count('photo'), 3);
+  assert.equal(count('text'), 2);
+  // Passou do limite: a mais antiga sai
+  const p6 = await photo(106);
+  assert.equal(count('photo'), 3);
+  assert.equal(db.prepare('SELECT caption FROM posts WHERE professional_id = ? AND kind = ? ORDER BY id DESC').get(c.data.id, 'photo').caption, 'Foto 106');
+  await text(106);
+  assert.equal(count('text'), 2);
   await new Promise((ok) => setTimeout(ok, 50));
-  assert.equal(fs.existsSync(path.join(tmp, 'uploads', path.basename(photos[0].image))), false, 'arquivo apagado (libera espaço)');
-  const reels = [];
-  for (let i = 1; i <= 3; i++) reels.push(await reel(i));
-  assert.equal(count('reel'), 2);
-  assert.equal(db.prepare('SELECT 1 FROM posts WHERE id = ?').get(reels[0].id), undefined, 'o vídeo mais antigo saiu');
-  assert.deepEqual((await pro.get('/api/social/limits')).data, { photo: { max: 3, used: 3 }, reel: { max: 2, used: 2 } });
-  // Diminuir o limite: mostra quantas vão sair e apaga as mais antigas na hora
-  const prev = (await admin.get('/api/admin/limits?photo=1&reel=1')).data;
-  assert.ok(prev.would_remove.photo >= 2 && prev.would_remove.reel >= 1);
-  const r = (await admin.post('/api/admin/limits', { photo: 1, reel: 1 })).data;
-  assert.ok(r.removed >= 3);
-  assert.equal(count('photo'), 1);
-  assert.equal(count('reel'), 1);
-  assert.equal(db.prepare('SELECT caption FROM posts WHERE professional_id = ? AND kind = ?').get(c.data.id, 'photo').caption, 'Foto 4', 'fica a mais nova');
-  // Paciente e profissional não mudam o limite
-  assert.equal((await pro.post('/api/admin/limits', { photo: 99, reel: 99 })).status, 401);
-  // Volta ao padrão combinado (15 fotos e 10 vídeos)
-  assert.equal((await admin.post('/api/admin/limits', { photo: 15, reel: 10 })).status, 200);
-});
-
-test('reel: sem limite de tamanho (só a duração conta)', async () => {
-  const pro = client();
-  await pro.post('/api/auth/professional/login', { login: '123456789', password: '123456789' });
-  assert.equal((await pro.post('/api/social/uploads', { mime: 'video/mp4', size: 900 * 1024 * 1024 })).status, 201, 'vídeo grande também pode');
+  assert.ok(p6.image && fs.existsSync(path.join(tmp, 'uploads', path.basename(p6.image))));
+  // Paciente e profissional não mudam o limite; número inválido não
+  assert.equal((await pro.post('/api/admin/limits', { photo: 99, text: 99 })).status, 401);
+  assert.equal((await admin.post('/api/admin/limits', { photo: -1, text: 0 })).status, 400);
+  // Volta para sem limite
+  assert.equal((await admin.post('/api/admin/limits', { photo: 0, text: 0 })).status, 200);
 });
 
 test('chat: apagar para mim, limpar conversa, bloquear (só mensagens) e conta apagada some com tudo', async () => {
@@ -1786,49 +1696,15 @@ test('conta apagada some de tudo: conversa, atendimentos, curtida, comentário, 
   assert.equal((await pro.get(`/api/chat/conversations/${items[0].id}/messages`)).data.items.length, 1, 'só a mensagem nova (as antigas não voltam)');
 });
 
-test('Acolia Brasil publica vídeo (reel) pelo admin e ele aparece nos Reels', async () => {
+test('Acolia Brasil também não publica vídeo (reels desativados)', async () => {
   const fd = new FormData();
   fd.append('video', new Blob([Buffer.from('fake-mp4-video')], { type: 'video/mp4' }), 'v.mp4');
   fd.append('poster', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'c.png');
   fd.append('caption', 'Bem-vindo à Acolia'); fd.append('duration', '30');
-  let r = await fetch(`${base}/api/admin/official/reels`, { method: 'POST', body: fd, headers: { Cookie: admin.cookie } });
-  const d = await r.json();
-  assert.equal(r.status, 201, JSON.stringify(d));
-  assert.equal(d.kind, 'reel');
-  const long = new FormData();
-  long.append('video', new Blob([Buffer.from('x')], { type: 'video/mp4' }), 'v.mp4');
-  long.append('poster', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'c.png');
-  long.append('duration', '300');
-  r = await fetch(`${base}/api/admin/official/reels`, { method: 'POST', body: long, headers: { Cookie: admin.cookie } });
-  assert.equal(r.status, 400, 'mais de 2 minutos não');
-  const mid = new FormData();
-  mid.append('video', new Blob([Buffer.from('x')], { type: 'video/mp4' }), 'v.mp4');
-  mid.append('poster', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'c.png');
-  mid.append('duration', '110');
-  r = await fetch(`${base}/api/admin/official/reels`, { method: 'POST', body: mid, headers: { Cookie: admin.cookie } });
-  assert.equal(r.status, 201, 'admin: até 2 minutos (1 min 50 s pode)');
-  const pt = client();
-  await pt.post('/api/auth/patient/register', { name: 'Vera Reels', cpf: '100.023.747-81', birth_date: '1990-01-01', state: 'SP', city: 'Campinas', password: '123456' });
-  const reels = (await pt.get('/api/social/reels')).data.items;
-  assert.ok(reels.some((x) => x.id === d.id), 'aparece nos Reels do paciente');
-  assert.equal((await pt.post('/api/admin/official/reels')).status, 401, 'paciente não publica pelo admin');
-  // envio em partes (vídeo grande pelo painel)
-  const video = Buffer.alloc(9 * 1024 * 1024, 7);
-  const s = await admin.post('/api/admin/official/uploads', { mime: 'video/mp4', size: video.length });
-  assert.equal(s.status, 201, JSON.stringify(s.data));
-  for (let off = 0; off < video.length; off += 4 * 1024 * 1024) {
-    const part = video.subarray(off, off + 4 * 1024 * 1024);
-    const pr = await fetch(`${base}/api/admin/official/uploads/${s.data.id}?offset=${off}`, { method: 'PUT', body: part, headers: { Cookie: admin.cookie, 'Content-Type': 'application/octet-stream' } });
-    assert.equal(pr.status, 200, await pr.text());
-  }
-  const fin = new FormData();
-  fin.append('photo', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'c.png');
-  fin.append('caption', 'Vídeo grande'); fin.append('duration', '100');
-  r = await fetch(`${base}/api/admin/official/uploads/${s.data.id}/finish`, { method: 'POST', body: fin, headers: { Cookie: admin.cookie } });
-  const big = await r.json();
-  assert.equal(r.status, 201, JSON.stringify(big));
-  assert.equal(big.kind, 'reel');
-  assert.ok((await pt.get('/api/social/reels')).data.items.some((x) => x.id === big.id), 'vídeo em partes aparece nos Reels');
+  const r = await fetch(`${base}/api/admin/official/reels`, { method: 'POST', body: fd, headers: { Cookie: admin.cookie } });
+  assert.equal(r.status, 410);
+  assert.equal((await admin.post('/api/admin/official/uploads', { mime: 'video/mp4', size: 1000 })).status, 410);
+  assert.equal((await client().post('/api/admin/official/reels')).status, 401, 'sem login nem chega');
 });
 
 test('publicação de texto: profissional e Acolia Brasil, 4 fontes, até 3.000 caracteres; legenda até 1.700', async () => {

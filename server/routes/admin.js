@@ -646,11 +646,11 @@ router.get('/export/professionals.csv', (req, res) => {
 router.get('/limits', (req, res) => {
   const S = require('./social');
   const lim = S.getLimits();
-  const out = { photo: lim.photo, reel: lim.reel };
+  const out = { photo: lim.photo, text: lim.text };
   const p = Number(req.query.photo);
-  const r = Number(req.query.reel);
-  if (Number.isInteger(p) && Number.isInteger(r) && p > 0 && r > 0) {
-    out.would_remove = { photo: S.overLimit('photo', p).length, reel: S.overLimit('reel', r).length };
+  const t = Number(req.query.text);
+  if (Number.isInteger(p) && Number.isInteger(t) && p >= 0 && t >= 0) {
+    out.would_remove = { photo: p ? S.overLimit('photo', p).length : 0, text: t ? S.overLimit('text', t).length : 0 };
   }
   res.json(out);
 });
@@ -658,13 +658,13 @@ router.get('/limits', (req, res) => {
 // POST: salva e já aplica — quem passar do novo limite perde as publicações mais antigas
 router.post('/limits', (req, res) => {
   const photo = Number(req.body.photo);
-  const reel = Number(req.body.reel);
-  const ok = (n) => Number.isInteger(n) && n >= 1 && n <= 500;
-  if (!ok(photo) || !ok(reel)) throw new U.HttpError(400, 'Use números de 1 a 500.');
+  const text = Number(req.body.text);
+  const ok = (n) => Number.isInteger(n) && n >= 0 && n <= 500;
+  if (!ok(photo) || !ok(text)) throw new U.HttpError(400, 'Use números de 0 a 500 (0 = sem limite).');
   const S = require('./social');
-  S.setLimits({ photo, reel });
+  S.setLimits({ photo, text });
   const removed = S.enforceLimits();
-  res.json({ photo, reel, removed });
+  res.json({ photo, text, removed });
 });
 
 // ---------- Perfil oficial Acolia Brasil (publicações feitas pela administração) ----------
@@ -715,7 +715,9 @@ router.post('/limits', (req, res) => {
     if (!u) throw new U.HttpError(404, 'Envio não encontrado. Comece de novo.');
     return u;
   };
-  router.post('/official/uploads', (req, res) => {
+  // Reels desligados (pedido do dono): a Acolia Brasil também não publica vídeo novo
+  router.post('/official/uploads', (_req, _res) => { throw new U.HttpError(410, 'A publicação de reels (vídeos) foi desativada.'); });
+  router.post('/official/uploads-desativado', (req, res) => {
     const mime = String(req.body.mime || '').split(';')[0].toLowerCase();
     const size = Number(req.body.size);
     if (!(mime in UPL.VIDEO_EXT)) throw new U.HttpError(400, 'Envie um vídeo MP4, MOV ou WEBM.');
@@ -751,7 +753,8 @@ router.post('/limits', (req, res) => {
   });
 
   // Vídeo (reel) do perfil oficial: aparece no feed, nos Reels e no perfil da Acolia Brasil
-  router.post('/official/reels', async (req, res) => {
+  router.post('/official/reels', (_req, _res) => { throw new U.HttpError(410, 'A publicação de reels (vídeos) foi desativada.'); });
+  router.post('/official/reels-desativado', async (req, res) => {
     const UP = require('../upload');
     const media = await UP.handleReel(req, res);
     const secs = Number(req.body.duration) || 0;
