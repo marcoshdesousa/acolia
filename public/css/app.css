@@ -317,7 +317,7 @@ td .row { flex-wrap: nowrap; }
 .call-stage.is-group .group-grid { top: 176px; bottom: 180px; }
 .call-stage.is-group #localVideo, .call-stage.is-group .local-off { top: 82px; right: 14px; width: 66px; z-index: 5; }
 .call-stage.is-group .call-top { max-width: calc(100% - 32px - 80px); }
-@media (min-width: 700px) { .call-stage.is-group .group-grid { bottom: 112px; } }
+@media (min-width: 700px) { .call-stage.is-group .group-grid { top: 150px; bottom: 112px; } }
 
 .install-banner { display: flex; gap: 12px; align-items: center; }
 .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; margin: 24px auto; }

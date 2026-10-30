@@ -341,6 +341,7 @@ addColumn('professionals', 'presencial_on', 'INTEGER NOT NULL DEFAULT 1'); // "D
 // Aula/atendimento em grupo (só no Acolia Fisio): o horário recebe até 10 pacientes; a chamada é uma só,
 // o profissional vê todos e cada paciente vê só o profissional
 addColumn('agenda_hours', 'grp', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('professionals', 'group_size', 'INTEGER NOT NULL DEFAULT 10'); // vagas em cada horário em grupo (2 a 10, o profissional escolhe)
 addColumn('appointments', 'group_slot', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('calls', 'is_group', 'INTEGER NOT NULL DEFAULT 0');
 db.exec(`CREATE TABLE IF NOT EXISTS call_guests (

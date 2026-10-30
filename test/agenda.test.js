@@ -1349,6 +1349,19 @@ test('atendimento em grupo (só Acolia Fisio): até 10 pacientes no horário, um
   assert.equal((await pats[10].post('/api/agenda/book', { professional_id: F.id, start: at(day, '19:00'), accept: true })).status, 201);
   const pv = (await F.cl.get(`/api/agenda/pro/${F.id}/day?date=2030-04-08`)).data.slots.find((x) => x.label === '18:00');
   assert.deepEqual(pv.group, { taken: 0, max: 10 }, 'o profissional vê as vagas');
+  // O profissional escolhe quantas vagas cada horário em grupo tem (de 2 a 10)
+  assert.equal((await F.cl.put('/api/agenda/settings', { group_size: 11 })).status, 400);
+  assert.equal((await F.cl.put('/api/agenda/settings', { group_size: 1 })).status, 400);
+  assert.equal((await F.cl.put('/api/agenda/settings', { group_size: 3 })).data.group_max, 3);
+  const day2 = '2030-04-08';
+  for (let i = 0; i < 3; i++) {
+    const r = await pats[i].post('/api/agenda/book', { professional_id: F.id, start: at(day2, '18:00'), accept: true });
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    await F.cl.post(`/api/agenda/appointments/${r.data.id}/send-pix`);
+    await F.cl.post(`/api/agenda/appointments/${r.data.id}/manual-result`, { approved: true });
+  }
+  assert.equal((await pats[3].post('/api/agenda/book', { professional_id: F.id, start: at(day2, '18:00'), accept: true })).status, 409, 'com 3 vagas, o 4º não entra');
+  await F.cl.put('/api/agenda/settings', { group_size: 10 });
 
   // Chamada: uma só para o horário, um código para cada paciente
   clock = Date.parse(at(day, '17:56'));

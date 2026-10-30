@@ -99,7 +99,9 @@
           <select id="ag-break" data-break>${[0, 5, 10, 15, 20, 30].map((m) => `<option value="${m}" ${m === (s.break_minutes || 0) ? 'selected' : ''}>${m ? `${m} minutos` : 'Sem descanso'}</option>`).join('')}</select></div>
       </div>
       <div><b>Horários de início das consultas</b><div class="small muted">Coloque a hora em que <b>começa</b> cada consulta; o fim aparece sozinho. Em "+ adicionar horário" o próximo já vem contando o descanso. Você pode deixar para mais tarde (almoço, pausa), mas não para antes.</div></div>
-      ${s.group_allowed ? `<div class="notice info small"><b>Atendimento em grupo</b> (Pilates, yoga, funcional…): marque <b>"Em grupo"</b> nos horários que recebem até <b>${s.group_max} pacientes</b> ao mesmo tempo. O horário só fecha quando as ${s.group_max} vagas forem preenchidas. Online, a chamada é uma só: você vê todos e toca em um para ampliar; cada paciente vê só você (nunca os outros pacientes). O paciente não vê que o horário é em grupo.</div>
+      ${s.group_allowed ? `<div class="notice info small"><b>Atendimento em grupo</b> (Pilates, yoga, funcional…): marque <b>"Grupo"</b> nos horários que recebem mais de um paciente ao mesmo tempo e escolha quantas vagas cada um tem (de 2 a ${s.group_limit}). O horário só fecha quando as vagas forem preenchidas. Online, a chamada é uma só: você vê todos e toca em um para ampliar; cada paciente vê só você (nunca os outros pacientes). O paciente não vê que o horário é em grupo.</div>
+      <div class="field" style="margin:0"><label for="ag-gsize">Pacientes em cada horário em grupo</label>
+        <select id="ag-gsize" data-gsize>${Array.from({ length: s.group_limit - 1 }, (_, i) => i + 2).map((n) => `<option value="${n}" ${n === s.group_max ? 'selected' : ''}>${n} pacientes${n === s.group_limit ? ' (máximo)' : ''}</option>`).join('')}</select></div>
       <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary sm" data-grp-all>Marcar todos os horários em grupo</button><button type="button" class="btn secondary sm" data-grp-none>Nenhum em grupo</button></div>` : ''}
       <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary sm" data-commercial>Preencher horário comercial (seg. a sex.)</button><button type="button" class="btn secondary sm" data-copy-mon>Copiar segunda para os dias úteis</button></div>
       <div class="week">${DAYS.map(([d, name]) => { const list = s.starts[d] || []; return `<div class="week-day ${list.length ? 'closed' : ''}" data-day="${d}">
@@ -224,7 +226,7 @@
         const grp = $$('[data-start-row]', day).filter((r) => $('[data-grp]', r)?.checked).map((r) => $('[data-start]', r).value).filter(Boolean);
         if (grp.length) group_starts[day.dataset.day] = grp;
       });
-      return api('/api/agenda/settings', { method: 'PUT', body: { starts, group_starts, session_minutes: dur(), break_minutes: brk(), ...extra } });
+      return api('/api/agenda/settings', { method: 'PUT', body: { starts, group_starts, ...($('[data-gsize]', root) ? { group_size: Number($('[data-gsize]', root).value) } : {}), session_minutes: dur(), break_minutes: brk(), ...extra } });
     };
     $('[data-save]', root).addEventListener('click', async (e) => {
       const btn = e.currentTarget; // (depois do await o evento já não guarda o botão)

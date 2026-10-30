@@ -37,7 +37,7 @@ const RULES = {
   HORIZON_MONTHS: 3,      // mês atual + 3 (se estiverem lotados, abre o seguinte)
   HORIZON_MAX_MONTHS: 24, // no máximo 2 anos à frente
   DEFAULT_MINUTES: 50,
-  GROUP_MAX: 10,          // horário em grupo (Acolia Fisio): até 10 pacientes (com o profissional, 11 na chamada)
+  GROUP_MAX: 10,          // horário em grupo (Acolia Fisio): no máximo 10 pacientes (com o profissional, 11 na chamada)
 };
 const CANCEL_REASONS = {
   nao_preciso: 'Não preciso mais',
@@ -87,6 +87,8 @@ const getAppt = (id) => db.prepare('SELECT * FROM appointments WHERE id = ?').ge
 const duration = (pro) => pro.session_minutes || RULES.DEFAULT_MINUTES;
 // Atendimento em grupo: só os profissionais do movimento (Acolia Fisio: fisioterapia, Pilates, yoga, personal…)
 const groupAllowed = (pro) => !!pro && pro.portal === 'fisio';
+// Vagas de cada horário em grupo: o profissional escolhe de 2 a 10
+const groupMax = (pro) => Math.min(RULES.GROUP_MAX, Math.max(2, Number(pro?.group_size) || RULES.GROUP_MAX));
 
 // Pagamento automático (Asaas) do profissional, com a chave já aberta; null = manual
 function autoPayment(proId) {
@@ -198,9 +200,9 @@ function slotsForDay(pro, date, opts = {}) {
       const same = (bs, k) => group && k === 'pro' && bs === s;
       if (busy.some(([bs, be, k]) => s < be && e > bs && !same(bs, k))) continue;
       const taken = group ? busy.filter(([bs, , k]) => same(bs, k)).length : 0;
-      if (group && taken >= RULES.GROUP_MAX) continue;
+      if (group && taken >= groupMax(pro)) continue;
       seen.add(s);
-      out.push(group ? { start: iso(s), label: hhmm(m), group: { taken, max: RULES.GROUP_MAX } } : { start: iso(s), label: hhmm(m) });
+      out.push(group ? { start: iso(s), label: hhmm(m), group: { taken, max: groupMax(pro) } } : { start: iso(s), label: hhmm(m) });
     }
   }
   return out.sort((a, b) => ms(a.start) - ms(b.start));
@@ -436,7 +438,7 @@ function confirmPaid(a) {
     const others = db.prepare(`SELECT start_at, group_slot FROM appointments WHERE professional_id = ? AND id <> ? AND ${OCCUPY_SQL} AND start_at < ? AND end_at > ?`)
       .all(cur.professional_id, cur.id, iso(now()), cur.end_at, cur.start_at);
     const mates = cur.group_slot ? others.filter((o) => o.group_slot && o.start_at === cur.start_at).length : 0;
-    const clash = others.length > mates || (cur.group_slot && mates >= RULES.GROUP_MAX);
+    const clash = others.length > mates || (cur.group_slot && mates >= groupMax(pro));
     if (clash || !pro) return { a: cur, clash: true };
     return { a: setStatus(cur.id, { status: 'confirmada', paid_at: iso(now()), hold_until: null }) };
   });
@@ -773,7 +775,7 @@ function view(a, role) {
 module.exports = {
   RULES, CANCEL_REASONS, HOLDING, ACTIVE, OCCUPY_SQL,
   now, iso, ms, localDate, localMin, fromLocal, hhmm, parseHHMM, addDays, fmtWhen, dayLabel, dowOf,
-  getPro, getAppt, duration, groupAllowed, groupStarts, guestJoined, readiness, maxDate, pixDeadline, clinicOf, presencialOpen, priceFor, modalityChange, proCancelMin, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
+  getPro, getAppt, duration, groupAllowed, groupMax, groupStarts, guestJoined, readiness, maxDate, pixDeadline, clinicOf, presencialOpen, priceFor, modalityChange, proCancelMin, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
   ensureConversation, post, pushText, notifyBoth, setStatus, createCharge, confirmPaid, checkPayment, refund, refundLock,
   openCall, closeCall, canEndCall, finishFromCall, sweep, canDo, view, onAccountGone,
   _setNow(fn) { nowFn = fn || Date.now; touch(); },

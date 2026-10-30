@@ -466,7 +466,8 @@ function settingsOf(pro) {
     starts: G.weekStarts(pro), // início de cada consulta, por dia da semana
     group_allowed: G.groupAllowed(pro), // Acolia Fisio: horários em grupo (até 10 pacientes)
     group_starts: G.groupAllowed(pro) ? G.groupStarts(pro) : {},
-    group_max: G.RULES.GROUP_MAX,
+    group_max: G.groupMax(pro), // vagas de cada horário em grupo (o profissional escolhe)
+    group_limit: G.RULES.GROUP_MAX,
     hours: db.prepare('SELECT dow, start_min, end_min FROM agenda_hours WHERE professional_id = ? ORDER BY dow, start_min').all(pro.id)
       .map((h) => ({ dow: h.dow, start: G.hhmm(h.start_min), end: G.hhmm(h.end_min) })),
     blocks: db.prepare('SELECT id, start_at, end_at, note FROM agenda_blocks WHERE professional_id = ? AND end_at > ? ORDER BY start_at').all(pro.id, G.iso(G.now()))
@@ -556,6 +557,11 @@ router.put('/settings', (req, res) => {
     }
     if (minutes) db.prepare('UPDATE professionals SET session_minutes = ? WHERE id = ?').run(minutes, pro.id);
     if (pause !== null) db.prepare('UPDATE professionals SET break_minutes = ? WHERE id = ?').run(pause, pro.id);
+    if (req.body.group_size !== undefined && G.groupAllowed(pro)) {
+      const n = Number(req.body.group_size);
+      if (!(Number.isInteger(n) && n >= 2 && n <= G.RULES.GROUP_MAX)) throw new U.HttpError(400, `Escolha de 2 a ${G.RULES.GROUP_MAX} pacientes por horário em grupo.`);
+      db.prepare('UPDATE professionals SET group_size = ? WHERE id = ?').run(n, pro.id);
+    }
     if (req.body.online !== undefined) db.prepare('UPDATE professionals SET agenda_on = ? WHERE id = ?').run(req.body.online ? 1 : 0, pro.id);
     if (req.body.presencial !== undefined) db.prepare('UPDATE professionals SET presencial_on = ? WHERE id = ?').run(req.body.presencial ? 1 : 0, pro.id);
     // Chave Pix do pagamento manual (fica em Consultas, abaixo do Asaas)
