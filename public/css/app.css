@@ -1671,7 +1671,7 @@ dialog.wide { max-width: 640px; width: calc(100vw - 24px); }
 /* Pacote mensal (Acolia Fisio) */
 .pk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .pk-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
-.pk-list li span { display: flex; align-items: center; gap: 8px; }
+.pk-list li > span { display: flex; align-items: center; gap: 10px; }
 .pk-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
 .pk-form .btn { grid-column: 1 / -1; }
 .pk-offer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }

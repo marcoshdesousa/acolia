@@ -415,37 +415,41 @@
   // O profissional cria os pacotes (sessões por semana e valor do mês), vê quem comprou e, no Pix manual,
   // confirma quando o dinheiro cair. Com o pacote valendo, o paciente marca as sessões sem pagar cada uma.
   async function renderPackages() {
-    const box = document.querySelector('[data-packages-card]');
-    if (!box) return;
+    const editor = document.querySelector('[data-pk-editor]'); // Meu perfil → Valores
+    const box = document.querySelector('[data-packages-card]'); // Consultas: pacientes com pacote
     let d;
-    try { d = await api('/api/agenda/packages'); } catch { box.classList.add('hidden'); return; }
-    box.classList.toggle('hidden', !d.allowed);
-    if (!d.allowed) return;
+    try { d = await api('/api/agenda/packages'); } catch { box?.classList.add('hidden'); return; }
+    if (!d.allowed) { box?.classList.add('hidden'); if (editor) editor.innerHTML = ''; return; }
+    if (editor) {
+      editor.innerHTML = `<h3 style="margin:14px 0 4px">Pacotes mensais <span class="small muted" style="font-weight:600">(opcional)</span></h3>
+        <p class="small muted" style="margin:0 0 10px">Se quiser, venda um pacote por mês: escolha <b>quantas sessões por semana</b> e o <b>valor do mês</b>. O paciente compra no seu perfil, paga o Pix (direto para você) e marca as sessões na sua agenda <b>sem pagar cada uma</b>, até o limite da semana. Sem pacote, a consulta é avulsa.</p>
+        ${d.items.length ? `<ul class="pk-list">${d.items.map((p) => `<li><span>${ic('calendar', 18)}<span><b>${esc(p.label)}</b><br><span class="small muted">${money(p.price_cents)} por mês</span></span></span>${d.secretary ? '' : `<button type="button" class="icon-btn" data-pk-del="${p.id}" aria-label="Tirar este pacote" title="Tirar da venda">✕</button>`}</li>`).join('')}</ul>` : ''}
+        ${d.secretary ? '' : `<div class="pk-form" style="margin-top:10px">
+          <div class="field" style="margin:0"><label for="pk-n">Sessões por semana</label><select id="pk-n" data-pk-n>${[1, 2, 3, 4, 5, 6, 7].map((n) => `<option value="${n}" ${n === 2 ? 'selected' : ''}>${n}x por semana</option>`).join('')}</select></div>
+          <div class="field" style="margin:0"><label for="pk-v">Valor do mês (R$)</label><input id="pk-v" data-pk-v inputmode="decimal" placeholder="Ex.: 320,00"></div>
+          <button type="button" class="btn secondary" data-pk-add>+ Adicionar pacote</button></div>`}`;
+      $('[data-pk-v]', editor)?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('[data-pk-add]', editor).click(); } });
+      $('[data-pk-add]', editor)?.addEventListener('click', async (e) => {
+        e.currentTarget.disabled = true;
+        try { await api('/api/agenda/packages', { method: 'POST', body: { per_week: Number($('[data-pk-n]', editor).value), price: $('[data-pk-v]', editor).value } }); toast('Pacote adicionado ✓ Já aparece no seu perfil.', '', { top: true }); } catch (ex) { toast(ex.message, 'error'); }
+        renderPackages();
+      });
+      $$('[data-pk-del]', editor).forEach((b) => b.addEventListener('click', async () => {
+        if (!await confirmDialog('Tirar este pacote da venda? Quem já comprou continua com o seu até o fim do mês.', { okLabel: 'Tirar' })) return;
+        await api(`/api/agenda/packages/${b.dataset.pkDel}`, { method: 'DELETE' });
+        renderPackages();
+      }));
+    }
+    if (!box) return;
     const waiting = d.patients.filter((p) => p.status === 'aguardando_pagamento');
     const active = d.patients.filter((p) => p.status === 'ativo');
-    box.innerHTML = `<h2 style="margin:0">Pacotes mensais</h2>
-      <p class="small muted" style="margin:0"><b>Opcional.</b> Se quiser, venda um pacote por mês: você escolhe <b>quantas sessões por semana</b> e o <b>valor do mês</b>. O paciente compra no seu perfil, paga o Pix (direto para você) e, durante o mês, marca as sessões na sua agenda <b>sem pagar cada uma</b>, até o limite da semana. Sessão cancelada a tempo volta para o pacote.</p>
-      ${d.items.length ? `<ul class="pk-list">${d.items.map((p) => `<li><span>${ic('calendar', 18)}<span><b>${esc(p.label)}</b><br><span class="small muted">${money(p.price_cents)} por mês</span></span></span>${d.secretary ? '' : `<button type="button" class="icon-btn" data-pk-del="${p.id}" aria-label="Tirar este pacote" title="Tirar da venda">✕</button>`}</li>`).join('')}</ul>`
-        : '<p class="small muted" style="margin:0">Você ainda não tem pacote à venda.</p>'}
-      ${d.secretary ? '' : `<div class="pk-form">
-        <div class="field" style="margin:0"><label for="pk-n">Sessões por semana</label><select id="pk-n" data-pk-n>${[1, 2, 3, 4, 5, 6, 7].map((n) => `<option value="${n}" ${n === 2 ? 'selected' : ''}>${n} ${n === 1 ? 'vez' : 'vezes'} por semana</option>`).join('')}</select></div>
-        <div class="field" style="margin:0"><label for="pk-v">Valor do mês (R$)</label><input id="pk-v" data-pk-v inputmode="decimal" placeholder="Ex.: 320,00"></div>
-        <button type="button" class="btn" data-pk-add>Criar pacote</button></div>`}
+    box.classList.toggle('hidden', !waiting.length && !active.length);
+    box.innerHTML = `<h2 style="margin:0">Pacotes dos pacientes</h2>
       ${waiting.length ? `<h3 style="margin:8px 0 0">Esperando o pagamento</h3>${waiting.map((p) => `<div class="appt-item"><div class="row" style="gap:10px;flex-wrap:nowrap">${avatar(p.patient.name, p.patient.photo, 'sm')}<div class="grow" style="min-width:0"><b>${esc(p.patient.name)}</b>
           <div class="small muted">${esc(p.label)} · ${money(p.price_cents)} · ${p.mode === 'auto' ? 'Pix automático (confirma sozinho)' : 'Pix na sua chave'}</div></div></div>
           ${p.mode === 'manual' && !d.secretary ? `<div class="small" style="margin-top:6px"><b>O Pix caiu na sua conta?</b></div><div class="bk-actions"><button type="button" class="btn sm" data-pk-ok="${p.id}">Sim, recebi</button><button type="button" class="btn sm secondary" data-pk-no="${p.id}">Não recebi</button></div>` : ''}</div>`).join('')}` : ''}
       ${active.length ? `<h3 style="margin:8px 0 0">Pacotes valendo</h3>${active.map((p) => `<div class="appt-item"><div class="row" style="gap:10px;flex-wrap:nowrap">${avatar(p.patient.name, p.patient.photo, 'sm')}<div class="grow" style="min-width:0"><b>${esc(p.patient.name)}</b>
           <div class="small muted">${esc(p.label)} · ${esc(p.period)}${p.used_this_week ? ` · ${p.used_this_week} de ${p.per_week} nesta semana` : ''}</div></div></div></div>`).join('')}` : ''}`;
-    $('[data-pk-add]', box)?.addEventListener('click', async (e) => {
-      e.currentTarget.disabled = true;
-      try { await api('/api/agenda/packages', { method: 'POST', body: { per_week: Number($('[data-pk-n]', box).value), price: $('[data-pk-v]', box).value } }); toast('Pacote criado ✓', '', { top: true }); } catch (ex) { toast(ex.message, 'error'); }
-      renderPackages();
-    });
-    $$('[data-pk-del]', box).forEach((b) => b.addEventListener('click', async () => {
-      if (!await confirmDialog('Tirar este pacote da venda? Quem já comprou continua com o seu até o fim do mês.', { okLabel: 'Tirar' })) return;
-      await api(`/api/agenda/packages/${b.dataset.pkDel}`, { method: 'DELETE' });
-      renderPackages();
-    }));
     const confirmPk = async (id, received) => {
       if (!received && !await confirmDialog('O Pix não caiu? O pedido do pacote é cancelado e o paciente recebe um aviso na conversa.', { okLabel: 'Não recebi', danger: true })) return;
       try { await api(`/api/agenda/my-packages/${id}/confirm`, { method: 'POST', body: { received } }); toast(received ? 'Pacote ativado ✓ O paciente já pode marcar as sessões.' : 'Pedido cancelado.', '', { top: true }); } catch (ex) { toast(ex.message, 'error'); }
@@ -470,6 +474,7 @@
     G.bindActions(els.appts, (id) => G.findAppt(id));
     G.onChange(() => { if (!els.appts.closest('.hidden')) renderAppts().catch(() => {}); });
     setInterval(() => $$('[data-cd]', els.appts).forEach((el) => { el.textContent = G.countdown(Date.parse(el.dataset.cd) - Date.now()); }), 30000);
+    setTimeout(() => renderPackages().catch(() => {}), 0); // pacotes em Meu perfil → Valores
     return { load };
   }
 
