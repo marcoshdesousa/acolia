@@ -80,7 +80,7 @@
   function renderAgenda() {
     const s = settings;
     const status = s.ready
-      ? `<div class="notice ok small">✅ Pacientes já podem marcar. ${s.next ? `Próximo horário livre: <b>${esc(s.next.label)} às ${esc(s.next.first)}</b>.` : 'Não há horário livre no período aberto para marcar.'} Pagamento: <b>${s.mode === 'auto' ? 'Pix automático (Asaas)' : 'Pix manual pelo chat'}</b>.</div>`
+      ? `<div class="notice ok small">✅ Pacientes já podem marcar. ${s.next ? `Próximo horário livre: <b>${esc(s.next.label)} às ${esc(s.next.first)}</b>.` : 'Não há horário livre no período aberto para marcar.'} Pagamento: <b>${s.mode === 'auto' ? `Pix automático (${esc(s.payment.provider_label || 'Asaas')})` : 'Pix manual pelo chat'}</b>.</div>`
       : `<div class="notice warn small"><b>Os pacientes ainda não conseguem marcar.</b> Falta:<ul style="margin:6px 0 0;padding-left:18px">${s.missing.map((m) => `<li>${MISSING[m]}</li>`).join('')}</ul></div>`;
     els.agenda.innerHTML = `<h2 style="margin:0">Minha agenda</h2>
       <label class="switch-row"><span class="sw-ic">${ic('video', 22)}</span>
@@ -272,7 +272,7 @@
     }));
   }
 
-  // ---------- Pix manual (fica abaixo do Asaas): usado quando o pagamento automático não está ligado ----------
+  // ---------- Pix manual (fica abaixo do pagamento automático): usado quando o pagamento automático não está ligado ----------
   function pixManualHtml() {
     const p = settings.payment;
     const auto = p.connected && p.enabled && p.key_ok;
@@ -298,7 +298,7 @@
     });
   }
 
-  // ---------- Pagamento automático (Asaas) ----------
+  // ---------- Pagamento automático (Asaas, Mercado Pago ou PagBank) ----------
   function renderAsaas() {
     const p = settings.payment;
     const box = els.asaas;
@@ -307,36 +307,87 @@
       const on = p.connected && p.enabled && p.key_ok;
       box.innerHTML = `<h2 style="margin:0">${ic('pix', 22)} Pagamento pelo Pix</h2>
         <div class="notice ${on ? 'ok' : ''} small">${on ? '✅ Pagamento automático ligado: as consultas pagas são confirmadas sozinhas.' : 'Pagamento manual: a chave Pix do profissional vai pela conversa e a consulta é confirmada quando o dinheiro cair.'}</div>
-        <p class="small muted" style="margin:0">🔒 Só o profissional muda a forma de pagamento, o Asaas e a chave Pix.</p>`;
+        <p class="small muted" style="margin:0">🔒 Só o profissional muda a forma de pagamento e a chave Pix.</p>`;
       return;
     }
     if (!p.connected) {
-      box.innerHTML = `<h2 style="margin:0">${ic('pix', 22)} Pagamento automático pelo Pix (Asaas)</h2>
-        <p style="margin:0">O paciente paga o Pix <b>dentro da Acolia</b> e a consulta é marcada sozinha. Se ele cancelar no prazo, o reembolso também é automático. O dinheiro cai <b>direto na sua conta Asaas</b>: a Acolia não recebe nem cobra taxa.</p>
-        <p class="small muted" style="margin:0">Sem o Asaas, o pagamento é manual: o paciente pede a consulta, você manda a sua chave Pix na conversa e confirma quando o dinheiro cair.</p>
-        <button type="button" class="btn" data-connect>Conectar meu Asaas (passo a passo)</button>
+      box.innerHTML = `<h2 style="margin:0">${ic('pix', 22)} Pagamento automático pelo Pix</h2>
+        <p style="margin:0">O paciente paga o Pix <b>dentro da Acolia</b> e a consulta é marcada sozinha. Se ele cancelar no prazo, o reembolso também é automático. O dinheiro cai <b>direto na sua conta</b>: a Acolia não recebe nem cobra taxa.</p>
+        <p class="small" style="margin:0"><b>Escolha onde você quer receber:</b></p>
+        <div class="pay-opts">${PROVS.map(([k, name, sub]) => `<button type="button" class="pay-opt" data-connect="${k}"><b>${name}</b><span class="small muted">${sub}</span><span class="small pay-go">Conectar (passo a passo) ›</span></button>`).join('')}</div>
+        <p class="small muted" style="margin:0">Sem conectar nenhuma, o pagamento é manual: o paciente pede a consulta, você manda a sua chave Pix na conversa e confirma quando o dinheiro cair.</p>
         ${pixManualHtml()}`;
-      $('[data-connect]', box).addEventListener('click', wizard);
+      $$('[data-connect]', box).forEach((b) => b.addEventListener('click', () => wizard(b.dataset.connect)));
       bindPixManual(box);
       return;
     }
-    box.innerHTML = `<h2 style="margin:0">${ic('pix', 22)} Pagamento automático pelo Pix (Asaas)</h2>
-      <div class="notice ${p.key_ok ? 'ok' : 'warn'} small">${p.key_ok ? '✅ Conectado' : '⚠️ A chave guardada não abre mais: conecte de novo'}${p.account_name && p.env !== 'simulado' ? `: <b>${esc(p.account_name)}</b>` : ''} · ${p.env === 'simulado' ? '<b>Asaas simulado</b> (conta de teste, sem dinheiro)' : p.env === 'teste' ? '<b>Asaas Sandbox</b> (teste, dinheiro de mentira)' : 'conta real'}</div>
+    const name = p.provider_label || 'Asaas';
+    box.innerHTML = `<h2 style="margin:0">${ic('pix', 22)} Pagamento automático pelo Pix (${esc(name)})</h2>
+      <div class="notice ${p.key_ok ? 'ok' : 'warn'} small">${p.key_ok ? `✅ ${esc(name)} conectado` : '⚠️ A chave guardada não abre mais: conecte de novo'}${p.account_name && p.env !== 'simulado' ? `: <b>${esc(p.account_name)}</b>` : ''} · ${p.env === 'simulado' ? '<b>Asaas simulado</b> (conta de teste, sem dinheiro)' : p.env === 'teste' ? '<b>conta de teste</b> (dinheiro de mentira)' : 'conta real'}</div>
       <label class="check"><input type="checkbox" data-enabled ${p.enabled ? 'checked' : ''}> Usar o pagamento automático nas novas consultas</label>
       ${p.enabled ? '<p class="small" style="margin:0">As consultas pagas pelo Pix são <b>confirmadas sozinhas</b>, e os reembolsos no prazo também saem sozinhos.</p>' : ''}
       <p class="small muted" style="margin:0">Desligado, as novas consultas vão pelo Pix manual (a sua chave Pix na conversa).</p>
-      <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary sm" data-connect>Trocar a chave</button><button type="button" class="btn ghost sm danger-text" data-disconnect>Desconectar</button></div>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary sm" data-connect="${esc(p.provider || 'asaas')}">Trocar a chave</button><button type="button" class="btn secondary sm" data-change>Usar outra empresa</button><button type="button" class="btn ghost sm danger-text" data-disconnect>Desconectar</button></div>
       ${pixManualHtml()}`;
-    $('[data-connect]', box).addEventListener('click', wizard);
+    $('[data-connect]', box).addEventListener('click', (e) => wizard(e.currentTarget.dataset.connect));
+    $('[data-change]', box).addEventListener('click', async () => {
+      const k = await modal({ title: 'Receber por outra empresa', html: '<p class="small muted" style="margin-top:0">Escolha a empresa. As consultas que já foram pagas continuam com a empresa antiga até terminarem.</p>',
+        actions: PROVS.filter(([x]) => x !== (p.provider || 'asaas')).map(([x, n]) => ({ label: n, value: x, class: 'secondary' })) });
+      if (k) wizard(k);
+    });
     bindPixManual(box);
     $('[data-enabled]', box).addEventListener('change', async (e) => {
-      try { settings = await api('/api/agenda/asaas', { method: 'PUT', body: { enabled: e.target.checked } }); render(); toast(e.target.checked ? 'Pagamento automático ligado ✓' : 'Pagamento automático desligado'); } catch (ex) { toast(ex.message, 'error'); }
+      try { settings = await api('/api/agenda/payment', { method: 'PUT', body: { enabled: e.target.checked } }); render(); toast(e.target.checked ? 'Pagamento automático ligado ✓' : 'Pagamento automático desligado'); } catch (ex) { toast(ex.message, 'error'); }
     });
     $('[data-disconnect]', box).addEventListener('click', async () => {
-      if (!await confirmDialog('Desconectar o Asaas? As novas consultas passam a ser pagas pelo Pix manual.', { okLabel: 'Desconectar', danger: true })) return;
-      try { settings = await api('/api/agenda/asaas', { method: 'DELETE' }); render(); toast('Asaas desconectado'); } catch (ex) { toast(ex.message, 'error'); }
+      if (!await confirmDialog(`Desconectar o ${name}? As novas consultas passam a ser pagas pelo Pix manual.`, { okLabel: 'Desconectar', danger: true })) return;
+      try { settings = await api('/api/agenda/payment', { method: 'DELETE' }); render(); toast(`${name} desconectado`); } catch (ex) { toast(ex.message, 'error'); }
     });
   }
+
+  // Empresas para receber o Pix na conta do profissional
+  const PROVS = [
+    ['asaas', 'Asaas', 'Conta digital grátis, feita para profissionais.'],
+    ['mercadopago', 'Mercado Pago', 'Use a conta do Mercado Pago que você já tem.'],
+    ['pagbank', 'PagBank', 'Use a conta do PagBank (PagSeguro) que você já tem.'],
+  ];
+  const howItWorks = (name) => ['Como funciona', `<ul class="policy-list">
+      <li>O paciente escolhe o dia e o horário na sua agenda e paga o <b>Pix dentro da Acolia</b> (QR Code ou "copia e cola").</li>
+      <li>Quando o Pix cai na sua conta ${name}, a <b>consulta é confirmada sozinha</b>: você não precisa conferir nada. A chamada também é criada sozinha.</li>
+      <li>O dinheiro vai <b>direto para a sua conta no ${name}</b>. A Acolia <b>não recebe</b> o dinheiro e <b>não cobra taxa</b> sobre a consulta. A tarifa do Pix é a do próprio ${name}.</li>
+      <li>Se o paciente cancelar no prazo (até 30 minutos antes), o <b>reembolso sai automático</b> da sua conta ${name}. Deixe saldo para isso.</li>
+      <li>Só <b>Pix</b> (cai na hora). Não há cartão nem boleto.</li></ul>`];
+  const WIZ = {
+    mercadopago: {
+      title: 'Conectar o Mercado Pago', keyLabel: 'Access Token do Mercado Pago', placeholder: 'APP_USR-...',
+      steps: [howItWorks('Mercado Pago'),
+        ['Passo 1 — Conta e chave Pix no Mercado Pago', `<ol class="policy-list">
+          <li>Tenha uma conta no <b>Mercado Pago</b> (app ou site mercadopago.com.br), pessoa física ou jurídica, com os dados e documentos confirmados.</li>
+          <li>No app, abra a área <b>Pix</b> e entre em <b>Minhas chaves</b> (ou "Chaves Pix").</li>
+          <li>Cadastre uma chave (aleatória, CPF, e-mail ou telefone). É nessa conta que os pagamentos vão cair.</li></ol>`],
+        ['Passo 2 — Pegue o seu Access Token', `<ol class="policy-list">
+          <li>No computador, entre em <b>mercadopago.com.br/developers</b> com a sua conta e abra <b>Suas integrações</b>.</li>
+          <li>Toque em <b>Criar aplicação</b>: nome <b>Acolia</b>, tipo <b>pagamentos online</b>. Se perguntar o produto, escolha a opção de <b>API / Checkout Transparente</b>.</li>
+          <li>Na aplicação, abra <b>Credenciais de produção</b> (se pedir, preencha os dados do seu negócio e ative).</li>
+          <li>Copie o <b>Access Token</b>: ele começa com <code>APP_USR-</code>.</li>
+          <li>Não mande para ninguém. Aqui ele fica guardado <b>criptografado</b> e só é usado para criar o Pix das consultas e fazer os reembolsos.</li></ol>
+          <p class="small muted">As telas do Mercado Pago mudam de vez em quando; se o nome de algum botão estiver diferente, procure por "Credenciais de produção". Token de teste (começa com TEST-) não é aceito.</p>`]],
+    },
+    pagbank: {
+      title: 'Conectar o PagBank', keyLabel: 'Token do PagBank', placeholder: 'Cole o token aqui',
+      steps: [howItWorks('PagBank'),
+        ['Passo 1 — Conta e chave Pix no PagBank', `<ol class="policy-list">
+          <li>Tenha uma conta no <b>PagBank</b> (app ou site pagbank.com.br), pessoa física ou jurídica, com os dados confirmados.</li>
+          <li>No app, abra a área <b>Pix</b> → <b>Minhas chaves</b> e cadastre uma chave. É nessa conta que os pagamentos vão cair.</li></ol>`],
+        ['Passo 2 — Gere o seu token', `<ol class="policy-list">
+          <li>No computador, entre na sua conta pelo site do <b>PagBank</b>.</li>
+          <li>No menu, procure <b>Venda online</b> → <b>Integrações</b>.</li>
+          <li>Toque em <b>Gerar token</b> (token de <b>produção</b>). O PagBank mostra o token ou manda para o seu e-mail.</li>
+          <li>Copie o token inteiro.</li>
+          <li>Não mande para ninguém. Aqui ele fica guardado <b>criptografado</b> e só é usado para criar o Pix das consultas e fazer os reembolsos.</li></ol>
+          <p class="small muted">Se o nome de algum menu estiver diferente no seu PagBank, procure por "Integrações" ou "Token". Token de teste (sandbox) não é aceito.</p>`]],
+    },
+  };
 
   // Passo a passo: cada tela pede um print e só avança com "Sim, tirei print" (o ✕ fecha)
   const STEPS = [
@@ -369,40 +420,43 @@
       <li>Não mande essa chave para ninguém. Aqui na Acolia ela fica guardada <b>criptografada</b> e só é usada para criar o Pix das consultas e fazer os reembolsos.</li></ol>
       <p class="small muted">Use a chave da sua <b>conta real</b> do Asaas. Chave de conta de teste (Sandbox) não é aceita, porque não recebe dinheiro de verdade.</p>`],
   ];
-  function wizard() {
+  function wizard(provider = 'asaas') {
+    const W = WIZ[provider] || { title: 'Conectar o Asaas', keyLabel: 'Chave de API do Asaas', placeholder: '$aact_prod_...', steps: STEPS };
+    const name = (PROVS.find(([k]) => k === provider) || [])[1] || 'Asaas';
+    const steps = W.steps;
     let i = 0;
     let asked = false;
     modal({
-      title: 'Conectar o Asaas',
+      title: W.title,
       html: '<div data-wz></div>',
       actions: [],
       onOpen: (dlg) => {
         const wz = $('[data-wz]', dlg);
         const paint = () => {
-          if (i < STEPS.length) {
-            const [t, body] = STEPS[i];
-            wz.innerHTML = `<div class="wz-step">Tela ${i + 1} de ${STEPS.length + 1}</div><h3 style="margin:4px 0 10px">${t}</h3>${body}
+          if (i < steps.length) {
+            const [t, body] = steps[i];
+            wz.innerHTML = `<div class="wz-step">Tela ${i + 1} de ${steps.length + 1}</div><h3 style="margin:4px 0 10px">${t}</h3>${body}
               ${asked ? `<div class="wz-ask"><b>Você tirou print desta tela?</b><button type="button" class="btn" data-yes>Sim</button></div>`
                 : `<p class="notice info small" style="margin-top:12px">📸 <b>Tire um print desta tela</b> para rever as informações depois.</p><button type="button" class="btn block" data-next>Avançar</button>`}`;
             $('[data-next]', wz)?.addEventListener('click', () => { asked = true; paint(); });
             $('[data-yes]', wz)?.addEventListener('click', () => { asked = false; i++; paint(); });
             return;
           }
-          wz.innerHTML = `<div class="wz-step">Tela ${STEPS.length + 1} de ${STEPS.length + 1}</div><h3 style="margin:4px 0 10px">Passo 4 — Cole a chave e confirme</h3>
+          wz.innerHTML = `<div class="wz-step">Tela ${steps.length + 1} de ${steps.length + 1}</div><h3 style="margin:4px 0 10px">Último passo — Cole e confirme</h3>
             <div class="form-error hidden" data-err></div>
-            <div class="field"><label for="wz-key">Chave de API do Asaas</label><input id="wz-key" data-key autocomplete="off" spellcheck="false" placeholder="$aact_prod_..."></div>
+            <div class="field"><label for="wz-key">${esc(W.keyLabel)}</label><input id="wz-key" data-key autocomplete="off" spellcheck="false" placeholder="${esc(W.placeholder)}"></div>
             <button type="button" class="btn block" data-save>Conectar e confirmar</button>
-            <p class="small muted">A Acolia confere a chave com o Asaas na hora. Depois de conectar, deixe marcado <b>"Usar o pagamento automático"</b>: a partir daí as consultas pagas pelo Pix são <b>confirmadas sozinhas</b>. Confira também se a sua <b>agenda</b> está aberta (horários e valor da consulta).</p>`;
+            <p class="small muted">A Acolia confere a chave com o ${esc(name)} na hora. Depois de conectar, deixe marcado <b>"Usar o pagamento automático"</b>: a partir daí as consultas pagas pelo Pix são <b>confirmadas sozinhas</b>. Confira também se a sua <b>agenda</b> está aberta (horários e valor da consulta).</p>`;
           $('[data-save]', wz).addEventListener('click', async (e) => {
             const btn = e.currentTarget;
             const err = $('[data-err]', wz);
             err.classList.add('hidden');
             btn.disabled = true;
             try {
-              settings = await api('/api/agenda/asaas', { method: 'POST', body: { key: $('[data-key]', wz).value } });
+              settings = await api('/api/agenda/payment', { method: 'POST', body: { provider, key: $('[data-key]', wz).value } });
               dlg.close(); dlg.remove();
               render();
-              toast(`Asaas conectado ✓ Consultas confirmadas automaticamente${settings.payment.env !== 'producao' ? ' (teste)' : ''}`, '', { top: true });
+              toast(`${name} conectado ✓ Consultas confirmadas automaticamente${settings.payment.env !== 'producao' ? ' (teste)' : ''}`, '', { top: true });
             } catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); btn.disabled = false; }
           });
         };

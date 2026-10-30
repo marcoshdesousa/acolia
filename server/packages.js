@@ -125,13 +125,7 @@ async function buy(patient, offerId) {
   let pp = get(Number(info.lastInsertRowid));
   if (pay) {
     try {
-      const asaas = require('./asaas');
-      let cust = db.prepare('SELECT customer_id FROM asaas_customers WHERE professional_id = ? AND patient_id = ?').get(pro.id, patient.id)?.customer_id;
-      if (!cust) {
-        cust = await asaas.ensureCustomer(pay.env, pay.key, db.prepare('SELECT id, name, cpf FROM patients WHERE id = ?').get(patient.id));
-        db.prepare('INSERT OR REPLACE INTO asaas_customers (professional_id, patient_id, customer_id) VALUES (?, ?, ?)').run(pro.id, patient.id, cust);
-      }
-      const pix = await asaas.createPix(pay.env, pay.key, { customer: cust, cents: offer.price_cents, description: `Pacote mensal (${label(offer.per_week)}) com ${pro.name} (Acolia)`, ref: `acolia-pacote-${pp.id}` });
+      const pix = await require('./payGateway').charge(pay, { proId: pro.id, patientId: patient.id, cents: offer.price_cents, description: `Pacote mensal (${label(offer.per_week)}) com ${pro.name} (Acolia)`, ref: `acolia-pacote-${pp.id}` });
       db.prepare('UPDATE patient_packages SET pay_id = ?, pix_payload = ?, pix_image = ? WHERE id = ?').run(pix.id, pix.payload, pix.image, pp.id);
     } catch (e) {
       db.prepare("UPDATE patient_packages SET status = 'cancelado' WHERE id = ?").run(pp.id);
@@ -167,7 +161,7 @@ async function check(pp) {
   const pay = G.autoPayment(pp.professional_id);
   if (!pay) return pp;
   try {
-    const st = await require('./asaas').status(pay.env, pay.key, pp.pay_id);
+    const st = await require('./payGateway').status(pay, pp.pay_id);
     if (st.paid) return activate(pp);
   } catch (e) { console.error('[pacote] consulta de pagamento', pp.id, e.message); }
   return get(pp.id);

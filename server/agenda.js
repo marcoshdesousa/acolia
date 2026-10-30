@@ -90,14 +90,14 @@ const groupAllowed = (pro) => !!pro && pro.portal === 'fisio';
 // Vagas de cada horário em grupo: o profissional escolhe de 2 a 10
 const groupMax = (pro) => Math.min(RULES.GROUP_MAX, Math.max(2, Number(pro?.group_size) || RULES.GROUP_MAX));
 
-// Pagamento automático (Asaas) do profissional, com a chave já aberta; null = manual
+// Pagamento automático (Asaas, Mercado Pago ou PagBank) do profissional, com a chave já aberta; null = manual
 function autoPayment(proId) {
   const row = db.prepare('SELECT * FROM pro_payment WHERE professional_id = ? AND enabled = 1').get(proId);
   if (!row) return null;
   // Chave de teste (Sandbox) ou Asaas simulado: só vale para o Profissional Teste (não recebe dinheiro)
   if (row.env !== 'producao' && process.env.ALLOW_ASAAS_SANDBOX !== '1' && !(row.env === 'simulado' && getPro(proId)?.is_test)) return null;
   const key = require('./secretBox').open(row.key_enc);
-  return key ? { env: row.env, key, name: row.account_name } : null;
+  return key ? { provider: row.provider || 'asaas', env: row.env, key, name: row.account_name } : null;
 }
 
 // Consultório (consulta presencial): só quem marcou "Atende presencialmente" e cadastrou o endereço
@@ -415,16 +415,10 @@ function setStatus(id, fields) {
 async function createCharge(a) {
   const pay = autoPayment(a.professional_id);
   if (!pay) throw new U.HttpError(409, 'O pagamento automático deste profissional não está disponível agora.');
-  const asaas = require('./asaas');
-  const pat = db.prepare('SELECT id, name, cpf FROM patients WHERE id = ?').get(a.patient_id);
-  let cust = db.prepare('SELECT customer_id FROM asaas_customers WHERE professional_id = ? AND patient_id = ?').get(a.professional_id, a.patient_id)?.customer_id;
-  if (!cust) {
-    cust = await asaas.ensureCustomer(pay.env, pay.key, pat);
-    db.prepare('INSERT OR REPLACE INTO asaas_customers (professional_id, patient_id, customer_id) VALUES (?, ?, ?)').run(a.professional_id, a.patient_id, cust);
-  }
   const pro = getPro(a.professional_id);
-  const pix = await asaas.createPix(pay.env, pay.key, {
-    customer: cust, cents: a.price_cents, description: `Consulta ${a.modality === 'presencial' ? 'presencial' : 'online'} com ${pro.name} — ${fmtWhen(ms(a.start_at))} (Acolia)`, ref: `acolia-consulta-${a.id}`,
+  const pix = await require('./payGateway').charge(pay, {
+    proId: a.professional_id, patientId: a.patient_id, cents: a.price_cents,
+    description: `Consulta ${a.modality === 'presencial' ? 'presencial' : 'online'} com ${pro.name} — ${fmtWhen(ms(a.start_at))} (Acolia)`, ref: `acolia-consulta-${a.id}`,
   });
   return setStatus(a.id, { pay_id: pix.id, pix_payload: pix.payload, pix_image: pix.image });
 }
@@ -463,7 +457,7 @@ async function checkPayment(a, { force = false } = {}) {
   const pay = autoPayment(a.professional_id);
   if (!pay) return a;
   try {
-    const st = await require('./asaas').status(pay.env, pay.key, a.pay_id);
+    const st = await require('./payGateway').status(pay, a.pay_id);
     if (st.paid) return confirmPaid(a);
   } catch (e) { console.error('[agenda] consulta de pagamento', a.id, e.message); }
   return getAppt(a.id);
@@ -498,7 +492,7 @@ function refund(a, reason, detail = '') {
       }
     };
     if (!pay) { done(false, 'sem chave'); return getAppt(a.id); }
-    return require('./asaas').refund(pay.env, pay.key, a.pay_id, 'Reembolso da consulta (Acolia)')
+    return require('./payGateway').refund(pay, a.pay_id, 'Reembolso da consulta (Acolia)')
       .then(() => done(true)).catch((e) => done(false, e.message)).then(() => getAppt(a.id));
   }
   const upd = setStatus(a.id, { ...fields, status: 'reembolso_pendente', refund_status: 'pedido' });
@@ -615,7 +609,7 @@ async function sweep() {
         const cur = await checkPayment(a, { force: true });
         if (cur.status !== 'aguardando_pagamento') continue;
         const pay = autoPayment(a.professional_id);
-        if (pay && a.pay_id) require('./asaas').cancel(pay.env, pay.key, a.pay_id);
+        if (pay && a.pay_id) require('./payGateway').cancel(pay, a.pay_id);
       }
       const upd = setStatus(a.id, { status: 'expirada', hold_until: null });
       post(upd, a.status === 'aguardando_pix' ? 'professional' : 'patient', a.status === 'aguardando_pix' ? 'sem_resposta' : 'expirada');
@@ -680,7 +674,7 @@ function onAccountGone(role, id) {
     closeCall(a);
     if (['confirmada', 'aguardando_paciente'].includes(a.status) && a.mode === 'auto' && a.pay_id) {
       const pay = autoPayment(a.professional_id);
-      if (pay) require('./asaas').refund(pay.env, pay.key, a.pay_id, 'Conta apagada (Acolia)').catch((e) => console.error('[agenda] estorno', a.id, e.message));
+      if (pay) require('./payGateway').refund(pay, a.pay_id, 'Conta apagada (Acolia)').catch((e) => console.error('[agenda] estorno', a.id, e.message));
     }
     setStatus(a.id, { status: 'cancelada', hold_until: null, cancel_reason: 'conta_apagada', conversation_id: null });
   }

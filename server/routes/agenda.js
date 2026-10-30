@@ -341,7 +341,7 @@ router.post('/appointments/:id/cancel', async (req, res) => {
       // Se o Pix já caiu, confirma em vez de desistir (e aí dá para cancelar com reembolso)
       const cur = await G.checkPayment(a, { force: true });
       if (cur.status === 'confirmada') throw new U.HttpError(409, 'O seu Pix já foi recebido e a consulta está marcada. Para desmarcar, use "Cancelar consulta".');
-      if (pay) require('../asaas').cancel(pay.env, pay.key, a.pay_id);
+      if (pay) require('../payGateway').cancel(pay, a.pay_id);
     }
     const upd = G.setStatus(a.id, { status: 'cancelada', hold_until: null, cancel_reason: 'desistiu' });
     G.post(upd, 'patient', 'cancelada', 'antes_pagar');
@@ -441,7 +441,7 @@ router.post('/appointments/:id/withdraw', async (req, res) => {
     const cur = await G.checkPayment(a, { force: true });
     if (cur.status === 'confirmada') throw new U.HttpError(409, 'O Pix do paciente acabou de cair: a consulta está marcada. Se não puder atender, use "Não vou poder atender".');
     const pay = G.autoPayment(a.professional_id);
-    if (pay) require('../asaas').cancel(pay.env, pay.key, a.pay_id);
+    if (pay) require('../payGateway').cancel(pay, a.pay_id);
   }
   const upd = G.setStatus(a.id, { status: 'cancelada', hold_until: null, cancel_reason: 'profissional_desistiu' });
   G.post(upd, 'professional', 'cancelada', 'pro_antes_pagar');
@@ -486,7 +486,7 @@ router.post('/appointments/:id/refund-done', (req, res) => {
 
 // ---------- Configurações da agenda (profissional) ----------
 function settingsOf(pro) {
-  const pay = db.prepare('SELECT env, account_name, enabled, connected_at, key_enc FROM pro_payment WHERE professional_id = ?').get(pro.id);
+  const pay = db.prepare('SELECT provider, env, account_name, enabled, connected_at, key_enc FROM pro_payment WHERE professional_id = ?').get(pro.id);
   const ready = G.readiness(pro);
   return {
     online: !!pro.agenda_on,
@@ -506,7 +506,7 @@ function settingsOf(pro) {
     price_cents: pro.price_cents,
     has_pix_key: !!String(pro.pix_key || '').trim(),
     pix_key: pro.pix_key || '',
-    payment: pay ? { connected: true, env: pay.env, account_name: pay.account_name, enabled: !!pay.enabled, connected_at: pay.connected_at, key_ok: !!require('../secretBox').open(pay.key_enc) } : { connected: false },
+    payment: pay ? { connected: true, provider: pay.provider || 'asaas', provider_label: require('../payGateway').label(pay.provider || 'asaas'), env: pay.env, account_name: pay.account_name, enabled: !!pay.enabled, connected_at: pay.connected_at, key_ok: !!require('../secretBox').open(pay.key_enc) } : { connected: false },
     ready: ready.ok, missing: ready.missing, mode: ready.mode,
     next: G.nextAvailable(pro),
     rules: G.RULES,
@@ -625,29 +625,40 @@ router.delete('/blocks/:id', (req, res) => {
   res.json(settingsOf(req.auth.user));
 });
 
-// ---------- Pagamento automático (Asaas) ----------
-router.post('/asaas', async (req, res) => {
-  if (!isPro(req)) throw new U.HttpError(403, 'Só para profissionais.');
-  const r = await require('../asaas').check(req.body.key);
-  db.prepare(`INSERT INTO pro_payment (professional_id, provider, key_enc, env, account_name, enabled, connected_at) VALUES (?, 'asaas', ?, ?, ?, 1, datetime('now'))
-    ON CONFLICT(professional_id) DO UPDATE SET key_enc = excluded.key_enc, env = excluded.env, account_name = excluded.account_name, enabled = 1, connected_at = excluded.connected_at`)
-    .run(req.auth.user.id, require('../secretBox').seal(r.key), r.env, U.cleanText(r.name, 120));
+// ---------- Pagamento automático (Asaas, Mercado Pago ou PagBank: o profissional escolhe um) ----------
+// /asaas continua valendo (é o Asaas); /payment recebe { provider, key }
+const connectPayment = async (req, res) => {
+  if (!isPro(req) || req.auth.secretary) throw new U.HttpError(403, 'Só o profissional conecta a forma de receber.');
+  const provider = req.path === '/asaas' ? 'asaas' : String(req.body.provider || '');
+  const PG = require('../payGateway');
+  const r = await PG.check(provider, req.body.key);
+  // Trocar de empresa com consultas pagas pela anterior em andamento: elas ficariam sem reembolso automático
+  const cur = db.prepare('SELECT provider FROM pro_payment WHERE professional_id = ?').get(req.auth.user.id);
+  if (cur && (cur.provider || 'asaas') !== provider) {
+    const pending = db.prepare("SELECT COUNT(*) n FROM appointments WHERE professional_id = ? AND mode = 'auto' AND status IN ('aguardando_pagamento', 'confirmada', 'aguardando_paciente', 'reembolso_pendente')").get(req.auth.user.id).n;
+    if (pending) throw new U.HttpError(409, `Você tem ${pending} consulta(s) paga(s) pelo ${PG.label(cur.provider || 'asaas')} em andamento. Troque de empresa depois que elas terminarem.`);
+  }
+  db.prepare(`INSERT INTO pro_payment (professional_id, provider, key_enc, env, account_name, enabled, connected_at) VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
+    ON CONFLICT(professional_id) DO UPDATE SET provider = excluded.provider, key_enc = excluded.key_enc, env = excluded.env, account_name = excluded.account_name, enabled = 1, connected_at = excluded.connected_at`)
+    .run(req.auth.user.id, provider, require('../secretBox').seal(r.key), r.env, U.cleanText(r.name, 120));
   G.touch();
   require('../cloud').scheduleBackup();
   res.json(settingsOf(req.auth.user));
-});
+};
+router.post('/asaas', connectPayment);
+router.post('/payment', connectPayment);
 
-router.put('/asaas', (req, res) => {
+router.put(['/asaas', '/payment'], (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só para profissionais.');
   db.prepare('UPDATE pro_payment SET enabled = ? WHERE professional_id = ?').run(req.body.enabled ? 1 : 0, req.auth.user.id);
   G.touch();
   res.json(settingsOf(req.auth.user));
 });
 
-router.delete('/asaas', (req, res) => {
+router.delete(['/asaas', '/payment'], (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só para profissionais.');
   const pending = db.prepare("SELECT COUNT(*) n FROM appointments WHERE professional_id = ? AND mode = 'auto' AND status IN ('aguardando_pagamento', 'confirmada', 'aguardando_paciente', 'reembolso_pendente')").get(req.auth.user.id).n;
-  if (pending) throw new U.HttpError(409, `Você tem ${pending} consulta(s) paga(s) pelo Asaas em andamento. Desligue o pagamento automático (as novas vão pelo Pix manual) e desconecte depois que elas terminarem.`);
+  if (pending) throw new U.HttpError(409, `Você tem ${pending} consulta(s) paga(s) pelo pagamento automático em andamento. Desligue o pagamento automático (as novas vão pelo Pix manual) e desconecte depois que elas terminarem.`);
   db.prepare('DELETE FROM pro_payment WHERE professional_id = ?').run(req.auth.user.id);
   G.touch();
   res.json(settingsOf(req.auth.user));
