@@ -69,7 +69,9 @@ router.get('/pro/:id/day', (req, res) => {
   const exclude = Number(req.query.exclude) || 0;
   const rd = G.readiness(pro);
   const ok = (rd.ok || (isPro(req) && !!pro.accepts_insurance && rd.missing.every((m) => ['valor', 'pix'].includes(m)))) && sameKind(pro, pat || (isPatient(req) ? req.auth.user : req.auth ? pro : {}));
-  res.json({ date, label: G.dayLabel(date), slots: ok ? G.slotsForDay(pro, date, { patientId, exclude }) : [] });
+  const slots = ok ? G.slotsForDay(pro, date, { patientId, exclude }) : [];
+  // O paciente não fica sabendo se o horário é em grupo (só o profissional vê as vagas)
+  res.json({ date, label: G.dayLabel(date), slots: isPro(req) ? slots : slots.map(({ start, label }) => ({ start, label })) });
 });
 
 // Daqui para baixo, só com conta (o calendário acima também abre para o visitante que veio pelo link do
@@ -116,6 +118,7 @@ router.post('/book', async (req, res) => {
     const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, hold_until, accepted_policy_at, modality)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'paciente', ?, ?, ?, ?)`).run(pro.id, me.id, c.id, G.iso(slot.start), G.iso(slot.end), G.priceFor(pro, modality), ready.mode,
       auto ? 'aguardando_pagamento' : 'aguardando_pix', G.iso(auto ? t + G.RULES.PAY_MIN * MIN : G.pixDeadline(t, slot.start)), G.iso(t), modality);
+    db.prepare('UPDATE appointments SET group_slot = ? WHERE id = ?').run(slot.group, Number(info.lastInsertRowid));
     return G.getAppt(Number(info.lastInsertRowid));
   });
   let out = a;
@@ -156,6 +159,7 @@ router.post('/propose', async (req, res) => {
       const slot = G.assertFree(pro, req.body.start, { patientId: pat.id, who: 'pro' });
       const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, modality, billing, paid_at)
         VALUES (?, ?, ?, ?, ?, NULL, 'manual', 'profissional', 'confirmada', ?, 'convenio', NULL)`).run(pro.id, pat.id, c.id, G.iso(slot.start), G.iso(slot.end), modality);
+      db.prepare('UPDATE appointments SET group_slot = ? WHERE id = ?').run(slot.group, Number(info.lastInsertRowid));
       return G.getAppt(Number(info.lastInsertRowid));
     });
     G.announceConfirmed(conv);
@@ -169,6 +173,7 @@ router.post('/propose', async (req, res) => {
     const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, hold_until, pix_payload, modality)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'profissional', 'aguardando_pagamento', ?, ?, ?)`).run(pro.id, pat.id, c.id, G.iso(slot.start), G.iso(slot.end), G.priceFor(pro, modality),
       ready.mode, G.iso(t + G.RULES.PAY_MIN * MIN), ready.mode === 'manual' ? pro.pix_key : null, modality);
+    db.prepare('UPDATE appointments SET group_slot = ? WHERE id = ?').run(slot.group, Number(info.lastInsertRowid));
     return G.getAppt(Number(info.lastInsertRowid));
   });
   let out = a;
@@ -264,7 +269,7 @@ router.post('/appointments/:id/reschedule', (req, res) => {
   const upd = tx(() => {
     const slot = G.assertFree(pro, req.body.start, { patientId: a.patient_id, exclude: a.id });
     return G.setStatus(a.id, {
-      start_at: G.iso(slot.start), end_at: G.iso(slot.end), status: 'confirmada',
+      start_at: G.iso(slot.start), end_at: G.iso(slot.end), status: 'confirmada', group_slot: slot.group,
       reschedules: byPro ? a.reschedules : a.reschedules + 1, call_id: null, modality: to,
     });
   });
@@ -459,6 +464,9 @@ function settingsOf(pro) {
     presencial_on: pro.presencial_on !== 0,
     has_clinic: !!G.clinicOf(pro),
     starts: G.weekStarts(pro), // início de cada consulta, por dia da semana
+    group_allowed: G.groupAllowed(pro), // Acolia Fisio: horários em grupo (até 10 pacientes)
+    group_starts: G.groupAllowed(pro) ? G.groupStarts(pro) : {},
+    group_max: G.RULES.GROUP_MAX,
     hours: db.prepare('SELECT dow, start_min, end_min FROM agenda_hours WHERE professional_id = ? ORDER BY dow, start_min').all(pro.id)
       .map((h) => ({ dow: h.dow, start: G.hhmm(h.start_min), end: G.hhmm(h.end_min) })),
     blocks: db.prepare('SELECT id, start_at, end_at, note FROM agenda_blocks WHERE professional_id = ? AND end_at > ? ORDER BY start_at').all(pro.id, G.iso(G.now()))
@@ -495,7 +503,14 @@ router.put('/settings', (req, res) => {
   if (pause !== null && ![0, 5, 10, 15, 20, 30].includes(pause)) throw new U.HttpError(400, 'Escolha o descanso entre as consultas.');
   const dur = minutes || G.duration(pro);
   const brk = pause !== null ? pause : (pro.break_minutes || 0);
-  let rows = null; // { dow, s, e, single }
+  let rows = null; // { dow, s, e, single, grp }
+  // Horários em grupo (só Acolia Fisio): { 1: ['18:00'], ... } — precisam estar entre os horários do dia
+  const grpSet = new Set();
+  if (G.groupAllowed(pro) && req.body.group_starts && typeof req.body.group_starts === 'object') {
+    for (const [k, list] of Object.entries(req.body.group_starts)) {
+      if (Array.isArray(list)) for (const t of list.slice(0, 40)) { const m = G.parseHHMM(t); if (m !== null) grpSet.add(`${Number(k)}:${m}`); }
+    }
+  }
   if (req.body.starts && typeof req.body.starts === 'object') {
     rows = [];
     for (const [k, list] of Object.entries(req.body.starts)) {
@@ -511,7 +526,7 @@ router.put('/settings', (req, res) => {
         if (n && mins[n] < mins[n - 1] + dur + brk) {
           throw new U.HttpError(400, `Em ${DOW_NAME[dow]}, o horário das ${G.hhmm(mins[n])} não pode começar antes das ${G.hhmm(mins[n - 1] + dur + brk)} (fim da consulta anterior + descanso).`);
         }
-        rows.push({ dow, s: mins[n], e: mins[n] + dur, single: 1 });
+        rows.push({ dow, s: mins[n], e: mins[n] + dur, single: 1, grp: grpSet.has(`${dow}:${mins[n]}`) ? 1 : 0 });
       }
     }
   } else if (Array.isArray(req.body.hours)) {
@@ -521,7 +536,7 @@ router.put('/settings', (req, res) => {
       const e0 = G.parseHHMM(h.end);
       if (!(dow >= 0 && dow <= 6) || s0 === null || e0 === null) throw new U.HttpError(400, 'Confira os horários (formato 08:00).');
       if (e0 <= s0) throw new U.HttpError(400, `Em ${DOW_NAME[dow]}, o horário final precisa ser depois do inicial.`);
-      return { dow, s: s0, e: e0, single: 0 };
+      return { dow, s: s0, e: e0, single: 0, grp: 0 };
     });
     for (const d of [0, 1, 2, 3, 4, 5, 6]) {
       const list = rows.filter((h) => h.dow === d).sort((a, b) => a.s - b.s);
@@ -531,8 +546,13 @@ router.put('/settings', (req, res) => {
   tx(() => {
     if (rows) {
       db.prepare('DELETE FROM agenda_hours WHERE professional_id = ?').run(pro.id);
-      const ins = db.prepare('INSERT INTO agenda_hours (professional_id, dow, start_min, end_min, single) VALUES (?, ?, ?, ?, ?)');
-      for (const h of rows) ins.run(pro.id, h.dow, h.s, h.e, h.single);
+      const ins = db.prepare('INSERT INTO agenda_hours (professional_id, dow, start_min, end_min, single, grp) VALUES (?, ?, ?, ?, ?, ?)');
+      for (const h of rows) ins.run(pro.id, h.dow, h.s, h.e, h.single, h.grp);
+    } else if (req.body.group_starts && G.groupAllowed(pro)) {
+      // Só mudou quais horários são em grupo
+      db.prepare('UPDATE agenda_hours SET grp = 0 WHERE professional_id = ?').run(pro.id);
+      const up = db.prepare('UPDATE agenda_hours SET grp = 1 WHERE professional_id = ? AND dow = ? AND start_min = ? AND single = 1');
+      for (const k of grpSet) { const [d, m] = k.split(':').map(Number); up.run(pro.id, d, m); }
     }
     if (minutes) db.prepare('UPDATE professionals SET session_minutes = ? WHERE id = ?').run(minutes, pro.id);
     if (pause !== null) db.prepare('UPDATE professionals SET break_minutes = ? WHERE id = ?').run(pause, pro.id);

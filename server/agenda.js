@@ -37,6 +37,7 @@ const RULES = {
   HORIZON_MONTHS: 3,      // mês atual + 3 (se estiverem lotados, abre o seguinte)
   HORIZON_MAX_MONTHS: 24, // no máximo 2 anos à frente
   DEFAULT_MINUTES: 50,
+  GROUP_MAX: 10,          // horário em grupo (Acolia Fisio): até 10 pacientes (com o profissional, 11 na chamada)
 };
 const CANCEL_REASONS = {
   nao_preciso: 'Não preciso mais',
@@ -84,6 +85,8 @@ const ACTIVE = ['aguardando_pagamento', 'aguardando_pix', 'pagamento_recusado', 
 const getPro = (id) => db.prepare('SELECT * FROM professionals WHERE id = ?').get(Number(id));
 const getAppt = (id) => db.prepare('SELECT * FROM appointments WHERE id = ?').get(Number(id));
 const duration = (pro) => pro.session_minutes || RULES.DEFAULT_MINUTES;
+// Atendimento em grupo: só os profissionais do movimento (Acolia Fisio: fisioterapia, Pilates, yoga, personal…)
+const groupAllowed = (pro) => !!pro && pro.portal === 'fisio';
 
 // Pagamento automático (Asaas) do profissional, com a chave já aberta; null = manual
 function autoPayment(proId) {
@@ -148,7 +151,8 @@ function loadBusy(proId, fromMs, toMs, { patientId = null, exclude = 0 } = {}) {
   const blocks = db.prepare('SELECT start_at, end_at FROM agenda_blocks WHERE professional_id = ? AND end_at > ? AND start_at < ?').all(proId, iso(fromMs), iso(toMs));
   const mine = patientId ? db.prepare(`SELECT start_at, end_at FROM appointments WHERE patient_id = ? AND id <> ? AND ${OCCUPY_SQL}
     AND end_at > ? AND start_at < ?`).all(patientId, exclude, t, iso(fromMs), iso(toMs)) : [];
-  return [...busy, ...blocks, ...mine].map((r) => [ms(r.start_at), ms(r.end_at)]);
+  // 'pro': consulta do profissional (num horário em grupo, as do mesmo início somam vagas); 'block'/'mine': fecham o horário
+  return [...busy.map((r) => [r, 'pro']), ...blocks.map((r) => [r, 'block']), ...mine.map((r) => [r, 'mine'])].map(([r, k]) => [ms(r.start_at), ms(r.end_at), k]);
 }
 
 // Regra: cada paciente marca UMA consulta por dia (com qualquer profissional). Devolve a consulta que
@@ -171,7 +175,8 @@ function slotsForDay(pro, date, opts = {}) {
   if (opts.patientId && patientDayTaken(opts.patientId, date, opts.exclude || 0, portalOf(pro))) return []; // já tem consulta neste dia
   const dur = duration(pro);
   const step = dur + (pro.break_minutes || 0); // consulta + descanso até a próxima
-  const ranges = db.prepare('SELECT start_min, end_min, single FROM agenda_hours WHERE professional_id = ? AND dow = ? ORDER BY start_min').all(pro.id, dowOf(date));
+  const ranges = db.prepare('SELECT start_min, end_min, single, grp FROM agenda_hours WHERE professional_id = ? AND dow = ? ORDER BY start_min').all(pro.id, dowOf(date));
+  const grpOk = groupAllowed(pro);
   if (!ranges.length) return [];
   const t0 = now();
   // Conta de teste: dá para marcar até em cima da hora (para o dono testar na hora)
@@ -188,14 +193,27 @@ function slotsForDay(pro, date, opts = {}) {
       const s = fromLocal(date, m);
       const e = s + dur * MIN;
       if (s < earliest || s > latest || seen.has(s)) continue;
-      if (busy.some(([bs, be]) => s < be && e > bs)) continue;
+      // Em grupo: as consultas que começam no mesmo horário ocupam vagas (até 10); o resto fecha o horário
+      const group = !!(r.grp && r.single && grpOk);
+      const same = (bs, k) => group && k === 'pro' && bs === s;
+      if (busy.some(([bs, be, k]) => s < be && e > bs && !same(bs, k))) continue;
+      const taken = group ? busy.filter(([bs, , k]) => same(bs, k)).length : 0;
+      if (group && taken >= RULES.GROUP_MAX) continue;
       seen.add(s);
-      out.push({ start: iso(s), label: hhmm(m) });
+      out.push(group ? { start: iso(s), label: hhmm(m), group: { taken, max: RULES.GROUP_MAX } } : { start: iso(s), label: hhmm(m) });
     }
   }
   return out.sort((a, b) => ms(a.start) - ms(b.start));
 }
 
+// Horários marcados como "em grupo" ({ 1: ['18:00'], ... })
+function groupStarts(pro) {
+  const out = {};
+  for (const r of db.prepare('SELECT dow, start_min FROM agenda_hours WHERE professional_id = ? AND single = 1 AND grp = 1 ORDER BY dow, start_min').all(pro.id)) {
+    (out[r.dow] ||= []).push(hhmm(r.start_min));
+  }
+  return out;
+}
 // Inícios das consultas de cada dia da semana, como a tela mostra ({ 1: ['08:00', '09:00'], ... })
 function weekStarts(pro) {
   const dur = duration(pro);
@@ -299,15 +317,15 @@ function assertFree(pro, startIso, { patientId, exclude = 0, who = 'patient' } =
   const date = localDate(t);
   const taken = patientDayTaken(patientId, date, exclude, portalOf(pro));
   if (taken) throw new U.HttpError(409, takenText(taken, who));
-  const ok = slotsForDay(pro, date, { patientId, exclude }).some((s) => ms(s.start) === t);
-  if (!ok) {
+  const slot = slotsForDay(pro, date, { patientId, exclude }).find((s) => ms(s.start) === t);
+  if (!slot) {
     // Diz o motivo certo quando é choque com outra consulta do próprio paciente
     if (patientId && slotsForDay(pro, date, { exclude }).some((s) => ms(s.start) === t)) {
       throw new U.HttpError(409, 'Você já tem outra consulta nesse horário. Escolha um horário que não bata com ela.');
     }
     throw new U.HttpError(409, 'Esse horário não está mais disponível. Escolha outro.');
   }
-  return { start: t, end: t + duration(pro) * MIN };
+  return { start: t, end: t + duration(pro) * MIN, group: slot.group ? 1 : 0 };
 }
 
 // ---------- Conversa e mensagens automáticas ----------
@@ -414,8 +432,11 @@ function confirmPaid(a) {
     const cur = getAppt(a.id);
     if (cur.status === 'confirmada') return { a: cur, already: true };
     const pro = getPro(cur.professional_id);
-    const clash = db.prepare(`SELECT 1 FROM appointments WHERE professional_id = ? AND id <> ? AND ${OCCUPY_SQL} AND start_at < ? AND end_at > ?`)
-      .get(cur.professional_id, cur.id, iso(now()), cur.end_at, cur.start_at);
+    // Em grupo: as outras do mesmo horário em grupo só contam as vagas
+    const others = db.prepare(`SELECT start_at, group_slot FROM appointments WHERE professional_id = ? AND id <> ? AND ${OCCUPY_SQL} AND start_at < ? AND end_at > ?`)
+      .all(cur.professional_id, cur.id, iso(now()), cur.end_at, cur.start_at);
+    const mates = cur.group_slot ? others.filter((o) => o.group_slot && o.start_at === cur.start_at).length : 0;
+    const clash = others.length > mates || (cur.group_slot && mates >= RULES.GROUP_MAX);
     if (clash || !pro) return { a: cur, clash: true };
     return { a: setStatus(cur.id, { status: 'confirmada', paid_at: iso(now()), hold_until: null }) };
   });
@@ -498,10 +519,26 @@ function openCall(a) {
   const pro = getPro(cur.professional_id);
   const pat = db.prepare('SELECT name FROM patients WHERE id = ?').get(cur.patient_id);
   const { newPatientCode } = require('./routes/calls');
-  const code = newPatientCode(pro.code);
-  const info = db.prepare('INSERT INTO calls (professional_id, patient_label, patient_code, conversation_id, appointment_id) VALUES (?, ?, ?, ?, ?)')
-    .run(pro.id, pat?.name || 'Paciente', code, cur.conversation_id, cur.id);
-  const upd = setStatus(cur.id, { call_id: Number(info.lastInsertRowid) });
+  let callId;
+  if (cur.group_slot) {
+    // Em grupo: uma chamada só para o horário; cada paciente entra com o próprio código
+    callId = tx(() => {
+      let call = db.prepare(`SELECT c.id FROM calls c JOIN appointments x ON x.call_id = c.id
+        WHERE c.professional_id = ? AND c.status = 'ativo' AND c.is_group = 1 AND x.start_at = ? AND x.group_slot = 1 LIMIT 1`).get(pro.id, cur.start_at);
+      if (!call) {
+        const info = db.prepare('INSERT INTO calls (professional_id, patient_label, patient_code, conversation_id, appointment_id, is_group) VALUES (?, ?, ?, NULL, NULL, 1)')
+          .run(pro.id, 'Atendimento em grupo', newPatientCode(pro.code));
+        call = { id: Number(info.lastInsertRowid) };
+      }
+      db.prepare('INSERT OR IGNORE INTO call_guests (call_id, appointment_id, code, label) VALUES (?, ?, ?, ?)').run(call.id, cur.id, newPatientCode(pro.code), pat?.name || 'Paciente');
+      return call.id;
+    });
+  } else {
+    const info = db.prepare('INSERT INTO calls (professional_id, patient_label, patient_code, conversation_id, appointment_id) VALUES (?, ?, ?, ?, ?)')
+      .run(pro.id, pat?.name || 'Paciente', newPatientCode(pro.code), cur.conversation_id, cur.id);
+    callId = Number(info.lastInsertRowid);
+  }
+  const upd = setStatus(cur.id, { call_id: callId });
   post(upd, 'professional', 'chamada');
   notifyBoth(upd);
   return upd;
@@ -510,7 +547,21 @@ function openCall(a) {
 function closeCall(a) {
   if (!a.call_id) return;
   const call = db.prepare("SELECT * FROM calls WHERE id = ? AND status = 'ativo'").get(a.call_id);
-  if (call) require('./routes/calls').endCall(call);
+  if (!call) return;
+  if (call.is_group) {
+    // Em grupo: este paciente sai da chamada; ela só fecha quando não sobra nenhuma consulta marcada nela
+    const g = db.prepare('SELECT id FROM call_guests WHERE appointment_id = ?').get(a.id);
+    db.prepare('DELETE FROM call_guests WHERE appointment_id = ?').run(a.id);
+    if (g) require('./realtime').emit(`call:${call.id}`, 'call:guest-gone', { gid: g.id });
+    if (db.prepare("SELECT 1 FROM appointments WHERE call_id = ? AND id <> ? AND status = 'confirmada'").get(call.id, a.id)) return;
+  }
+  require('./routes/calls').endCall(call);
+}
+// Entrou na chamada? (em grupo, cada paciente tem o seu registro)
+function guestJoined(a, call) {
+  if (!call) return false;
+  if (call.is_group) return !!db.prepare('SELECT joined_at FROM call_guests WHERE appointment_id = ?').get(a.id)?.joined_at;
+  return !!call.guest_joined_at;
 }
 
 // O profissional finalizou a chamada da consulta: a consulta está concluída. Sai o aviso fixo
@@ -518,11 +569,27 @@ function closeCall(a) {
 // Se o paciente ainda não entrou, a chamada NÃO fecha (ele tem até 3 minutos depois do horário):
 // devolve false para quem chamou não encerrar.
 function canEndCall(call) {
+  if (call?.is_group) {
+    // Em grupo: espera os pacientes que ainda não entraram até 3 minutos depois do horário
+    const waiting = db.prepare(`SELECT a.start_at FROM appointments a LEFT JOIN call_guests g ON g.appointment_id = a.id
+      WHERE a.call_id = ? AND a.status = 'confirmada' AND g.joined_at IS NULL LIMIT 1`).get(call.id);
+    return !waiting || now() >= ms(waiting.start_at) + RULES.PRO_GRACE_MIN * MIN;
+  }
   if (!call?.appointment_id || call.guest_joined_at) return true;
   const a = getAppt(call.appointment_id);
   return !(a && a.status === 'confirmada');
 }
 function finishFromCall(call) {
+  if (call?.is_group) {
+    // Em grupo: conclui a consulta de quem entrou (quem não entrou fica com a regra dos 3 minutos)
+    for (const a of db.prepare(`SELECT a.* FROM appointments a JOIN call_guests g ON g.appointment_id = a.id
+      WHERE a.call_id = ? AND a.status = 'confirmada' AND g.joined_at IS NOT NULL`).all(call.id)) {
+      const upd = setStatus(a.id, { status: 'concluida' });
+      post(upd, 'professional', 'finalizada');
+      notifyBoth(upd);
+    }
+    return;
+  }
   if (!call?.appointment_id) return;
   const a = getAppt(call.appointment_id);
   if (!a || a.status !== 'confirmada') return;
@@ -567,14 +634,14 @@ async function sweep() {
     // - profissional não entrou → reembolso de 100% e fecha a chamada (vale mesmo se o paciente também faltou)
     // - paciente não entrou → a chamada acaba e o valor NÃO é devolvido
     for (const a of db.prepare("SELECT * FROM appointments WHERE status = 'confirmada' AND modality = 'online' AND start_at <= ?").all(iso(t - RULES.PRO_GRACE_MIN * MIN))) {
-      const call = a.call_id ? db.prepare('SELECT host_joined_at, guest_joined_at FROM calls WHERE id = ?').get(a.call_id) : null;
+      const call = a.call_id ? db.prepare('SELECT id, host_joined_at, guest_joined_at, is_group FROM calls WHERE id = ?').get(a.call_id) : null;
       if (!call?.host_joined_at) {
         closeCall(a);
         post(a, 'professional', 'ausente');
         await refund(getAppt(a.id), 'profissional_ausente');
         continue;
       }
-      if (call.guest_joined_at) continue;
+      if (guestJoined(a, call)) continue;
       closeCall(a);
       const upd = setStatus(a.id, { status: 'paciente_ausente' });
       post(upd, 'professional', 'paciente_ausente'); // aviso vai para o paciente (e aparece para o profissional)
@@ -662,7 +729,9 @@ function view(a, role) {
   }
   const pro = getPro(a.professional_id);
   const pat = db.prepare('SELECT id, name, handle, photo FROM patients WHERE id = ?').get(a.patient_id);
-  const call = a.call_id ? db.prepare('SELECT patient_code, status FROM calls WHERE id = ?').get(a.call_id) : null;
+  const call = a.call_id ? db.prepare('SELECT patient_code, status, is_group FROM calls WHERE id = ?').get(a.call_id) : null;
+  // Em grupo: cada paciente tem o próprio código de entrada (o profissional entra por qualquer um deles)
+  if (call?.is_group) call.patient_code = db.prepare('SELECT code FROM call_guests WHERE appointment_id = ?').get(a.id)?.code || null;
   const t0 = ms(a.start_at);
   return {
     id: a.id,
@@ -704,7 +773,7 @@ function view(a, role) {
 module.exports = {
   RULES, CANCEL_REASONS, HOLDING, ACTIVE, OCCUPY_SQL,
   now, iso, ms, localDate, localMin, fromLocal, hhmm, parseHHMM, addDays, fmtWhen, dayLabel, dowOf,
-  getPro, getAppt, duration, readiness, maxDate, pixDeadline, clinicOf, presencialOpen, priceFor, modalityChange, proCancelMin, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
+  getPro, getAppt, duration, groupAllowed, groupStarts, guestJoined, readiness, maxDate, pixDeadline, clinicOf, presencialOpen, priceFor, modalityChange, proCancelMin, sendLocation, announceConfirmed, weekStarts, autoPayment, slotsForDay, monthDays, nextAvailable, nextAvailableFor, patientDayTaken, assertFree, touch,
   ensureConversation, post, pushText, notifyBoth, setStatus, createCharge, confirmPaid, checkPayment, refund, refundLock,
   openCall, closeCall, canEndCall, finishFromCall, sweep, canDo, view, onAccountGone,
   _setNow(fn) { nowFn = fn || Date.now; touch(); },

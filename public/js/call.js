@@ -124,8 +124,11 @@
       track.enabled = S.micOn;
       S.local.getAudioTracks().forEach((t) => S.local.removeTrack(t));
       S.local.addTrack(track);
-      const tr = S.pc?.getTransceivers().find((t) => t.receiver.track.kind === 'audio');
-      if (tr) await tr.sender.replaceTrack(track);
+      const pcs = S.peers ? [...S.peers.values()].map((p) => p.pc) : [S.pc];
+      for (const pc of pcs) {
+        const tr = pc?.getTransceivers().find((t) => t.receiver.track.kind === 'audio');
+        if (tr) await tr.sender.replaceTrack(track);
+      }
     } catch { /* sem permissão agora */ }
   }
 
@@ -154,6 +157,7 @@
 
   // ---------- 3. Sala ----------
   function join() {
+    if (S.role === 'host' && S.info.call.group) return joinGroup();
     show('call');
     document.body.classList.add('call-page');
     $('#localVideo').srcObject = S.local;
@@ -250,6 +254,7 @@
   }
 
   function closePc() {
+    if (S.peers) for (const gid of [...S.peers.keys()]) removePeer(gid);
     if (S.pc) { S.pc.ontrack = null; S.pc.onicecandidate = null; S.pc.onconnectionstatechange = null; S.pc.close(); S.pc = null; }
   }
 
@@ -297,6 +302,148 @@
     } catch (e) {
       console.error(e);
     }
+  }
+
+  // ---------- Atendimento em grupo (só o profissional; Acolia Fisio) ----------
+  // Uma conexão com cada paciente: o profissional vê todos numa grade e toca em um para ampliar.
+  // Cada paciente recebe só a imagem e o som do profissional (o servidor nunca liga um paciente no outro).
+  function joinGroup() {
+    show('call');
+    document.body.classList.add('call-page');
+    $('#localVideo').srcObject = S.local;
+    $('#remoteVideo').classList.add('hidden');
+    $('.call-stage').classList.add('is-group');
+    const grid = $('#groupGrid');
+    grid.classList.remove('hidden');
+    S.peers = new Map();
+    S.focus = null;
+    // Câmera ligada/desligada vale para todas as conexões
+    S.videoSender = { replaceTrack: (t) => Promise.all([...S.peers.values()].map((p) => p.videoSender?.replaceTrack(t))) };
+    $('[data-top-avatar]').innerHTML = avatar('Grupo', null, 'sm');
+    $('[data-top-name]').textContent = 'Atendimento em grupo';
+    $('[data-overlay-avatar]').innerHTML = '';
+    $('[data-overlay-title]').textContent = 'Atendimento em grupo';
+    groupOverlay();
+    renderControls();
+    setupBackground();
+    S.socket = io();
+    S.socket.on('connect', () => {
+      S.socket.emit('call:join', { code: S.code }, (r) => {
+        if (r.error) return finish(r.error, true);
+        sendMediaState();
+        (r.guests || []).forEach(offerTo);
+      });
+    });
+    S.socket.on('call:guest-joined', offerTo);
+    S.socket.on('call:signal', async ({ from, description, candidate }) => {
+      const p = S.peers.get(from);
+      if (!p) return;
+      try {
+        if (description?.type === 'answer') {
+          await p.pc.setRemoteDescription(description);
+          limitBitrate(p);
+          for (const c of p.pendingIce.splice(0)) await p.pc.addIceCandidate(c).catch(() => {});
+        } else if (candidate) {
+          if (p.pc.remoteDescription) await p.pc.addIceCandidate(candidate).catch(() => {});
+          else p.pendingIce.push(candidate);
+        }
+      } catch (e) { console.error(e); }
+    });
+    S.socket.on('call:media-state', ({ from, mic, cam }) => {
+      const p = S.peers.get(from);
+      if (!p) return;
+      p.camOff = !cam;
+      $('.gt-flags', p.tile).innerHTML = `${mic ? '' : ICONS.micOff}${cam ? '' : ICONS.videoOff}`;
+      p.tile.classList.toggle('cam-off', !cam);
+    });
+    S.socket.on('call:guest-left', ({ from }) => removePeer(from));
+    S.socket.on('call:guest-gone', ({ gid }) => removePeer(gid));
+    S.socket.on('call:ended', () => finish(null));
+    S.socket.on('call:replaced', () => finish('Você entrou neste atendimento em outra aba ou aparelho.', true));
+    S.socket.on('disconnect', () => { if (!S.ended) status('Reconectando…'); });
+    S.local.getVideoTracks().forEach((t) => t.addEventListener('ended', reacquireHostCamera));
+    window.addEventListener('beforeunload', () => S.socket?.emit('call:leave'));
+  }
+
+  function groupOverlay() {
+    const n = S.peers ? [...S.peers.values()].filter((p) => p.connected).length : 0;
+    overlay(S.peers && S.peers.size ? null : 'Aguardando os pacientes entrarem…');
+    status(n ? `${n} ${n === 1 ? 'paciente' : 'pacientes'} na chamada` : 'Aguardando…');
+    if (n) startTimer(); else stopTimer();
+    if (n) $('[data-top-status]').dataset.count = n;
+    $('#groupGrid').dataset.n = String(S.peers ? S.peers.size : 0);
+  }
+  // Com várias pessoas, a imagem do profissional sai mais leve para cada uma (a internet aguenta)
+  function limitBitrate(p) {
+    const sender = p.videoSender;
+    if (!sender?.getParameters) return;
+    try {
+      const prm = sender.getParameters();
+      if (!prm.encodings || !prm.encodings.length) prm.encodings = [{}];
+      prm.encodings[0].maxBitrate = S.peers.size > 4 ? 300000 : 600000;
+      sender.setParameters(prm).catch(() => {});
+    } catch { /* não suportado */ }
+  }
+
+  async function offerTo({ gid, label }) {
+    if (S.ended) return;
+    removePeer(gid);
+    const pc = new RTCPeerConnection({ iceServers: S.iceServers });
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'gtile';
+    tile.innerHTML = `<video autoplay playsinline muted></video><audio autoplay playsinline></audio>
+      <div class="gt-off">${avatar(label, null, 'lg')}</div>
+      <div class="gt-name"><span>${esc(label)}</span><span class="gt-flags"></span></div><div class="gt-wait">Conectando…</div>`;
+    tile.addEventListener('click', () => { S.focus = S.focus === gid ? null : gid; layoutGrid(); });
+    $('#groupGrid').append(tile);
+    const p = { gid, label, pc, tile, pendingIce: [], videoSender: null, connected: false };
+    S.peers.set(gid, p);
+    S.local.getTracks().forEach((t) => {
+      const sender = pc.addTrack(t, S.local);
+      if (t.kind === 'video') p.videoSender = sender;
+    });
+    if (!p.videoSender) p.videoSender = pc.addTransceiver('video', { direction: 'sendrecv' }).sender;
+    pc.onicecandidate = (e) => { if (e.candidate) S.socket.emit('call:signal', { to: gid, candidate: e.candidate }); };
+    const remote = new MediaStream();
+    $('video', tile).srcObject = remote;
+    pc.ontrack = (e) => {
+      remote.getTracks().filter((t) => t.kind === e.track.kind).forEach((t) => remote.removeTrack(t));
+      remote.addTrack(e.track);
+      $('video', tile).play().catch(() => {});
+      if (e.track.kind === 'audio') { const a = $('audio', tile); a.srcObject = new MediaStream([e.track]); a.play().catch(() => {}); }
+    };
+    pc.onconnectionstatechange = () => {
+      const st = pc.connectionState;
+      p.connected = st === 'connected';
+      $('.gt-wait', tile).textContent = st === 'connected' ? '' : st === 'failed' ? 'Falha na conexão' : st === 'disconnected' ? 'Conexão instável…' : 'Conectando…';
+      if (st === 'connected') sendMediaState();
+      if (st === 'failed' && S.peers.get(gid) === p) setTimeout(() => { if (S.peers.get(gid) === p) offerTo({ gid, label }); }, 1000);
+      groupOverlay();
+    };
+    layoutGrid();
+    groupOverlay();
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    S.socket.emit('call:signal', { to: gid, description: pc.localDescription });
+  }
+
+  function removePeer(gid) {
+    const p = S.peers?.get(gid);
+    if (!p) return;
+    p.pc.ontrack = null; p.pc.onicecandidate = null; p.pc.onconnectionstatechange = null; p.pc.close();
+    p.tile.remove();
+    S.peers.delete(gid);
+    if (S.focus === gid) S.focus = null;
+    layoutGrid();
+    groupOverlay();
+  }
+
+  // Grade com todos; tocou em um: ele fica grande e os outros numa fileira embaixo
+  function layoutGrid() {
+    const grid = $('#groupGrid');
+    grid.classList.toggle('has-focus', S.focus !== null);
+    for (const p of S.peers.values()) p.tile.classList.toggle('big', p.gid === S.focus);
   }
 
   // ---------- Controles ----------
@@ -374,9 +521,10 @@
       S.local.getVideoTracks().forEach((t) => S.local.removeTrack(t));
       S.local.addTrack(track);
       track.addEventListener('ended', reacquireHostCamera);
-      if (S.pc && S.videoSender) await S.videoSender.replaceTrack(track);
+      if ((S.pc || S.peers) && S.videoSender) await S.videoSender.replaceTrack(track);
       $('#localVideo').srcObject = S.local;
-      overlay(S.pc?.connectionState === 'connected' ? null : 'Aguardando…');
+      if (S.peers) groupOverlay();
+      else overlay(S.pc?.connectionState === 'connected' ? null : 'Aguardando…');
     } catch {
       overlay('Sua câmera está desligada. Religue-a para continuar o atendimento.');
       setTimeout(reacquireHostCamera, 3000);

@@ -338,6 +338,20 @@ addColumn('appointments', 'scheduled_at', 'TEXT'); // quando a consulta ficou ma
 addColumn('appointments', 'modality', "TEXT NOT NULL DEFAULT 'online'");  // online | presencial
 addColumn('appointments', 'billing', "TEXT NOT NULL DEFAULT 'pix'");      // pix | convenio
 addColumn('professionals', 'presencial_on', 'INTEGER NOT NULL DEFAULT 1'); // "Disponível para atendimento presencial" (Minha agenda)
+// Aula/atendimento em grupo (só no Acolia Fisio): o horário recebe até 10 pacientes; a chamada é uma só,
+// o profissional vê todos e cada paciente vê só o profissional
+addColumn('agenda_hours', 'grp', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('appointments', 'group_slot', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('calls', 'is_group', 'INTEGER NOT NULL DEFAULT 0');
+db.exec(`CREATE TABLE IF NOT EXISTS call_guests (
+  id INTEGER PRIMARY KEY,
+  call_id INTEGER NOT NULL,
+  appointment_id INTEGER NOT NULL UNIQUE,
+  code TEXT NOT NULL UNIQUE,              -- código de entrada de cada paciente
+  label TEXT NOT NULL,
+  joined_at TEXT
+)`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_call_guests_call ON call_guests(call_id)');
 addColumn('professionals', 'price_presencial_cents', 'INTEGER'); // valor da presencial; NULL = o mesmo da online     // quando o paciente entrou (não entrou em 3 min → encerrada, sem reembolso)
 addColumn('calls', 'host_joined_at', 'TEXT');      // quando o profissional entrou (ausência → reembolso)
 db.exec(`UPDATE conversations SET patient_wrote = 1 WHERE patient_wrote = 0

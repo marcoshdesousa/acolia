@@ -1302,3 +1302,107 @@ test('planos (Nutri e Fisio): plano alimentar com lista de compras, plano de exe
   await other.post(`/api/chat/conversations/${cp.id}/messages`, { body: 'Oi' });
   assert.equal((await P.cl.post('/api/plans', { conversation_id: cp.id, data: { items: [{ name: 'x' }] } })).status, 403);
 });
+
+test('atendimento em grupo (só Acolia Fisio): até 10 pacientes no horário, uma chamada, o profissional vê todos e cada paciente só o profissional', async () => {
+  const { io: ioClient } = require('socket.io-client');
+  await admin.post('/api/auth/admin/login', { username: 'admin', password: 'senha-admin-123' });
+  clock = Date.parse(at('2030-03-25', '09:00'));
+  const mk = async (portal, profession, registry, name, email, phone) => {
+    const r = await admin.post('/api/admin/professionals', { portal, name, profession, registry, email, phone, state: 'SP', city: 'Campinas', specialties: [portal === 'fisio' ? 'Pilates solo' : 'Emagrecimento'] });
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    const cl = client();
+    await cl.post('/api/auth/professional/login', { login: r.data.code, password: r.data.password });
+    await cl.put('/api/professional/profile', { name, phone, state: 'SP', city: 'Campinas', bio: '', price: '90', specialties: [portal === 'fisio' ? 'Pilates solo' : 'Emagrecimento'] });
+    return { cl, id: r.data.id };
+  };
+  const F = await mk('fisio', 'Fisioterapeuta', 'CREFITO-3/123456-F', 'Flávia Pilates Rocha', 'flavia.grupo@example.com', '11944440001');
+  const N = await mk('nutri', 'Nutricionista', 'CRN-3 54321', 'Nara Nutri Melo', 'nara.grupo@example.com', '11944440002');
+  // Fisio marca o horário das 18:00 de segunda em grupo; o das 19:00 continua individual
+  let s = await F.cl.put('/api/agenda/settings', { starts: { 1: ['18:00', '19:00'] }, group_starts: { 1: ['18:00'] }, session_minutes: 50, online: true, pix_key: 'flavia@pix.com' });
+  assert.equal(s.status, 200, JSON.stringify(s.data));
+  assert.equal(s.data.group_allowed, true);
+  assert.deepEqual(s.data.group_starts, { 1: ['18:00'] });
+  assert.equal(s.data.group_max, 10);
+  // Nutri não tem atendimento em grupo (o pedido é ignorado)
+  s = await N.cl.put('/api/agenda/settings', { starts: { 1: ['18:00'] }, group_starts: { 1: ['18:00'] }, session_minutes: 50, online: true, pix_key: 'nara@pix.com' });
+  assert.equal(s.data.group_allowed, false);
+  assert.deepEqual(s.data.group_starts, {});
+
+  const day = '2030-04-01';
+  const pats = [];
+  for (let i = 0; i < 11; i++) pats.push(await mkPatient(`Paciente Grupo ${String.fromCharCode(65 + i)} Silva`, nextCpf()));
+  const appts = [];
+  for (let i = 0; i < 10; i++) {
+    const r = await pats[i].post('/api/agenda/book', { professional_id: F.id, start: at(day, '18:00'), accept: true });
+    assert.equal(r.status, 201, `paciente ${i + 1}: ${JSON.stringify(r.data)}`);
+    await F.cl.post(`/api/agenda/appointments/${r.data.id}/send-pix`);
+    assert.equal((await F.cl.post(`/api/agenda/appointments/${r.data.id}/manual-result`, { approved: true })).status, 200);
+    appts.push(r.data);
+  }
+  // O paciente não vê que é em grupo nem quantas vagas têm; o profissional vê
+  const seen = (await pats[10].get(`/api/agenda/pro/${F.id}/day?date=${day}`)).data.slots;
+  assert.ok(!seen.some((x) => x.label === '18:00'), '10 vagas preenchidas: o horário fechou');
+  assert.ok(seen.every((x) => !('group' in x)));
+  const r11 = await pats[10].post('/api/agenda/book', { professional_id: F.id, start: at(day, '18:00'), accept: true });
+  assert.equal(r11.status, 409, 'o 11º não entra');
+  // O horário individual continua normal: um paciente fecha o horário
+  assert.equal((await pats[10].post('/api/agenda/book', { professional_id: F.id, start: at(day, '19:00'), accept: true })).status, 201);
+  const pv = (await F.cl.get(`/api/agenda/pro/${F.id}/day?date=2030-04-08`)).data.slots.find((x) => x.label === '18:00');
+  assert.deepEqual(pv.group, { taken: 0, max: 10 }, 'o profissional vê as vagas');
+
+  // Chamada: uma só para o horário, um código para cada paciente
+  clock = Date.parse(at(day, '17:56'));
+  await G.sweep();
+  const views = await Promise.all(appts.map((a, i) => pats[i].get(`/api/agenda/appointments/${a.id}`)));
+  const codes = views.map((v) => v.data.call_code);
+  assert.equal(new Set(codes).size, 10, 'cada paciente tem o seu código');
+  const { db } = require('../server/db');
+  assert.equal(new Set(appts.map((a) => db.prepare('SELECT call_id FROM appointments WHERE id = ?').get(a.id).call_id)).size, 1, 'uma chamada só');
+  // O paciente não fica sabendo que é em grupo
+  const res = (await pats[0].post('/api/calls/resolve', { code: codes[0] })).data;
+  assert.equal(res.role, 'guest');
+  assert.equal(res.call.group, undefined);
+  assert.equal((await F.cl.post('/api/calls/resolve', { code: codes[0] })).data.call.group, true);
+
+  const conn = (cl) => ioClient(base, { extraHeaders: { Cookie: cl.cookie }, transports: ['websocket'] });
+  const host = conn(F.cl);
+  const joined = [];
+  host.on('call:guest-joined', (g) => joined.push(g));
+  const hack = await new Promise((ok) => host.emit('call:join', { code: codes[3] }, ok));
+  assert.equal(hack.role, 'host');
+  assert.equal(hack.group, true);
+  const ga = conn(pats[0]);
+  const gb = conn(pats[1]);
+  assert.equal((await new Promise((ok) => ga.emit('call:join', { code: codes[0] }, ok))).role, 'guest');
+  assert.equal((await new Promise((ok) => gb.emit('call:join', { code: codes[1] }, ok))).role, 'guest');
+  await new Promise((ok) => setTimeout(ok, 100));
+  assert.deepEqual(joined.map((g) => g.label).sort(), ['Paciente Grupo A Silva', 'Paciente Grupo B Silva']);
+  const gidA = joined.find((g) => g.label.includes(' A ')).gid;
+  // Paciente → só o profissional; profissional → só o paciente indicado
+  const gotHost = []; const gotA = []; const gotB = [];
+  host.on('call:signal', (p) => gotHost.push(p));
+  ga.on('call:signal', (p) => gotA.push(p));
+  gb.on('call:signal', (p) => gotB.push(p));
+  ga.emit('call:signal', { description: { type: 'answer', sdp: 'a' } });
+  host.emit('call:signal', { to: gidA, description: { type: 'offer', sdp: 'h' } });
+  await new Promise((ok) => setTimeout(ok, 150));
+  assert.equal(gotHost.length, 1);
+  assert.equal(gotHost[0].from, gidA);
+  assert.equal(gotA.length, 1);
+  assert.equal(gotA[0].to, undefined);
+  assert.equal(gotB.length, 0, 'o outro paciente não recebe nada');
+  // Quem não entrou em 3 minutos fica como ausente; a chamada continua para os outros
+  clock = Date.parse(at(day, '18:03'));
+  await G.sweep();
+  const st = async (i) => (await pats[i].get(`/api/agenda/appointments/${appts[i].id}`)).data;
+  assert.equal((await st(0)).status, 'confirmada');
+  assert.equal((await st(5)).status, 'paciente_ausente');
+  assert.ok((await st(1)).call_code, 'a chamada continua aberta');
+  // O profissional finaliza: concluída para quem entrou
+  host.emit('call:end');
+  await new Promise((ok) => setTimeout(ok, 150));
+  [host, ga, gb].forEach((x) => x.close());
+  assert.equal((await st(0)).status, 'concluida');
+  assert.equal((await st(1)).status, 'concluida');
+  assert.equal((await st(0)).call_code, null);
+});

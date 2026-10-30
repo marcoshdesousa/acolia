@@ -72,7 +72,9 @@
   // mas nunca para antes do fim da anterior + descanso.
   const toMin = (t) => { const [h, m] = String(t || '').split(':').map(Number); return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null; };
   const toHHMM = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-  const startRow = (t) => `<div class="start-row" data-start-row><input type="time" data-start value="${esc(t)}" aria-label="Começa às" step="300"><span class="small muted">até <b data-end></b></span>
+  // Acolia Fisio: cada horário pode ser "Em grupo" (até 10 pacientes no mesmo horário, numa chamada só)
+  const startRow = (t, grp = false) => `<div class="start-row" data-start-row><input type="time" data-start value="${esc(t)}" aria-label="Começa às" step="300"><span class="small muted">até <b data-end></b></span>
+      ${settings?.group_allowed ? `<label class="check small grp-check" title="Até ${settings.group_max} pacientes neste horário"><input type="checkbox" data-grp ${grp ? 'checked' : ''}> Grupo</label>` : ''}
       <button type="button" class="icon-btn" data-rm aria-label="Tirar este horário" title="Tirar">✕</button></div>`;
 
   function renderAgenda() {
@@ -97,11 +99,13 @@
           <select id="ag-break" data-break>${[0, 5, 10, 15, 20, 30].map((m) => `<option value="${m}" ${m === (s.break_minutes || 0) ? 'selected' : ''}>${m ? `${m} minutos` : 'Sem descanso'}</option>`).join('')}</select></div>
       </div>
       <div><b>Horários de início das consultas</b><div class="small muted">Coloque a hora em que <b>começa</b> cada consulta; o fim aparece sozinho. Em "+ adicionar horário" o próximo já vem contando o descanso. Você pode deixar para mais tarde (almoço, pausa), mas não para antes.</div></div>
+      ${s.group_allowed ? `<div class="notice info small"><b>Atendimento em grupo</b> (Pilates, yoga, funcional…): marque <b>"Em grupo"</b> nos horários que recebem até <b>${s.group_max} pacientes</b> ao mesmo tempo. O horário só fecha quando as ${s.group_max} vagas forem preenchidas. Online, a chamada é uma só: você vê todos e toca em um para ampliar; cada paciente vê só você (nunca os outros pacientes). O paciente não vê que o horário é em grupo.</div>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary sm" data-grp-all>Marcar todos os horários em grupo</button><button type="button" class="btn secondary sm" data-grp-none>Nenhum em grupo</button></div>` : ''}
       <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn secondary sm" data-commercial>Preencher horário comercial (seg. a sex.)</button><button type="button" class="btn secondary sm" data-copy-mon>Copiar segunda para os dias úteis</button></div>
       <div class="week">${DAYS.map(([d, name]) => { const list = s.starts[d] || []; return `<div class="week-day ${list.length ? 'closed' : ''}" data-day="${d}">
           <div class="wd-head"><label class="check"><input type="checkbox" data-on ${list.length ? 'checked' : ''}> <b>${name}</b></label>
             <button type="button" class="link-btn small wd-sum" data-toggle-day></button></div>
-          <div class="ranges" data-ranges>${list.map(startRow).join('')}</div>
+          <div class="ranges" data-ranges>${list.map((t) => startRow(t, (s.group_starts?.[d] || []).includes(t))).join('')}</div>
           <button type="button" class="btn sm ghost ${list.length ? '' : 'hidden'}" data-add>+ adicionar horário</button>
         </div>`; }).join('')}</div>
       <div class="form-error hidden" data-agerr></div>
@@ -191,13 +195,19 @@
       }
       toast('Horário comercial preenchido. Confira e toque em "Salvar agenda".');
     });
+    const setAllGrp = (on) => {
+      $$('[data-grp]', root).forEach((x) => { x.checked = on; });
+      toast(on ? 'Todos os horários ficaram em grupo. Toque em "Salvar agenda".' : 'Nenhum horário em grupo. Toque em "Salvar agenda".');
+    };
+    $('[data-grp-all]', root)?.addEventListener('click', () => setAllGrp(true));
+    $('[data-grp-none]', root)?.addEventListener('click', () => setAllGrp(false));
     $('[data-copy-mon]', root).addEventListener('click', () => {
       const mon = $('.week-day[data-day="1"]', root);
-      const list = $$('[data-start]', mon).map((x) => x.value);
+      const list = $$('[data-start-row]', mon).map((r) => [$('[data-start]', r).value, !!$('[data-grp]', r)?.checked]);
       if (!list.length) { toast('Preencha a segunda-feira primeiro.', 'error'); return; }
       for (const d of [2, 3, 4, 5]) {
         const day = $(`.week-day[data-day="${d}"]`, root);
-        $('[data-ranges]', day).innerHTML = list.map(startRow).join('');
+        $('[data-ranges]', day).innerHTML = list.map(([t, g]) => startRow(t, g)).join('');
         $('[data-on]', day).checked = true;
         $('[data-add]', day).classList.remove('hidden');
         day.classList.add('closed');
@@ -207,8 +217,14 @@
     });
     const save = async (extra = {}) => {
       const starts = {};
-      days.forEach((day) => { const list = $$('[data-start]', day).map((x) => x.value).filter(Boolean); if (list.length) starts[day.dataset.day] = list; });
-      return api('/api/agenda/settings', { method: 'PUT', body: { starts, session_minutes: dur(), break_minutes: brk(), ...extra } });
+      const group_starts = {};
+      days.forEach((day) => {
+        const list = $$('[data-start]', day).map((x) => x.value).filter(Boolean);
+        if (list.length) starts[day.dataset.day] = list;
+        const grp = $$('[data-start-row]', day).filter((r) => $('[data-grp]', r)?.checked).map((r) => $('[data-start]', r).value).filter(Boolean);
+        if (grp.length) group_starts[day.dataset.day] = grp;
+      });
+      return api('/api/agenda/settings', { method: 'PUT', body: { starts, group_starts, session_minutes: dur(), break_minutes: brk(), ...extra } });
     };
     $('[data-save]', root).addEventListener('click', async (e) => {
       const btn = e.currentTarget; // (depois do await o evento já não guarda o botão)

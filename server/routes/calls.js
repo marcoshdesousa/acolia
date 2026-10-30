@@ -50,21 +50,26 @@ function resolveCode(code, auth) {
     if (calls.length > 1) throw new U.HttpError(409, 'Você tem 2 atendimentos abertos. Entre pelo botão "Entrar na chamada" de cada um no seu painel.');
     return { role: 'host', call: calls[0], pro };
   }
-  const call = db.prepare("SELECT * FROM calls WHERE patient_code = ? AND status = 'ativo'").get(code);
+  let call = db.prepare("SELECT * FROM calls WHERE patient_code = ? AND status = 'ativo'").get(code);
+  // Atendimento em grupo: cada paciente tem o próprio código
+  const guest = call ? null : db.prepare('SELECT * FROM call_guests WHERE code = ?').get(code);
+  if (guest) call = db.prepare("SELECT * FROM calls WHERE id = ? AND status = 'ativo'").get(guest.call_id);
   if (!call) throw new U.HttpError(404, 'Código inválido ou atendimento já finalizado. Peça um novo código ao profissional.');
   const p = db.prepare('SELECT * FROM professionals WHERE id = ?').get(call.professional_id);
   // Secretária (versão 1.1.3): não entra nas chamadas — nem como profissional, nem como convidada
   if (auth?.secretary) throw new U.HttpError(403, 'A secretária não entra nas chamadas de vídeo. Só o profissional.');
   // O próprio profissional, logado, entra no atendimento dele pelo código do paciente (como anfitrião)
   if (auth?.role === 'professional' && auth.user.id === p.id) return { role: 'host', call, pro: p };
-  return { role: 'guest', call, pro: p };
+  if (call.is_group && !guest) throw new U.HttpError(404, 'Código inválido ou atendimento já finalizado. Peça um novo código ao profissional.');
+  return { role: 'guest', call, pro: p, guest };
 }
 
 router.post('/resolve', (req, res) => {
   const r = resolveCode(req.body.code, req.auth);
   res.json({
     role: r.role,
-    call: { id: r.call.id, patient_label: r.call.patient_label },
+    // O paciente não fica sabendo que é em grupo: vê só o profissional
+    call: { id: r.call.id, patient_label: r.guest ? r.guest.label : r.call.patient_label, ...(r.role === 'host' && r.call.is_group ? { group: true } : {}) },
     professional: { name: r.pro.name, photo: r.pro.photo, profession: r.pro.profession, registry: r.pro.registry },
   });
 });
