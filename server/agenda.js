@@ -384,12 +384,13 @@ function pushText(body) {
     const a = getAppt(id);
     if (a?.modality === 'presencial') return `📍 Consulta presencial agendada: ${fmtWhen(ms(a.start_at))}`;
     if (a?.billing === 'convenio') return `✅ Consulta agendada pelo convênio: ${fmtWhen(ms(a.start_at))}`;
+    if (a?.billing === 'pacote') return `✅ Sessão do pacote agendada: ${fmtWhen(ms(a.start_at))}`;
   }
   return PUSH[event] || 'Consulta';
 }
 // Consulta confirmada: o cartão "agendada" e, se for presencial, a localização logo em seguida
 function announceConfirmed(a) {
-  post(a, 'patient', 'agendada', a.billing === 'convenio' ? 'convenio' : '');
+  post(a, 'patient', 'agendada', a.billing === 'convenio' || a.billing === 'pacote' ? a.billing : '');
   if (a.modality === 'presencial' && a.conversation_id) {
     sendLocation(db.prepare('SELECT * FROM conversations WHERE id = ?').get(a.conversation_id), getPro(a.professional_id));
   }
@@ -472,10 +473,10 @@ async function checkPayment(a, { force = false } = {}) {
 // e manda a foto do comprovante na conversa)
 function refund(a, reason, detail = '') {
   const fields = { cancel_reason: reason, cancel_detail: detail || null };
-  if (a.billing === 'convenio') {
-    // Pelo convênio não houve pagamento pela Acolia: só cancela
+  if (a.billing === 'convenio' || a.billing === 'pacote') {
+    // Pelo convênio não houve pagamento pela Acolia: só cancela. Do pacote: a sessão volta para o pacote.
     const upd = setStatus(a.id, { ...fields, status: 'cancelada', hold_until: null });
-    post(upd, 'patient', 'cancelada', 'convenio');
+    post(upd, 'patient', 'cancelada', a.billing);
     notifyBoth(upd);
     return upd;
   }
@@ -661,6 +662,8 @@ async function sweep() {
       post(upd, 'professional', a.modality === 'presencial' ? 'concluida' : 'finalizada');
       notifyBoth(upd);
     }
+    // Pacote mensal: prazo de pagamento vencido
+    await require('./packages').sweep();
     // Lembretes de 1 dia e 1 hora antes (WhatsApp da Acolia + notificação do app)
     await require('./reminders').run(module.exports);
   } catch (e) {

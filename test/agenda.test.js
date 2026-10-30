@@ -1419,3 +1419,87 @@ test('atendimento em grupo (só Acolia Fisio): até 10 pacientes no horário, um
   assert.equal((await st(1)).status, 'concluida');
   assert.equal((await st(0)).call_code, null);
 });
+
+test('pacote mensal (só Acolia Fisio): profissional cria, paciente compra, profissional confirma o Pix, sessões por semana sem pagar; login pelo CPF', async () => {
+  await admin.post('/api/auth/admin/login', { username: 'admin', password: 'senha-admin-123' });
+  clock = Date.parse(at('2030-05-06', '09:00')); // segunda-feira
+  const cpf = nextCpf();
+  const r = await admin.post('/api/admin/professionals', { portal: 'fisio', name: 'Paulo Pacote Ramos', profession: 'Fisioterapeuta', registry: 'CREFITO-3/654321-F', email: 'paulo.pacote@example.com', phone: '11955550001', state: 'SP', city: 'Campinas', specialties: ['Dor lombar'], cpf });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  // Entra pelo CPF (com pontos), além do código e do e-mail
+  const F = client();
+  const fmt = `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`;
+  assert.equal((await F.post('/api/auth/professional/login', { login: fmt, password: r.data.password })).status, 200, 'login pelo CPF');
+  await F.put('/api/professional/profile', { name: 'Paulo Pacote Ramos', phone: '11955550001', state: 'SP', city: 'Campinas', bio: '', price: '120', specialties: ['Dor lombar'] });
+  await F.put('/api/agenda/settings', { starts: { 1: ['08:00', '09:00'], 2: ['08:00'], 3: ['08:00'], 4: ['08:00'], 5: ['08:00'] }, session_minutes: 50, online: true, pix_key: 'paulo@pix.com' });
+  const fid = r.data.id;
+  // Cria os pacotes
+  assert.equal((await F.post('/api/agenda/packages', { per_week: 0, price: '200' })).status, 400);
+  assert.equal((await F.post('/api/agenda/packages', { per_week: 2, price: '' })).status, 400);
+  let pk = await F.post('/api/agenda/packages', { per_week: 2, price: '320,00' });
+  assert.equal(pk.status, 201, JSON.stringify(pk.data));
+  assert.deepEqual(pk.data.items.map((x) => [x.per_week, x.price_cents]), [[2, 32000]]);
+  await F.post('/api/agenda/packages', { per_week: 1, price: '180' });
+  // Nutri não tem pacote
+  const N = (await admin.post('/api/admin/professionals', { portal: 'nutri', name: 'Nilo Nutri Lima', profession: 'Nutricionista', registry: 'CRN-3 77777', email: 'nilo.pk@example.com', phone: '11955550002', state: 'SP', city: 'Campinas', specialties: ['Emagrecimento'] })).data;
+  const nc = client();
+  await nc.post('/api/auth/professional/login', { login: N.code, password: N.password });
+  assert.equal((await nc.post('/api/agenda/packages', { per_week: 1, price: '100' })).status, 400);
+  // O paciente vê os pacotes no perfil (até sem conta)
+  const offers = (await anon.get(`/api/agenda/pro/${fid}/packages`)).data.items;
+  assert.deepEqual(offers.map((x) => x.label), ['1 vez por semana', '2 vezes por semana']);
+  const pat = await mkPatient('Pietra Pacote Melo', nextCpf());
+  // Sem pacote: não marca usando pacote
+  assert.equal((await pat.post('/api/agenda/book', { professional_id: fid, start: at('2030-05-07', '08:00'), accept: true, use_package: true })).status, 409);
+  // Compra o de 2x por semana (Pix manual: chave do profissional)
+  const offer2 = offers.find((x) => x.per_week === 2);
+  assert.equal((await pat.post(`/api/agenda/packages/${offer2.id}/buy`, {})).status, 400, 'precisa aceitar');
+  let buy = await pat.post(`/api/agenda/packages/${offer2.id}/buy`, { accept: true });
+  assert.equal(buy.status, 201, JSON.stringify(buy.data));
+  assert.equal(buy.data.status, 'aguardando_pagamento');
+  assert.equal(buy.data.mode, 'manual');
+  assert.equal(buy.data.pix_payload, 'paulo@pix.com');
+  assert.equal((await pat.post(`/api/agenda/packages/${offer2.id}/buy`, { accept: true })).status, 409, 'já tem um esperando o pagamento');
+  // O profissional vê e confirma que recebeu
+  const list = (await F.get('/api/agenda/packages')).data;
+  assert.equal(list.patients[0].status, 'aguardando_pagamento');
+  assert.equal((await pat.post(`/api/agenda/my-packages/${buy.data.id}/confirm`, { received: true })).status, 403, 'o paciente não confirma');
+  const conf = await F.post(`/api/agenda/my-packages/${buy.data.id}/confirm`, { received: true });
+  assert.equal(conf.data.status, 'ativo');
+  assert.equal(conf.data.starts_on, '2030-05-06');
+  assert.equal(conf.data.ends_on, '2030-06-05');
+  // Calendário do paciente mostra o pacote
+  const month = (await pat.get(`/api/agenda/pro/${fid}/month?ym=2030-05`)).data;
+  assert.equal(month.my_packages.length, 1);
+  assert.equal(month.package_offers.length, 2);
+  // Marca 2 sessões na semana sem pagar; a 3ª da mesma semana não
+  let b1 = await pat.post('/api/agenda/book', { professional_id: fid, start: at('2030-05-07', '08:00'), accept: true, use_package: true });
+  assert.equal(b1.status, 201, JSON.stringify(b1.data));
+  assert.equal(b1.data.status, 'confirmada');
+  assert.equal(b1.data.billing, 'pacote');
+  assert.equal((await pat.post('/api/agenda/book', { professional_id: fid, start: at('2030-05-08', '08:00'), accept: true, use_package: true })).status, 201);
+  const b3 = await pat.post('/api/agenda/book', { professional_id: fid, start: at('2030-05-09', '08:00'), accept: true, use_package: true });
+  assert.equal(b3.status, 409);
+  assert.match(b3.data.error, /2 vezes por semana/);
+  // Cancelou uma a tempo: a sessão volta para o pacote (sem reembolso, nada foi cobrado)
+  const cn = await pat.post(`/api/agenda/appointments/${b1.data.id}/cancel`, { reason: 'horario' });
+  assert.equal(cn.status, 200, JSON.stringify(cn.data));
+  assert.equal(cn.data.status, 'cancelada');
+  assert.equal((await pat.post('/api/agenda/book', { professional_id: fid, start: at('2030-05-09', '08:00'), accept: true, use_package: true })).status, 201, 'voltou a sessão');
+  // Na semana seguinte, mais 2
+  assert.equal((await pat.post('/api/agenda/book', { professional_id: fid, start: at('2030-05-13', '08:00'), accept: true, use_package: true })).status, 201);
+  // Fora do período do pacote: não
+  const out = await pat.post('/api/agenda/book', { professional_id: fid, start: at('2030-06-10', '08:00'), accept: true, use_package: true });
+  assert.equal(out.status, 409);
+  assert.match(out.data.error, /06\/05\/2030 a 05\/06\/2030/);
+  // Financeiro do profissional: o pacote entra como recebido
+  const fin = (await F.get('/api/professional/finance?ym=2030-05')).data;
+  assert.ok(fin.items.some((x) => x.kind === 'pacote' && x.amount_cents === 32000 && x.state === 'recebido'));
+  // Pix não confirmado em 3 dias: o pedido expira
+  const offer1 = offers.find((x) => x.per_week === 1);
+  const pat2 = await mkPatient('Paulo Sem Pagar Dias', nextCpf());
+  const b2 = await pat2.post(`/api/agenda/packages/${offer1.id}/buy`, { accept: true });
+  clock += 73 * 3600e3;
+  await G.sweep();
+  assert.equal((await pat2.get(`/api/agenda/my-packages/${b2.data.id}`)).data.status, 'expirado');
+});

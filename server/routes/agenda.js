@@ -16,6 +16,7 @@ const isPatient = (req) => req.auth?.role === 'patient';
 const sameKind = (pro, patient) => !!pro?.is_test === !!patient?.is_test;
 const TEST_MSG = 'Conta de teste: as consultas de teste são só entre o Profissional Teste e o Paciente Teste.';
 const isPro = (req) => req.auth?.role === 'professional';
+const PK = require('../packages');
 
 // ---------- Público: próximo dia disponível (aparece até para quem não tem conta) ----------
 router.get('/pro/:id/next', (req, res) => {
@@ -57,6 +58,9 @@ router.get('/pro/:id/month', (req, res) => {
     paused: pro.accepts_messages === 0,
     presencial: G.clinicOf(pro), presencial_open: G.presencialOpen(pro), online: !!pro.agenda_on, insurance: !!pro.accepts_insurance, patient,
     days: agendaOk ? G.monthDays(pro, ym, { patientId }) : [],
+    // Pacote mensal (Acolia Fisio): os pacotes à venda e, para o paciente, os que ele tem valendo
+    package_offers: PK.allowed(pro) ? PK.offers(pro.id) : [],
+    my_packages: isPatient(req) && PK.allowed(pro) ? PK.forCalendar(req.auth.user.id, pro.id) : [],
   });
 });
 
@@ -72,6 +76,13 @@ router.get('/pro/:id/day', (req, res) => {
   const slots = ok ? G.slotsForDay(pro, date, { patientId, exclude }) : [];
   // O paciente não fica sabendo se o horário é em grupo (só o profissional vê as vagas)
   res.json({ date, label: G.dayLabel(date), slots: isPro(req) ? slots : slots.map(({ start, label }) => ({ start, label })) });
+});
+
+// Pacotes mensais à venda (aparece no perfil até para quem não tem conta)
+router.get('/pro/:id/packages', (req, res) => {
+  const pro = visiblePro(req.params.id);
+  if (!pro || !PK.allowed(pro)) return res.json({ items: [], mine: [] });
+  res.json({ items: PK.offers(pro.id), mine: isPatient(req) ? PK.current(req.auth.user.id, pro.id).map((pp) => PK.view(pp)) : [] });
 });
 
 // Daqui para baixo, só com conta (o calendário acima também abre para o visitante que veio pelo link do
@@ -105,11 +116,26 @@ router.post('/book', async (req, res) => {
   if (!sameKind(pro, me)) throw new U.HttpError(403, TEST_MSG);
   const ready = G.readiness(pro);
   if (pro.accepts_messages === 0) throw new U.HttpError(409, 'Este profissional não está fazendo agendamentos no momento.');
-  if (!ready.ok) throw new U.HttpError(409, 'Este profissional ainda não abriu a agenda.');
+  // Sessão do pacote mensal: já está paga (só precisa dos horários)
+  const usePackage = !!req.body.use_package && PK.allowed(pro);
+  if (!ready.ok && !(usePackage && ready.missing.every((m) => ['valor', 'pix'].includes(m)))) throw new U.HttpError(409, 'Este profissional ainda não abriu a agenda.');
   const modality = req.body.modality === 'presencial' ? 'presencial' : 'online';
   if (modality === 'presencial' && !G.presencialOpen(pro)) throw new U.HttpError(400, 'Este profissional não está com a agenda presencial aberta. Marque uma consulta online.');
   if (modality === 'online' && !pro.agenda_on) throw new U.HttpError(400, 'Este profissional não está com a agenda online aberta no momento.');
   if (modality === 'presencial' && !req.body.confirm_place) throw new U.HttpError(400, `Confirme que você consegue ir até ${pro.city} - ${pro.state} para a consulta presencial.`);
+  if (usePackage) {
+    const pa = tx(() => {
+      const slot = G.assertFree(pro, req.body.start, { patientId: me.id });
+      const pp = PK.assertUsable(me.id, pro, slot.start);
+      const c = G.ensureConversation(me.id, pro.id);
+      const info = db.prepare(`INSERT INTO appointments (professional_id, patient_id, conversation_id, start_at, end_at, price_cents, mode, origin, status, accepted_policy_at, modality, billing, package_id, group_slot)
+        VALUES (?, ?, ?, ?, ?, NULL, 'manual', 'paciente', 'confirmada', ?, ?, 'pacote', ?, ?)`).run(pro.id, me.id, c.id, G.iso(slot.start), G.iso(slot.end), G.iso(G.now()), modality, pp.id, slot.group);
+      return G.getAppt(Number(info.lastInsertRowid));
+    });
+    G.announceConfirmed(pa);
+    G.notifyBoth(pa);
+    return res.status(201).json(G.view(pa, 'patient'));
+  }
   const a = tx(() => {
     const slot = G.assertFree(pro, req.body.start, { patientId: me.id });
     const c = G.ensureConversation(me.id, pro.id);
@@ -268,6 +294,9 @@ router.post('/appointments/:id/reschedule', (req, res) => {
   G.closeCall(a);
   const upd = tx(() => {
     const slot = G.assertFree(pro, req.body.start, { patientId: a.patient_id, exclude: a.id });
+    // Sessão do pacote: o novo dia precisa estar dentro do pacote e com sessão livre na semana
+    const pp = a.billing === 'pacote' ? PK.assertUsable(a.patient_id, pro, slot.start, a.id) : null;
+    if (pp) db.prepare('UPDATE appointments SET package_id = ? WHERE id = ?').run(pp.id, a.id);
     return G.setStatus(a.id, {
       start_at: G.iso(slot.start), end_at: G.iso(slot.end), status: 'confirmada', group_slot: slot.group,
       reschedules: byPro ? a.reschedules : a.reschedules + 1, call_id: null, modality: to,
@@ -330,7 +359,7 @@ router.post('/appointments/:id/cancel', async (req, res) => {
     if (reason === 'outros' && detail.length < 3) throw new U.HttpError(400, 'Conte rapidinho o motivo do cancelamento.');
   }
   G.closeCall(a);
-  if (a.billing !== 'convenio') G.post(a, 'patient', 'reembolso_pedido', reason);
+  if (a.billing !== 'convenio' && a.billing !== 'pacote') G.post(a, 'patient', 'reembolso_pedido', reason);
   const upd = await G.refund(a, reason, detail);
   res.json(G.view(G.getAppt(upd.id), 'patient'));
 });
@@ -622,6 +651,68 @@ router.delete('/asaas', (req, res) => {
   db.prepare('DELETE FROM pro_payment WHERE professional_id = ?').run(req.auth.user.id);
   G.touch();
   res.json(settingsOf(req.auth.user));
+});
+
+// ---------- Pacote mensal (Acolia Fisio) ----------
+// Profissional: os pacotes que ele vende e os dos pacientes (esperando confirmar o Pix, valendo)
+router.get('/packages', (req, res) => {
+  if (!isPro(req)) throw new U.HttpError(403, 'Só para profissionais.');
+  const pro = req.auth.user;
+  if (!PK.allowed(pro)) return res.json({ allowed: false, items: [], patients: [] });
+  const today = G.localDate(G.now());
+  const patients = db.prepare(`SELECT * FROM patient_packages WHERE professional_id = ? AND (status = 'aguardando_pagamento' OR (status = 'ativo' AND ends_on >= ?))
+    ORDER BY CASE status WHEN 'aguardando_pagamento' THEN 0 ELSE 1 END, ends_on`).all(pro.id, today).map((pp) => PK.view(pp, 'professional'))
+    .map((v) => (req.auth.secretary ? { ...v, pix_payload: null } : v)); // a secretária não vê a chave Pix
+  res.json({ allowed: true, items: PK.offers(pro.id), patients, secretary: !!req.auth.secretary });
+});
+router.post('/packages', (req, res) => {
+  if (!isPro(req) || req.auth.secretary) throw new U.HttpError(403, 'Só o profissional cria pacotes.');
+  const pro = req.auth.user;
+  if (!PK.allowed(pro)) throw new U.HttpError(400, 'Pacotes mensais são do Acolia Fisio.');
+  const n = Number(req.body.per_week);
+  if (!(Number.isInteger(n) && n >= 1 && n <= 7)) throw new U.HttpError(400, 'Escolha de 1 a 7 sessões por semana.');
+  const cents = Math.round(Number(String(req.body.price ?? '').replace(/\./g, '').replace(',', '.')) * 100);
+  if (!(cents >= 100 && cents <= 10000000)) throw new U.HttpError(400, 'Informe o valor do mês.');
+  if (db.prepare('SELECT COUNT(*) AS n FROM pro_packages WHERE professional_id = ? AND active = 1').get(pro.id).n >= 10) throw new U.HttpError(400, 'Você pode ter até 10 pacotes.');
+  db.prepare('INSERT INTO pro_packages (professional_id, per_week, price_cents) VALUES (?, ?, ?)').run(pro.id, n, cents);
+  res.status(201).json({ items: PK.offers(pro.id) });
+});
+// Tirar um pacote da venda (quem já comprou continua com o seu até o fim)
+router.delete('/packages/:id', (req, res) => {
+  if (!isPro(req) || req.auth.secretary) throw new U.HttpError(403, 'Só o profissional muda os pacotes.');
+  db.prepare('UPDATE pro_packages SET active = 0 WHERE id = ? AND professional_id = ?').run(Number(req.params.id), req.auth.user.id);
+  res.json({ items: PK.offers(req.auth.user.id) });
+});
+// Paciente compra
+router.post('/packages/:id/buy', async (req, res) => {
+  if (!isPatient(req)) throw new U.HttpError(403, 'Só pacientes compram pacotes.');
+  if (!req.body.accept) throw new U.HttpError(400, 'Leia e aceite como funciona o pacote para continuar.');
+  const pp = await PK.buy(req.auth.user, req.params.id);
+  res.status(201).json(PK.view(pp));
+});
+function loadPackage(req) {
+  const pp = PK.get(req.params.id);
+  const mine = pp && (isPatient(req) ? pp.patient_id === req.auth.user.id : pp.professional_id === req.auth.user.id);
+  if (!mine) throw new U.HttpError(404, 'Pacote não encontrado.');
+  return pp;
+}
+// Situação (o paciente fica conferindo enquanto paga o Pix automático)
+router.get('/my-packages/:id', async (req, res) => {
+  const pp = await PK.check(loadPackage(req));
+  res.json(PK.view(pp, isPatient(req) ? 'patient' : 'professional'));
+});
+// Pix manual: o profissional confirma que recebeu (ou que não recebeu)
+router.post('/my-packages/:id/confirm', (req, res) => {
+  if (!isPro(req) || req.auth.secretary) throw new U.HttpError(403, 'Só o profissional confirma o pagamento.');
+  const pp = loadPackage(req);
+  if (pp.status !== 'aguardando_pagamento') throw new U.HttpError(409, 'Este pacote não está esperando pagamento.');
+  if (!req.body.received) {
+    db.prepare("UPDATE patient_packages SET status = 'cancelado', hold_until = NULL WHERE id = ?").run(pp.id);
+    const c = pp.conversation_id && db.prepare('SELECT * FROM conversations WHERE id = ?').get(pp.conversation_id);
+    if (c) require('./chat').sendMessage(c, 'professional', req.auth.user.name, 'text', 'Não recebi o pagamento do pacote mensal, então ele não foi ativado. Se você já pagou, me mande o comprovante aqui.');
+    return res.json(PK.view(PK.get(pp.id), 'professional'));
+  }
+  res.json(PK.view(PK.activate(pp), 'professional'));
 });
 
 module.exports = { router };

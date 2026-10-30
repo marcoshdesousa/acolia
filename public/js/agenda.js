@@ -98,6 +98,67 @@
     };
   }
 
+  // ---------- Pacote mensal (Acolia Fisio): comprar ----------
+  // Explica como funciona, a pessoa aceita e paga o Pix: automático (QR Code, confirma sozinho) ou na chave
+  // do profissional (ele confirma quando o dinheiro cair). onDone: o pacote começou ou o pedido foi feito.
+  async function buyPackage(offer, proName, onDone) {
+    if (!offer) return;
+    let started = null;
+    await modal({
+      title: 'Pacote mensal',
+      html: `<div class="pk-offer" style="margin-bottom:12px"><div><b>${esc(offer.label)}</b><span class="small muted">${money(offer.price_cents)} por mês · com ${esc(proName)}</span></div></div>
+        <ul class="small" style="margin:0 0 12px;padding-left:18px;display:grid;gap:6px">
+          <li>O pacote vale <b>um mês</b> a partir do dia em que o pagamento for confirmado.</li>
+          <li>Você marca até <b>${esc(offer.label)}</b> na agenda, sem pagar cada sessão (a semana vai de segunda a domingo).</li>
+          <li>Cancelou uma sessão até 30 minutos antes? Ela volta para o pacote. Sessões não marcadas na semana não passam para a outra.</li>
+          <li>O dinheiro vai direto para o profissional.</li>
+        </ul>
+        <label class="check"><input type="checkbox" data-pk-accept> Li e aceito como funciona o pacote</label>
+        <div class="form-error hidden" data-pk-err></div>`,
+      actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, {
+        label: 'Ir para o pagamento',
+        handler: async (dlg) => {
+          const err = $('[data-pk-err]', dlg);
+          if (!$('[data-pk-accept]', dlg).checked) { err.textContent = 'Marque que leu e aceita como funciona o pacote.'; err.classList.remove('hidden'); return false; }
+          try { started = await api(`/api/agenda/packages/${offer.id}/buy`, { method: 'POST', body: { accept: true } }); } catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); return false; }
+          return true;
+        },
+      }],
+    });
+    if (!started) return;
+    let poll = null;
+    await modal({
+      title: 'Pagar o pacote (Pix)',
+      html: `<div class="stack center pix-card">
+          <div class="pix-value">${money(started.price_cents)}</div>
+          <div class="small muted">${esc(started.label)} · um mês</div>
+          ${started.pix_image ? `<img class="pix-qr" src="data:image/png;base64,${esc(started.pix_image)}" alt="QR Code do Pix">` : ''}
+          ${started.mode === 'manual' ? `<div class="small">Chave Pix de ${esc(proName)}:</div><code class="pix-key">${esc(started.pix_payload || '')}</code>` : ''}
+          <button type="button" class="btn block" data-pk-copy>${ICONS.copy} ${started.mode === 'manual' ? 'Copiar a chave Pix' : 'Copiar código Pix'}</button>
+          <p class="small muted" style="margin:0">${started.mode === 'manual'
+            ? `Pague <b>${money(started.price_cents)}</b> nessa chave pelo app do seu banco e <b>mande o comprovante na conversa</b> com ${esc(proName.split(' ')[0])}. O pacote começa quando o profissional confirmar que recebeu.`
+            : 'Abra o app do seu banco, escolha Pix → Pix copia e cola (ou leia o QR Code) e pague. A confirmação é automática.'}</p>
+          ${started.mode === 'auto' ? '<div class="pix-wait" data-pk-wait><span class="spinner sm"></span> Aguardando o pagamento…</div>' : ''}
+        </div>`,
+      actions: [{ label: started.mode === 'manual' ? 'Entendi' : 'Fechar', value: true }],
+      onOpen(dlg) {
+        $('[data-pk-copy]', dlg).addEventListener('click', () => Acolia.copyText(started.pix_payload || ''));
+        if (started.mode !== 'auto') return;
+        poll = setInterval(async () => {
+          if (!dlg.isConnected) { clearInterval(poll); return; }
+          try {
+            const r = await api(`/api/agenda/my-packages/${started.id}`);
+            if (r.status === 'ativo') { clearInterval(poll); $('[data-pk-wait]', dlg).innerHTML = `<b>Pagamento confirmado!</b> Pacote de ${esc(r.period)}.`; toast('Pacote ativado ✓ Agora é só marcar as sessões.', '', { top: true }); }
+            else if (r.status !== 'aguardando_pagamento') { clearInterval(poll); $('[data-pk-wait]', dlg).textContent = 'O tempo para pagar acabou. Compre de novo.'; }
+          } catch { /* tenta de novo */ }
+        }, 4000);
+      },
+    });
+    clearInterval(poll);
+    if (started.mode === 'manual') toast('Pedido enviado. O pacote começa quando o profissional confirmar o Pix.', '', { top: true });
+    onDone?.();
+  }
+
   // ---------- Marcar / remarcar / propor ----------
   // opts: { mode: 'book'|'reschedule'|'propose', pro, appt, conversationId, patientId, peerName, me, reschedulePro }
   async function openBooking(opts) {
@@ -117,6 +178,7 @@
     let modality = opts.appt?.modality || 'online';
     let billing = 'pix';
     let placeChecked = false;
+    let usePkg = true; // sessão do pacote mensal (quando o paciente tem um valendo no dia)
     // Valor conforme a modalidade (a presencial pode custar diferente)
     const priceOf = (m) => (m === 'presencial' && info?.price_presencial_cents != null ? info.price_presencial_cents : info?.price_cents);
     const priceNow = () => priceOf(modality);
@@ -126,6 +188,23 @@
       if (mode === 'reschedule') return '';
       return (m === 'online' ? info.online === false : !info.presencial_open) ? 'Sem agenda' : '';
     };
+
+    // Pacote mensal (Acolia Fisio): o que o paciente tem valendo ou os pacotes à venda
+    const pkMonday = (date) => { const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); };
+    const pkFor = (date) => (info?.my_packages || []).find((p) => p.starts_on <= date && p.ends_on >= date) || null;
+    const pkFree = (p, date) => p.per_week - (p.weeks[pkMonday(date)] || 0);
+    const brD = (d) => d.split('-').reverse().slice(0, 2).join('/');
+    function packagesBox() {
+      if (mode !== 'book') return '';
+      const mine = info.my_packages || [];
+      if (mine.length) {
+        return `<div class="pk-box mine">${mine.map((p) => `<div class="row" style="gap:10px;flex-wrap:nowrap">${ic('calendar', 22)}<div><b>Seu pacote: ${esc(p.label)}</b><div class="small">De ${brD(p.starts_on)} a ${brD(p.ends_on)}. Marque as sessões abaixo, sem pagar cada uma.</div></div></div>`).join('')}</div>`;
+      }
+      const offers = info.package_offers || [];
+      if (!offers.length) return '';
+      return `<div class="pk-box"><div><b>Pacote mensal</b><div class="small muted">Pague o mês e marque as sessões sem pagar cada uma.</div></div>
+        ${offers.map((o) => `<div class="pk-offer"><div><b>${esc(o.label)}</b><span class="small muted">${money(o.price_cents)} por mês</span></div><button type="button" class="btn sm" data-pk-buy="${o.id}">Comprar</button></div>`).join('')}</div>`;
+    }
 
     async function loadMonth() {
       page.body.innerHTML = '<div class="spinner"></div>';
@@ -151,7 +230,7 @@
       const head = mode === 'propose' ? `<div class="card flat pat-data"><div class="small muted" style="font-weight:700">PACIENTE</div><b>${esc(pt?.name || opts.peerName || 'Paciente')}</b>
             ${pt?.cpf ? `<div class="small muted">CPF ${esc(pt.cpf)}${pt.birth_date ? ` · nascimento ${esc(pt.birth_date)}` : ''}${pt.place ? ` · ${esc(pt.place)}` : ''}</div>` : ''}</div>`
         : mode === 'reschedule' ? `<p class="muted" style="margin-top:0">Consulta atual: <b>${esc(opts.appt.when)}</b> (${opts.appt.modality === 'presencial' ? 'presencial' : 'online'}). Escolha o novo dia e horário${info.presencial ? ' e, se quiser, troque entre online e presencial' : ''}.${opts.appt.status === 'confirmada' ? ' <b>Você só pode remarcar uma vez.</b>' : ''}</p>`
-          : `<div class="row" style="gap:12px;margin-bottom:12px">${avatar(proName, opts.pro.photo, 'md')}<div><b>${esc(proName)}</b><div class="muted small">${esc(opts.pro.profession || '')}</div></div></div>`;
+          : `<div class="row" style="gap:12px;margin-bottom:12px">${avatar(proName, opts.pro.photo, 'md')}<div><b>${esc(proName)}</b><div class="muted small">${esc(opts.pro.profession || '')}</div></div></div>${packagesBox()}`;
       const loc = info.presencial;
       const off = { online: modOff('online'), presencial: modOff('presencial') };
       const choices = `
@@ -201,6 +280,10 @@
         <div data-slots></div>
         <div class="ag-foot" data-foot></div>`;
       $$('[data-mod]', page.body).forEach((b) => b.addEventListener('click', () => { modality = b.dataset.mod; placeChecked = false; renderMonth(); }));
+      $$('[data-pk-buy]', page.body).forEach((b) => b.addEventListener('click', () => {
+        if (opts.visitor) { opts.onNeedAccount?.(); return; }
+        buyPackage(info.package_offers.find((o) => String(o.id) === b.dataset.pkBuy), proName, () => loadMonth());
+      }));
       $$('[data-bill]', page.body).forEach((b) => b.addEventListener('click', () => { billing = b.dataset.bill; renderMonth(); }));
       $('[data-ins-chat]', page.body)?.addEventListener('click', async () => {
         if (opts.visitor) { opts.onNeedAccount?.(); return; }
@@ -258,11 +341,20 @@
       page.setTitle(mode === 'reschedule' ? 'Confirmar remarcação' : 'Confirmar consulta');
       const when = `${sel.dayLabel} às ${sel.label}`;
       const loc = modality === 'presencial' ? (info.presencial || opts.appt?.location) : null;
-      page.body.innerHTML = `<div class="card stack">
+      const pk = mode === 'book' ? pkFor(sel.date) : null;
+      const pkOk = pk && pkFree(pk, sel.date) > 0;
+      const withPkg = pkOk && usePkg;
+      page.body.innerHTML = `${pk ? `<div class="opt-label">Pagamento</div>
+          <div class="opt-grid" role="radiogroup" aria-label="Pagamento">
+            ${optCard({ attr: 'data-pk-use="1"', on: withPkg, off: !pkOk, icon: 'calendar', title: 'Usar o pacote', sub: pkOk ? `${pkFree(pk, sel.date)} de ${pk.per_week} livre(s) nesta semana` : 'Semana completa' })}
+            ${optCard({ attr: 'data-pk-use="0"', on: !withPkg, icon: 'pix', title: 'Pagar esta consulta', sub: priceNow() != null ? money(priceNow()) : 'Pix' })}
+          </div>${!pkOk ? `<p class="small muted opt-note">Você já marcou as ${pk.per_week} sessões do pacote nesta semana. Escolha um dia de outra semana ou pague esta consulta.</p>` : ''}` : ''}
+        <div class="card stack">
           <div class="row" style="gap:12px">${ic(modality === 'presencial' ? 'home' : 'video', 26)}<div><b style="font-size:1.1rem">${esc(when)}</b><div class="muted small">${esc(proName)} · ${info.minutes} min · consulta ${modality === 'presencial' ? 'presencial' : 'online'}</div></div></div>
           ${loc ? `<div class="opt-place">${ic('pin', 18)}<span>${loc.name ? `<b>${esc(loc.name)}</b> · ` : ''}${esc(loc.address)}<br><span class="muted">${esc(loc.place)}</span></span></div>` : ''}
           ${mode === 'reschedule' ? `<p class="small" style="margin:0">${modality !== opts.appt.modality ? `<b>A consulta passa a ser ${modality}.</b> ` : ''}${opts.appt.billing === 'convenio' ? 'A consulta continua pelo convênio.' : 'O valor que você já pagou continua valendo para o novo horário.'}</p>`
-            : billing === 'convenio' ? '<div class="row between"><span>Pagamento</span><b>Convênio (plano de saúde)</b></div>' : `<div class="row between"><span>Valor da consulta ${modality}</span><b>${money(priceNow())}</b></div>`}
+            : billing === 'convenio' ? '<div class="row between"><span>Pagamento</span><b>Convênio (plano de saúde)</b></div>'
+              : withPkg ? `<div class="row between"><span>Pagamento</span><b>Pacote mensal (já pago)</b></div>` : `<div class="row between"><span>Valor da consulta ${modality}</span><b>${money(priceNow())}</b></div>`}
         </div>
         ${mode === 'book' ? `<h3 style="margin:18px 0 6px">Política de agendamento</h3>${policyHtml(rules)}
         <label class="check" style="margin:14px 0"><input type="checkbox" data-accept> Li e aceito a política de agendamento e cancelamento</label>` : ''}
@@ -270,9 +362,10 @@
         ${mode === 'propose' && billing !== 'convenio' ? `<p class="notice info small" style="margin-top:14px">O paciente recebe na conversa <b>"Sua consulta está quase pronta"</b>, aceita a política de agendamento e tem ${rules?.PAY_MIN || 10} minutos para pagar. ${info.mode === 'auto' ? 'Ele toca em "Pagar agora" e paga o Pix da sua conta Asaas: quando cair, a consulta é confirmada sozinha.' : 'Ele toca em "Copiar Pix" (sua chave e o valor já vão juntos). Quando o dinheiro cair, toque em <b>Sim</b> em "O paciente fez o pagamento?", em cima do campo de mensagem.'}</p>` : ''}
         <div class="form-error hidden" data-err></div>
         <div class="row" style="gap:10px;margin-top:10px"><button type="button" class="btn secondary" data-back2>Voltar</button>
-          <button type="button" class="btn grow" data-ok ${mode === 'book' ? 'disabled' : ''}>${mode === 'reschedule' ? 'Remarcar' : mode === 'propose' ? (billing === 'convenio' ? 'Agendar pelo convênio' : 'Enviar para o paciente') : opts.visitor ? 'Criar conta e ir para o pagamento' : `Ir para o pagamento (${info.mode === 'auto' ? 'Pix' : 'Pix pelo chat'})`}</button></div>
+          <button type="button" class="btn grow" data-ok ${mode === 'book' ? 'disabled' : ''}>${mode === 'reschedule' ? 'Remarcar' : mode === 'propose' ? (billing === 'convenio' ? 'Agendar pelo convênio' : 'Enviar para o paciente') : opts.visitor ? 'Criar conta e ir para o pagamento' : withPkg ? 'Agendar com o pacote' : `Ir para o pagamento (${info.mode === 'auto' ? 'Pix' : 'Pix pelo chat'})`}</button></div>
         ${opts.visitor ? '<p class="small muted center" style="margin-top:8px">Para confirmar e pagar, crie a sua conta grátis (ou entre). Depois você volta direto para o pagamento deste horário.</p>' : ''}`;
       $('[data-accept]', page.body)?.addEventListener('change', (e) => { $('[data-ok]', page.body).disabled = !e.target.checked; });
+      $$('[data-pk-use]', page.body).forEach((b) => b.addEventListener('click', () => { if (b.classList.contains('off')) return; usePkg = b.dataset.pkUse === '1'; confirmStep(); }));
       $('[data-back2]', page.body).addEventListener('click', () => { page.setTitle(mode === 'reschedule' ? 'Remarcar consulta' : 'Agendar consulta'); renderMonth(); });
       $('[data-ok]', page.body).addEventListener('click', async (e) => {
         const btn = e.currentTarget;
@@ -321,7 +414,14 @@
             opts.onNeedAccount?.({ booking: true });
             return;
           }
-          const a = await api('/api/agenda/book', { method: 'POST', body: { professional_id: proId, start: sel.start, accept: true, modality, confirm_place: modality === 'presencial' } });
+          const a = await api('/api/agenda/book', { method: 'POST', body: { professional_id: proId, start: sel.start, accept: true, modality, confirm_place: modality === 'presencial', use_package: withPkg || undefined } });
+          if (a.billing === 'pacote') {
+            toast('Sessão do pacote agendada ✓', '', { top: true });
+            page.close();
+            opts.onDone?.(a);
+            refreshAll();
+            return;
+          }
           if (a.mode === 'auto') payScreen(page, a);
           else manualSent(page, a);
         } catch (ex) {
@@ -759,6 +859,10 @@
       text = () => 'Pelo convênio (plano de saúde): nada é cobrado aqui. O link da chamada aparece aqui 5 minutos antes.';
     } else if (m.event === 'cancelada' && m.extra === 'convenio') {
       text = () => 'Consulta pelo convênio cancelada. O horário foi liberado.';
+    } else if (m.event === 'agendada' && a.billing === 'pacote') {
+      text = () => 'Sessão do pacote mensal: já está paga. O link da chamada aparece aqui 5 minutos antes.';
+    } else if (m.event === 'cancelada' && m.extra === 'pacote') {
+      text = () => 'Sessão do pacote cancelada. Ela volta para o pacote e o horário foi liberado.';
     } else if (m.event === 'proposta' && a.modality === 'presencial') {
       title = '📅 Consulta presencial quase pronta: falta o pagamento';
     }

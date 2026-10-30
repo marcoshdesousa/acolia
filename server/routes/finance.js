@@ -60,9 +60,13 @@ function entries(proId) {
       if (!state) return null;
       return { key: `a${a.id}`, kind: 'acolia', date: G.localDate(G.ms(a.start_at)), name: a.name, cpf: U.formatCpf(a.cpf), amount_cents: a.price_cents || 0, state, modality: a.modality };
     }).filter(Boolean);
+  // Pacotes mensais pagos (Acolia Fisio)
+  const packs = db.prepare(`SELECT pp.id, pp.paid_at, pp.price_cents, pp.per_week, p.name, p.cpf FROM patient_packages pp JOIN patients p ON p.id = pp.patient_id
+      WHERE pp.professional_id = ? AND pp.paid_at IS NOT NULL`).all(proId)
+    .map((x) => ({ key: `p${x.id}`, kind: 'pacote', date: G.localDate(G.ms(x.paid_at)), name: x.name, cpf: U.formatCpf(x.cpf), amount_cents: x.price_cents, state: 'recebido', note: `Pacote mensal (${require('../packages').label(x.per_week)})` }));
   const manual = db.prepare('SELECT * FROM pro_finance_manual WHERE professional_id = ?').all(proId)
     .map((m) => ({ key: `m${m.id}`, kind: 'manual', date: m.date, name: m.name, cpf: m.cpf ? U.formatCpf(m.cpf) : '', amount_cents: m.amount_cents, state: MANUAL_STATES.includes(m.state) ? m.state : 'recebido', note: m.note }));
-  return auto.concat(manual).sort((x, y) => y.date.localeCompare(x.date));
+  return auto.concat(packs, manual).sort((x, y) => y.date.localeCompare(x.date));
 }
 
 function summarize(list) {

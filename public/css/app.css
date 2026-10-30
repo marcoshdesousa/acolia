@@ -1667,3 +1667,15 @@ dialog.wide { max-width: 640px; width: calc(100vw - 24px); }
 .crop-ring { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 999px rgba(20, 28, 26, .55); border: 2px solid rgba(255,255,255,.9); pointer-events: none; }
 .crop-zoom { display: flex; align-items: center; gap: 10px; max-width: 280px; margin: 14px auto 0; font-weight: 800; font-size: 1.2rem; color: var(--muted); }
 .crop-zoom input { flex: 1; }
+
+/* Pacote mensal (Acolia Fisio) */
+.pk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pk-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.pk-list li span { display: flex; align-items: center; gap: 8px; }
+.pk-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
+.pk-form .btn { grid-column: 1 / -1; }
+.pk-offer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.pk-offer b { display: block; }
+.pk-box { border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 14px; display: grid; gap: 10px; }
+.pk-box.mine { background: var(--primary-soft, #e5ebe8); border-color: transparent; }
+.pix-key { display: block; word-break: break-all; background: var(--bg2, #f1f0eb); padding: 8px 12px; border-radius: 10px; font-size: .95rem; }

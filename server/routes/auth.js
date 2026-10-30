@@ -238,7 +238,7 @@ router.post('/professional/login', (req, res) => {
   if (sec) {
     if (!U.verifyPassword(req.body.password || '', sec.password_hash)) {
       A.registerLoginFailure(key);
-      throw new HttpError(401, 'Código/e-mail ou senha incorretos.');
+      throw new HttpError(401, 'Código, CPF, e-mail ou senha incorretos.');
     }
     const owner = db.prepare('SELECT status FROM professionals WHERE id = ?').get(sec.professional_id);
     if (!owner || !['aprovado', 'restrito', 'bloqueado'].includes(owner.status)) throw new HttpError(403, 'A conta do profissional desta secretária não está ativa.');
@@ -250,13 +250,16 @@ router.post('/professional/login', (req, res) => {
   // Pelo código: a conta certa. Pelo e-mail: a mesma pessoa pode ter uma conta em cada portal (o e-mail dos
   // outros portais fica guardado com "#portal"); vale a do portal em que ela está (ou a única que existir).
   const mail = login.toLowerCase();
-  const found = db.prepare(`SELECT * FROM professionals WHERE (code = ? OR email = ? OR email IN (?, ?)) AND status NOT IN ('oficial', 'clinica', 'excluido')
-    ORDER BY id`).all(login.toUpperCase(), mail, `${mail}#nutri`, `${mail}#fisio`);
+  // Também pelo CPF (com ou sem pontos): 11 dígitos de um CPF válido
+  const cpf = U.onlyDigits(login);
+  const byCpf = !login.includes('@') && cpf.length === 11 && U.isValidCpf(cpf) ? cpf : '';
+  const found = db.prepare(`SELECT * FROM professionals WHERE (code = ? OR email = ? OR email IN (?, ?) OR (? <> '' AND cpf = ?)) AND status NOT IN ('oficial', 'clinica', 'excluido')
+    ORDER BY id`).all(login.toUpperCase(), mail, `${mail}#nutri`, `${mail}#fisio`, byCpf, byCpf);
   const askedPortal = PO.valid(req.body.portal) ? req.body.portal : PO.fromReq(req);
   const p = found.length > 1 ? (found.find((x) => (x.portal || 'psi') === askedPortal) || found.find((x) => U.verifyPassword(req.body.password || '', x.password_hash)) || found[0]) : found[0];
   // Cadastro em análise: ainda não tem senha — mostra o aviso com o WhatsApp de atendimento
   if (p && p.status === 'pendente') {
-    return res.status(403).json({ error: 'Seus dados estão sendo analisados pela nossa equipe. Você recebe sua senha pelo WhatsApp assim que o cadastro for aprovado.',
+    return res.status(403).json({ error: 'Seu cadastro ainda não foi confirmado. Assim que for, você recebe a sua senha de acesso único. Dúvidas? Fale com o nosso atendimento no WhatsApp.',
       pending: true, support: require('../accountState').SUPPORT_WHATSAPP, name: p.name, code: p.code });
   }
   if (p && p.password_hash === NO_PASSWORD) {
@@ -265,11 +268,11 @@ router.post('/professional/login', (req, res) => {
   }
   if (!p || !U.verifyPassword(req.body.password || '', p.password_hash)) {
     A.registerLoginFailure(key);
-    throw new HttpError(401, 'Código/e-mail ou senha incorretos.');
+    throw new HttpError(401, 'Código, CPF, e-mail ou senha incorretos.');
   }
   A.clearLoginFailures(key);
   if (p.status === 'recusado') throw new HttpError(403, 'Seu cadastro não foi aprovado. Fale com a administração.');
-  if (p.status === 'excluido') throw new HttpError(401, 'Código/e-mail ou senha incorretos.');
+  if (p.status === 'excluido') throw new HttpError(401, 'Código, CPF, e-mail ou senha incorretos.');
   A.createSession(res, 'professional', p.id);
   res.json({ ok: true });
 });

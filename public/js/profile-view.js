@@ -66,6 +66,20 @@
     window.addEventListener('popstate', onPop);
     el.addEventListener('click', (e) => { if (e.target.closest('[data-bio-back]')) history.back(); });
   }
+  // Pacotes mensais (Acolia Fisio): aparecem nos valores do perfil; o botão abre a agenda, onde a pessoa compra
+  const pkFill = (root) => root.querySelectorAll?.('[data-pk-slot]:not([data-done])').forEach(async (slot) => {
+    slot.dataset.done = '1';
+    const A = window.Acolia;
+    let d;
+    try { d = await A.api(`/api/agenda/pro/${slot.dataset.pkSlot}/packages`); } catch { return; }
+    if (!d.items.length && !d.mine.length) return;
+    slot.innerHTML = `<div class="pk-box ${d.mine.length ? 'mine' : ''}" style="margin:0"><b>Pacote mensal</b>
+      ${d.mine.length ? d.mine.map((m) => `<div class="small">Seu pacote: <b>${A.esc(m.label)}</b>, ${A.esc(m.period)}.</div>`).join('')
+        : d.items.map((o) => `<div class="row between small"><span>${A.esc(o.label)}</span><b>${A.money(o.price_cents)}/mês</b></div>`).join('')}
+      <button type="button" class="btn sm secondary" data-book="${slot.dataset.pkSlot}">${d.mine.length ? 'Marcar sessão' : 'Ver pacotes'}</button></div>`;
+  });
+  new MutationObserver((list) => list.forEach((m) => m.addedNodes.forEach((n) => n.nodeType === 1 && pkFill(n)))).observe(document.documentElement, { childList: true, subtree: true });
+
   document.addEventListener('click', (e) => {
     // "Dia disponível" no topo: desce até os valores, onde fica o botão de agendar
     const go = e.target.closest('[data-next-go]');
@@ -192,6 +206,7 @@
             ? `<div class="price-rows"><div class="row between"><span>${ic('video', 16)} Sessão online</span><b class="price">${p.price_cents != null ? money(p.price_cents) : 'A combinar'}</b></div>
                 <div class="row between"><span>${ic('home', 16)} Sessão presencial</span><b class="price">${money(p.price_presencial_cents)}</b></div></div>`
             : `<div><span class="price" style="font-size:1.5rem;font-weight:800">${p.price_cents != null ? money(p.price_cents) : 'A combinar'}</span> <span class="muted">por sessão ${p.price_presencial_cents != null ? 'online e presencial' : 'online'}</span></div>`}
+          ${p.portal === 'fisio' ? `<div data-pk-slot="${p.id}"></div>` : ''}
           ${agendaBox}
           ${insurance}
         </div>`;
