@@ -194,13 +194,13 @@
       g.restore();
     }
 
-    // Rodapé: símbolo e nome da Acolia (prova de que foi gerado pela plataforma)
+    // Rodapé: símbolo oficial e nome da Acolia Brasil (prova de que foi gerado pela plataforma), em todos os portais
     const fy = 1620;
     g.fillStyle = '#e3e2dc';
     g.fillRect(M, fy, W - 2 * M, 2);
-    const sym = await loadImg((Acolia.PORTAL_UI[p.portal] || Acolia.PORTAL_UI.psi).symbol);
+    const sym = await loadImg('/img/acolia-saude-simbolo.png');
     const word = await loadImg('/img/logo-nome.png');
-    const symW = sym ? Math.round(58 * Math.min(1, sym.width / sym.height)) : 58; // símbolos em pé (Nutri, Fisio) sem esticar
+    const symW = sym ? Math.round(58 * Math.min(1, sym.width / sym.height)) : 58; // sem esticar
     if (sym) g.drawImage(sym, M + (58 - symW) / 2, fy + 24, symW, 58);
     if (word) g.drawImage(word, M + 72, fy + 38, 160, 30);
     g.font = font(20, 400);
