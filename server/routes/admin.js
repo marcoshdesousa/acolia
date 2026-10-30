@@ -111,9 +111,18 @@ function diskUsage() {
   return usageCache.data;
 }
 
-router.get('/stats', (_req, res) => {
-  const g = (sql) => db.prepare(sql).get().n;
+router.get('/stats', (req, res) => {
+  // Portais (versão 2.0): profissionais e clínicas contam só o portal que o admin está administrando
+  // (a tabela professionals/clinics é trocada por um filtro do portal); pacientes são da conta única
+  const ap = require('../portals').adminPortal(req);
+  const g = (sql) => db.prepare(sql
+    .replace(/FROM professionals WHERE /g, "FROM professionals WHERE COALESCE(portal, 'psi') = '" + ap + "' AND ")
+    .replace(/FROM clinics WHERE /g, "FROM clinics WHERE COALESCE(portal, 'psi') = '" + ap + "' AND ")
+    .replace(/FROM clinics$/, "FROM clinics WHERE COALESCE(portal, 'psi') = '" + ap + "'")
+    .replace(/FROM conversations$/, "FROM conversations c JOIN professionals pp ON pp.id = c.professional_id WHERE COALESCE(pp.portal, 'psi') = '" + ap + "'")
+    .replace(/FROM messages$/, "FROM messages m JOIN conversations c ON c.id = m.conversation_id JOIN professionals pp ON pp.id = c.professional_id WHERE COALESCE(pp.portal, 'psi') = '" + ap + "'")).get().n;
   res.json({
+    portal: ap,
     patients: g('SELECT COUNT(*) n FROM patients'),
     patients_blocked: g("SELECT COUNT(*) n FROM patients WHERE status = 'bloqueado'"),
     professionals: g("SELECT COUNT(*) n FROM professionals WHERE status NOT IN ('oficial', 'clinica')"),
@@ -158,7 +167,8 @@ router.get('/professionals', (req, res) => {
   if ([...PRO_STATUSES, 'excluido'].includes(req.query.status)) rows = rows.filter((r) => r.status === req.query.status);
   if (req.query.status === 'vencido') rows = rows.filter((r) => r.status === 'aprovado' && !isVisible(r));
   if (req.query.status === 'ativos') rows = rows.filter((r) => !['bloqueado', 'excluido'].includes(r.status));
-  if (require('../portals').valid(req.query.portal)) rows = rows.filter((r) => (r.portal || 'psi') === req.query.portal);
+  const ap = require('../portals').valid(req.query.portal) ? req.query.portal : require('../portals').adminPortal(req);
+  rows = rows.filter((r) => (r.portal || 'psi') === ap); // só o portal que o admin está administrando
   rows = filterRows(rows, req.query);
   res.json({ items: rows.map(adminPro) });
 });
@@ -202,7 +212,7 @@ router.post('/professionals/:id/review', (req, res) => {
 // Psicanalista, psicoterapeuta e terapeuta (sem conselho) podem ser cadastrados sem registro.
 router.post('/professionals', async (req, res) => {
   const PO = require('../portals');
-  const d = validateProfessionalInput(req.body, PO.enabled() ? PO.normalize(req.body.portal) : 'psi');
+  const d = validateProfessionalInput(req.body, PO.enabled() ? (PO.valid(req.body.portal) ? req.body.portal : PO.adminPortal(req)) : 'psi');
   const R = require('../registry');
   if (R.councilFor(d.profession)) {
     const reg = R.validateRegistry(d.profession, req.body.registry, d.state);
@@ -448,7 +458,8 @@ router.get('/clinics', (req, res) => {
   const st = req.query.status === 'ativos' ? null : req.query.status;
   if (req.query.status === 'ativos') rows = rows.filter((r) => !['bloqueado', 'excluido'].includes(r.status));
   else if (['pendente', 'aprovado', 'recusado', 'bloqueado', 'excluido'].includes(st)) rows = rows.filter((r) => r.status === st);
-  if (require('../portals').valid(req.query.portal)) rows = rows.filter((r) => (r.portal || 'psi') === req.query.portal);
+  const ap = require('../portals').valid(req.query.portal) ? req.query.portal : require('../portals').adminPortal(req);
+  rows = rows.filter((r) => (r.portal || 'psi') === ap);
   const q = U.norm(req.query.q || '').trim();
   const digits = U.onlyDigits(req.query.q || '');
   if (q) rows = rows.filter((r) => U.norm(`${r.name} ${r.email} ${r.code} ${r.city}`).includes(q) || (digits.length >= 3 && String(r.doc || '').includes(digits)));
@@ -684,7 +695,7 @@ router.get('/export/patients.csv', (req, res) => {
 });
 
 router.get('/export/professionals.csv', (req, res) => {
-  const rows = filterRows(db.prepare("SELECT * FROM professionals WHERE status NOT IN ('oficial', 'clinica') ORDER BY name").all(), req.query).map(adminPro);
+  const rows = filterRows(db.prepare("SELECT * FROM professionals WHERE status NOT IN ('oficial', 'clinica') AND COALESCE(portal, 'psi') = ? ORDER BY name").all(require('../portals').adminPortal(req)), req.query).map(adminPro);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="profissionais.csv"');
   res.send(csv(rows, [['Nome', 'name'], ['Profissão', 'profession'], ['Registro', 'registry'], ['Código', 'code'], ['E-mail', 'email'],
@@ -695,12 +706,13 @@ router.get('/export/professionals.csv', (req, res) => {
 // GET: limites atuais. ?photo=&reel= mostra quantas publicações seriam apagadas com esses números.
 router.get('/limits', (req, res) => {
   const S = require('./social');
-  const lim = S.getLimits();
+  const ap = require('../portals').adminPortal(req); // cada portal tem o seu limite
+  const lim = S.getLimits(ap);
   const out = { photo: lim.photo, text: lim.text };
   const p = Number(req.query.photo);
   const t = Number(req.query.text);
   if (Number.isInteger(p) && Number.isInteger(t) && p >= 0 && t >= 0) {
-    out.would_remove = { photo: p ? S.overLimit('photo', p).length : 0, text: t ? S.overLimit('text', t).length : 0 };
+    out.would_remove = { photo: p ? S.overLimit('photo', p, null, ap).length : 0, text: t ? S.overLimit('text', t, null, ap).length : 0 };
   }
   res.json(out);
 });
@@ -712,8 +724,9 @@ router.post('/limits', (req, res) => {
   const ok = (n) => Number.isInteger(n) && n >= 0 && n <= 500;
   if (!ok(photo) || !ok(text)) throw new U.HttpError(400, 'Use números de 0 a 500 (0 = sem limite).');
   const S = require('./social');
-  S.setLimits({ photo, text });
-  const removed = S.enforceLimits();
+  const ap = require('../portals').adminPortal(req);
+  S.setLimits({ photo, text }, ap);
+  const removed = S.enforceLimits(null, ap);
   res.json({ photo, text, removed });
 });
 

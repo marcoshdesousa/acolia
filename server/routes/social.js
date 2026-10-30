@@ -289,7 +289,10 @@ async function fixOldAspects() {
 // arquivos) para a nova entrar. A Acolia Brasil (perfil oficial) não tem limite.
 // 0 = sem limite (o padrão agora). Textos também têm limite próprio. Reels foram desligados (não contam mais).
 const LIMIT_DEFAULTS = { photo: 0, text: 0, reel: 0 };
-function getLimits() {
+// Portais (versão 2.0): cada portal tem o seu limite (Psi: as chaves de sempre; Nutri/Fisio: com ":portal")
+const limKey = (k, portal) => (!portal || portal === 'psi' ? k : `${k}:${portal}`);
+const portalOfAuthor = (proId) => (db.prepare('SELECT portal FROM professionals WHERE id = ?').get(proId) || {}).portal || 'psi';
+function getLimits(portal = 'psi') {
   db.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
   const read = (k, d) => {
     const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(k);
@@ -301,25 +304,28 @@ function getLimits() {
     const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
     up.run('limit_photo_posts', '0'); up.run('limit_text_posts', '0'); up.run('limits_unlimited_v1', '1');
   }
-  return { photo: read('limit_photo_posts', LIMIT_DEFAULTS.photo), text: read('limit_text_posts', LIMIT_DEFAULTS.text), reel: 0 };
+  const k = (x) => limKey(x, portal);
+  return { photo: read(k('limit_photo_posts'), portal === 'psi' ? LIMIT_DEFAULTS.photo : 0), text: read(k('limit_text_posts'), portal === 'psi' ? LIMIT_DEFAULTS.text : 0), reel: 0 };
 }
-function setLimits({ photo, text }) {
+function setLimits({ photo, text }, portal = 'psi') {
   const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
-  up.run('limit_photo_posts', String(photo));
-  up.run('limit_text_posts', String(text));
+  up.run(limKey('limit_photo_posts', portal), String(photo));
+  up.run(limKey('limit_text_posts', portal), String(text));
 }
 // Publicações que passam do limite (as mais antigas) — de um profissional ou de todos
-function overLimit(kind, max, proId = null) {
+function overLimit(kind, max, proId = null, portal = null) {
   return db.prepare(`SELECT po.* FROM posts po WHERE po.kind = ? AND po.professional_id <> ? ${proId ? 'AND po.professional_id = ?' : ''}
+    ${portal ? "AND (SELECT COALESCE(portal, 'psi') FROM professionals x WHERE x.id = po.professional_id) = ?" : ''}
     AND (SELECT COUNT(*) FROM posts n WHERE n.professional_id = po.professional_id AND n.kind = po.kind AND n.id > po.id) >= ?`)
-    .all(...[kind, O.officialId(), ...(proId ? [proId] : []), max]);
+    .all(...[kind, O.officialId(), ...(proId ? [proId] : []), ...(portal ? [portal] : []), max]);
 }
-function enforceLimits(proId = null) {
-  const lim = getLimits();
+function enforceLimits(proId = null, portal = null) {
+  if (proId && !portal) portal = portalOfAuthor(proId);
+  const lim = getLimits(portal || 'psi');
   let removed = 0;
   for (const kind of ['photo', 'text']) {
     if (!lim[kind]) continue; // 0 = sem limite
-    for (const p of overLimit(kind, lim[kind], proId)) { deletePostFully(p); removed++; }
+    for (const p of overLimit(kind, lim[kind], proId, portal || 'psi')) { deletePostFully(p); removed++; }
   }
   return removed;
 }
@@ -447,7 +453,7 @@ function cleanupUploads() {
 
 // Quanto o profissional já usou do limite (aparece na hora de publicar)
 router.get('/limits', (req, res) => {
-  const lim = getLimits();
+  const lim = getLimits(myAuthor(req) ? portalOfAuthor(myAuthor(req)) : 'psi');
   const used = (kind) => (myAuthor(req) ? db.prepare('SELECT COUNT(*) n FROM posts WHERE professional_id = ? AND kind = ?').get(myAuthor(req), kind).n : 0);
   res.json({ photo: { max: lim.photo, used: used('photo') }, text: { max: lim.text, used: used('text') } }); // max 0 = sem limite (sem aviso)
 });

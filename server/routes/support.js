@@ -58,8 +58,8 @@ function userOf(t) {
     const p = db.prepare('SELECT id, name, handle, photo, status, is_test FROM patients WHERE id = ?').get(t.user_id);
     return p ? { id: p.id, role: 'patient', name: p.name, handle: p.handle || '', full_name: p.name, photo: p.photo, active: p.status === 'ativo', is_test: !!p.is_test } : null;
   }
-  const p = db.prepare('SELECT id, name, photo, status, profession, is_test FROM professionals WHERE id = ?').get(t.user_id);
-  return p ? { id: p.id, role: 'professional', name: p.name, photo: p.photo, profession: p.profession, active: ['aprovado', 'restrito', 'bloqueado'].includes(p.status), is_test: !!p.is_test } : null;
+  const p = db.prepare('SELECT id, name, photo, status, profession, is_test, portal FROM professionals WHERE id = ?').get(t.user_id);
+  return p ? { id: p.id, role: 'professional', portal: p.portal || 'psi', name: p.name, photo: p.photo, profession: p.profession, active: ['aprovado', 'restrito', 'bloqueado'].includes(p.status), is_test: !!p.is_test } : null;
 }
 
 function insert(t, sender, kind, body, extra = {}) {
@@ -186,7 +186,7 @@ admin.get('/threads', (req, res) => {
     const last = db.prepare(`SELECT ${COLS} FROM support_messages WHERE thread_id = ? ORDER BY id DESC LIMIT 1`).get(t.id);
     const unread = db.prepare("SELECT COUNT(*) n FROM support_messages WHERE thread_id = ? AND sender = 'user' AND read_at IS NULL").get(t.id).n;
     return { id: t.id, user: userOf(t), unread, last_message: last ? forAdmin(t)(last) : null, last_message_at: t.last_message_at };
-  }).filter((x) => x.user);
+  }).filter((x) => x.user && (x.user.role === 'patient' || x.user.portal === require('../portals').adminPortal(req))); // profissionais: só do portal administrado
   res.json({ items, unread: items.reduce((n, x) => n + x.unread, 0) });
 });
 
@@ -231,7 +231,8 @@ admin.post('/messages/:id/delete', (req, res) => {
 admin.post('/broadcast-professionals', (req, res) => {
   const body = U.cleanText(req.body.body, 4000);
   if (!body) throw new U.HttpError(400, 'Escreva a mensagem.');
-  const pros = db.prepare("SELECT id FROM professionals WHERE status IN ('aprovado', 'restrito', 'bloqueado')").all();
+  // Só os profissionais do portal que o admin está administrando
+  const pros = db.prepare("SELECT id FROM professionals WHERE status IN ('aprovado', 'restrito', 'bloqueado') AND COALESCE(portal, 'psi') = ?").all(require('../portals').adminPortal(req));
   tx(() => { for (const p of pros) insert(threadOf('professional', p.id), 'admin', 'text', body, { broadcast: true }); });
   res.json({ sent: pros.length });
 });

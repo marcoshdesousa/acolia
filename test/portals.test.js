@@ -177,6 +177,35 @@ test('portais: paciente com uma conta para os três e clínica por portal', asyn
   assert.ok(C.docTaken(doc, 0, 'nutri') && C.docTaken(doc, 0, 'fisio') && !C.docTaken(doc, 0, 'psi'));
 });
 
+test('portais: o admin administra um portal de cada vez (profissionais, clínicas, números e limites separados)', async () => {
+  const adm = client();
+  await adm.post('/api/auth/admin/login', { username: 'admin', password: 'senha-admin-123' });
+  const as = (k) => { adm.jar.set('acolia_admin_portal', k); };
+  as('fisio');
+  let pros = (await adm.get('/api/admin/professionals')).data.items;
+  assert.ok(pros.length === 2 && pros.every((p) => p.portal === 'fisio'));
+  assert.equal((await adm.get('/api/admin/clinics')).data.items.length, 1);
+  const sf = (await adm.get('/api/admin/stats')).data;
+  assert.equal(sf.portal, 'fisio');
+  assert.equal(sf.pros_active, 2);
+  as('nutri');
+  pros = (await adm.get('/api/admin/professionals')).data.items;
+  assert.ok(pros.length === 1 && pros[0].portal === 'nutri');
+  // Limite de publicações: cada portal com o seu
+  assert.equal((await adm.post('/api/admin/limits', { photo: 7, text: 0 })).status, 200);
+  assert.equal((await adm.get('/api/admin/limits')).data.photo, 7);
+  as('psi');
+  assert.equal((await adm.get('/api/admin/limits')).data.photo, 0);
+  assert.equal((await adm.get('/api/admin/professionals')).data.items.length, 0);
+  // Cadastrar profissional pelo admin: vai para o portal administrado
+  as('nutri');
+  const r = await adm.post('/api/admin/professionals', { name: 'Dora Nutri Alves', profession: 'Nutricionista', registry: 'CRN-3 99887', cpf: cpfOf(7300), email: 'dora@example.com', phone: '11988880000', state: 'SP', city: 'Campinas', specialties: ['Emagrecimento'] });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const { db } = require('../server/db');
+  assert.equal(db.prepare('SELECT portal FROM professionals WHERE id = ?').get(r.data.id).portal, 'nutri');
+  await adm.post('/api/admin/limits', { photo: 0, text: 0 });
+});
+
 test('portais: desligar e "Desistir dos portais" (o site volta ao de antes; Psi e pacientes ficam)', async () => {
   const adm = client();
   await adm.post('/api/auth/admin/login', { username: 'admin', password: 'senha-admin-123' });
@@ -196,7 +225,7 @@ test('portais: desligar e "Desistir dos portais" (o site volta ao de antes; Psi 
   assert.equal((await adm.post('/api/admin/portals/desistir', { confirm: 'sim' })).status, 400);
   const r = await adm.post('/api/admin/portals/desistir', { confirm: 'desistir' });
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.equal(r.data.removed_professionals, 3);
+  assert.equal(r.data.removed_professionals, 4);
   assert.equal(r.data.removed_clinics, 2);
   const { db } = require('../server/db');
   assert.equal(db.prepare("SELECT COUNT(*) n FROM professionals WHERE portal IN ('nutri', 'fisio') AND status <> 'excluido'").get().n, 0);

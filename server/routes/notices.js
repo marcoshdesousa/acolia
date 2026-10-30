@@ -32,7 +32,8 @@ admin.post('/', (req, res) => {
   const image = /^\/uploads\/[a-f0-9]{32}\.(jpg|png|webp)$/.test(String(req.body.image || '')) ? req.body.image : null;
   const to = [];
   if (audience !== 'professional') for (const r of db.prepare("SELECT id FROM patients WHERE status = 'ativo'").all()) to.push(['patient', r.id]);
-  if (audience !== 'patient') for (const r of db.prepare("SELECT id FROM professionals WHERE status IN ('aprovado', 'restrito', 'bloqueado')").all()) to.push(['professional', r.id]);
+  // Profissionais: só os do portal que o admin está administrando (pacientes: a conta é uma só para todos)
+  if (audience !== 'patient') for (const r of db.prepare("SELECT id FROM professionals WHERE status IN ('aprovado', 'restrito', 'bloqueado') AND COALESCE(portal, 'psi') = ?").all(require('../portals').adminPortal(req))) to.push(['professional', r.id]);
   const notice = tx(() => {
     const info = db.prepare('INSERT INTO notices (audience, text, image, sent_count) VALUES (?, ?, ?, ?)').run(audience, text, image, to.length);
     const id = Number(info.lastInsertRowid);

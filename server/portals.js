@@ -78,6 +78,14 @@ function fromReq(req) {
   return normalize(asked);
 }
 
+// Admin: o portal que ele está administrando (escolhido ao entrar; cookie acolia_admin_portal).
+// Com os portais desligados, ou sem escolha, é o Psi.
+function adminPortal(req) {
+  if (!enabled()) return 'psi';
+  const m = String(req.headers?.cookie || '').match(/(?:^|;\s*)acolia_admin_portal=([a-z]+)/);
+  return normalize(m ? m[1] : 'psi');
+}
+
 function portalOfProfession(profession) {
   return KEYS.find((k) => PORTALS[k].professions.includes(profession)) || null;
 }
@@ -95,4 +103,4 @@ function publicList() {
   });
 }
 
-module.exports = { KEYS, PORTALS, ALL_PROFESSIONS, COOKIE, valid, normalize, enabled, setEnabled, fromReq, portalOfProfession, emailKey, plainEmail, publicList };
+module.exports = { KEYS, PORTALS, ALL_PROFESSIONS, COOKIE, valid, normalize, enabled, setEnabled, fromReq, adminPortal, portalOfProfession, emailKey, plainEmail, publicList };

@@ -16,10 +16,33 @@
     });
     return;
   }
+  const cfg = await api('/api/config');
+  // Portais (versão 2.0): primeiro escolhe qual portal vai administrar (cookie acolia_admin_portal; o servidor
+  // filtra tudo por ele). A escolha vale para esta aba; ao abrir o admin de novo, pergunta outra vez.
+  const portalsOn = cfg.portals_enabled !== false;
+  let adminPortal = 'psi';
+  const setAdminPortal = (k) => { adminPortal = k; document.cookie = `acolia_admin_portal=${k}; Path=/; SameSite=Lax`; try { sessionStorage.setItem('acolia.admin.portal', k); } catch { /* nada */ } };
+  if (portalsOn) {
+    let saved = ''; try { saved = sessionStorage.getItem('acolia.admin.portal') || ''; } catch { /* nada */ }
+    if (!Acolia.PORTAL_KEYS.includes(saved)) {
+      $('[data-admin-pick]').classList.remove('hidden');
+      loadPortals().catch(() => {});
+      saved = await new Promise((resolve) => Acolia.portalPicker($('[data-admin-portals]'), {
+        notes: Object.fromEntries(Acolia.PORTAL_KEYS.map((k) => [k, `Administrar o ${Acolia.PORTAL_UI[k].name}`])),
+        onPick: resolve,
+      }));
+      $('[data-admin-pick]').classList.add('hidden');
+    }
+    setAdminPortal(saved);
+    Acolia.applyPortal(saved);
+    $('[data-logo]').innerHTML = ICONS.logo;
+    const sw = $('[data-admin-switch]');
+    sw.textContent = `${Acolia.PORTAL_UI[saved].short} · trocar`;
+    sw.classList.remove('hidden');
+    sw.addEventListener('click', () => { try { sessionStorage.removeItem('acolia.admin.portal'); } catch { /* nada */ } location.hash = ''; location.reload(); });
+  }
   $('[data-app]').classList.remove('hidden');
   $('[data-bnav]').classList.remove('hidden');
-
-  const cfg = await api('/api/config');
   let locations = {};
 
   const STATUS_BADGE = {
@@ -222,7 +245,6 @@
       if (ok && ok.ok) { toast(`Pronto: ${ok.removed_professionals} profissional(is) e ${ok.removed_clinics} clínica(s) apagados. Portais desligados.`); loadPortals(); loadStats().catch(() => {}); }
     });
   }
-  loadPortals().catch(() => {});
 
   // ---------- Profissionais ----------
   function proRow(p) {
@@ -577,9 +599,8 @@
     const P = (cfg.portals || []).find((x) => x.key === nf.portal.value);
     nf.profession.innerHTML = (P ? P.professions : cfg.professions).map((p) => `<option>${esc(p)}</option>`).join('');
   };
+  nf.portal.value = adminPortal; // cadastra no portal que está sendo administrado
   fillProfs();
-  nf.portal.addEventListener('change', () => { fillProfs(); syncReg(); });
-  if (cfg.portals_enabled === false) nf.portal.closest('.field').classList.add('hidden');
   nf.state.innerHTML = ufOptions('', 'UF');
   bindUfCity(nf.state, nf.city);
   maskPhone(nf.phone);

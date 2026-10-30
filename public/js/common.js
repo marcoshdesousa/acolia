@@ -363,7 +363,7 @@
     updatingEl = document.createElement('div');
     updatingEl.className = 'updating-screen';
     updatingEl.setAttribute('role', 'status');
-    updatingEl.innerHTML = `<div class="updating-breath" aria-hidden="true"><img src="/img/logo-simbolo.png" alt=""></div>
+    updatingEl.innerHTML = `<div class="updating-breath" aria-hidden="true"><img src="/img/acolia-saude-simbolo.png" alt=""></div>
       <h2>Estamos preparando tudo para você</h2>
       <p>A Acolia está passando por uma atualização rápida. Respire fundo: em instantes tudo volta ao normal.</p>
       <p class="small">Esta página volta sozinha assim que estiver pronta.</p>

@@ -16,7 +16,8 @@
   <link rel="stylesheet" href="/css/app.css">
   <style>
     .hub-hero { text-align: center; padding: 18px 0 8px; }
-    .hub-hero .hub-logo { width: min(300px, 56vw); margin: 0 auto 6px; }
+    .hub-hero .hub-logo { width: min(260px, 62vw); margin: 0 auto 18px; background: #faf9f5; border-radius: 28px; padding: 22px 26px 18px; box-shadow: var(--shadow); }
+    .hub-hero .hub-logo img { width: 100%; height: auto; }
     .hub-hero h1 { margin-top: 8px; }
     .hub-hero .lead { max-width: 560px; margin: 0 auto 18px; }
     .hub-portals { max-width: 980px; margin: 0 auto; }
@@ -33,10 +34,6 @@
     .hub-step .n { width: 40px; height: 40px; border-radius: 13px; background: var(--primary-strong); color: var(--on-primary); display: grid; place-items: center; flex: none; }
     .hub-step .n svg { width: 20px; height: 20px; }
     .hub-step b { display: block; }
-    .hub-pro { max-width: 980px; margin: 0 auto; background: var(--primary-strong); color: #fff; border-radius: 22px; padding: 22px; display: grid; gap: 12px; }
-    .hub-pro .eyebrow { color: #c2ae9d; }
-    .hub-pro p { color: #cfe0d6; margin: 0; }
-    .hub-pro .btn { background: #c2ae9d; color: #26322f; width: max-content; }
     .hub-hello { max-width: 560px; margin: 0 auto 16px; }
   </style>
 </head>
@@ -51,7 +48,7 @@
 
   <main class="container">
     <section class="hub-hero">
-      <img class="hub-logo" src="/img/acolia-saude.png" alt="Acolia — Saúde ao seu alcance" style="height:auto">
+      <div class="hub-logo"><img src="/img/acolia-saude.png" alt="Acolia — Saúde ao seu alcance"></div>
       <p class="eyebrow">Mente · Alimentação · Movimento</p>
       <h1>Cuidado para você por inteiro.</h1>
       <p class="lead muted">Psicologia, nutrição e fisioterapia num só aplicativo. Escolha por onde começar: dá para olhar os profissionais sem cadastro.</p>
@@ -70,15 +67,10 @@
         <div class="hub-step"><span class="n" data-i="chat"></span><div><b>Troque de portal quando quiser</b><span class="small muted">Suas conversas e consultas vão junto.</span></div></div>
         <div class="hub-step"><span class="n" data-i="video"></span><div><b>Baixe o app</b><span class="small muted">Avisos de mensagem e lembretes de consulta. <a href="#" data-install>Baixar o app</a></span></div></div>
       </div>
-      <p class="center" style="margin-top:18px" data-cta><a class="btn" href="/cadastro-paciente">Criar conta grátis</a> <a class="btn ghost" href="/entrar">Já tenho conta</a></p>
-    </section>
-
-    <section class="section">
-      <div class="hub-pro">
-        <p class="eyebrow">Para profissionais</p>
-        <h2 style="margin:0">Atenda pela Acolia</h2>
-        <p>Agenda, chat, videochamada, documentos e financeiro. Zero comissão nas consultas. Psicologia, nutrição, fisioterapia, Pilates, yoga e mais.</p>
-        <a class="btn" href="/cadastro-profissional">Teste 7 dias grátis</a>
+      <div class="row" style="justify-content:center;margin-top:18px;gap:10px" data-cta>
+        <a class="btn" href="/cadastro-paciente">Criar conta</a>
+        <a class="btn secondary" href="/cadastro-profissional">Sou profissional</a>
+        <a class="btn ghost" href="/entrar">Já tenho conta</a>
       </div>
     </section>
   </main>
