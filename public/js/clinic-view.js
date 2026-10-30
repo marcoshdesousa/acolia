@@ -126,7 +126,7 @@
       const d = await api('/api/clinics?' + qs);
       if (first) { st.innerHTML = window.Acolia.ufOptions(d.state || '', 'Todos os estados'); window.Acolia.bindUfCity(st, ct); ct.value = ''; first = false; }
       $('[data-cv-list]', page.body).innerHTML = d.items.length ? `<div class="clinic-list">${d.items.map((c) => `<button type="button" class="card clinic-item" data-cv-open="${c.slug || c.id}">
-          ${logoOf(c, 'md')}<span class="grow"><b>${esc(c.name)}</b><small class="muted">${esc(c.city)} - ${esc(c.state)}${c.near ? ' · perto de você' : ''}</small>
+          ${logoOf(c, 'md')}<span class="grow"><b>${esc(c.name)}${c.portal && window.Acolia.PORTAL_UI?.[c.portal] && document.documentElement.dataset.portal ? ` <span class="ptag ${esc(c.portal)}">${window.Acolia.PORTAL_UI[c.portal].short}</span>` : ''}</b><small class="muted">${esc(c.city)} - ${esc(c.state)}${c.near ? ' · perto de você' : ''}</small>
           ${c.has_doctors ? '<small class="muted">Também tem médicos</small>' : ''}</span><span class="muted" aria-hidden="true">›</span></button>`).join('')}</div>`
         : '<div class="empty">Ainda não há clínicas cadastradas neste lugar.</div>';
     }

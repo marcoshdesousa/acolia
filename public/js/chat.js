@@ -4,7 +4,7 @@
   'use strict';
   const { $, $$, esc, api, ICONS, avatar, fmtTime, fmtDay, fmtShort, toast, modal, copyText, money } = window.Acolia;
 
-  function mount(root, { role, me, socket, secretary = false, onUnreadChange = () => {}, onNavigate = () => {} }) {
+  function mount(root, { role, me, socket, secretary = false, onUnreadChange = () => {}, onNavigate = () => {}, onPortal = null }) {
     const getMe = typeof me === 'function' ? me : () => me;
     const state = { archived: false, list: [], current: null, messages: [], hasMore: false, loadingOlder: false, typingTimer: null, support: null };
     // Suporte Acolia: conversa fixa no topo (endereços próprios em /api/support)
@@ -175,6 +175,8 @@
       try {
         const conv = await api(`/api/chat/conversations/${id}`);
         state.current = conv;
+        // Portais: conversa com profissional de outro portal → o app passa para o portal dele
+        if (onPortal && conv.peer?.portal && window.Acolia.portal() && conv.peer.portal !== window.Acolia.portal()) onPortal(conv.peer.portal);
         const data = await api(`/api/chat/conversations/${id}/messages`);
         state.messages = data.items;
         state.hasMore = data.has_more;

@@ -46,8 +46,8 @@ router.get('/clinics', (req, res) => {
   const state = all ? '' : U.isUf(req.query.state) ? req.query.state.toUpperCase() : (me?.state || '');
   const city = U.norm(req.query.city || '').trim();
   const myCity = me?.city ? U.norm(me.city) : '';
-  // Cada portal tem as suas clínicas
-  let rows = db.prepare(`SELECT * FROM clinics c WHERE ${C.VISIBLE_SQL} AND COALESCE(c.portal, 'psi') = ?`).all(require('../portals').fromReq(req));
+  // A aba Clínicas mostra as clínicas dos três portais (cada uma com a etiqueta do seu portal)
+  let rows = db.prepare(`SELECT * FROM clinics c WHERE ${C.VISIBLE_SQL}`).all();
   if (state) rows = rows.filter((c) => c.state === state);
   if (city) rows = rows.filter((c) => (c.city_norm || '').includes(city));
   // O município da pessoa aparece primeiro

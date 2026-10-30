@@ -227,6 +227,13 @@
     setTimeout(() => AcoliaAgenda.askRatings(), 1500); // avaliar a consulta que acabou (1 a 5 estrelas)
     const chat = AcoliaChat.mount($('[data-chat]'), {
       role: 'patient', me, socket, onUnreadChange: setUnread,
+      // Abriu a conversa com um profissional de outro portal: o app passa para o portal dele
+      onPortal: (k) => {
+        Acolia.setPortal(k);
+        api('/api/patient/portal', { method: 'POST', body: { portal: k } }).catch(() => {});
+        portalChanged = true;
+        toast(`Você está no ${Acolia.PORTAL_UI[k].name}`);
+      },
       onNavigate: (id) => { const h = id ? '#chat/' + id : '#chat'; if (location.hash !== h && location.hash.startsWith('#chat')) history.replaceState(null, '', h); },
     });
 
@@ -238,6 +245,7 @@
       onAllPosts: (id, kind) => { location.hash = 'posts/' + id + '/' + (kind || 'photo'); } });
 
     let catalogMounted = false;
+    let portalChanged = false; // trocou de portal pela conversa: a vitrine e o feed recarregam ao voltar
     let backTo = '#buscar';
     async function route() {
       const [view, arg] = (location.hash.slice(1) || 'inicio').split('/');
@@ -253,6 +261,7 @@
         return;
       }
       const v = ['inicio', 'buscar', 'clinicas', 'perfil', 'posts', 'chat', 'config', 'planos'].includes(view) ? view : 'inicio';
+      if (portalChanged && (v === 'inicio' || v === 'buscar')) { location.reload(); return; }
       if (v === 'inicio' || v === 'buscar') backTo = '#' + v;
       $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
       $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'perfil' || v === 'posts' ? backTo.slice(1) : v)));
