@@ -404,7 +404,8 @@
   }
 
   const ICONS = {
-    logo: '<img class="brand-mark" src="/img/logo-simbolo.png" alt="" width="34" height="34">',
+    // Símbolo do portal atual (Psi, Nutri ou Fisio; sem portal, o de sempre)
+    get logo() { return `<img class="brand-mark" src="${(PORTAL_UI[document.documentElement.dataset.portal] || PORTAL_UI.psi).symbol}" alt="" width="34" height="34">`; },
     therapist: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M9.5 7.5h.01M14.5 7.5h.01"/><path d="M10.5 10c.9.6 2.1.6 3 0"/><path d="M8 3.8C9 2.7 10.4 2 12 2s3 .7 4 1.8"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/><path d="M12 14v3"/></svg>',
     search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
     chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-12.4 7.6L3 21l1.5-5.2A8.5 8.5 0 1 1 21 12z"/></svg>',
@@ -1021,10 +1022,112 @@
       <input name="${k}" value="${esc(values[k] || '')}" maxlength="200" placeholder="${esc(s.ph)}" aria-label="${esc(s.name)}" autocomplete="off" autocapitalize="none" spellcheck="false"></label>`).join('')}</div>`;
   }
 
+  // ---------- Portais (versão 2.0): Acolia Psi, Nutri e Fisio ----------
+  // Um app, um banco e três portais, cada um com a sua logo e a sua cor. O paciente usa os três (escolhe e
+  // troca); profissional e clínica ficam no portal da conta. O portal atual vai no cookie acolia_portal
+  // (o servidor filtra a vitrine, o feed e as clínicas por ele) e no <html data-portal> (cores do CSS).
+  const PORTAL_UI = {
+    psi: { key: 'psi', name: 'Acolia Psi', short: 'Psi', area: 'Saúde mental', symbol: '/img/logo-simbolo.png', logo: '/img/logo-completo.png',
+      who: 'Psicólogos, psicanalistas, terapeutas e psiquiatras', proHint: 'Psicólogo, psicanalista, psiquiatra…',
+      eyebrow: 'Escuta · Equilíbrio · Evolução', title: 'Saúde mental ao seu alcance.',
+      lead: 'Encontre psicólogos, psicanalistas e psiquiatras verificados. Converse pelo chat e faça sua consulta online por vídeo, com sigilo.',
+      features: [['shield', 'Profissionais verificados', 'Todo profissional informa o seu registro (CRP, CRM…) e passa por aprovação antes de aparecer.'],
+        ['chat', 'Chat direto', 'Tire dúvidas e combine sua consulta direto com o profissional, sem precisar de WhatsApp.'],
+        ['video', 'Consulta por vídeo', 'Atendimento online por vídeo ou voz, com privacidade, de onde você estiver.'],
+        ['pin', 'Perto de você', 'Escolha um profissional perto de você ou de outro lugar.']] },
+    nutri: { key: 'nutri', name: 'Acolia Nutri', short: 'Nutri', area: 'Nutrição e alimentação', symbol: '/img/portal-nutri-simbolo.png', logo: '/img/portal-nutri.png',
+      who: 'Nutricionistas, nutrólogos e alimentação saudável', proHint: 'Nutricionista, nutrólogo, chef saudável…',
+      eyebrow: 'Sabor · Equilíbrio · Saúde', title: 'Nutrição para uma vida melhor.',
+      lead: 'Encontre nutricionistas e nutrólogos verificados. Converse pelo chat e faça sua consulta online ou presencial.',
+      features: [['shield', 'Profissionais verificados', 'Registro no CRN ou CRM informado no cadastro e conferido pela equipe.'],
+        ['chat', 'Chat direto', 'Tire dúvidas e combine sua consulta direto com o profissional, sem precisar de WhatsApp.'],
+        ['video', 'Online ou presencial', 'Consulta por vídeo de onde você estiver ou no consultório.'],
+        ['pin', 'Perto de você', 'Escolha um profissional perto de você ou de outro lugar.']] },
+    fisio: { key: 'fisio', name: 'Acolia Fisio', short: 'Fisio', area: 'Movimento e reabilitação', symbol: '/img/portal-fisio-simbolo.png', logo: '/img/portal-fisio.png',
+      who: 'Fisioterapia, Pilates, yoga e personal', proHint: 'Fisioterapeuta, Pilates, yoga, personal…',
+      eyebrow: 'Movimento · Força · Bem-estar', title: 'Movimento para uma vida melhor.',
+      lead: 'Encontre fisioterapeutas, instrutores de Pilates e yoga e personal trainers. Converse pelo chat e marque online ou presencial.',
+      features: [['shield', 'Profissionais verificados', 'CREFITO, CREF ou CRM informados no cadastro e conferidos pela equipe.'],
+        ['chat', 'Chat direto', 'Tire dúvidas e combine o atendimento direto com o profissional, sem precisar de WhatsApp.'],
+        ['video', 'Online ou presencial', 'Atendimento por vídeo ou no consultório e estúdio.'],
+        ['pin', 'Perto de você', 'Escolha um profissional perto de você ou de outro lugar.']] },
+  };
+  const PORTAL_KEYS = ['psi', 'nutri', 'fisio'];
+  const validPortal = (k) => PORTAL_KEYS.includes(k);
+  function readCookiePortal() { const m = document.cookie.match(/(?:^|;\s*)acolia_portal=([a-z]+)/); return m && validPortal(m[1]) ? m[1] : ''; }
+  function storedPortal() { try { return localStorage.getItem('acolia.portal') || ''; } catch { return ''; } }
+  // Portal atual (sem escolha ainda: '')
+  function portal() {
+    const d = document.documentElement.dataset.portal;
+    if (validPortal(d)) return d;
+    const k = readCookiePortal() || storedPortal();
+    return validPortal(k) ? k : '';
+  }
+  function applyPortal(k) {
+    const key = validPortal(k) ? k : 'psi';
+    document.documentElement.dataset.portal = key;
+    const ui = PORTAL_UI[key];
+    $$('img.brand-mark').forEach((img) => { img.src = ui.symbol; });
+    $$('.brand').forEach((b) => {
+      if (b.closest('[data-no-portal]')) return;
+      let tag = b.querySelector('.portal-tag');
+      if (!tag) { tag = document.createElement('span'); tag.className = 'portal-tag'; b.querySelector('.brand-word')?.after(tag); }
+      tag.textContent = ui.short;
+    });
+  }
+  // Escolhe o portal (guarda no aparelho e no cookie para o servidor)
+  function setPortal(k, { persist = true } = {}) {
+    if (!validPortal(k)) return;
+    if (persist) {
+      try { localStorage.setItem('acolia.portal', k); } catch { /* sem armazenamento */ }
+      document.cookie = `acolia_portal=${k}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    }
+    applyPortal(k);
+  }
+  // Os portais estão ligados? (o admin pode desligar e o site volta a ser só o Psi)
+  let portalsOnP = null;
+  function portalsOn() {
+    return (portalsOnP ||= fetch('/api/config', { cache: 'no-store' }).then((r) => r.json()).then((c) => c.portals_enabled !== false).catch(() => false));
+  }
+  // Lista dos 3 portais para escolher. mode 'radio': marca um (cadastro); 'link': cada um é um link.
+  function portalPicker(el, { selected = '', onPick = null, href = null, notes = {} } = {}) {
+    el.classList.add('portal-pick');
+    el.innerHTML = PORTAL_KEYS.map((k) => {
+      const u = PORTAL_UI[k];
+      const inner = `<span class="po-logo"><img src="${u.symbol}" alt=""></span>
+        <span><b>${u.name}</b><small>${esc(notes[k] || `${u.area} · ${u.who}`)}</small></span>
+        <span class="po-go" aria-hidden="true">${href ? '›' : `<span class="po-dot"></span>`}</span>`;
+      return href ? `<a class="portal-opt" data-k="${k}" href="${esc(href(k))}">${inner}</a>`
+        : `<button type="button" class="portal-opt${k === selected ? ' on' : ''}" data-k="${k}" aria-pressed="${k === selected}">${inner}</button>`;
+    }).join('');
+    if (!href) {
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('.portal-opt');
+        if (!b) return;
+        $$('.portal-opt', el).forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); });
+        onPick?.(b.dataset.k);
+      });
+    } else if (onPick) {
+      el.addEventListener('click', (e) => { const a = e.target.closest('.portal-opt'); if (a) onPick(a.dataset.k); });
+    }
+  }
+  // Na abertura de cada página: aplica a cor e a logo do portal (desligados: tudo como antes)
+  (function bootPortal() {
+    if (document.documentElement.hasAttribute('data-no-portal')) return; // página principal e admin
+    const k = portal();
+    if (k && k !== 'psi') document.documentElement.dataset.portal = k; // cor certa já no 1º desenho
+    const run = () => portalsOn().then((on) => {
+      if (!on) { delete document.documentElement.dataset.portal; $$('.portal-tag').forEach((t) => t.remove()); return; }
+      if (portal()) applyPortal(portal());
+    });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
+  })();
+
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
     supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
     handleForm, logout, showBlocked, verifiedBadge, ratingHtml, STAR, pixBox, renewPix, platformPixOn, showNeedsCpf, showNeedsPassword, installBanner, namePicker, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
     SOCIAL, socialLinks, socialFields,
+    PORTAL_UI, PORTAL_KEYS, portal, setPortal, applyPortal, portalsOn, portalPicker,
   };
 })();

@@ -19,7 +19,15 @@
   <main class="narrow" style="padding-top:32px;padding-bottom:48px">
     <h1 class="center">Criar sua conta</h1>
     <p class="center muted">Com a conta você vê os valores, o endereço e a galeria completa dos profissionais, conversa pelo chat e faz sua consulta.</p>
+    <!-- Portais (versão 2.0): primeiro o portal, depois os dados (a conta vale nos três) -->
+    <section class="card hidden" data-step-portal>
+      <h2 style="margin-bottom:4px">Qual portal você procura?</h2>
+      <p class="small muted">Sua conta vai valer nos 3. Este é só o primeiro: dá para trocar quando quiser.</p>
+      <div data-portal-pick></div>
+      <button class="btn block" type="button" data-portal-next style="margin-top:14px" disabled>Continuar</button>
+    </section>
     <form class="card" data-form novalidate>
+      <p class="small hidden" data-portal-chosen style="margin:0 0 12px"></p>
       <div class="field"><label for="name">Nome completo</label><input id="name" name="name" autocomplete="name" required maxlength="120">
         <div class="hint">Igual ao que consta no seu CPF.</div></div>
       <div class="field"><label for="handle">Escolha o seu @</label>
@@ -62,6 +70,30 @@
     const next = new URLSearchParams(location.search).get('next');
     const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
     if (safeNext) $('a[href="/entrar"]').href = '/entrar?next=' + encodeURIComponent(safeNext);
+    // 1º passo: escolher o portal (com os portais desligados, vai direto para os dados)
+    let portal = '';
+    const asked = new URLSearchParams(location.search).get('portal');
+    Acolia.portalsOn().then((on) => {
+      if (!on) return;
+      portal = Acolia.PORTAL_KEYS.includes(asked) ? asked : Acolia.portal();
+      form.classList.add('hidden');
+      $('[data-step-portal]').classList.remove('hidden');
+      const go = $('[data-portal-next]');
+      go.disabled = !portal;
+      Acolia.portalPicker($('[data-portal-pick]'), { selected: portal, onPick: (k) => { portal = k; go.disabled = false; Acolia.setPortal(k); } });
+      go.addEventListener('click', () => {
+        if (!portal) return;
+        Acolia.setPortal(portal);
+        $('[data-step-portal]').classList.add('hidden');
+        form.classList.remove('hidden');
+        const u = Acolia.PORTAL_UI[portal];
+        const c = $('[data-portal-chosen]');
+        c.innerHTML = `<img src="${u.symbol}" alt="" style="width:26px;height:26px;display:inline-block;vertical-align:middle;margin-right:6px"><b>${u.name}</b> · <a href="#" data-portal-back>trocar</a>`;
+        c.classList.remove('hidden');
+        $('[data-portal-back]').addEventListener('click', (e) => { e.preventDefault(); form.classList.add('hidden'); $('[data-step-portal]').classList.remove('hidden'); });
+        scrollTo(0, 0);
+      });
+    });
     form.state.innerHTML = ufOptions('', 'UF');
     bindUfCity(form.state, form.city);
     form.birth_date.max = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
@@ -81,12 +113,12 @@
       if (!d.terms) throw new Error('Para continuar, aceite o uso dos dados.');
       try {
         // Veio do link de um profissional (a página dele): ele recebe o aviso do novo paciente
-        await api('/api/auth/patient/register', { method: 'POST', body: { ...d, ref: safeNext || '' } });
+        await api('/api/auth/patient/register', { method: 'POST', body: { ...d, ref: safeNext || '', portal } });
       } catch (e) {
         if (e.data?.cpf_exists) { Acolia.cpfExistsDialog({ role: 'patient', cpf: d.cpf }); return; }
         throw e;
       }
-      location.replace(safeNext || '/');
+      location.replace(safeNext || (portal ? `/app?portal=${portal}` : '/'));
     });
   })();
   </script>

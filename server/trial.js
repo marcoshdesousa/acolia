@@ -32,8 +32,11 @@ if (!db.prepare("SELECT 1 FROM settings WHERE key = 'trial_verified_v1'").get())
   db.prepare("INSERT INTO settings (key, value) VALUES ('trial_verified_v1', datetime('now'))").run();
 }
 
-const eligible = (cpf) => on() && !!cpf && !db.prepare('SELECT 1 FROM free_trials WHERE cpf = ?').get(U.onlyDigits(cpf));
-const markUsed = (cpf) => { if (cpf) db.prepare('INSERT OR IGNORE INTO free_trials (cpf) VALUES (?)').run(U.onlyDigits(cpf)); };
+// Portais (versão 2.0): os 7 dias valem uma vez por CPF em CADA portal. No Psi a chave é o CPF (como
+// sempre foi); nos outros, "CPF:portal" (ex.: 12345678909:nutri).
+const trialKey = (cpf, portal) => (!portal || portal === 'psi' ? U.onlyDigits(cpf) : `${U.onlyDigits(cpf)}:${portal}`);
+const eligible = (cpf, portal) => on() && !!cpf && !db.prepare('SELECT 1 FROM free_trials WHERE cpf = ?').get(trialKey(cpf, portal));
+const markUsed = (cpf, portal) => { if (cpf) db.prepare('INSERT OR IGNORE INTO free_trials (cpf) VALUES (?)').run(trialKey(cpf, portal)); };
 
 // Dar ou tirar o selo. Ao dar, o profissional vê "Você é verificado!" no próximo acesso e recebe a notificação.
 function setVerified(proId, on) {

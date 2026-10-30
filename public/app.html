@@ -124,6 +124,38 @@
     if (auth.account?.blocked) { Acolia.showBlocked(auth); return; } // perfil bloqueado: só a tela de bloqueio
     let me = auth.user;
     $('[data-logo]').innerHTML = ICONS.logo;
+    // Portais (versão 2.0): a conta vale nos três. Abre no portal pedido (?portal=), no último usado ou
+    // pergunta; o botão de quadradinhos no topo troca (conversas e consultas continuam as mesmas).
+    if (await Acolia.portalsOn()) {
+      const qp = new URLSearchParams(location.search).get('portal');
+      const keys = Acolia.PORTAL_KEYS;
+      let cur = keys.includes(qp) ? qp : (keys.includes(Acolia.portal()) ? Acolia.portal() : (keys.includes(me.last_portal) ? me.last_portal : ''));
+      if (qp) history.replaceState(null, '', location.pathname + location.hash);
+      const choose = (first) => new Promise((resolve) => {
+        let picked = cur;
+        Acolia.modal({
+          title: first ? `Olá, ${String(me.name).split(' ')[0]}! Em qual portal você quer entrar?` : 'Trocar de portal',
+          html: `<p class="small muted" style="margin-top:0">${first ? 'Sua conta vale nos 3. Dá para trocar quando quiser pelo botão no topo.' : 'Sua conta, conversas e consultas continuam as mesmas.'}</p><div data-pp></div>`,
+          locked: first,
+          actions: first ? [] : [{ label: 'Voltar para a página da Acolia', class: 'secondary', value: 'hub' }],
+          onOpen: (dlg) => Acolia.portalPicker($('[data-pp]', dlg), { selected: picked, onPick: (k) => { picked = k; dlg.close(); dlg.remove(); resolve(k); } }),
+        }).then((v) => { if (v === 'hub') location.href = '/'; });
+      });
+      if (!cur) cur = await choose(true);
+      Acolia.setPortal(cur);
+      if (cur !== me.last_portal) api('/api/patient/portal', { method: 'POST', body: { portal: cur } }).catch(() => {});
+      const sw = document.createElement('button');
+      sw.type = 'button'; sw.className = 'icon-btn portal-switch'; sw.title = 'Trocar de portal'; sw.setAttribute('aria-label', 'Trocar de portal');
+      sw.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>';
+      sw.addEventListener('click', async () => {
+        const k = await choose(false);
+        if (!k || k === Acolia.portal()) return;
+        Acolia.setPortal(k);
+        await api('/api/patient/portal', { method: 'POST', body: { portal: k } }).catch(() => {});
+        location.hash = ''; location.reload(); // vitrine, feed e clínicas do portal novo
+      });
+      document.querySelector('.topbar nav').prepend(sw);
+    }
     $$('[data-i]').forEach((el) => { el.outerHTML = ICONS[el.dataset.i]; });
 
     function renderMe() {

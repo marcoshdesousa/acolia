@@ -14,6 +14,8 @@
   // Versão 1.1.3: secretária usa este mesmo painel, com limites (ver js/secretary.js)
   const isSec = !!auth.secretary;
   const cfg = await api('/api/config');
+  // Portais (versão 2.0): o painel tem a logo e a cor do portal da conta (não muda o portal do aparelho)
+  if (cfg.portals_enabled !== false) Acolia.applyPortal(me.portal || 'psi');
 
   $('[data-logo]').innerHTML = ICONS.logo;
   $$('[data-i]').forEach((el) => { el.outerHTML = ICONS[el.dataset.i]; });

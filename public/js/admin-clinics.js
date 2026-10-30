@@ -18,7 +18,7 @@
     const { items } = await api('/api/admin/clinics?' + qs);
     items.forEach((c) => ITEMS.set(c.id, c));
     $('[data-crows]').innerHTML = items.length ? items.map((c) => `<tr>
-        <td><div class="row" style="flex-wrap:nowrap">${window.AcoliaClinicsLogo(c)}<div><b>${esc(c.name)}</b><div class="small muted">${esc(c.email)} · <code>${esc(c.code)}</code></div></div></div></td>
+        <td><div class="row" style="flex-wrap:nowrap">${window.AcoliaClinicsLogo(c)}<div><b>${esc(c.name)}</b><div class="small muted">${c.portal && Acolia.PORTAL_UI[c.portal] ? `<span class="ptag ${esc(c.portal)}">${Acolia.PORTAL_UI[c.portal].short}</span> ` : ''}${esc(c.email)} · <code>${esc(c.code)}</code></div></div></div></td>
         <td style="white-space:nowrap">${esc(c.doc || '—')}</td><td>${esc(c.city)} - ${esc(c.state)}</td><td>${badge(c.status)}${c.review_pending ? ' <span class="badge warn" title="Pagou o Pix e entrou direto: confira os dados">Conferir dados</span>' : ''}</td>
         <td>${c.status === 'aprovado' ? (c.visible ? `<span class="badge ok">Até ${br(c.subscription_until)}</span>` : `<span class="badge danger">Vencida ${br(c.subscription_until)}</span>`) : '—'}</td>
         <td><button class="btn secondary sm" data-copen="${c.id}">Gerenciar</button></td></tr>`).join('')

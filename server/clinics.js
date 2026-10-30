@@ -65,7 +65,9 @@ function parseDoc(v) {
   throw new U.HttpError(400, 'Informe um CPF ou CNPJ válido do responsável pela clínica.');
 }
 const fmtDoc = (type, d) => (!d ? '' : type === 'cnpj' ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : U.formatCpf(d));
-const docTaken = (doc, exceptId = 0) => !!db.prepare("SELECT 1 FROM clinics WHERE doc = ? AND status <> 'excluido' AND id <> ?").get(doc, exceptId);
+// Uma clínica por CPF/CNPJ em cada portal (portal = null: em qualquer portal)
+const docTaken = (doc, exceptId = 0, portal = null) => !!db.prepare(`SELECT 1 FROM clinics WHERE doc = ? AND status <> 'excluido' AND id <> ?
+  ${portal ? "AND COALESCE(portal, 'psi') = ?" : ''}`).get(doc, exceptId, ...(portal ? [portal] : []));
 const parseDoctors = (v) => {
   let list = v;
   if (typeof v === 'string') { try { list = JSON.parse(v); } catch { list = v.split(','); } }
@@ -110,6 +112,8 @@ function authorOf(clinicId) {
     VALUES (?, ?, ?, 'Clínica', '', ?, '', ?, 'clinica')`)
     .run(code, c.name, c.name, `clinica-${code.toLowerCase()}@acolia.invalid`, U.hashPassword(crypto.randomBytes(24).toString('hex')));
   const id = Number(info.lastInsertRowid);
+  // A linha autora fica no mesmo portal da clínica (o feed separa por portal)
+  db.prepare("UPDATE professionals SET portal = (SELECT COALESCE(portal, 'psi') FROM clinics WHERE id = ?) WHERE id = ?").run(c.id, id);
   db.prepare('UPDATE clinics SET author_id = ? WHERE id = ?').run(id, c.id);
   return id;
 }
@@ -139,7 +143,7 @@ function publicClinic(c, { loggedIn = false, viewer = null, full = false } = {})
   }
   return {
     ...social,
-    id: c.id, kind: 'clinic', name: c.name, slug: c.slug, logo: c.logo, bio: c.bio, state: c.state, city: c.city,
+    id: c.id, kind: 'clinic', portal: c.portal || 'psi', name: c.name, slug: c.slug, logo: c.logo, bio: c.bio, state: c.state, city: c.city,
     address: loggedIn ? c.address : '', maps_url: loggedIn ? c.maps_url : '',
     map_embed: loggedIn && c.maps_query ? maps.embedUrl?.(c.maps_query) || '' : '',
     has_doctors: !!c.has_doctors, doctors: c.has_doctors ? doctorsOf(c) : [],
@@ -148,7 +152,7 @@ function publicClinic(c, { loggedIn = false, viewer = null, full = false } = {})
 }
 function ownClinic(c) {
   return {
-    id: c.id, kind: 'clinic', code: c.code, status: c.status, name: c.name, doc_type: c.doc_type, doc: fmtDoc(c.doc_type, c.doc), responsible: c.responsible,
+    id: c.id, kind: 'clinic', portal: c.portal || 'psi', code: c.code, status: c.status, name: c.name, doc_type: c.doc_type, doc: fmtDoc(c.doc_type, c.doc), responsible: c.responsible,
     email: c.email, phone: c.phone, logo: c.logo, bio: c.bio, state: c.state, city: c.city, address: c.address, maps_url: c.maps_url,
     has_doctors: !!c.has_doctors, doctors: doctorsOf(c), slug: c.slug, plan: c.plan, plan_label: PLANS[c.plan] || c.plan,
     subscription_until: c.subscription_until, visible: isVisible(c),

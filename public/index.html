@@ -94,6 +94,27 @@
   (async function () {
     const { $, $$, api, ICONS, esc } = Acolia;
     $('[data-logo]').innerHTML = ICONS.logo;
+    // Portais (versão 2.0): site.com/psi, /nutri e /fisio usam esta mesma página com a logo, a cor e os
+    // textos do portal (o servidor marca <html data-portal> e o cookie, que filtra a vitrine)
+    const pk = document.documentElement.dataset.portal;
+    const PU = pk && Acolia.PORTAL_UI[pk];
+    if (PU) {
+      Acolia.setPortal(pk);
+      document.title = `${PU.name} — ${PU.title.replace(/\.$/, '')}`;
+      $('.hero .eyebrow').textContent = PU.eyebrow;
+      $('.hero h1').textContent = PU.title;
+      $('.hero .lead').textContent = PU.lead;
+      $$('.choice')[1].querySelector('span > span').textContent = PU.proHint;
+      const logo = $('.hero-logo img');
+      logo.src = PU.logo; logo.alt = PU.name; logo.removeAttribute('width'); logo.removeAttribute('height');
+      $('.hero-logo').style.padding = '18px';
+      $('.features').innerHTML = PU.features.map(([i, t, d]) => `<div class="card flat feature"><span data-i="${i}"></span><h3>${esc(t)}</h3><p class="muted small">${esc(d)}</p></div>`).join('');
+      $$('a[href="/cadastro-paciente"], a[href="/cadastro-profissional"]').forEach((a) => { a.href += `?portal=${pk}`; });
+      $('.footer-brand p').textContent = `${PU.name}: ${PU.area.toLowerCase()}. Profissionais verificados, chat e atendimento online e presencial em um só lugar.`;
+      const back = document.createElement('a');
+      back.className = 'btn secondary sm'; back.href = '/'; back.textContent = '‹ Acolia'; back.title = 'Voltar para a página da Acolia';
+      $('[data-nav]').prepend(back);
+    }
     $('[data-year]').textContent = new Date().getFullYear();
     $$('[data-i]').forEach((el) => { if (el.classList.contains('choice-icon')) el.innerHTML = ICONS[el.dataset.i]; else el.outerHTML = ICONS[el.dataset.i]; });
     // Voltou pelo "voltar" do navegador depois de sair/entrar: recarrega para mostrar o estado certo
@@ -103,14 +124,14 @@
     // Já entrou: a página inicial mostra o botão para abrir o app (paciente), o sistema
     // (profissional) ou o administrativo (admin), e um "Sair" para trocar de conta
     const ENTER = {
-      patient: { href: '/app', label: 'Entrar no aplicativo' },
+      patient: { href: pk ? `/app?portal=${pk}` : '/app', label: 'Entrar no aplicativo' },
       professional: { href: '/painel', label: 'Entrar no sistema' },
       admin: { href: '/admin', label: 'Entrar no administrativo' },
       clinic: { href: '/clinica', label: 'Entrar no painel da clínica' },
     }[me.role];
     if (ENTER) {
       const first = String((me.user && (me.user.display_name || me.user.name || me.user.username)) || '').trim().split(/\s+/)[0];
-      nav.innerHTML = `<a class="btn sm" href="${ENTER.href}">${ENTER.label}</a>`;
+      nav.innerHTML = `${PU ? '<a class="btn secondary sm" href="/">‹ Acolia</a> ' : ''}<a class="btn sm" href="${ENTER.href}">${ENTER.label}</a>`;
       $('[data-choose]').innerHTML = `<div class="enter-box card">
           <div class="muted">${first ? `Olá, <b>${esc(first)}</b>! ` : ''}Você já está conectado.</div>
           <a class="btn block enter-btn" href="${ENTER.href}" data-enter>${ENTER.label} →</a>
@@ -122,7 +143,7 @@
     AcoliaCatalog.mount($('[data-catalog]'), {
       loggedIn: me.role === 'patient',
       me: me.role === 'patient' ? me.user : null,
-      profileHref: (p) => me.role === 'patient' ? `/app#perfil/${p.id}` : `/${p.slug || 'profissional?id=' + p.id}`,
+      profileHref: (p) => me.role === 'patient' ? `/app${pk ? `?portal=${pk}` : ''}#perfil/${p.id}` : `/${p.slug || 'profissional?id=' + p.id}`,
       onMessage: (id) => { location.href = `/app#conversar/${id}`; },
     });
   })();

@@ -188,10 +188,46 @@
   });
   loadLimits().catch(() => {});
 
+  // ---------- Portais (versão 2.0) ----------
+  // Ligar/desligar sem apagar nada, ou "Desistir dos portais": apaga as contas do Nutri e do Fisio e volta ao de antes
+  async function loadPortals(data) {
+    const box = $('[data-portals-card]');
+    const d = data || await api('/api/admin/portals');
+    box.innerHTML = `<p style="margin-top:0">${d.enabled ? '<span class="badge ok">Ligados</span> A página inicial é a da Acolia (com os 3 portais) e cada portal tem a sua vitrine, feed e clínicas.'
+      : '<span class="badge">Desligados</span> O site está como antes: só o Psi, com a página inicial antiga.'}</p>
+      <div class="table-wrap"><table><thead><tr><th>Portal</th><th>Profissionais</th><th>Clínicas</th></tr></thead><tbody>
+      ${d.portals.map((x) => `<tr><td><span class="ptag ${x.key}">${esc((Acolia.PORTAL_UI[x.key] || {}).short || x.key)}</span> ${esc(x.name)}</td><td>${x.pros}</td><td>${x.clinics}</td></tr>`).join('')}</tbody></table></div>
+      <div class="row" style="margin-top:12px;gap:8px">
+        <button class="btn secondary sm" type="button" data-portals-toggle>${d.enabled ? 'Desligar os portais (sem apagar nada)' : 'Ligar os portais'}</button>
+        ${d.enabled ? '<button class="btn danger sm" type="button" data-portals-quit>Desistir dos portais</button>' : ''}
+      </div>
+      <p class="small muted" style="margin:10px 0 0"><b>Desistir dos portais</b> apaga todas as contas de profissionais e clínicas do Nutri e do Fisio (com publicações e conversas) e desliga os portais: o site volta a ser o de antes. O Psi e os pacientes não são apagados.</p>`;
+    $('[data-portals-toggle]', box).addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      try { loadPortals(await api('/api/admin/portals', { method: 'POST', body: { enabled: !d.enabled } })); toast(d.enabled ? 'Portais desligados.' : 'Portais ligados.'); }
+      catch (ex) { toast(ex.message, 'error'); e.currentTarget.disabled = false; }
+    });
+    $('[data-portals-quit]', box)?.addEventListener('click', async () => {
+      const n = d.portals.filter((x) => x.key !== 'psi').reduce((a, x) => a + x.pros + x.clinics, 0);
+      const ok = await modal({
+        title: 'Desistir dos portais?',
+        html: `<p>Isto apaga <b>${n} conta${n === 1 ? '' : 's'}</b> do Nutri e do Fisio (profissionais e clínicas, com publicações, conversas e arquivos) e desliga os portais. <b>Não dá para desfazer.</b></p>
+          <p>O Acolia Psi e os pacientes continuam como estão.</p><div class="field"><label>Para confirmar, digite <b>DESISTIR</b></label><input data-quit-word autocomplete="off"></div><div class="form-error hidden" data-err></div>`,
+        actions: [{ label: 'Cancelar', value: false, class: 'secondary' }, { label: 'Apagar e voltar ao de antes', class: 'danger', handler: async (dlg) => {
+          const w = $('[data-quit-word]', dlg).value;
+          try { return await api('/api/admin/portals/desistir', { method: 'POST', body: { confirm: w } }); }
+          catch (ex) { const er = $('[data-err]', dlg); er.textContent = ex.message; er.classList.remove('hidden'); return false; }
+        } }],
+      });
+      if (ok && ok.ok) { toast(`Pronto: ${ok.removed_professionals} profissional(is) e ${ok.removed_clinics} clínica(s) apagados. Portais desligados.`); loadPortals(); loadStats().catch(() => {}); }
+    });
+  }
+  loadPortals().catch(() => {});
+
   // ---------- Profissionais ----------
   function proRow(p) {
     return `<tr>
-      <td><div class="row" style="flex-wrap:nowrap">${avatar(p.name, p.photo, 'sm')}<div><b>${esc(p.name)}</b>${p.is_test ? ' <span class="badge warn">Teste</span>' : ''}<div class="small muted">${esc(p.profession)} · ${esc(p.email)}</div></div></div></td>
+      <td><div class="row" style="flex-wrap:nowrap">${avatar(p.name, p.photo, 'sm')}<div><b>${esc(p.name)}</b>${p.is_test ? ' <span class="badge warn">Teste</span>' : ''}<div class="small muted">${p.portal && cfg.portals_enabled !== false ? `<span class="ptag ${esc(p.portal)}">${esc((Acolia.PORTAL_UI[p.portal] || {}).short || '')}</span> ` : ''}${esc(p.profession)} · ${esc(p.email)}</div></div></div></td>
       <td>${esc(p.registry)}</td>
       <td>${esc(p.city)} - ${esc(p.state)}</td>
       <td>${p.status === 'excluido' ? '<span class="badge">Apagada</span>' : (STATUS_BADGE[p.status] || esc(p.status))}${p.review_pending ? ' <span class="badge warn" title="Entrou direto (7 dias grátis ou Pix): confira os dados">Conferir dados</span>' : ''}${p.verified ? ' <span class="badge" style="background:#e3f1fd;color:#1565c0">Verificado</span>' : ''}</td>
@@ -328,7 +364,7 @@
         ${fld('Nome completo', `<input data-f="name" value="${esc(p.legal_name || p.name)}" maxlength="120">`, 'Vai nos documentos (atestado, receita, encaminhamento e declaração).')}
         ${fld('Nome no perfil', '<input type="hidden" data-f="display_name"><div data-name-picker></div>', 'Toque nas palavras do nome completo para escolher como aparece no perfil e nas mensagens (pelo menos 2).')}
         <div class="grid-2">${fld('CPF', `<input data-f="cpf" inputmode="numeric" value="${esc(p.cpf || '')}" placeholder="000.000.000-00">`)}
-          ${fld('Profissão', `<select data-f="profession">${cfg.professions.map((x) => `<option ${x === p.profession ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`)}</div>
+          ${fld('Profissão', `<select data-f="profession">${((cfg.portals || []).find((x) => x.key === (p.portal || 'psi')) || { professions: cfg.professions }).professions.map((x) => `<option ${x === p.profession ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`)}</div>
         <div class="grid-2">${fld('Carteirinha (CRP/CRM)', `<input data-f="registry" value="${esc(p.registry || '')}" maxlength="40" placeholder="Ex.: CRP 06/12345">`)}
           ${fld('Plano', `<select data-f="plan">${(cfg.plans || []).map((x) => `<option value="${esc(x.key)}" ${x.key === (p.plan_key || 'mensal-30') ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>`)}</div>
         <div class="grid-2">${fld('E-mail', `<input data-f="email" type="email" value="${esc(p.email)}">`)}
@@ -405,7 +441,7 @@
     else statusBtns = btn('aprovado', p.status === 'recusado' ? 'Aprovar' : 'Reativar', '') + (p.status !== 'bloqueado' ? btn('bloqueado', 'Bloquear', 'danger') : '');
 
     // Psicanalista, psicoterapeuta e terapeuta não têm conselho: sem registro nem carteirinha para conferir
-    const council = ['Psicólogo(a)', 'Neuropsicólogo(a)', 'Psiquiatra'].includes(p.profession);
+    const council = !!(cfg.councils || {})[p.profession];
     await modal({
       title: p.name,
       html: `
@@ -536,16 +572,24 @@
 
   // ---------- Novo profissional ----------
   const nf = $('[data-new-pro]');
-  nf.profession.innerHTML = cfg.professions.map((p) => `<option>${esc(p)}</option>`).join('');
+  // Portais (versão 2.0): a profissão depende do portal escolhido
+  const fillProfs = () => {
+    const P = (cfg.portals || []).find((x) => x.key === nf.portal.value);
+    nf.profession.innerHTML = (P ? P.professions : cfg.professions).map((p) => `<option>${esc(p)}</option>`).join('');
+  };
+  fillProfs();
+  nf.portal.addEventListener('change', () => { fillProfs(); syncReg(); });
+  if (cfg.portals_enabled === false) nf.portal.closest('.field').classList.add('hidden');
   nf.state.innerHTML = ufOptions('', 'UF');
   bindUfCity(nf.state, nf.city);
   maskPhone(nf.phone);
   Acolia.maskCpf(nf.cpf);
   // Registro só para quem tem conselho (igual ao cadastro pelo site): CRP para psicólogo e
   // neuropsicólogo, CRM para psiquiatra. Psicanalista, psicoterapeuta e terapeuta não têm.
-  const REG = {
-    'Psicólogo(a)': ['CRP', 'Ex.: CRP 06/12345'], 'Neuropsicólogo(a)': ['CRP', 'Ex.: CRP 06/12345'], Psiquiatra: ['CRM', 'Ex.: CRM-SP 123456'],
-  };
+  const REG = new Proxy({}, { get: (_t, prof) => {
+    const c = (cfg.councils || {})[prof];
+    return c ? [c, `Ex.: ${(cfg.council_examples || {})[c] || ''}`] : undefined;
+  } });
   const syncReg = () => {
     const r = REG[nf.profession.value];
     $('[data-n-reg-field]', nf).classList.toggle('hidden', !r);

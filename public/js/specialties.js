@@ -5,8 +5,9 @@
   const { $, $$, esc, api, ICONS, avatar } = window.Acolia;
   const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
   const list = (text) => String(text || '').split(',').map((s) => s.trim()).filter(Boolean);
-  let groupsP = null;
-  const groups = () => (groupsP ||= api('/api/config').then((c) => c.specialties || []));
+  let cfgP = null;
+  // Cada portal tem a sua lista (Psi, Nutri, Fisio); sem portal escolhido, a do portal atual (ou a do Psi)
+  const groups = (portal) => (cfgP ||= api('/api/config')).then((c) => (c.specialties_by_portal && c.specialties_by_portal[portal || Acolia.portal() || 'psi']) || c.specialties || []);
 
   // host: onde desenhar · opts: { selected, name, hint, onChange }
   // Clicar numa especialidade escolhe (vai para o fim da lista); clicar de novo, ou no ✕, tira.
@@ -21,7 +22,7 @@
     </div>`;
     const box = $('[data-sp-box]', host);
     const hidden = opts.name ? $(`input[name="${opts.name}"]`, host) : null;
-    const gs = await groups().catch(() => []);
+    const gs = await groups(opts.portal).catch(() => []);
     box.innerHTML = gs.map((g) => `<div class="sp-group"><div class="sp-gname">${esc(g.name)}</div>
         <div class="sp-chips">${g.items.map((s) => `<button type="button" class="sp-chip" data-sp="${esc(s)}" data-n="${esc(norm(s))}">${esc(s)}</button>`).join('')}</div></div>`).join('')
       + '<p class="sp-none muted small hidden" data-sp-none>Nenhuma especialidade com esse nome.</p>';

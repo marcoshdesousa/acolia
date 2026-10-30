@@ -17,12 +17,23 @@
     <a class="brand" href="/"><span data-logo><img class="brand-mark" src="/img/logo-simbolo.png" alt="" width="34" height="34"></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
   </div></header>
   <main class="narrow" style="padding-top:32px;padding-bottom:48px;max-width:560px">
+    <!-- Portais (versão 2.0): primeiro a área (o portal), depois os dados -->
+    <div data-step0 class="hidden">
+      <h1 class="center">Em qual área você atende?</h1>
+      <p class="center muted">Você aparece para os pacientes desse portal. Atende em mais de uma área? Faça um cadastro em cada portal (cada um tem a sua mensalidade).</p>
+      <div class="card">
+        <div data-portal-pick></div>
+        <button class="btn block" type="button" data-portal-next style="margin-top:14px" disabled>Continuar</button>
+      </div>
+    </div>
     <div data-step1>
+      <p class="center small hidden" data-portal-chosen></p>
       <h1 class="center">Cadastro de profissional</h1>
-      <p class="center muted">Psicólogos, neuropsicólogos, psiquiatras, psicanalistas, psicoterapeutas e terapeutas. Seu cadastro será analisado pela administração antes de aparecer na vitrine.</p>
+      <p class="center muted" data-intro>Psicólogos, neuropsicólogos, psiquiatras, psicanalistas, psicoterapeutas e terapeutas. Seu cadastro será analisado pela administração antes de aparecer na vitrine.</p>
       <div class="help-wa-row know-row"><button type="button" class="know-btn" data-guide-open><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M8 7h7"/></svg> Tudo o que você, profissional, terá</button></div>
       <div class="help-wa-row"><a class="help-wa" data-help="dados" href="#" target="_blank" rel="noopener"><span class="help-wa-ic" aria-hidden="true"></span><span>Alguma dúvida? <b>Fale no WhatsApp</b></span></a></div>
       <form class="card" data-form novalidate>
+        <input type="hidden" name="portal" value="">
         <div class="field"><label for="name">Nome completo</label><input id="name" name="name" autocomplete="name" required maxlength="120"></div>
         <div class="field"><label for="cpf">CPF</label><input id="cpf" name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" required>
           <div class="hint" data-cpf-hint>Cada CPF pode ter só um cadastro de profissional.</div></div>
@@ -41,7 +52,7 @@
         <div class="field"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="email" required></div>
         <div class="field"><label for="phone">WhatsApp (com DDD)</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="(94) 99999-9999" required>
           <div class="hint">Obrigatório. É por ele que a equipe Acolia fala com você (aprovação e mensalidade).</div></div>
-        <div class="field"><label>Estado e município (o estado precisa ser o mesmo do seu conselho regional)</label>
+        <div class="field"><label>Estado e município (o estado precisa ser o mesmo do seu conselho regional, se tiver)</label>
           <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
         <p class="small notice info" style="margin:0 0 14px">Você não precisa criar senha agora: assim que o cadastro for aprovado, a equipe Acolia manda a sua senha pelo WhatsApp. Depois de entrar, você pode trocá-la em <b>Conta</b>.</p>
         <button class="btn block" type="submit">Próximo</button>
@@ -154,14 +165,28 @@
       upd();
       ['pointerdown', 'focus', 'mouseenter', 'click'].forEach((ev) => a.addEventListener(ev, upd));
     });
-    form.profession.insertAdjacentHTML('beforeend', cfg.professions.map((p) => '<option>' + esc(p) + '</option>').join(''));
-    const HINTS = {
-      'Psicólogo(a)': 'Seu CRP com região e número. Ex.: CRP 10/12345.',
-      'Neuropsicólogo(a)': 'Seu CRP com região e número. Ex.: CRP 10/12345.',
-      Psiquiatra: 'Seu CRM com estado e número. Ex.: CRM-PA 12345.',
+    // Conselho de cada profissão (CRP, CRM, CRN, CREFITO, CREF): só quem tem conselho envia a carteirinha
+    const COUNCILS = cfg.councils || { 'Psicólogo(a)': 'CRP', 'Neuropsicólogo(a)': 'CRP', Psiquiatra: 'CRM' };
+    const EX = cfg.council_examples || { CRP: 'CRP 10/12345', CRM: 'CRM-PA 12345' };
+    const council = () => COUNCILS[form.profession.value] || '';
+    const HINTS = new Proxy({}, { get: (_t, prof) => (COUNCILS[prof] ? `Seu ${COUNCILS[prof]}. Ex.: ${EX[COUNCILS[prof]] || ''}.` : undefined) });
+    const needsCard = () => !!council();
+    const INTRO = {
+      psi: 'Psicólogos, neuropsicólogos, psiquiatras, psicanalistas, psicoterapeutas e terapeutas.',
+      nutri: 'Nutricionistas, nutrólogos, técnicos em nutrição, chefs de alimentação saudável e educadores de hábitos alimentares.',
+      fisio: 'Fisioterapeutas, terapeutas ocupacionais, profissionais de educação física, instrutores de Pilates e yoga, massoterapeutas, quiropraxistas, osteopatas e médicos do esporte.',
     };
-    // Carteirinha só para quem tem conselho: CRP (psicólogo, neuropsicólogo) e CRM (psiquiatra)
-    const needsCard = () => !!HINTS[form.profession.value];
+    let sp = null;
+    // Monta a lista de profissões e as especialidades do portal escolhido
+    async function usePortal(k) {
+      form.portal.value = k;
+      const P = (cfg.portals || []).find((x) => x.key === k);
+      const list = P ? P.professions : cfg.professions;
+      form.profession.innerHTML = '<option value="">Selecione</option>' + list.map((p) => '<option>' + esc(p) + '</option>').join('');
+      $('[data-intro]').textContent = `${INTRO[k] || INTRO.psi} Seu cadastro será conferido pela nossa equipe.`;
+      syncCard();
+      sp = await AcoliaSpecialties.picker($('[data-sp-picker]'), { name: 'specialties', portal: k });
+    }
     // Os campos da carteirinha só aparecem depois de escolher uma profissão que precisa dela
     const syncCard = () => {
       const hide = !needsCard();
@@ -173,10 +198,10 @@
     form.profession.addEventListener('change', () => {
       syncCard();
       $('[data-reg-hint]').textContent = HINTS[form.profession.value] || 'Número do seu registro na entidade de classe.';
-      form.registry.placeholder = form.profession.value === 'Psiquiatra' ? 'Ex.: CRM-PA 12345' : HINTS[form.profession.value] ? 'Ex.: CRP 10/12345' : 'Número do registro';
+      form.registry.placeholder = council() ? `Ex.: ${EX[council()] || ''}` : 'Número do registro';
     });
     // Dados → Próximo → Confira seus dados (Sim / Não, corrigir) → Plano → Avançar → Termo (assinar) → cria a conta → código
-    const STEPS = { 1: '[data-step1]', confirm: '[data-confirm-step]', 2: '[data-plan-step]', terms: '[data-terms-step]', pay: '[data-pay-step]', paid: '[data-paid-step]', 3: '[data-step2]' };
+    const STEPS = { 0: '[data-step0]', 1: '[data-step1]', confirm: '[data-confirm-step]', 2: '[data-plan-step]', terms: '[data-terms-step]', pay: '[data-pay-step]', paid: '[data-paid-step]', 3: '[data-step2]' };
     const show = (step) => {
       Object.entries(STEPS).forEach(([k, sel]) => $(sel).classList.toggle('hidden', String(k) !== String(step)));
       scrollTo(0, 0);
@@ -200,7 +225,30 @@
       if (saved && Date.now() - saved.at < 12 * 3600e3) startPay(saved, saved.code);
       else localStorage.removeItem('acolia_cad_pay');
     } catch { /* nada */ }
-    const sp = await AcoliaSpecialties.picker($('[data-sp-picker]'), { name: 'specialties' });
+    // 1º passo: a área (portal). Com os portais desligados, vai direto para os dados (Psi).
+    const portalsOn = cfg.portals_enabled !== false;
+    let chosen = '';
+    if (portalsOn && $('[data-pay-step]').classList.contains('hidden')) { // (voltando para o Pix não pergunta de novo)
+      const asked = new URLSearchParams(location.search).get('portal');
+      chosen = Acolia.PORTAL_KEYS.includes(asked) ? asked : Acolia.portal();
+      const nx = $('[data-portal-next]');
+      nx.disabled = !chosen;
+      Acolia.portalPicker($('[data-portal-pick]'), { selected: chosen, onPick: (k) => { chosen = k; nx.disabled = false; Acolia.setPortal(k); } });
+      nx.addEventListener('click', async () => {
+        if (!chosen) return;
+        Acolia.setPortal(chosen);
+        await usePortal(chosen);
+        const u = Acolia.PORTAL_UI[chosen];
+        const c = $('[data-portal-chosen]');
+        c.innerHTML = `<img src="${u.symbol}" alt="" style="width:26px;height:26px;display:inline-block;vertical-align:middle;margin-right:6px"><b>${esc(u.name)}</b> · <a href="#" data-portal-back>trocar</a>`;
+        c.classList.remove('hidden');
+        $('[data-portal-back]').onclick = (e) => { e.preventDefault(); show(0); };
+        show(1);
+      });
+      show(0);
+    } else {
+      await usePortal('psi');
+    }
     const LABELS = { cpf: 'Informe o seu CPF.', name: 'Informe seu nome completo.', email: 'Informe seu e-mail.', phone: 'Informe seu WhatsApp com DDD.', state: 'Selecione o estado.', city: 'Informe o município.' };
     handleForm(form, async () => {
       if ($('#name').value.trim().split(/\s+/).length < 2) throw new Error('Informe nome e sobrenome.');
@@ -210,7 +258,7 @@
       if (!/^\S+@\S+\.\S+$/.test(form.email.value.trim())) throw new Error('Confira o seu e-mail.');
       if (form.phone.value.replace(/\D/g, '').length < 10) throw new Error('Confira o seu WhatsApp com DDD.');
       if (!form.profession.value) throw new Error('Selecione sua profissão.');
-      if (needsCard() && !form.registry.value.trim()) throw new Error(form.profession.value === 'Psiquiatra' ? 'Informe o número do seu CRM.' : 'Informe o número do seu CRP.');
+      if (needsCard() && !form.registry.value.trim()) throw new Error(`Informe o número do seu ${council()}.`);
       if (needsCard() && !form.document.files.length) throw new Error('Envie a foto da sua carteirinha profissional.');
       if (!sp.value().length) throw new Error('Escolha pelo menos uma especialidade (em "Suas especialidades").');
       if (!form.birth_date.value) { form.birth_date.focus(); throw new Error('Informe sua data de nascimento.'); }
@@ -219,7 +267,8 @@
       // Confira seus dados
       const v = (n) => (form.elements[n]?.value || '').trim();
       const rows = [['Nome completo', v('name')], ['CPF', v('cpf')], ['Data de nascimento', v('birth_date').split('-').reverse().join('/')],
-        ['Profissão', v('profession')], needsCard() ? [form.profession.value === 'Psiquiatra' ? 'CRM' : 'CRP', v('registry')] : null,
+        ...(form.portal.value && portalsOn ? [['Portal', Acolia.PORTAL_UI[form.portal.value].name]] : []),
+        ['Profissão', v('profession')], needsCard() ? [council(), v('registry')] : null,
         needsCard() ? ['Carteirinha', form.document.files[0]?.name || ''] : null,
         ['E-mail', v('email')], ['WhatsApp', v('phone')], ['Estado e município', `${v('city')} - ${v('state')}`], ['Especialidades', sp.value().join(', ')]].filter(Boolean);
       $('[data-confirm-list]').innerHTML = rows.map(([k, x]) => `<tr><th>${esc(k)}</th><td>${esc(x)}</td></tr>`).join('');

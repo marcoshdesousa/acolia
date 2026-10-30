@@ -118,6 +118,24 @@ function createApp() {
   });
   app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
   const pub = path.join(__dirname, '..', 'public');
+  // Portais (versão 2.0): com os portais ligados, a página inicial é a da Acolia (leva aos 3 portais),
+  // cada portal tem a sua (site.com/psi, /nutri, /fisio) e o ícone do app é a logo oficial nova.
+  // Desligados, tudo volta a ser como antes (a página inicial é a do Psi e os ícones antigos).
+  const PO = require('./portals');
+  const fsx = require('node:fs');
+  const indexHtml = fsx.readFileSync(path.join(pub, 'index.html'), 'utf8');
+  app.get('/', (req, res, next) => (PO.enabled() ? res.sendFile(path.join(pub, 'inicio.html')) : next()));
+  app.get(/^\/(psi|nutri|fisio)\/?$/, (req, res, next) => {
+    if (!PO.enabled()) return next();
+    const k = req.params[0];
+    res.setHeader('Set-Cookie', `${PO.COOKIE}=${k}; Path=/; Max-Age=31536000; SameSite=Lax`);
+    res.type('html').send(indexHtml.replace('<html lang="pt-BR">', `<html lang="pt-BR" data-portal="${k}">`));
+  });
+  const NEW_ICONS = new Set(['/img/app-icon-192.png', '/img/app-icon-512.png', '/img/app-icon-maskable-512.png', '/img/apple-touch-icon.png', '/img/favicon.png']);
+  app.use((req, _res, next) => {
+    if (NEW_ICONS.has(req.path) && PO.enabled()) req.url = req.url.replace('/img/', '/img/v2/');
+    next();
+  });
   // Páginas, CSS e JS já compactados (Brotli/gzip) e imagens com cache no aparelho
   app.use(require('./compress').staticCompressed(pub));
   app.use(express.static(pub, { extensions: ['html'], maxAge: '1d' }));

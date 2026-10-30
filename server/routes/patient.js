@@ -40,6 +40,15 @@ router.put('/profile', (req, res) => {
   res.json(ownPatient(me));
 });
 
+// Portais (versão 2.0): o último portal usado (o app abre nele da próxima vez, em qualquer aparelho)
+router.post('/portal', (req, res) => {
+  const PO = require('../portals');
+  if (!PO.valid(req.body.portal)) throw new U.HttpError(400, 'Portal inválido.');
+  db.prepare('UPDATE patients SET last_portal = ? WHERE id = ?').run(req.body.portal, req.auth.user.id);
+  res.cookie?.(PO.COOKIE, req.body.portal, { path: '/', maxAge: 365 * 864e5, sameSite: 'lax' });
+  res.json({ ok: true, portal: req.body.portal });
+});
+
 // Sugestão de @ livre (botão "Gerar @")
 router.get('/handle/suggest', (req, res) => res.json({ handle: require('../handles').generate(req.auth.user.name, req.auth.user.id) }));
 

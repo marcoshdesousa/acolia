@@ -10,6 +10,7 @@ const RESERVED = new Set([
   'atendimento', 'profissional', 'profissionais', 'paciente', 'pacientes', 'uploads', 'img', 'css', 'js', 'socket-io',
   'socket.io', 'sw', 'manifest', 'offline', 'index', 'p', 'acolia', 'ajuda', 'suporte', 'contato', 'termos', 'privacidade',
   'blog', 'sobre', 'www', 'static', 'assets', 'favicon', 'robots', 'sitemap', '404', 'clinica', 'clinicas', 'cadastro-clinica',
+  'psi', 'nutri', 'fisio', 'portal', 'portais', 'inicio',
 ]);
 try {
   for (const f of fs.readdirSync(path.join(__dirname, '..', 'public'))) RESERVED.add(f.replace(/\.[^.]+$/, '').toLowerCase());

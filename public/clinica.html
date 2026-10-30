@@ -116,6 +116,8 @@
     if (auth.account?.needs_password) { Acolia.showNeedsPassword(auth); return; } // 1º acesso: cria a própria senha
     let me = auth.user;
     const cfg = await api('/api/config');
+    // Portais (versão 2.0): o painel da clínica tem a logo e a cor do portal dela
+    if (cfg.portals_enabled !== false) { Acolia.applyPortal(me.portal || 'psi'); $('[data-logo]').innerHTML = ICONS.logo; }
     // Feed: a clínica publica e vê as publicações de quem segue (mesmo Início dos profissionais)
     let home = null;
     AcoliaSocial.setContext({ role: 'clinic', me, onAllPosts: (id, kind) => { location.hash = `posts/${id}/${kind || 'photo'}`; } });

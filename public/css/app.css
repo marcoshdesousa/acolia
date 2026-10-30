@@ -1544,3 +1544,37 @@ body.has-appt-bar .home-feed, body.has-appt-bar .panel-main { padding-bottom: ca
 .msg-notice { align-self: center; display: flex; align-items: flex-start; gap: 8px; max-width: 92%; background: #e5ebe8; color: #2e403c; border-radius: 12px; padding: 10px 14px; margin: 8px 0; font-size: .9rem; font-weight: 700; line-height: 1.35; }
 .msg-notice svg { flex: none; margin-top: 1px; }
 .msg-notice small { font-weight: 600; color: #3f5550; }
+
+/* ---------- Portais (versão 2.0): cores do Acolia Nutri e do Acolia Fisio (o Psi usa as de sempre) ---------- */
+html[data-portal="nutri"] {
+  --primary: #4f7a4a; --primary-strong: #2f4a32; --primary-soft: #e3ecdc; --accent: #c0703c; --accent-soft: #f6e6d8;
+  --bubble-me: #dfe9d8;
+}
+html[data-portal="fisio"] {
+  --primary: #2f6f8f; --primary-strong: #1f3a4d; --primary-soft: #e2f0f2; --accent: #d0684d; --accent-soft: #f7e3dc;
+  --bubble-me: #d9e9ee;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-portal="nutri"]:not([data-theme="light"]) { --primary: #a8c79f; --primary-strong: #c3dab9; --primary-soft: #22301f; --on-primary: #14200f; --accent: #e3a97f; --accent-soft: #3a2a1f; --bubble-me: #2b3a27; }
+  html[data-portal="fisio"]:not([data-theme="light"]) { --primary: #8fc3d4; --primary-strong: #b0d6e2; --primary-soft: #1d2c33; --on-primary: #0f1c22; --accent: #eba08a; --accent-soft: #3a2621; --bubble-me: #23363d; }
+}
+.portal-tag { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px; background: var(--primary-strong); color: var(--on-primary);
+  font: 800 .7rem/1.4 var(--font); letter-spacing: .02em; vertical-align: middle; }
+html:not([data-portal]) .portal-tag { display: none; }
+/* Escolha do portal (cadastro, app e página principal) */
+.portal-pick { display: grid; gap: 10px; }
+.portal-opt { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 18px; border: 2px solid var(--line); background: var(--surface);
+  cursor: pointer; text-align: left; font: inherit; color: inherit; width: 100%; text-decoration: none; }
+.portal-opt:hover { border-color: var(--primary); }
+.portal-opt.on { border-color: var(--pc, var(--primary)); background: var(--pcs, var(--primary-soft)); }
+.portal-opt .po-logo { width: 52px; height: 52px; border-radius: 15px; background: #fff; display: grid; place-items: center; flex: none; box-shadow: 0 0 0 1.5px var(--line); }
+.portal-opt .po-logo img { max-width: 42px; max-height: 42px; }
+.portal-opt b { display: block; font-weight: 800; font-size: 1.02rem; }
+.portal-opt small { display: block; color: var(--muted); font-size: .82rem; line-height: 1.3; }
+.portal-opt .po-go { margin-left: auto; color: var(--muted); }
+.portal-opt[data-k="psi"] { --pc: #3f5550; --pcs: #e5ebe8; }
+.portal-opt[data-k="nutri"] { --pc: #4f7a4a; --pcs: #e3ecdc; }
+.portal-opt[data-k="fisio"] { --pc: #2f6f8f; --pcs: #e2f0f2; }
+.portal-opt .po-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--pc); flex: none; }
+.ptag { display: inline-block; font-size: .68rem; font-weight: 800; border-radius: 6px; padding: 1px 6px; color: #fff; vertical-align: middle; }
+.ptag.psi { background: #3f5550; } .ptag.nutri { background: #4f7a4a; } .ptag.fisio { background: #2f6f8f; }

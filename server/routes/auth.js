@@ -11,7 +11,11 @@ const { handleDocument, removeDocument } = require('../upload');
 const router = express.Router();
 const { HttpError } = U;
 
-const PROFESSIONS = ['Psicólogo(a)', 'Psicanalista', 'Psiquiatra', 'Psicoterapeuta', 'Neuropsicólogo(a)', 'Terapeuta'];
+const PO = require('../portals');
+// Profissões do Psi (a lista de antes). As dos outros portais estão em server/portals.js.
+const PROFESSIONS = PO.PORTALS.psi.professions;
+// Portal do cadastro: o escolhido no 1º passo (com os portais desligados, sempre Psi)
+const portalFromBody = (body) => (PO.enabled() ? PO.normalize(body && body.portal) : 'psi');
 
 const NO_PASSWORD = '!sem-senha'; // profissional que ainda não recebeu a primeira senha
 
@@ -64,6 +68,7 @@ router.post('/patient/register', async (req, res) => {
   const status = require('../blocklist').isBlocked('patient', { cpf }) ? 'bloqueado' : 'ativo';
   const info = db.prepare(`INSERT INTO patients (name, cpf, cpf_name_verified, birth_date, state, city, city_norm, password_hash, status, handle, phone)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name, cpf, verified, birth, state, city, U.norm(city), U.hashPassword(req.body.password), status, handle, phone);
+  if (PO.enabled() && PO.valid(req.body.portal)) db.prepare('UPDATE patients SET last_portal = ? WHERE id = ?').run(req.body.portal, Number(info.lastInsertRowid));
   A.createSession(res, 'patient', Number(info.lastInsertRowid));
   // Veio pelo link de um profissional: ele recebe o aviso e pode mandar mensagem
   try {
@@ -118,7 +123,7 @@ function newProfessionalCode() {
   }
 }
 
-function validateProfessionalInput(body) {
+function validateProfessionalInput(body, portal = 'psi') {
   const name = U.cleanText(body.name, 120);
   const profession = U.cleanText(body.profession, 60);
   const registry = U.cleanText(body.registry, 40);
@@ -126,30 +131,32 @@ function validateProfessionalInput(body) {
   const email = U.cleanText(body.email, 160).toLowerCase();
   const phone = U.onlyDigits(body.phone);
   if (!U.isFullName(name)) throw new HttpError(400, 'Informe nome e sobrenome.');
-  if (!PROFESSIONS.includes(profession)) throw new HttpError(400, 'Selecione sua profissão.');
+  if (!PO.PORTALS[PO.normalize(portal)].professions.includes(profession)) throw new HttpError(400, 'Selecione sua profissão.');
   // CPF: obrigatório (no autocadastro e no cadastro feito pelo admin)
   if (!U.isValidCpf(cpf)) throw new HttpError(400, 'CPF inválido. Confira os números digitados.');
-  if (db.prepare("SELECT 1 FROM professionals WHERE cpf = ? AND status <> 'excluido'").get(cpf)) throw cpfTaken('professional');
+  // Um cadastro de profissional por CPF em cada portal (quem atua em duas áreas tem uma conta em cada)
+  if (db.prepare("SELECT 1 FROM professionals WHERE cpf = ? AND status <> 'excluido' AND COALESCE(portal, 'psi') = ?").get(cpf, PO.normalize(portal))) throw cpfTaken('professional');
   // Registro/carteirinha: obrigatório só para quem tem conselho (CRP: psicólogo e neuropsicólogo; CRM: psiquiatra)
-  if (require('../registry').councilFor(profession) && registry.length < 3) throw new HttpError(400, 'Informe o número do seu registro profissional (CRP ou CRM).');
+  const council = require('../registry').councilFor(profession);
+  if (council && registry.length < 3) throw new HttpError(400, `Informe o número do seu registro profissional (${council}).`);
   if (!U.isValidEmail(email)) throw new HttpError(400, 'E-mail inválido.');
   if (phone.length < 10 || phone.length > 13) throw new HttpError(400, 'Informe o WhatsApp com DDD.');
   const { state, city } = validateLocation(body.state, body.city);
   // Especialidades: pelo menos uma da lista (sem máximo)
   const specialties = require('../specialties').parse(body.specialties);
-  if (db.prepare('SELECT 1 FROM professionals WHERE email = ?').get(email)) throw new HttpError(409, 'Este e-mail já está cadastrado.');
-  return { name, profession, registry, cpf, email, phone, state, city, specialties };
+  if (db.prepare('SELECT 1 FROM professionals WHERE email = ?').get(PO.emailKey(email, portal))) throw new HttpError(409, 'Este e-mail já está cadastrado.');
+  return { name, profession, registry, cpf, email, phone, state, city, specialties, portal: PO.normalize(portal) };
 }
 
 function insertProfessional(d, passwordHash, status, subscriptionUntil = null) {
   const code = newProfessionalCode();
   const info = db.prepare(`INSERT INTO professionals
     (code, name, profession, registry, cpf, email, phone, password_hash, status, state, city, city_norm, subscription_until,
-     document_file, registry_verified, legal_name, slug, specialties)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(code, d.name, d.profession, d.registry, d.cpf || null, d.email, d.phone, passwordHash, status, d.state, d.city, U.norm(d.city), subscriptionUntil,
+     document_file, registry_verified, legal_name, slug, specialties, portal)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(code, d.name, d.profession, d.registry, d.cpf || null, PO.emailKey(d.email, d.portal || 'psi'), d.phone, passwordHash, status, d.state, d.city, U.norm(d.city), subscriptionUntil,
       d.document_file || null, d.registry_verified ? 1 : 0, d.name, require('../slug').uniqueSlug(db, d.name),
-      require('../specialties').store(d.specialties || []));
+      require('../specialties').store(d.specialties || []), PO.normalize(d.portal || 'psi'));
   return { id: Number(info.lastInsertRowid), code };
 }
 
@@ -165,7 +172,7 @@ router.get('/terms/professional', (_req, res) => res.json(require('../terms').pu
 router.post('/professional/register', async (req, res) => {
   const documentFile = await handleDocument(req, res);
   try {
-    const d = validateProfessionalInput(req.body);
+    const d = validateProfessionalInput(req.body, portalFromBody(req.body));
     const birth = String(req.body.birth_date || '');
     if (!U.isValidBirthDate(birth)) throw new HttpError(400, 'Informe sua data de nascimento.');
     const plan = String(req.body.plan || 'mensal-30');
@@ -191,17 +198,17 @@ router.post('/professional/register', async (req, res) => {
     const blocked = require('../blocklist').isBlocked('professional', { cpf: d.cpf, email: d.email, registry: reg.registry, phone: d.phone });
     // 7 dias grátis (CPF novo de profissional): a conta já nasce liberada, na vitrine, com a senha de acesso único
     const TR = require('../trial');
-    if (!blocked && TR.eligible(d.cpf)) {
+    if (!blocked && TR.eligible(d.cpf, d.portal)) {
       const password = U.randomPassword(10);
       const until = U.addDaysISO(U.todayISO(), TR.TRIAL_DAYS);
       const t = insertProfessional({ ...d, registry: reg.registry, document_file: needsCard ? documentFile : null, registry_verified: verified },
         U.hashPassword(password), 'aprovado', until);
       db.prepare('UPDATE professionals SET plan = ?, birth_date = ?, trial = 1, review_pending = 1, must_change_password = 1 WHERE id = ?').run(plan, birth, t.id);
-      TR.markUsed(d.cpf);
+      TR.markUsed(d.cpf, d.portal);
       T.record('professional', t.id, signedName, req);
       return res.status(201).json({ ok: true, code: t.code, trial: { days: TR.TRIAL_DAYS, until }, password, support: require('../accountState').SUPPORT_WHATSAPP });
     }
-    require('../trial').markUsed(d.cpf); // já usou (ou bloqueado): paga; e o CPF fica marcado
+    require('../trial').markUsed(d.cpf, d.portal); // já usou (ou bloqueado): paga; e o CPF fica marcado
     const { id, code } = insertProfessional({ ...d, registry: reg.registry, document_file: needsCard ? documentFile : null, registry_verified: verified },
       NO_PASSWORD, blocked ? 'bloqueado' : 'pendente');
     db.prepare('UPDATE professionals SET plan = ?, birth_date = ? WHERE id = ?').run(plan, birth, id);
@@ -240,7 +247,13 @@ router.post('/professional/login', (req, res) => {
     A.createSession(res, 'professional', sec.professional_id, sec.id);
     return res.json({ ok: true, secretary: true });
   }
-  const p = db.prepare("SELECT * FROM professionals WHERE (code = ? OR email = ?) AND status NOT IN ('oficial', 'clinica')").get(login.toUpperCase(), login.toLowerCase());
+  // Pelo código: a conta certa. Pelo e-mail: a mesma pessoa pode ter uma conta em cada portal (o e-mail dos
+  // outros portais fica guardado com "#portal"); vale a do portal em que ela está (ou a única que existir).
+  const mail = login.toLowerCase();
+  const found = db.prepare(`SELECT * FROM professionals WHERE (code = ? OR email = ? OR email IN (?, ?)) AND status NOT IN ('oficial', 'clinica', 'excluido')
+    ORDER BY id`).all(login.toUpperCase(), mail, `${mail}#nutri`, `${mail}#fisio`);
+  const askedPortal = PO.valid(req.body.portal) ? req.body.portal : PO.fromReq(req);
+  const p = found.length > 1 ? (found.find((x) => (x.portal || 'psi') === askedPortal) || found.find((x) => U.verifyPassword(req.body.password || '', x.password_hash)) || found[0]) : found[0];
   // Cadastro em análise: ainda não tem senha — mostra o aviso com o WhatsApp de atendimento
   if (p && p.status === 'pendente') {
     return res.status(403).json({ error: 'Seus dados estão sendo analisados pela nossa equipe. Você recebe sua senha pelo WhatsApp assim que o cadastro for aprovado.',
@@ -276,12 +289,13 @@ router.post('/clinic/register', async (req, res) => {
     if (responsible && !U.isFullName(responsible)) throw new HttpError(400, 'Informe o nome completo do responsável.');
     // Sem CNPJ: só o CPF do dono. Com CNPJ: o CNPJ e o CPF do proprietário. O Pix da mensalidade sai com o CPF.
     const { type, doc } = C.parseDoc(b.doc);
+    const portal = portalFromBody(b);
     const ownerCpf = type === 'cpf' ? doc : U.onlyDigits(b.owner_cpf);
     if (!U.isValidCpf(ownerCpf)) throw new HttpError(400, 'Informe o CPF do proprietário da clínica.');
-    if (C.docTaken(doc)) throw Object.assign(new HttpError(409, 'Já existe uma clínica com este CPF/CNPJ.'), { extra: { doc_exists: true, role: 'clinic' } });
+    if (C.docTaken(doc, 0, portal)) throw Object.assign(new HttpError(409, 'Já existe uma clínica com este CPF/CNPJ.'), { extra: { doc_exists: true, role: 'clinic' } });
     const email = U.cleanText(b.email, 160).toLowerCase();
     if (!U.isValidEmail(email)) throw new HttpError(400, 'E-mail inválido.');
-    if (db.prepare("SELECT 1 FROM clinics WHERE email = ? AND status <> 'excluido'").get(email)) throw new HttpError(409, 'Este e-mail já está cadastrado em outra clínica.');
+    if (db.prepare("SELECT 1 FROM clinics WHERE email = ? AND status <> 'excluido' AND COALESCE(portal, 'psi') = ?").get(email, portal)) throw new HttpError(409, 'Este e-mail já está cadastrado em outra clínica.');
     const phone = U.onlyDigits(b.phone);
     if (phone.length < 10 || phone.length > 13) throw new HttpError(400, 'Informe o WhatsApp da clínica com DDD.');
     const { state, city } = validateLocation(b.state, b.city);
@@ -300,7 +314,7 @@ router.post('/clinic/register', async (req, res) => {
       VALUES (?, ?, 'pendente', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(code, C.NO_PASSWORD, name, type, doc, responsible, email, phone, logo, U.cleanText(b.bio, 1500), state, city, U.norm(city), address, mapsUrl, mapsQuery,
         hasDoctors, JSON.stringify(doctors), require('../slug').uniqueSlug(db, name, 0, { clinic: true }), plan);
-    db.prepare('UPDATE clinics SET responsible_cpf = ? WHERE code = ?').run(ownerCpf, code);
+    db.prepare('UPDATE clinics SET responsible_cpf = ?, portal = ? WHERE code = ?').run(ownerCpf, portal, code);
     const created = db.prepare('SELECT * FROM clinics WHERE code = ?').get(code);
     // Pagamento pelo Pix (SyncPay): pago → clínica liberada na hora. Sem a SyncPay: finaliza no WhatsApp.
     let pay = null;
@@ -323,7 +337,9 @@ router.post('/clinic/login', (req, res) => {
   const login = U.cleanText(req.body.login, 160);
   const key = `cli:${req.ip}:${login.toLowerCase()}`;
   A.checkLoginRate(key);
-  const c = db.prepare("SELECT * FROM clinics WHERE (code = ? OR email = ?) AND status <> 'excluido'").get(login.toUpperCase(), login.toLowerCase());
+  const cs = db.prepare("SELECT * FROM clinics WHERE (code = ? OR email = ?) AND status <> 'excluido' ORDER BY id").all(login.toUpperCase(), login.toLowerCase());
+  const askedPortal = PO.valid(req.body.portal) ? req.body.portal : PO.fromReq(req);
+  const c = cs.length > 1 ? (cs.find((x) => (x.portal || 'psi') === askedPortal) || cs[0]) : cs[0];
   if (c && c.status === 'pendente') {
     return res.status(403).json({ error: 'Os dados da clínica estão sendo analisados pela nossa equipe. Você recebe a senha pelo WhatsApp assim que o cadastro for aprovado.',
       pending: true, support: require('../accountState').SUPPORT_WHATSAPP, name: c.name, code: c.code, clinic: true });

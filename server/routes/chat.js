@@ -87,8 +87,10 @@ function loadConversation(req, id) {
 
 function peerOf(role, c) {
   if (role === 'patient') {
-    const p = db.prepare('SELECT id, name, photo, profession, status, verified FROM professionals WHERE id = ?').get(c.professional_id);
-    return { id: p.id, name: p.name, photo: p.photo, subtitle: p.profession, active: ['aprovado', 'restrito'].includes(p.status), verified: !!p.verified };
+    const p = db.prepare('SELECT id, name, photo, profession, status, verified, portal FROM professionals WHERE id = ?').get(c.professional_id);
+    // portal: o paciente vê de qual portal é cada conversa (etiqueta Psi, Nutri ou Fisio)
+    return { id: p.id, name: p.name, photo: p.photo, subtitle: p.profession, active: ['aprovado', 'restrito'].includes(p.status), verified: !!p.verified,
+      portal: require('../portals').enabled() ? p.portal || 'psi' : undefined };
   }
   const p = db.prepare('SELECT id, name, handle, photo, city, state, status FROM patients WHERE id = ?').get(c.patient_id);
   return { id: p.id, name: p.name, full_name: p.name, handle: p.handle || '', photo: p.photo, subtitle: p.handle ? `@${p.handle}` : `${p.city} - ${p.state}`, active: p.status === 'ativo' };

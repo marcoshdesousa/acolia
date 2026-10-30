@@ -122,10 +122,11 @@ router.put('/profile', async (req, res) => {
   const { profession, registry } = req.auth.user;
   const phone = U.onlyDigits(b.phone);
   if (phone.length < 10 || phone.length > 13) throw new U.HttpError(400, 'Informe o WhatsApp com DDD.');
-  let email = req.auth.user.email;
+  let email = req.auth.user.email; // guardado com "#portal" nos portais Nutri e Fisio (ver server/portals.js)
   if (b.email !== undefined) {
-    email = U.cleanText(b.email, 160).toLowerCase();
-    if (!U.isValidEmail(email)) throw new U.HttpError(400, 'E-mail inválido.');
+    const plain = U.cleanText(b.email, 160).toLowerCase();
+    if (!U.isValidEmail(plain)) throw new U.HttpError(400, 'E-mail inválido.');
+    email = require('../portals').emailKey(plain, req.auth.user.portal || 'psi');
     if (db.prepare('SELECT 1 FROM professionals WHERE email = ? AND id <> ?').get(email, req.auth.user.id)) throw new U.HttpError(409, 'Este e-mail já está em uso em outra conta.');
   }
   const { state, city } = validateLocation(b.state, b.city);

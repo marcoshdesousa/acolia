@@ -23,7 +23,7 @@ router.get('/pagamento/cadastro/:id', async (req, res) => {
   if (p.status === 'pago') {
     const table = p.role === 'clinic' ? 'clinics' : 'professionals';
     const u = db.prepare(`SELECT code, email FROM ${table} WHERE id = ?`).get(p.user_id) || {};
-    r.code = u.code; r.email = u.email;
+    r.code = u.code; r.email = require('../portals').plainEmail(u.email);
     if (p.reveal) {
       try { r.password = require('../secretBox').open(p.reveal); } catch { /* nada */ }
       db.prepare('UPDATE platform_payments SET reveal = NULL WHERE id = ?').run(p.id); // só uma vez
@@ -44,7 +44,7 @@ router.post('/pagamento/renovar', async (req, res) => {
   if (!['aprovado', 'restrito'].includes(user.status)) throw new U.HttpError(400, 'A conta ainda não foi liberada.');
   const plan = role === 'clinic' ? 'clinica-4990' : (PP.PRICES[user.plan] ? user.plan : 'mensal-30');
   // Usa os dados que a conta já tem (nada para preencher)
-  const payer = role === 'clinic' ? PP.clinicPayer(user) : { name: user.legal_name || user.name, cpf: user.cpf, email: user.email, phone: user.phone };
+  const payer = role === 'clinic' ? PP.clinicPayer(user) : { name: user.legal_name || user.name, cpf: user.cpf, email: require('../portals').plainEmail(user.email), phone: user.phone };
   res.json(await PP.create({ role, userId: user.id, kind: 'renovacao', plan, payer }));
 });
 router.get('/pagamento/renovar/:id', async (req, res) => {

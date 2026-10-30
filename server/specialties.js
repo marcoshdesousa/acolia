@@ -69,7 +69,61 @@ const GROUPS = [
   },
 ];
 
-const ALL = GROUPS.flatMap((g) => g.items);
+// Portais Nutri e Fisio (versão 2.0): listas próprias. O Psi continua com a lista acima (GROUPS).
+const NUTRI_GROUPS = [
+  {
+    name: 'Público atendido',
+    items: ['Bebês e introdução alimentar', 'Crianças', 'Adolescentes', 'Adultos', 'Idosos', 'Gestantes', 'Lactantes', 'Atletas',
+      'Veganos e vegetarianos', 'Famílias', 'Mulheres', 'Homens', 'Empresas e equipes'],
+  },
+  {
+    name: 'Objetivos e demandas',
+    items: ['Emagrecimento', 'Ganho de massa muscular', 'Reeducação alimentar', 'Comportamento alimentar', 'Compulsão alimentar',
+      'Diabetes', 'Hipertensão', 'Colesterol e triglicerídeos', 'Doença renal', 'Saúde intestinal', 'Alergias alimentares',
+      'Intolerância à lactose', 'Doença celíaca e sem glúten', 'SOP (síndrome dos ovários policísticos)', 'Menopausa',
+      'Gestação e amamentação', 'Pré e pós-cirurgia bariátrica', 'Oncologia', 'TEA e seletividade alimentar', 'Esporte e performance',
+      'Longevidade e envelhecimento saudável', 'Imunidade', 'Pele, cabelo e unhas', 'Fertilidade'],
+  },
+  {
+    name: 'Abordagens',
+    items: ['Nutrição comportamental', 'Comer intuitivo', 'Nutrição funcional', 'Nutrição esportiva', 'Nutrição clínica',
+      'Nutrição materno-infantil', 'Fitoterapia', 'Low carb', 'Dieta mediterrânea', 'Plant-based', 'Nutrologia'],
+  },
+  {
+    name: 'Culinária e hábitos',
+    items: ['Marmitas saudáveis', 'Cozinha sem glúten', 'Cozinha vegana', 'Cozinha para crianças', 'Cardápio da semana',
+      'Educação alimentar', 'Hábitos saudáveis'],
+  },
+];
+const FISIO_GROUPS = [
+  {
+    name: 'Público atendido',
+    items: ['Crianças', 'Adolescentes', 'Adultos', 'Idosos', 'Gestantes', 'Pós-parto', 'Atletas', 'Pessoas com deficiência',
+      'Trabalhadores (ergonomia)', 'Iniciantes', 'Grupos e turmas'],
+  },
+  {
+    name: 'Demandas',
+    items: ['Dor lombar', 'Dor no pescoço', 'Hérnia de disco', 'Escoliose', 'Postura', 'Joelho', 'Ombro', 'Quadril', 'Pós-operatório',
+      'Lesão esportiva', 'AVC', 'Parkinson', 'Fibromialgia', 'Artrose', 'Osteoporose', 'Assoalho pélvico e incontinência',
+      'ATM (disfunção temporomandibular)', 'Respiratória', 'Cardiovascular', 'Linfedema', 'Condicionamento físico', 'Emagrecimento',
+      'Flexibilidade', 'Equilíbrio e prevenção de quedas', 'Estresse e respiração', 'Sono'],
+  },
+  {
+    name: 'Métodos',
+    items: ['Pilates solo', 'Pilates em aparelhos', 'RPG', 'Osteopatia', 'Quiropraxia', 'Terapia manual', 'Dry needling', 'Acupuntura',
+      'Kinesio taping', 'Hidroterapia', 'Liberação miofascial', 'Treinamento funcional', 'Musculação', 'Corrida', 'Hatha yoga',
+      'Vinyasa yoga', 'Yin yoga', 'Yoga restaurativo', 'Meditação', 'Massagem relaxante', 'Drenagem linfática', 'Massagem desportiva'],
+  },
+  {
+    name: 'Áreas da fisioterapia',
+    items: ['Fisioterapia ortopédica', 'Fisioterapia esportiva', 'Fisioterapia neurológica', 'Fisioterapia pediátrica',
+      'Fisioterapia respiratória', 'Fisioterapia cardiovascular', 'Fisioterapia pélvica', 'Fisioterapia geriátrica',
+      'Fisioterapia dermatofuncional', 'Fisioterapia do trabalho', 'Atendimento em casa', 'Aulas em turma'],
+  },
+];
+const BY_PORTAL = { psi: GROUPS, nutri: NUTRI_GROUPS, fisio: FISIO_GROUPS };
+
+const ALL = [...new Set([GROUPS, NUTRI_GROUPS, FISIO_GROUPS].flatMap((gs) => gs.flatMap((g) => g.items)))];
 const BY_NORM = new Map(ALL.map((s) => [U.norm(s), s]));
 
 // Texto guardado -> lista (aceita o formato antigo, que era texto livre separado por vírgula)
@@ -99,4 +153,4 @@ function parse(input, previous = '') {
   return out;
 }
 
-module.exports = { GROUPS, ALL, toList, parse, store: (list) => list.join(', ') };
+module.exports = { GROUPS, BY_PORTAL, ALL, toList, parse, store: (list) => list.join(', ') };

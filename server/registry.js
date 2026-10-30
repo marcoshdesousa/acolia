@@ -26,7 +26,17 @@ const COUNCIL_BY_PROFESSION = {
   'Psicólogo(a)': 'CRP',
   'Neuropsicólogo(a)': 'CRP',
   Psiquiatra: 'CRM',
+  // Portais Nutri e Fisio (versão 2.0)
+  Nutricionista: 'CRN',
+  'Técnico(a) em Nutrição': 'CRN',
+  'Nutrólogo(a)': 'CRM',
+  Fisioterapeuta: 'CREFITO',
+  'Terapeuta ocupacional': 'CREFITO',
+  'Profissional de Educação Física': 'CREF',
+  'Médico(a) do esporte': 'CRM',
 };
+// Exemplo de cada conselho (aparece no cadastro e nas mensagens de erro)
+const COUNCIL_EXAMPLE = { CRP: 'CRP 06/12345', CRM: 'CRM-SP 123456', CRN: 'CRN-3 12345', CREFITO: 'CREFITO-3/123456-F', CREF: 'CREF 012345-G/SP' };
 
 function councilFor(profession) {
   return COUNCIL_BY_PROFESSION[profession] || null;
@@ -56,6 +66,29 @@ function validateRegistry(profession, raw, state) {
       throw new U.HttpError(400, `Seu CRM é do estado ${ufInText}, mas você informou ${state}. O estado precisa ser o mesmo da sua carteirinha.`);
     }
     return { registry: `CRM-${state} ${num[1]}`, council, uf: state, number: num[1] };
+  }
+  // CRN (nutrição): região e número. As regiões cobrem vários estados; a equipe confere pela carteirinha.
+  if (council === 'CRN') {
+    const m = text.match(/(\d{1,2})\s*[/\-.\s]\s*(\d{3,6})/) || text.match(/CRN\s*-?\s*(\d{1,2})\D+(\d{3,6})/);
+    if (!m || Number(m[1]) < 1 || Number(m[1]) > 11) throw new U.HttpError(400, 'Informe o CRN com a região e o número. Ex.: CRN-3 12345.');
+    return { registry: `CRN-${Number(m[1])} ${m[2]}`, council, uf: state, number: m[2] };
+  }
+  // CREFITO (fisioterapia e terapia ocupacional): região/número e F (fisioterapeuta) ou TO
+  if (council === 'CREFITO') {
+    const m = text.match(/(\d{1,2})\s*[/\-.\s]\s*(\d{3,7})/);
+    if (!m || Number(m[1]) < 1 || Number(m[1]) > 25) throw new U.HttpError(400, 'Informe o CREFITO com a região e o número. Ex.: CREFITO-3/123456-F.');
+    const suffix = profession === 'Terapeuta ocupacional' ? 'TO' : 'F';
+    return { registry: `CREFITO-${Number(m[1])}/${m[2]}-${suffix}`, council, uf: state, number: m[2] };
+  }
+  // CREF (educação física): número, categoria (G ou P) e estado
+  if (council === 'CREF') {
+    const m = text.match(/(\d{3,6})\s*-?\s*([GP])?/);
+    if (!m) throw new U.HttpError(400, 'Informe o CREF. Ex.: CREF 012345-G/SP.');
+    const ufInText = (text.replace(/CREF/, '').match(/\b([A-Z]{2})\b/) || [])[1];
+    if (ufInText && U.isUf(ufInText) && ufInText !== state) {
+      throw new U.HttpError(400, `Seu CREF é do estado ${ufInText}, mas você informou ${state}. O estado precisa ser o mesmo da sua carteirinha.`);
+    }
+    return { registry: `CREF ${m[1].padStart(6, '0')}-${m[2] || 'G'}/${state}`, council, uf: state, number: m[1] };
   }
   // Profissões sem conselho federal (psicanalista, terapeuta…): registro da entidade/associação
   // Não é obrigatório: só CRP e CRM exigem carteirinha. Se informar, fica no perfil.
@@ -92,4 +125,4 @@ async function verifyRegistry({ council, uf, number }, name) {
   }
 }
 
-module.exports = { validateRegistry, verifyRegistry, councilFor, isApiConfigured, CRP_REGIONS };
+module.exports = { validateRegistry, verifyRegistry, councilFor, isApiConfigured, CRP_REGIONS, COUNCIL_BY_PROFESSION, COUNCIL_EXAMPLE };

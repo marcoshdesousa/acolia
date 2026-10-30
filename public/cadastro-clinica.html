@@ -17,9 +17,17 @@
     <a class="brand" href="/"><span data-logo><img class="brand-mark" src="/img/logo-simbolo.png" alt="" width="34" height="34"></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
   </div></header>
   <main class="narrow" style="padding-top:28px;padding-bottom:48px">
+    <!-- Portais (versão 2.0): a clínica escolhe o portal primeiro -->
+    <div data-step0 class="hidden">
+      <h1 class="center">Em qual área a clínica atende?</h1>
+      <p class="center muted">A clínica aparece nesse portal. Atende em mais de uma área? Faça um cadastro em cada portal.</p>
+      <div class="card"><div data-portal-pick></div>
+        <button class="btn block" type="button" data-portal-next style="margin-top:14px" disabled>Continuar</button></div>
+    </div>
     <div data-step1>
+      <p class="center small hidden" data-portal-chosen></p>
       <h1 class="center">Cadastro de clínica</h1>
-      <p class="center muted">Coloque a sua clínica na Acolia: perfil próprio com endereço e mapa, seus profissionais da mente e publicações. O cadastro é analisado pela administração antes de aparecer.</p>
+      <p class="center muted">Coloque a sua clínica na Acolia: perfil próprio com endereço e mapa, seus profissionais e publicações. O cadastro é analisado pela administração antes de aparecer.</p>
       <div class="help-wa-row"><a class="help-wa" data-help href="#" target="_blank" rel="noopener"><span class="help-wa-ic" aria-hidden="true"></span><span>Alguma dúvida? <b>Fale no WhatsApp</b></span></a></div>
       <form class="card" data-form novalidate>
         <div class="field"><label for="name">Nome da clínica</label><input id="name" name="name" required maxlength="120" autocomplete="organization"></div>
@@ -132,6 +140,7 @@
       $('[data-logo-prev]').innerHTML = `<img src="${URL.createObjectURL(logoFile)}" alt="">`;
     });
     const show = (step) => {
+      $('[data-step0]').classList.toggle('hidden', step !== 0);
       $('[data-step1]').classList.toggle('hidden', step !== 1);
       $('[data-plan-step]').classList.toggle('hidden', step !== 2);
       $('[data-step2]').classList.toggle('hidden', step !== 3);
@@ -143,7 +152,7 @@
     const pix = !!cfg.platform_pix;
     if (pix) {
       $('[data-pix-note]').classList.remove('hidden');
-      $('[data-step1] > p.center.muted').textContent = 'Coloque a sua clínica na Acolia: perfil próprio com endereço e mapa, seus profissionais da mente e publicações. Pagou o Pix, a clínica já aparece.';
+      $('[data-step1] > p.center.muted').textContent = 'Coloque a sua clínica na Acolia: perfil próprio com endereço e mapa, seus profissionais e publicações. Pagou o Pix, a clínica já aparece.';
     }
     function startPay(pay, code) {
       show('pay');
@@ -163,6 +172,26 @@
       if (saved && Date.now() - saved.at < 12 * 3600e3) startPay(saved, saved.code);
       else localStorage.removeItem('acolia_cad_pay_cl');
     } catch { /* nada */ }
+    // 1º passo: o portal (desligados: Psi, direto para os dados)
+    let portal = 'psi';
+    if (cfg.portals_enabled !== false && $('[data-pay-step]').classList.contains('hidden')) {
+      const asked = new URLSearchParams(location.search).get('portal');
+      portal = Acolia.PORTAL_KEYS.includes(asked) ? asked : Acolia.portal();
+      const nx = $('[data-portal-next]');
+      nx.disabled = !portal;
+      Acolia.portalPicker($('[data-portal-pick]'), { selected: portal, onPick: (k) => { portal = k; nx.disabled = false; Acolia.setPortal(k); } });
+      nx.addEventListener('click', () => {
+        if (!portal) return;
+        Acolia.setPortal(portal);
+        const u = Acolia.PORTAL_UI[portal];
+        const c = $('[data-portal-chosen]');
+        c.innerHTML = `<img src="${u.symbol}" alt="" style="width:26px;height:26px;display:inline-block;vertical-align:middle;margin-right:6px"><b>${esc(u.name)}</b> · <a href="#" data-portal-back>trocar</a>`;
+        c.classList.remove('hidden');
+        $('[data-portal-back]').onclick = (e) => { e.preventDefault(); show(0); };
+        show(1);
+      });
+      show(0);
+    }
     handleForm(form, async () => {
       const v = (n) => String(form.elements[n].value || '').trim();
       if (v('name').length < 2) throw new Error('Informe o nome da clínica.');
@@ -190,6 +219,7 @@
         fd.append('doc', kind === 'cnpj' ? form.doc.value : form.owner_cpf.value);
         fd.append('owner_cpf', form.owner_cpf.value);
         fd.append('plan', plan.value);
+        fd.append('portal', portal || 'psi');
         fd.append('photo', logoFile, 'logo.jpg');
         const r = await api('/api/auth/clinic/register', { method: 'POST', form: fd });
         $('[data-code]').textContent = r.code;

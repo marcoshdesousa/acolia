@@ -27,7 +27,8 @@ const PRO_STATUSES = ['pendente', 'aprovado', 'recusado', 'restrito', 'bloqueado
 
 function adminPro(p) {
   return {
-    id: p.id, code: p.code, name: p.name, profession: p.profession, registry: p.registry, email: p.email, phone: p.phone,
+    id: p.id, code: p.code, name: p.name, profession: p.profession, registry: p.registry, email: require('../portals').plainEmail(p.email), phone: p.phone,
+    portal: p.portal || 'psi',
     status: p.status, state: p.state, city: p.city, photo: p.photo, bio: p.bio, specialties: p.specialties,
     price_cents: p.price_cents, has_clinic: !!p.has_clinic,
     clinic_name: p.clinic_name, clinic_address: p.clinic_address, subscription_until: p.subscription_until,
@@ -157,6 +158,7 @@ router.get('/professionals', (req, res) => {
   if ([...PRO_STATUSES, 'excluido'].includes(req.query.status)) rows = rows.filter((r) => r.status === req.query.status);
   if (req.query.status === 'vencido') rows = rows.filter((r) => r.status === 'aprovado' && !isVisible(r));
   if (req.query.status === 'ativos') rows = rows.filter((r) => !['bloqueado', 'excluido'].includes(r.status));
+  if (require('../portals').valid(req.query.portal)) rows = rows.filter((r) => (r.portal || 'psi') === req.query.portal);
   rows = filterRows(rows, req.query);
   res.json({ items: rows.map(adminPro) });
 });
@@ -199,7 +201,8 @@ router.post('/professionals/:id/review', (req, res) => {
 // registro válido e do mesmo estado (e, com a consulta ao conselho configurada, o nome tem que bater).
 // Psicanalista, psicoterapeuta e terapeuta (sem conselho) podem ser cadastrados sem registro.
 router.post('/professionals', async (req, res) => {
-  const d = validateProfessionalInput(req.body);
+  const PO = require('../portals');
+  const d = validateProfessionalInput(req.body, PO.enabled() ? PO.normalize(req.body.portal) : 'psi');
   const R = require('../registry');
   if (R.councilFor(d.profession)) {
     const reg = R.validateRegistry(d.profession, req.body.registry, d.state);
@@ -313,12 +316,13 @@ router.post('/professionals/:id/edit', async (req, res) => {
   if (has('cpf')) {
     const cpf = U.onlyDigits(b.cpf);
     if (!U.isValidCpf(cpf)) throw new U.HttpError(400, 'CPF inválido. Confira os números digitados.');
-    if (db.prepare("SELECT 1 FROM professionals WHERE cpf = ? AND status <> 'excluido' AND id <> ?").get(cpf, p.id)) throw new U.HttpError(409, 'Este CPF já está em outro cadastro de profissional.');
+    if (db.prepare("SELECT 1 FROM professionals WHERE cpf = ? AND status <> 'excluido' AND id <> ? AND COALESCE(portal, 'psi') = ?").get(cpf, p.id, p.portal || 'psi')) throw new U.HttpError(409, 'Este CPF já está em outro cadastro de profissional.');
     up.cpf = cpf;
   }
   const { PROFESSIONS, PLANS, validateLocation } = require('./auth');
   if (has('profession')) {
-    if (!PROFESSIONS.includes(b.profession)) throw new U.HttpError(400, 'Selecione a profissão.');
+    // A profissão fica dentro do portal da conta
+    if (!(require('../portals').PORTALS[p.portal || 'psi'] || { professions: PROFESSIONS }).professions.includes(b.profession)) throw new U.HttpError(400, 'Selecione a profissão.');
     up.profession = b.profession;
   }
   if (has('registry')) up.registry = U.cleanText(b.registry, 40); // o admin define a carteirinha livremente
@@ -327,8 +331,9 @@ router.post('/professionals/:id/edit', async (req, res) => {
     up.plan = b.plan || null;
   }
   if (has('email')) {
-    const email = U.cleanText(b.email, 160).toLowerCase();
-    if (!U.isValidEmail(email)) throw new U.HttpError(400, 'E-mail inválido.');
+    const plain = U.cleanText(b.email, 160).toLowerCase();
+    if (!U.isValidEmail(plain)) throw new U.HttpError(400, 'E-mail inválido.');
+    const email = require('../portals').emailKey(plain, p.portal || 'psi');
     if (db.prepare('SELECT 1 FROM professionals WHERE email = ? AND id <> ?').get(email, p.id)) throw new U.HttpError(409, 'Este e-mail já está em uso em outra conta.');
     up.email = email;
   }
@@ -435,7 +440,7 @@ router.post('/patients/:id/delete-test', (req, res) => {
 // ---------- Clínicas (versão 1.3) ----------
 function adminClinic(c) {
   const C = require('../clinics');
-  return { ...C.ownClinic(c), visible: C.isVisible(c), created_at: c.created_at, admin_note: c.admin_note, maps_query: undefined,
+  return { ...C.ownClinic(c), portal: c.portal || 'psi', visible: C.isVisible(c), created_at: c.created_at, admin_note: c.admin_note, maps_query: undefined,
     review_pending: !!c.review_pending, responsible_cpf: c.responsible_cpf ? U.formatCpf(c.responsible_cpf) : '' };
 }
 router.get('/clinics', (req, res) => {
@@ -443,6 +448,7 @@ router.get('/clinics', (req, res) => {
   const st = req.query.status === 'ativos' ? null : req.query.status;
   if (req.query.status === 'ativos') rows = rows.filter((r) => !['bloqueado', 'excluido'].includes(r.status));
   else if (['pendente', 'aprovado', 'recusado', 'bloqueado', 'excluido'].includes(st)) rows = rows.filter((r) => r.status === st);
+  if (require('../portals').valid(req.query.portal)) rows = rows.filter((r) => (r.portal || 'psi') === req.query.portal);
   const q = U.norm(req.query.q || '').trim();
   const digits = U.onlyDigits(req.query.q || '');
   if (q) rows = rows.filter((r) => U.norm(`${r.name} ${r.email} ${r.code} ${r.city}`).includes(q) || (digits.length >= 3 && String(r.doc || '').includes(digits)));
@@ -557,6 +563,39 @@ router.post('/clinics/:id/delete', (req, res) => {
   if (c.status === 'excluido') throw new U.HttpError(400, 'Esta clínica já foi apagada.');
   require('./clinic').wipeClinic(c);
   res.json({ ok: true });
+});
+
+// ---------- Portais (versão 2.0): Psi, Nutri e Fisio ----------
+function portalCounts() {
+  const PO = require('../portals');
+  return PO.KEYS.map((k) => ({
+    key: k, name: PO.PORTALS[k].name,
+    pros: db.prepare("SELECT COUNT(*) n FROM professionals WHERE COALESCE(portal, 'psi') = ? AND status NOT IN ('oficial', 'clinica', 'excluido')").get(k).n,
+    clinics: db.prepare("SELECT COUNT(*) n FROM clinics WHERE COALESCE(portal, 'psi') = ? AND status <> 'excluido'").get(k).n,
+  }));
+}
+router.get('/portals', (_req, res) => res.json({ enabled: require('../portals').enabled(), portals: portalCounts() }));
+// Liga/desliga os portais sem apagar nada (desligado: o site fica como antes, só Psi)
+router.post('/portals', (req, res) => {
+  require('../portals').setEnabled(!!req.body.enabled);
+  res.json({ enabled: require('../portals').enabled(), portals: portalCounts() });
+});
+// "Desistir dos portais": apaga as contas de profissionais e clínicas do Nutri e do Fisio (com publicações,
+// conversas, consultas futuras e arquivos, igual ao "Apagar conta") e desliga os portais. O Psi não é tocado.
+// Pede a confirmação escrita "DESISTIR".
+router.post('/portals/desistir', (req, res) => {
+  if (String(req.body.confirm || '').trim().toUpperCase() !== 'DESISTIR') throw new U.HttpError(400, 'Para confirmar, digite DESISTIR.');
+  const pros = db.prepare("SELECT * FROM professionals WHERE COALESCE(portal, 'psi') IN ('nutri', 'fisio') AND status NOT IN ('oficial', 'clinica', 'excluido')").all();
+  for (const p of pros) {
+    require('../blocklist').unblock('professional', p);
+    require('./professional').wipeProfessional(p);
+  }
+  const clinics = db.prepare("SELECT * FROM clinics WHERE COALESCE(portal, 'psi') IN ('nutri', 'fisio') AND status <> 'excluido'").all();
+  for (const c of clinics) require('./clinic').wipeClinic(c);
+  // Pacientes: a conta é uma só para todos os portais; ninguém é apagado. Quem estava no Nutri/Fisio volta ao Psi.
+  db.prepare("UPDATE patients SET last_portal = '' WHERE last_portal IN ('nutri', 'fisio')").run();
+  require('../portals').setEnabled(false);
+  res.json({ ok: true, removed_professionals: pros.length, removed_clinics: clinics.length, enabled: false });
 });
 
 // ---------- Pacientes ----------

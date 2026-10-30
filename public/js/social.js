@@ -306,8 +306,16 @@
     if (official) return true;
     const ok = await modal({
       title: 'Antes de publicar',
-      html: `<p style="margin-top:0">A Acolia é uma plataforma <b>só da área da mente e da saúde mental</b>.</p>
-        <p>Publique apenas conteúdos dessa área. <b>Não é permitido</b> fazer propaganda de outros produtos, serviços ou assuntos que não sejam de saúde mental.</p>
+      // Portais (versão 2.0): o texto fala da área do portal (Psi: mente; Nutri: alimentação; Fisio: movimento)
+      html: (() => {
+        const k = document.documentElement.dataset.portal;
+        const area = { nutri: 'da nutrição, da alimentação e da saúde', fisio: 'do movimento, da reabilitação e da saúde' }[k];
+        const name = { nutri: 'O Acolia Nutri', fisio: 'O Acolia Fisio' }[k] || 'A Acolia';
+        return area ? `<p style="margin-top:0">${name} é um portal <b>só da área ${area}</b>.</p>
+        <p>Publique apenas conteúdos dessa área. <b>Não é permitido</b> fazer propaganda de outros produtos, serviços ou assuntos fora dela, nem prometer resultados.</p>`
+          : `<p style="margin-top:0">A Acolia é uma plataforma <b>só da área da mente e da saúde mental</b>.</p>
+        <p>Publique apenas conteúdos dessa área. <b>Não é permitido</b> fazer propaganda de outros produtos, serviços ou assuntos que não sejam de saúde mental.</p>`;
+      })() + `
         <p class="small muted" style="margin-bottom:0">Conteúdo fora do tema pode ser removido pela administração.</p>`,
       actions: [{ label: '✕ Cancelar publicação', value: false, class: 'secondary' }, { label: 'Estou ciente', value: true }],
     });

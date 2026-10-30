@@ -78,6 +78,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest 
     specialties: p.specialties,
     photo: p.photo,
     verified: !!p.verified, // selo azul (a equipe conferiu os dados)
+    portal: p.portal || 'psi',
     rating: require('./ratings').summary(p.id), // { avg, count } ou null
   };
   const { db } = require('./db');
@@ -184,7 +185,8 @@ function ownProfessional(p) {
     legal_name: p.legal_name || p.name, // nome completo (vai nos documentos)
     profession: p.profession,
     registry: p.registry,
-    email: p.email,
+    email: require('./portals').plainEmail(p.email),
+    portal: p.portal || 'psi',
     phone: p.phone,
     status: p.status,
     bio: p.bio,
@@ -231,6 +233,7 @@ function ownPatient(p) {
     state: p.state,
     city: p.city,
     photo: p.photo,
+    last_portal: p.last_portal || '',
   };
 }
 

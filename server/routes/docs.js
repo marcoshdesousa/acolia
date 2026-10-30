@@ -40,20 +40,23 @@ db.exec(`CREATE TABLE IF NOT EXISTS documents (
 try { db.exec('ALTER TABLE documents ADD COLUMN signature TEXT'); } catch { /* já existe */ }
 const SIGNATURE_MAX = 250 * 1024;
 
-const MEDICO = ['Psiquiatra'];
+const MEDICO = ['Psiquiatra', 'Nutrólogo(a)', 'Médico(a) do esporte'];
 const PSICO = ['Psicólogo(a)', 'Neuropsicólogo(a)'];
+// Portal Fisio (versão 2.0): fisioterapeuta e terapeuta ocupacional emitem atestado (COFFITO)
+const FISIO_TO = ['Fisioterapeuta', 'Terapeuta ocupacional'];
 // Conta de teste do profissional: emite tudo (para testar), mas o documento sai marcado
 // "TESTE — SEM VALIDADE" e com o nome/registro de teste, então não vale como documento real.
 function allowedKinds(profession, isTest = false) {
   if (isTest) return ['atestado', 'receita', 'declaracao', 'encaminhamento'];
   const kinds = [];
-  if (MEDICO.includes(profession) || PSICO.includes(profession)) kinds.push('atestado');
+  if (MEDICO.includes(profession) || PSICO.includes(profession) || FISIO_TO.includes(profession)) kinds.push('atestado');
   if (MEDICO.includes(profession)) kinds.push('receita');
   kinds.push('declaracao', 'encaminhamento');
   return kinds;
 }
 const TITLES = { receita: 'Receita', encaminhamento: 'Encaminhamento', declaracao: 'Declaração de comparecimento' };
-const titleOf = (kind, profession) => (kind === 'atestado' ? (MEDICO.includes(profession) ? 'Atestado médico' : 'Atestado psicológico') : TITLES[kind]);
+const ATTEST = { Fisioterapeuta: 'Atestado fisioterapêutico', 'Terapeuta ocupacional': 'Atestado de terapia ocupacional' };
+const titleOf = (kind, profession) => (kind === 'atestado' ? (MEDICO.includes(profession) ? 'Atestado médico' : ATTEST[profession] || 'Atestado psicológico') : TITLES[kind]);
 
 // Código fácil de ler e digitar (sem 0/O, 1/I)
 function newCode() {
@@ -128,7 +131,7 @@ router.post('/', (req, res) => {
   if (!['atestado', 'receita', 'declaracao', 'encaminhamento'].includes(kind)) throw new U.HttpError(400, 'Tipo de documento inválido.');
   if (!allowedKinds(pro.profession, !!pro.is_test).includes(kind)) {
     throw new U.HttpError(403, kind === 'receita'
-      ? 'Só médico (psiquiatra, com CRM) pode emitir receita de medicamentos.'
+      ? 'Só médico (com CRM) pode emitir receita de medicamentos.'
       : 'Sua profissão não permite emitir atestado. Você pode fazer um encaminhamento.');
   }
   chat.assertCanSend('professional', c);

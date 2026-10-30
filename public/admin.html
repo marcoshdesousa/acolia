@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-no-portal>
 <head>
   <title>Administração — Acolia</title>
   <meta name="robots" content="noindex">
@@ -45,6 +45,8 @@
         <div data-storage style="margin-bottom:16px"></div>
         <div class="acct-sum" data-acct-sum></div>
         <div class="stats" data-stats></div>
+        <h2 style="margin-top:28px">Portais (Psi, Nutri e Fisio)</h2>
+        <div class="card" data-portals-card style="padding:16px"><div class="spinner"></div></div>
         <h2 style="margin-top:28px">Limite de publicações por profissional</h2>
         <form class="card limits-card" data-limits-form style="padding:16px">
           <p class="small muted" style="margin-top:0"><b>0 = sem limite</b> (como está agora). Com um número, cada profissional guarda no máximo essa quantidade: quando ele publica além do limite, a publicação <b>mais antiga é apagada</b> sozinha para a nova entrar. O profissional não vê aviso de limite enquanto for sem limite. A Acolia Brasil não tem limite.</p>
@@ -75,6 +77,7 @@
         </div>
         <form class="search-bar" data-filter="professionals" style="margin-top:12px">
           <input name="q" type="search" placeholder="Nome, e-mail, código ou registro">
+          <select name="portal" style="flex:0 1 150px"><option value="">Todos os portais</option><option value="psi">Acolia Psi</option><option value="nutri">Acolia Nutri</option><option value="fisio">Acolia Fisio</option></select>
           <select name="status"><option value="">Todas as situações</option><option value="ativos">Ativos (não bloqueados)</option><option value="pendente">Pendentes</option><option value="aprovado">Aprovados</option><option value="vencido">Mensalidade vencida</option><option value="restrito">Restritos</option><option value="bloqueado">Bloqueados</option><option value="recusado">Recusados</option><option value="excluido">Apagados</option></select>
           <select name="state" style="flex:0 1 120px"></select>
           <select name="city"><option value="">Todos os municípios</option></select>
@@ -120,6 +123,7 @@
               <div class="hint">Um cadastro de profissional por CPF.</div></div>
           </div>
           <div class="grid-2">
+            <div class="field"><label for="n-portal">Portal</label><select id="n-portal" name="portal"><option value="psi">Acolia Psi</option><option value="nutri">Acolia Nutri</option><option value="fisio">Acolia Fisio</option></select></div>
             <div class="field"><label for="n-prof">Profissão</label><select id="n-prof" name="profession"></select></div>
             <div class="field" data-n-reg-field><label for="n-reg" data-n-reg-label>Registro (CRP, CRM…)</label><input id="n-reg" name="registry" required maxlength="40">
               <div class="hint" data-n-reg-hint>CRP ou CRM válido e do mesmo estado.</div></div>

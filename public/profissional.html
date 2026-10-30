@@ -69,6 +69,12 @@
 
     try {
       const p = await api('/api/professionals/' + encodeURIComponent(key));
+      // Portais (versão 2.0): a página do profissional abre com a logo e a cor do portal dele. Quem chegou pelo
+      // link (visitante ou paciente) passa a estar nesse portal (cadastro e app abrem nele).
+      if (p.portal && !p.official && await Acolia.portalsOn()) {
+        if (me.role === 'professional' || me.role === 'clinic') Acolia.applyPortal(p.portal); else Acolia.setPortal(p.portal);
+        $('[data-logo]').innerHTML = ICONS.logo;
+      }
       document.title = p.official ? p.name + ' | Acolia' : p.name + ' — ' + p.profession + ' | Acolia';
       const chat = ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"');
       $('[data-profile]').innerHTML = AcoliaProfile.render(p, {

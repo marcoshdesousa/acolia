@@ -12,7 +12,13 @@ router.get('/config', (_req, res) => {
   if (process.env.ICE_SERVERS) {
     try { iceServers = JSON.parse(process.env.ICE_SERVERS); } catch { console.error('ICE_SERVERS inválido (JSON)'); }
   }
-  res.json({ iceServers, professions: PROFESSIONS, plans: Object.entries(PLANS).map(([key, label]) => ({ key, label })), specialties: require('../specialties').GROUPS, ufs: U.UFS, support: require('../accountState').SUPPORT_WHATSAPP, platform_pix: require('../platformPay').configured() });
+  const PO = require('../portals');
+  const R = require('../registry');
+  res.json({ iceServers, professions: PROFESSIONS,
+    // Portais (versão 2.0): lista, profissões, conselhos e especialidades de cada um
+    portals_enabled: PO.enabled(), portals: PO.publicList(), councils: R.COUNCIL_BY_PROFESSION, council_examples: R.COUNCIL_EXAMPLE,
+    specialties_by_portal: require('../specialties').BY_PORTAL,
+    plans: Object.entries(PLANS).map(([key, label]) => ({ key, label })), specialties: require('../specialties').GROUPS, ufs: U.UFS, support: require('../accountState').SUPPORT_WHATSAPP, platform_pix: require('../platformPay').configured() });
 });
 
 // Vitrine de profissionais.
@@ -40,7 +46,8 @@ router.get('/clinics', (req, res) => {
   const state = all ? '' : U.isUf(req.query.state) ? req.query.state.toUpperCase() : (me?.state || '');
   const city = U.norm(req.query.city || '').trim();
   const myCity = me?.city ? U.norm(me.city) : '';
-  let rows = db.prepare(`SELECT * FROM clinics c WHERE ${C.VISIBLE_SQL}`).all();
+  // Cada portal tem as suas clínicas
+  let rows = db.prepare(`SELECT * FROM clinics c WHERE ${C.VISIBLE_SQL} AND COALESCE(c.portal, 'psi') = ?`).all(require('../portals').fromReq(req));
   if (state) rows = rows.filter((c) => c.state === state);
   if (city) rows = rows.filter((c) => (c.city_norm || '').includes(city));
   // O município da pessoa aparece primeiro
@@ -64,8 +71,9 @@ router.get('/professionals', (req, res) => {
   const isPatient = req.auth?.role === 'patient';
   const viewerIsPro = req.auth?.role === 'professional'; // profissional vê a vitrine completa (sem filtro automático)
   const me = isPatient ? req.auth.user : null;
-  const where = [VISIBLE_SQL];
-  const params = [];
+  // Só os profissionais do portal em que a pessoa está (com os portais desligados, todos são do Psi)
+  const where = [VISIBLE_SQL, "COALESCE(p.portal, 'psi') = ?"];
+  const params = [require('../portals').fromReq(req)];
   const profession = U.cleanText(req.query.profession, 60);
   if (profession) { where.push('p.profession = ?'); params.push(profession); }
   let rows = db.prepare(`SELECT p.* FROM professionals p WHERE ${where.join(' AND ')}`).all(...params);

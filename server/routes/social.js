@@ -84,6 +84,9 @@ function notify(toRole, toId, type, from, extra = {}) {
   rt.emit(`${toRole}:${toId}`, 'social:notification', { id: Number(info.lastInsertRowid), type });
 }
 
+// Portal do autor (o perfil oficial passa pelo "OR" próprio no feed)
+const PORTAL_SQL = "COALESCE(p.portal, 'psi') = ?";
+
 // ---------- Publicações ----------
 function visiblePro(id) {
   return db.prepare(`SELECT * FROM professionals p WHERE id = ? AND ${VISIBLE_SQL}`).get(id);
@@ -194,14 +197,16 @@ router.get('/feed', (req, res) => {
   const seed = Math.abs(Math.trunc(Number(req.query.seed))) % 1000003 || 1 + Math.floor(Math.random() * 1000000);
   const snap = Number(req.query.snap) > 0 ? Math.trunc(Number(req.query.snap)) : Date.now();
   const SEEN = '(SELECT 1 FROM post_views v WHERE v.post_id = po.id AND v.role = ? AND v.user_id = ? AND (v.seen_at IS NULL OR v.seen_at < ?))';
+  // Portais (versão 2.0): o feed mostra só o portal em que a pessoa está (a Acolia Brasil aparece em todos)
+  const portal = require('../portals').fromReq(req);
   const rows = db.prepare(`
     SELECT po.*, ${SEEN} AS seen
     FROM posts po JOIN professionals p ON p.id = po.professional_id
-    WHERE (${SOCIAL_VISIBLE} AND po.professional_id IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?))
+    WHERE (${SOCIAL_VISIBLE} AND ${PORTAL_SQL} AND po.professional_id IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?))
        OR po.professional_id = ?
        OR po.professional_id = ?
     ORDER BY seen IS NOT NULL, CASE WHEN seen IS NULL THEN -po.id ELSE feed_mix(po.id, ?) END
-    LIMIT ? OFFSET ?`).all(me.role, me.id, snap, me.role, me.id, authorIdOf(me) || -1, official, seed, PAGE + 1, offset);
+    LIMIT ? OFFSET ?`).all(me.role, me.id, snap, portal, me.role, me.id, authorIdOf(me) || -1, official, seed, PAGE + 1, offset);
   const mainMore = rows.length > PAGE;
   const main = rows.slice(0, PAGE);
 
@@ -215,12 +220,12 @@ router.get('/feed', (req, res) => {
     sug = db.prepare(`
       SELECT po.*, ${SEEN} AS seen
       FROM posts po JOIN professionals p ON p.id = po.professional_id
-      WHERE ${SOCIAL_VISIBLE} AND po.professional_id <> ?
+      WHERE ${SOCIAL_VISIBLE} AND ${PORTAL_SQL} AND po.professional_id <> ?
         AND po.professional_id <> ?
         AND po.professional_id NOT IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?)
         AND po.id NOT IN (SELECT value FROM json_each(?))
       ORDER BY seen IS NOT NULL, RANDOM()
-      LIMIT ?`).all(me.role, me.id, snap, official, authorIdOf(me) || -1, me.role, me.id, JSON.stringify(shown), want + 1);
+      LIMIT ?`).all(me.role, me.id, snap, portal, official, authorIdOf(me) || -1, me.role, me.id, JSON.stringify(shown), want + 1);
   }
   const sugMore = sug.length > want;
   sug = sug.slice(0, Math.max(0, want));
@@ -619,8 +624,8 @@ function storyOut(s, me) {
 router.get('/stories', (req, res) => {
   const me = who(req);
   const pros = db.prepare(`SELECT DISTINCT s.professional_id AS id FROM stories s JOIN professionals p ON p.id = s.professional_id
-    WHERE s.${STORY_ALIVE} AND ((${SOCIAL_VISIBLE} AND s.professional_id IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?))
-      OR s.professional_id = ?)`).all(me.role, me.id, authorIdOf(me) || -1);
+    WHERE s.${STORY_ALIVE} AND ((${SOCIAL_VISIBLE} AND ${PORTAL_SQL} AND s.professional_id IN (SELECT professional_id FROM follows WHERE follower_role = ? AND follower_id = ?))
+      OR s.professional_id = ?)`).all(require('../portals').fromReq(req), me.role, me.id, authorIdOf(me) || -1);
   const groups = pros.map(({ id }) => {
     const items = db.prepare(`SELECT * FROM stories WHERE professional_id = ? AND ${STORY_ALIVE} ORDER BY id`).all(id);
     return { professional: actor('professional', id), mine: authorIdOf(me) === id, items: items.map((s) => storyOut(s, me)), last: items.at(-1)?.id || 0 };
