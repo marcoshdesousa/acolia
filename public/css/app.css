@@ -301,23 +301,27 @@ td .row { flex-wrap: nowrap; }
 .peer-flags { position: absolute; left: 16px; bottom: 110px; z-index: 4; display: flex; gap: 6px; }
 .peer-flags span { background: rgba(0,0,0,.55); padding: 4px 10px; border-radius: 999px; font-size: .8rem; font-weight: 700; }
 /* Atendimento em grupo (tela do profissional): um quadro por paciente; tocou, amplia */
-.group-grid { position: absolute; left: 8px; right: 8px; top: 72px; bottom: 112px; z-index: 2; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(46%, 260px), 1fr)); grid-auto-rows: minmax(0, 1fr); }
-.group-grid.has-focus { grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); grid-auto-rows: 84px; }
+.group-grid { position: absolute; left: 8px; right: 8px; top: 148px; bottom: 180px; z-index: 2; display: flex; flex-direction: column; gap: 8px; }
+.g-main { flex: 1; min-height: 0; display: flex; }
+.g-strip { flex: none; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.g-strip::-webkit-scrollbar { display: none; }
+.g-empty { flex: none; align-self: center; font-size: .85rem; opacity: .8; padding: 0 8px; color: #fff; }
 .gtile { position: relative; border: 0; padding: 0; border-radius: 14px; overflow: hidden; background: #1d2826; cursor: pointer; min-height: 0; color: #fff; font: inherit; }
 .gtile video { width: 100%; height: 100%; object-fit: cover; display: block; }
-.gtile.big { grid-column: 1 / -1; grid-row: 1; }
-.gtile.big video { object-fit: contain; }
+.g-main .gtile { flex: 1; }
+.g-strip .gtile { flex: none; width: 82px; height: 112px; border: 2px solid transparent; }
+.gtile.self video { transform: scaleX(-1); }
 .gt-off { position: absolute; inset: 0; display: none; place-items: center; background: linear-gradient(135deg, #3f5550, #6f8a83); }
 .gtile.cam-off .gt-off { display: grid; }
-.has-focus .gtile:not(.big) .gt-off .avatar { transform: scale(.6); }
+.g-strip .gt-off .avatar { transform: scale(.55); }
 .gt-name { position: absolute; left: 6px; bottom: 6px; display: flex; gap: 6px; align-items: center; max-width: calc(100% - 12px); background: rgba(0,0,0,.55); border-radius: 999px; padding: 3px 10px; font-weight: 800; font-size: .8rem; }
+.g-strip .gt-name { left: 4px; bottom: 4px; padding: 2px 7px; font-size: .7rem; max-width: calc(100% - 8px); }
 .gt-name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gt-flags { display: flex; gap: 4px; } .gt-flags svg { width: 14px; height: 14px; }
 .gt-wait { position: absolute; left: 8px; top: 6px; font-size: .75rem; opacity: .85; }
-.call-stage.is-group .group-grid { top: 176px; bottom: 180px; }
-.call-stage.is-group #localVideo, .call-stage.is-group .local-off { top: 82px; right: 14px; width: 66px; z-index: 5; }
-.call-stage.is-group .call-top { max-width: calc(100% - 32px - 80px); }
-@media (min-width: 700px) { .call-stage.is-group .group-grid { top: 150px; bottom: 112px; } }
+.call-stage.is-group #localVideo, .call-stage.is-group .local-off { display: none; }
+.call-stage.is-group .call-top { max-width: calc(100% - 32px); }
+@media (min-width: 700px) { .group-grid { top: 120px; bottom: 112px; } .g-strip .gtile { width: 110px; height: 140px; } }
 
 .install-banner { display: flex; gap: 12px; align-items: center; }
 .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; margin: 24px auto; }

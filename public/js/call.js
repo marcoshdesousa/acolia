@@ -315,14 +315,24 @@
     $('.call-stage').classList.add('is-group');
     const grid = $('#groupGrid');
     grid.classList.remove('hidden');
+    // Em cima, grande: a câmera do profissional (ou o paciente que ele tocou). Embaixo, os pequenos.
+    grid.innerHTML = '<div class="g-main"></div><div class="g-strip"><span class="g-empty">Aguardando os pacientes entrarem…</span></div>';
     S.peers = new Map();
-    S.focus = null;
+    S.focus = 'self';
+    const self = document.createElement('button');
+    self.type = 'button';
+    self.className = 'gtile self';
+    self.innerHTML = `<video autoplay playsinline muted></video><div class="gt-off"></div><div class="gt-name"><span>Você</span><span class="gt-flags"></span></div>`;
+    self.addEventListener('click', () => { S.focus = 'self'; layoutGrid(); });
+    S.selfTile = self;
+    syncSelfTile();
     // Câmera ligada/desligada vale para todas as conexões
     S.videoSender = { replaceTrack: (t) => Promise.all([...S.peers.values()].map((p) => p.videoSender?.replaceTrack(t))) };
     $('[data-top-avatar]').innerHTML = avatar('Grupo', null, 'sm');
     $('[data-top-name]').textContent = 'Atendimento em grupo';
     $('[data-overlay-avatar]').innerHTML = '';
     $('[data-overlay-title]').textContent = 'Atendimento em grupo';
+    layoutGrid();
     groupOverlay();
     renderControls();
     setupBackground();
@@ -365,9 +375,24 @@
     window.addEventListener('beforeunload', () => S.socket?.emit('call:leave'));
   }
 
+  // Quadro do próprio profissional: a câmera dele (ou a foto, com a câmera desligada) e o microfone
+  function syncSelfTile() {
+    const t = S.selfTile;
+    if (!t) return;
+    const v = $('video', t);
+    const track = S.local?.getVideoTracks()[0];
+    if (v.dataset.track !== (track?.id || '')) { v.srcObject = null; v.srcObject = S.local; v.dataset.track = track?.id || ''; v.play().catch(() => {}); }
+    const off = !myCamLive();
+    t.classList.toggle('cam-off', off);
+    if (off) { const me = myIdentity(); $('.gt-off', t).innerHTML = avatar(me.name, me.photo, 'lg'); }
+    $('.gt-flags', t).innerHTML = S.micOn ? '' : ICONS.micOff;
+  }
+
   function groupOverlay() {
     const n = S.peers ? [...S.peers.values()].filter((p) => p.connected).length : 0;
-    overlay(S.peers && S.peers.size ? null : 'Aguardando os pacientes entrarem…');
+    overlay(null);
+    const empty = $('.g-empty');
+    if (empty) empty.classList.toggle('hidden', !!(S.peers && S.peers.size));
     status(n ? `${n} ${n === 1 ? 'paciente' : 'pacientes'} na chamada` : 'Aguardando…');
     if (n) startTimer(); else stopTimer();
     if (n) $('[data-top-status]').dataset.count = n;
@@ -395,8 +420,7 @@
     tile.innerHTML = `<video autoplay playsinline muted></video><audio autoplay playsinline></audio>
       <div class="gt-off">${avatar(label, null, 'lg')}</div>
       <div class="gt-name"><span>${esc(label)}</span><span class="gt-flags"></span></div><div class="gt-wait">Conectando…</div>`;
-    tile.addEventListener('click', () => { S.focus = S.focus === gid ? null : gid; layoutGrid(); });
-    $('#groupGrid').append(tile);
+    tile.addEventListener('click', () => { S.focus = S.focus === gid ? 'self' : gid; layoutGrid(); });
     const p = { gid, label, pc, tile, pendingIce: [], videoSender: null, connected: false };
     S.peers.set(gid, p);
     S.local.getTracks().forEach((t) => {
@@ -434,16 +458,25 @@
     p.pc.ontrack = null; p.pc.onicecandidate = null; p.pc.onconnectionstatechange = null; p.pc.close();
     p.tile.remove();
     S.peers.delete(gid);
-    if (S.focus === gid) S.focus = null;
+    if (S.focus === gid) S.focus = 'self';
     layoutGrid();
     groupOverlay();
   }
 
-  // Grade com todos; tocou em um: ele fica grande e os outros numa fileira embaixo
+  // Um grande em cima (o profissional, ou o paciente que ele tocou) e os outros pequenos embaixo, em pé
+  // (como a tela do celular). Tocou no grande: volta para a câmera do profissional.
   function layoutGrid() {
-    const grid = $('#groupGrid');
-    grid.classList.toggle('has-focus', S.focus !== null);
-    for (const p of S.peers.values()) p.tile.classList.toggle('big', p.gid === S.focus);
+    const main = $('#groupGrid .g-main');
+    const strip = $('#groupGrid .g-strip');
+    if (!main) return;
+    const tiles = [{ id: 'self', el: S.selfTile }, ...[...S.peers.values()].map((p) => ({ id: p.gid, el: p.tile }))];
+    for (const t of tiles) {
+      if (t.id === S.focus) { if (t.el.parentNode !== main) main.append(t.el); } else if (t.el.parentNode !== strip) strip.append(t.el);
+      t.el.classList.toggle('big', t.id === S.focus);
+    }
+    // Mantém a ordem da fileira: o profissional primeiro, depois os pacientes na ordem em que entraram
+    for (const t of tiles) if (t.id !== S.focus) strip.append(t.el);
+    $$('video', $('#groupGrid')).forEach((v) => v.play().catch(() => {}));
   }
 
   // ---------- Controles ----------
@@ -468,6 +501,7 @@
     const tile = $('#localOff');
     tile.classList.toggle('hidden', !off);
     if (off) { const me = myIdentity(); tile.innerHTML = avatar(me.name, me.photo, 'lg'); }
+    syncSelfTile();
   }
 
   $('[data-mic]').addEventListener('click', () => {
