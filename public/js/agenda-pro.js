@@ -411,7 +411,7 @@
     });
   }
 
-  // ---------- Pacote mensal (Acolia Fisio) ----------
+  // ---------- Pacote mensal (qualquer profissional; só aparece para o paciente se ele criar algum) ----------
   // O profissional cria os pacotes (sessões por semana e valor do mês), vê quem comprou e, no Pix manual,
   // confirma quando o dinheiro cair. Com o pacote valendo, o paciente marca as sessões sem pagar cada uma.
   async function renderPackages() {
@@ -424,7 +424,7 @@
     const waiting = d.patients.filter((p) => p.status === 'aguardando_pagamento');
     const active = d.patients.filter((p) => p.status === 'ativo');
     box.innerHTML = `<h2 style="margin:0">Pacotes mensais</h2>
-      <p class="small muted" style="margin:0">Venda um pacote por mês: você escolhe <b>quantas sessões por semana</b> e o <b>valor do mês</b>. O paciente compra no seu perfil, paga o Pix (direto para você) e, durante o mês, marca as sessões na sua agenda <b>sem pagar cada uma</b>, até o limite da semana. Sessão cancelada a tempo volta para o pacote.</p>
+      <p class="small muted" style="margin:0"><b>Opcional.</b> Se quiser, venda um pacote por mês: você escolhe <b>quantas sessões por semana</b> e o <b>valor do mês</b>. O paciente compra no seu perfil, paga o Pix (direto para você) e, durante o mês, marca as sessões na sua agenda <b>sem pagar cada uma</b>, até o limite da semana. Sessão cancelada a tempo volta para o pacote.</p>
       ${d.items.length ? `<ul class="pk-list">${d.items.map((p) => `<li><span>${ic('calendar', 18)}<span><b>${esc(p.label)}</b><br><span class="small muted">${money(p.price_cents)} por mês</span></span></span>${d.secretary ? '' : `<button type="button" class="icon-btn" data-pk-del="${p.id}" aria-label="Tirar este pacote" title="Tirar da venda">✕</button>`}</li>`).join('')}</ul>`
         : '<p class="small muted" style="margin:0">Você ainda não tem pacote à venda.</p>'}
       ${d.secretary ? '' : `<div class="pk-form">

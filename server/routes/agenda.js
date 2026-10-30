@@ -58,7 +58,7 @@ router.get('/pro/:id/month', (req, res) => {
     paused: pro.accepts_messages === 0,
     presencial: G.clinicOf(pro), presencial_open: G.presencialOpen(pro), online: !!pro.agenda_on, insurance: !!pro.accepts_insurance, patient,
     days: agendaOk ? G.monthDays(pro, ym, { patientId }) : [],
-    // Pacote mensal (Acolia Fisio): os pacotes à venda e, para o paciente, os que ele tem valendo
+    // Pacote mensal (se o profissional criou): os pacotes à venda e, para o paciente, os que ele tem valendo
     package_offers: PK.allowed(pro) ? PK.offers(pro.id) : [],
     my_packages: isPatient(req) && PK.allowed(pro) ? PK.forCalendar(req.auth.user.id, pro.id) : [],
   });
@@ -653,7 +653,7 @@ router.delete('/asaas', (req, res) => {
   res.json(settingsOf(req.auth.user));
 });
 
-// ---------- Pacote mensal (Acolia Fisio) ----------
+// ---------- Pacote mensal (qualquer profissional que quiser) ----------
 // Profissional: os pacotes que ele vende e os dos pacientes (esperando confirmar o Pix, valendo)
 router.get('/packages', (req, res) => {
   if (!isPro(req)) throw new U.HttpError(403, 'Só para profissionais.');
@@ -668,7 +668,6 @@ router.get('/packages', (req, res) => {
 router.post('/packages', (req, res) => {
   if (!isPro(req) || req.auth.secretary) throw new U.HttpError(403, 'Só o profissional cria pacotes.');
   const pro = req.auth.user;
-  if (!PK.allowed(pro)) throw new U.HttpError(400, 'Pacotes mensais são do Acolia Fisio.');
   const n = Number(req.body.per_week);
   if (!(Number.isInteger(n) && n >= 1 && n <= 7)) throw new U.HttpError(400, 'Escolha de 1 a 7 sessões por semana.');
   const cents = Math.round(Number(String(req.body.price ?? '').replace(/\./g, '').replace(',', '.')) * 100);

@@ -1420,7 +1420,7 @@ test('atendimento em grupo (só Acolia Fisio): até 10 pacientes no horário, um
   assert.equal((await st(0)).call_code, null);
 });
 
-test('pacote mensal (só Acolia Fisio): profissional cria, paciente compra, profissional confirma o Pix, sessões por semana sem pagar; login pelo CPF', async () => {
+test('pacote mensal (qualquer profissional que quiser): profissional cria, paciente compra, profissional confirma o Pix, sessões por semana sem pagar; login pelo CPF', async () => {
   await admin.post('/api/auth/admin/login', { username: 'admin', password: 'senha-admin-123' });
   clock = Date.parse(at('2030-05-06', '09:00')); // segunda-feira
   const cpf = nextCpf();
@@ -1440,11 +1440,12 @@ test('pacote mensal (só Acolia Fisio): profissional cria, paciente compra, prof
   assert.equal(pk.status, 201, JSON.stringify(pk.data));
   assert.deepEqual(pk.data.items.map((x) => [x.per_week, x.price_cents]), [[2, 32000]]);
   await F.post('/api/agenda/packages', { per_week: 1, price: '180' });
-  // Nutri não tem pacote
+  // Nutri também pode ter (é opcional: quem não cria não mostra nada)
   const N = (await admin.post('/api/admin/professionals', { portal: 'nutri', name: 'Nilo Nutri Lima', profession: 'Nutricionista', registry: 'CRN-3 77777', email: 'nilo.pk@example.com', phone: '11955550002', state: 'SP', city: 'Campinas', specialties: ['Emagrecimento'] })).data;
   const nc = client();
   await nc.post('/api/auth/professional/login', { login: N.code, password: N.password });
-  assert.equal((await nc.post('/api/agenda/packages', { per_week: 1, price: '100' })).status, 400);
+  assert.deepEqual((await anon.get(`/api/agenda/pro/${N.id}/packages`)).data.items, [], 'sem pacote criado, nada aparece');
+  assert.equal((await nc.post('/api/agenda/packages', { per_week: 1, price: '100' })).status, 201);
   // O paciente vê os pacotes no perfil (até sem conta)
   const offers = (await anon.get(`/api/agenda/pro/${fid}/packages`)).data.items;
   assert.deepEqual(offers.map((x) => x.label), ['1 vez por semana', '2 vezes por semana']);

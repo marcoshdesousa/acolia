@@ -1,5 +1,5 @@
 'use strict';
-// Pacote mensal (só Acolia Fisio: fisioterapia, Pilates, yoga, personal…).
+// Pacote mensal (qualquer profissional, de qualquer portal, se ele quiser).
 // O profissional cria os pacotes: quantas sessões por semana (1 a 7) e o valor do mês. O paciente compra
 // (Pix automático pelo Asaas do profissional ou Pix manual pela chave dele, com o profissional confirmando
 // que recebeu) e, enquanto o pacote vale (um mês), marca as sessões sem pagar cada uma, até o limite da
@@ -46,7 +46,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS patient_packages (
 db.exec('CREATE INDEX IF NOT EXISTS idx_patient_packages ON patient_packages(patient_id, professional_id)');
 try { db.exec('ALTER TABLE appointments ADD COLUMN package_id INTEGER'); } catch { /* já existe */ }
 
-const allowed = (pro) => G.groupAllowed(pro); // mesmos profissionais do atendimento em grupo (Acolia Fisio)
+const allowed = (pro) => !!pro; // todos podem; só aparece para o paciente quem criou algum pacote
 const label = (n) => `${n} ${n === 1 ? 'vez' : 'vezes'} por semana`;
 const brDate = (d) => (d ? d.split('-').reverse().join('/') : '');
 const addMonthDay = (date) => { // mesmo dia do mês seguinte, menos 1 (01/03 → 31/03; 15/03 → 14/04)

@@ -98,7 +98,7 @@
     };
   }
 
-  // ---------- Pacote mensal (Acolia Fisio): comprar ----------
+  // ---------- Pacote mensal: comprar ----------
   // Explica como funciona, a pessoa aceita e paga o Pix: automático (QR Code, confirma sozinho) ou na chave
   // do profissional (ele confirma quando o dinheiro cair). onDone: o pacote começou ou o pedido foi feito.
   async function buyPackage(offer, proName, onDone) {
@@ -189,7 +189,7 @@
       return (m === 'online' ? info.online === false : !info.presencial_open) ? 'Sem agenda' : '';
     };
 
-    // Pacote mensal (Acolia Fisio): o que o paciente tem valendo ou os pacotes à venda
+    // Pacote mensal (se o profissional criou): o que o paciente tem valendo ou os pacotes à venda
     const pkMonday = (date) => { const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); };
     const pkFor = (date) => (info?.my_packages || []).find((p) => p.starts_on <= date && p.ends_on >= date) || null;
     const pkFree = (p, date) => p.per_week - (p.weeks[pkMonday(date)] || 0);
