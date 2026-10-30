@@ -793,7 +793,7 @@
       title: 'Notificações',
       html: data.items.length ? `<ul class="notifs">${data.items.map((n) => (n.type === 'aviso' ? `
         <li class="${n.read ? '' : 'unread'} aviso" data-aviso="${n.id}">
-          <span class="avatar sm notif-ic aviso-ic"><img src="/img/logo-simbolo.png" alt=""></span>
+          <span class="avatar sm notif-ic aviso-ic"><img src="/img/acolia-saude-simbolo.png" alt=""></span>
           <div class="grow"><div><b>📣 Aviso da Acolia</b></div><div class="aviso-txt">${esc(n.text)}</div><small class="muted">${esc(timeAgo(n.created_at))}</small></div>
           ${n.notice?.image ? `<img src="${esc(n.notice.image)}" alt="" class="notif-thumb">` : ''}
         </li>` : `

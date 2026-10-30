@@ -212,7 +212,7 @@ function sendMessage(c, role, from, kind, body) {
   // Notificação no aparelho de quem recebe
   const to = role === 'patient' ? ['professional', c.professional_id, `/painel#conversas/${c.id}`] : ['patient', c.patient_id, `/app#chat/${c.id}`];
   const text = kind === 'booking' ? require('../agenda').pushText(body) : kind === 'pix' ? 'Enviou a chave Pix para pagamento' : kind === 'call' ? 'Enviou um código de atendimento'
-    : kind === 'audio' ? '🎤 Enviou um áudio' : kind === 'image' ? '📷 Enviou uma foto' : kind === 'location' ? '📍 Enviou a localização do consultório' : kind === 'doc' ? `📄 Enviou um documento: ${String(body).split('|')[1] || ''}` : kind === 'post' ? '📌 Enviou uma das suas publicações' : body;
+    : kind === 'audio' ? '🎤 Enviou um áudio' : kind === 'image' ? '📷 Enviou uma foto' : kind === 'location' ? '📍 Enviou a localização do consultório' : kind === 'doc' ? `📄 Enviou um documento: ${String(body).split('|')[1] || ''}` : kind === 'post' ? '📌 Enviou uma das suas publicações' : kind === 'plan' ? `📋 Enviou: ${String(body).split('|')[1] || 'plano'}` : body;
   require('../push').notify(to[0], to[1], {
     title: from, body: text.length > 140 ? `${text.slice(0, 137)}…` : text, url: to[2], tag: `conversa-${c.id}`,
   });
@@ -330,6 +330,7 @@ router.post('/messages/:id/delete', (req, res) => {
       removeAudioFile(m);
       // Documento apagado para todos: fica cancelado (a verificação pelo QR mostra "cancelado")
       if (m.kind === 'doc') db.prepare("UPDATE documents SET revoked_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE code = ?").run(String(m.body).split('|')[0]);
+      if (m.kind === 'plan') { const pid = Number(String(m.body).split('|')[0]); db.prepare('DELETE FROM care_plan_checks WHERE plan_id = ?').run(pid); db.prepare('DELETE FROM care_plans WHERE id = ?').run(pid); } // plano apagado para todos some de "Meus planos"
       db.prepare("UPDATE messages SET kind = 'deleted', body = '' WHERE id = ?").run(m.id);
     }
     // Os dois lados (e os outros aparelhos de quem apagou) passam a ver "Mensagem apagada"

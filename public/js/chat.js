@@ -9,7 +9,7 @@
     const state = { archived: false, list: [], current: null, messages: [], hasMore: false, loadingOlder: false, typingTimer: null, support: null };
     // Suporte Acolia: conversa fixa no topo (endereços próprios em /api/support)
     const isSup = () => !!state.current?.support;
-    const SUP = { id: 'suporte', support: true, peer: { name: 'Suporte Acolia', photo: '/img/logo-simbolo.png', active: true, subtitle: 'Equipe Acolia · dúvidas, erros e sugestões' } };
+    const SUP = { id: 'suporte', support: true, peer: { name: 'Suporte Acolia', photo: '/img/acolia-saude-simbolo.png', active: true, subtitle: 'Equipe Acolia · dúvidas, erros e sugestões' } };
 
     root.innerHTML = `
       <div class="chat">
@@ -86,6 +86,7 @@
       if (m.kind === 'deleted') return `${prefix}🚫 Mensagem apagada`;
       if (m.kind === 'doc') return `${prefix}📄 ${String(m.body).split('|')[1] || 'Documento'}`;
       if (m.kind === 'post') return `${prefix}Publicação compartilhada`;
+      if (m.kind === 'plan') return `${prefix}📋 ${String(m.body).split('|')[1] || 'Plano'}`;
       if (m.kind === 'booking') return prefix + (window.AcoliaAgenda ? AcoliaAgenda.previewText(m) : '📅 Consulta');
       if (m.kind === 'notice') return 'Novo paciente pelo seu link';
       return prefix + m.body;
@@ -114,7 +115,7 @@
       const s = state.support;
       const pinned = !state.archived && s ? `
         <li class="conv pinned ${isSup() ? 'active' : ''}" data-support tabindex="0">
-          <span class="avatar sup-avatar"><img src="/img/logo-simbolo.png" alt=""></span>
+          <span class="avatar sup-avatar"><img src="/img/acolia-saude-simbolo.png" alt=""></span>
           <div class="grow">
             <div class="top"><span class="nm">${esc(s.name)} <span class="pin-ic" title="Canal oficial da Acolia" aria-label="Canal oficial da Acolia"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.8l2.3 1.7 2.8-.2 1 2.7 2.4 1.5-.7 2.7 1.2 2.6-2 1.9-.3 2.8-2.7.8-1.5 2.4-2.7-.7L12 22.2l-1.8-2.2-2.7.7L6 18.3l-2.7-.8-.3-2.8-2-1.9 1.2-2.6-.7-2.7L3.9 6l1-2.7 2.8.2z"/><path d="m8.2 12.2 2.6 2.6 5-5.2" fill="none" class="seal-ck" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="tm">${s.last_message ? fmtShort(s.last_message.created_at) : ''}</span></div>
             <div class="row" style="gap:8px;flex-wrap:nowrap"><span class="pv grow">${esc(s.last_message ? previewOf(s.last_message) : 'Dúvidas, erros ou sugestões? Fale com a gente.')}</span>${s.unread ? `<span class="unread">${s.unread}</span>` : ''}</div>
@@ -218,7 +219,7 @@
             <div class="sub" data-sub>${esc(c.peer.subtitle || '')}${c.peer.active ? '' : ' · conta inativa'}</div>
           </div>
           ${proActions}
-          <img class="brand-mark" src="/img/logo-simbolo.png" alt="Acolia" title="Acolia">
+          <img class="brand-mark" src="/img/acolia-saude-simbolo.png" alt="Acolia" title="Acolia">
           <div class="thread-menu-wrap">
             <button class="icon-btn" data-thread-menu aria-label="Opções da conversa" title="Opções"><span style="font-size:1.3rem;line-height:1">⋮</span></button>
             <div class="msg-pop thread-pop hidden" data-thread-pop>
@@ -299,6 +300,8 @@
         pop.innerHTML = `${window.AcoliaQuick ? `<button type="button" role="menuitem" data-fn-quick>${ICONS.chat}<span><b>Mensagens prontas</b><small>Escolha uma e mande com um toque</small></span></button>` : ''}
           ${window.AcoliaAgenda ? `<button type="button" role="menuitem" data-fn-schedule>${ICONS.calendar}<span><b>Agendar consulta</b><small>O paciente recebe e paga o Pix aqui</small></span></button>` : ''}
           <button type="button" role="menuitem" data-fn-photo>${ICONS.camera}<span><b>Enviar foto</b><small>Ex.: o comprovante do reembolso</small></span></button>
+          ${!secretary && window.AcoliaPlans && ['nutri', 'fisio'].includes(getMe()?.portal) ? `<button type="button" role="menuitem" data-fn-plan>${ICONS.doc}<span><b>${getMe().portal === 'nutri' ? 'Plano alimentar' : 'Plano de exercícios'}</b><small>${getMe().portal === 'nutri' ? 'Refeições, substituições e lista de compras' : 'Séries, repetições e "Fiz hoje" para o paciente'}</small></span></button>
+            <button type="button" role="menuitem" data-fn-evo>${ICONS.chart || ICONS.calendar}<span><b>Evolução</b><small>${getMe().portal === 'nutri' ? 'Peso e medidas, com gráfico' : 'Dor de 0 a 10, com gráfico'}</small></span></button>` : ''}
           ${getMe()?.has_clinic && getMe()?.clinic_address ? `<button type="button" role="menuitem" data-fn-loc>${ICONS.pin}<span><b>Enviar localização</b><small>Endereço e mapa do seu consultório</small></span></button>` : ''}`;
         form.appendChild(pop);
         setTimeout(() => { document.addEventListener('click', outsideFn, true); document.addEventListener('keydown', escFn); });
@@ -309,6 +312,8 @@
           if (!canWrite(state.current)) { toast('Não é possível enviar nesta conversa.', 'error'); return; }
           if (b.hasAttribute('data-fn-quick')) window.AcoliaQuick.openPicker(form, ta);
           else if (b.hasAttribute('data-fn-loc')) api(`/api/chat/conversations/${c.id}/location`, { method: 'POST' }).then(addMessage).catch((ex) => toast(ex.message, 'error'));
+          else if (b.hasAttribute('data-fn-plan')) api(`/api/plans/conversation/${c.id}`).then((info) => window.AcoliaPlans.openEditor({ conversationId: c.id, can: info.can, patient: info.patient, onSent: (r) => addMessage(r.message) })).catch((ex) => toast(ex.message, 'error'));
+          else if (b.hasAttribute('data-fn-evo')) window.AcoliaPlans.openEvolution({ conversationId: c.id });
           else if (b.hasAttribute('data-fn-schedule')) window.AcoliaAgenda.openBooking({ mode: 'propose', conversationId: state.current.id, patientId: state.current.peer.id, peerName: state.current.peer.name, me: getMe() });
           else photoInput.click();
         });
@@ -376,7 +381,7 @@
       threadWrap.innerHTML = `
         <div class="thread-head">
           <button class="icon-btn back-btn" aria-label="Voltar" data-close>${ICONS.back}</button>
-          <span class="avatar sm sup-avatar"><img src="/img/logo-simbolo.png" alt=""></span>
+          <span class="avatar sm sup-avatar"><img src="/img/acolia-saude-simbolo.png" alt=""></span>
           <div class="grow" style="min-width:0">
             <div class="nm">${esc(c.peer.name)}</div>
             <div class="sub">${esc(c.peer.subtitle)}</div>
@@ -694,6 +699,12 @@
         inner = `<div class="msg-card doc-card"><strong>${ICONS.doc.replace('<svg', '<svg style="width:20px;height:20px;vertical-align:-4px"')} ${esc(title || 'Documento')}</strong>
           <span class="small muted">Código de verificação: <b>${esc(code)}</b></span>
           <button type="button" class="btn ${mine ? 'secondary' : ''} sm" data-open-doc="${esc(code)}">${ICONS.doc} ${mine ? 'Ver documento' : 'Ver e salvar documento'}</button></div>`;
+      } else if (m.kind === 'plan') {
+        // Plano alimentar ou de exercícios (Nutri e Fisio)
+        const [pid, title] = String(m.body).split('|');
+        inner = `<div class="msg-card doc-card"><strong>${ICONS.doc.replace('<svg', '<svg style="width:20px;height:20px;vertical-align:-4px"')} ${esc(title || 'Plano')}</strong>
+          <span class="small muted">${mine ? 'Enviado para o paciente' : 'Seu profissional montou para você'}</span>
+          <button type="button" class="btn ${mine ? 'secondary' : ''} sm" data-open-plan="${esc(pid)}">${mine ? 'Ver plano' : 'Abrir meu plano'}</button></div>`;
       } else if (m.kind === 'post') {
         inner = postCardHtml(m.post, mine);
       } else if (m.kind === 'booking') {
@@ -745,6 +756,7 @@
       box.innerHTML = html;
       $$('[data-copy]', box).forEach((b) => b.addEventListener('click', () => copyText(b.dataset.copy)));
       $$('[data-open-doc]', box).forEach((b) => b.addEventListener('click', () => window.AcoliaDocs.openDoc(b.dataset.openDoc)));
+      $$('[data-open-plan]', box).forEach((b) => b.addEventListener('click', () => window.AcoliaPlans?.openPlan(b.dataset.openPlan)));
       if (scrollBottom) box.scrollTop = box.scrollHeight;
       else box.scrollTop = box.scrollHeight - prevHeight + prevTop;
       // Foto de publicação que termina de carregar depois: continua no fim da conversa

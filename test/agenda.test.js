@@ -1239,3 +1239,61 @@ test('portais: Nutri e Fisio funcionam como o Psi (agenda, consulta no mesmo dia
   const { allowedKinds } = require('../server/routes/docs');
   assert.deepEqual(allowedKinds('Nutricionista'), ['declaracao', 'encaminhamento']);
 });
+
+test('planos (Nutri e Fisio): plano alimentar com lista de compras, plano de exercícios com "Fiz hoje", evolução; Psi e secretária não montam', async () => {
+  await admin.post('/api/auth/admin/login', { username: 'admin', password: 'senha-admin-123' });
+  const mk = async (portal, profession, registry, name, email, phone) => {
+    const r = await admin.post('/api/admin/professionals', { portal, name, profession, registry, email, phone, state: 'SP', city: 'Campinas', specialties: [portal === 'fisio' ? 'Dor lombar' : 'Emagrecimento'] });
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    const cl = client();
+    await cl.post('/api/auth/professional/login', { login: r.data.code, password: r.data.password });
+    return { cl, id: r.data.id };
+  };
+  const N = await mk('nutri', 'Nutricionista', 'CRN-3 22334', 'Nara Plano Lima', 'nara.plano@example.com', '11944440001');
+  const F = await mk('fisio', 'Fisioterapeuta', 'CREFITO-3/223344', 'Fabio Plano Reis', 'fabio.plano@example.com', '11944440002');
+  const pat = await mkPatient('Pedro Planos Costa', nextCpf());
+  const conv = async (pro) => {
+    const c = (await pat.post('/api/chat/conversations', { professional_id: pro.id })).data;
+    await pat.post(`/api/chat/conversations/${c.id}/messages`, { body: 'Oi!' });
+    return c.id;
+  };
+  const cn = await conv(N);
+  const cf = await conv(F);
+  // Nutri: plano alimentar
+  let info = (await N.cl.get(`/api/plans/conversation/${cn}`)).data;
+  assert.equal(info.can.kind, 'alimentar');
+  assert.equal((await N.cl.post('/api/plans', { conversation_id: cn, data: { meals: [] } })).status, 400);
+  let r = await N.cl.post('/api/plans', { conversation_id: cn, data: { meals: [{ name: 'Café da manhã', time: '07:00', items: [{ food: 'Pão integral', qty: '2 fatias', subs: 'tapioca' }, { food: 'Ovo', qty: '2' }] }, { name: 'Almoço', items: [{ food: 'Arroz', qty: '4 colheres' }, { food: 'ovo', qty: '1' }] }], water: '2 litros' } });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const planN = r.data.plan;
+  assert.deepEqual(planN.shopping.map((s) => s.food), ['Pão integral', 'Ovo', 'Arroz']); // sem repetir
+  const msgsN = (await pat.get(`/api/chat/conversations/${cn}/messages`)).data.items;
+  assert.ok(msgsN.some((m) => m.kind === 'plan'));
+  r = await pat.post(`/api/plans/${planN.id}/check`, { item: 1 });
+  assert.equal(r.data.shopping[1].done, true);
+  // Fisio: exercícios e "Fiz hoje"
+  info = (await F.cl.get(`/api/plans/conversation/${cf}`)).data;
+  assert.equal(info.can.kind, 'exercicios');
+  r = await F.cl.post('/api/plans', { conversation_id: cf, data: { items: [{ name: 'Ponte de glúteo', sets: '3', reps: '12', video: 'javascript:alert(1)' }], freq: '3x por semana' } });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(r.data.plan.data.items[0].video, ''); // só link https
+  r = await pat.post(`/api/plans/${r.data.plan.id}/check`, {});
+  assert.equal(r.data.done_today, true);
+  assert.equal(r.data.days.filter((d) => d.done).length, 1);
+  // Evolução
+  assert.equal((await N.cl.post('/api/plans/evolution', { conversation_id: cn })).status, 400);
+  assert.equal((await N.cl.post('/api/plans/evolution', { conversation_id: cn, weight: '82,5', waist: '95' })).status, 201);
+  assert.equal((await F.cl.post('/api/plans/evolution', { conversation_id: cf, pain: 7 })).status, 201);
+  const mine = (await pat.get('/api/plans/mine')).data;
+  assert.equal(mine.plans.length, 2);
+  assert.equal(mine.evolution.length, 2);
+  assert.ok(mine.evolution.some((e) => e.evo === 'nutri' && e.items[0].weight === 82.5));
+  // Outro paciente não vê; Psi não monta
+  const other = await mkPatient('Olga Outra Silva', nextCpf());
+  assert.equal((await other.get(`/api/plans/${planN.id}`)).status, 404);
+  assert.equal((await P.cl.get('/api/plans/templates')).status, 200);
+  assert.equal((await N.cl.get('/api/plans/templates')).data.items.length, 1);
+  const cp = (await other.post('/api/chat/conversations', { professional_id: P.id })).data;
+  await other.post(`/api/chat/conversations/${cp.id}/messages`, { body: 'Oi' });
+  assert.equal((await P.cl.post('/api/plans', { conversation_id: cp.id, data: { items: [{ name: 'x' }] } })).status, 403);
+});

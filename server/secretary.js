@@ -74,6 +74,8 @@ const DENY = [
   // documentos (atestado, receita, encaminhamento): levam a assinatura do profissional
   ['POST', /^\/api\/docs\/?$/, 'enviar documentos (atestado, receita ou encaminhamento): eles levam a assinatura do profissional'],
   ['GET', /^\/api\/docs\/options\/[^/]+$/, 'enviar documentos (atestado, receita ou encaminhamento): eles levam a assinatura do profissional'],
+  // planos e evolução (Nutri e Fisio): são do atendimento
+  [null, /^\/api\/plans(\/.*)?$/, 'ver ou montar planos e a evolução do paciente: só o profissional'],
   // chamadas de vídeo
   ['POST', /^\/api\/calls(\/(?!resolve$).*)?$/, 'entrar nas chamadas de vídeo'],
 ];

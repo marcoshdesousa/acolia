@@ -43,6 +43,12 @@
         <div data-chat></div>
       </section>
 
+      <section data-view="planos" class="narrow hidden" style="max-width:560px">
+        <a href="#config" class="btn ghost sm" style="margin-bottom:12px">← Voltar</a>
+        <h1 style="font-size:1.5rem">Meus planos e evolução</h1>
+        <div data-my-plans></div>
+      </section>
+
       <section data-view="config" class="narrow hidden" style="max-width:560px">
         <h1 style="font-size:1.5rem">Configurações</h1>
         <div class="card stack">
@@ -63,6 +69,11 @@
             <p class="small muted" style="margin:0 0 12px">Seu @, nome completo, CPF e data de nascimento não podem ser alterados.</p>
             <button class="btn" type="submit">Salvar</button>
           </form>
+        </div>
+        <div class="card stack" style="margin-top:16px">
+          <h2 style="margin:0;font-size:1.1rem">Meus planos e evolução</h2>
+          <p class="small muted" style="margin:0">Plano alimentar, plano de exercícios, lista de compras e o gráfico da sua evolução, que os profissionais do Nutri e do Fisio mandam para você.</p>
+          <a class="btn secondary" href="#planos" style="width:max-content">Ver meus planos</a>
         </div>
         <div class="card stack" style="margin-top:16px">
           <h2>Trocar senha</h2>
@@ -110,6 +121,7 @@
   <script src="/js/social.js"></script>
   <script src="/js/voice.js"></script>
   <script src="/js/docs.js"></script>
+  <script src="/js/plans.js"></script>
   <script src="/js/chat.js"></script>
   <script src="/js/delete-account.js"></script>
   <script src="/js/agenda.js"></script>
@@ -240,7 +252,7 @@
         }
         return;
       }
-      const v = ['inicio', 'buscar', 'clinicas', 'perfil', 'posts', 'chat', 'config'].includes(view) ? view : 'inicio';
+      const v = ['inicio', 'buscar', 'clinicas', 'perfil', 'posts', 'chat', 'config', 'planos'].includes(view) ? view : 'inicio';
       if (v === 'inicio' || v === 'buscar') backTo = '#' + v;
       $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
       $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'perfil' || v === 'posts' ? backTo.slice(1) : v)));
@@ -264,6 +276,7 @@
         });
       }
       if (v === 'clinicas') AcoliaClinics.mountList($('[data-clinics-page]'));
+      if (v === 'planos') AcoliaPlans.mountMine($('[data-my-plans]'));
       if (v === 'perfil') {
         $('[data-profile]').innerHTML = '<div class="spinner"></div>';
         try {

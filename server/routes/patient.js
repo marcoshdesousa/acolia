@@ -89,6 +89,7 @@ function wipePatient(me) {
   // O CPF fica livre para criar uma conta nova.
   require('./social').purgeUserSocial('patient', me.id);
   require('./support').purge('patient', me.id);
+  require('./plans').purge('patient', me.id);
   require('../agenda').onAccountGone('patient', me.id);
   require('./chat').eraseMessagesOf('patient', me.id);
   db.prepare('DELETE FROM pro_patient_hidden WHERE patient_id = ?').run(me.id);

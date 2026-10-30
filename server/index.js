@@ -108,7 +108,8 @@ function createApp() {
   app.use('/api/calls', require('./routes/calls').router);
   app.use('/api/agenda', require('./routes/agenda').router); // agenda, consultas e pagamento por Pix
   app.use('/api/admin', require('./routes/admin').router);
-  app.use('/api/docs', require('./routes/docs').router); // atestado, receita e encaminhamento
+  app.use('/api/docs', require('./routes/docs').router);
+  app.use('/api/plans', require('./routes/plans').router); // planos e evolução (Nutri e Fisio) // atestado, receita e encaminhamento
   app.use('/api', (_req, _res, next) => next(new U.HttpError(404, 'Rota não encontrada.')));
 
   // Fotos: se não estiverem no disco (servidor reiniciou), baixa da nuvem

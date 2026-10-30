@@ -83,7 +83,7 @@ function insert(t, sender, kind, body, extra = {}) {
 
 function summary(role, userId) {
   const t = threadOf(role, userId, false);
-  const base = { name: NAME, photo: '/img/logo-simbolo.png' };
+  const base = { name: NAME, photo: '/img/acolia-saude-simbolo.png' };
   if (!t) return { ...base, unread: 0, last_message: null };
   const last = db.prepare(`SELECT ${COLS} FROM support_messages WHERE thread_id = ? AND hidden_for_user = 0 ORDER BY id DESC LIMIT 1`).get(t.id);
   const unread = db.prepare("SELECT COUNT(*) n FROM support_messages WHERE thread_id = ? AND sender = 'admin' AND read_at IS NULL AND hidden_for_user = 0").get(t.id).n;

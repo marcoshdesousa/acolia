@@ -233,6 +233,7 @@ function wipeProfessional(me) {
   removePhoto(me.photo);
   parseGallery(me.gallery).forEach(removePhoto);
   removeDocument(me.document_file);
+  require('./plans').purge('professional', me.id);
   // Apaga tudo: publicações, reels, stories, curtidas, comentários, seguidores e o conteúdo das
   // mensagens que ele mandou. E-mail, registro, código e link ficam livres para um cadastro novo.
   require('./social').purgeUserSocial('professional', me.id);

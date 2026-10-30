@@ -11,7 +11,7 @@ const U = require('./util');
 
 const NAME = 'Acolia Brasil';
 const SLUG = 'acolia'; // site.com/acolia (nome reservado: nenhum profissional consegue usar)
-const PHOTO = '/img/logo-simbolo.png';
+const PHOTO = '/img/acolia-saude-simbolo.png'; // logo oficial nova
 
 function ensureOfficial() {
   let row = db.prepare("SELECT id FROM professionals WHERE status = 'oficial'").get();
