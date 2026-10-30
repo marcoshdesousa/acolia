@@ -190,10 +190,13 @@
   window.addEventListener('acolia:posted', loadMyPosts); // terminou um envio em segundo plano
 
   $('[data-photo-input]').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
+    const picked = e.target.files[0];
+    e.target.value = '';
+    // Antes de salvar, a pessoa ajusta a posição e o tamanho dentro do círculo (sai em 640 px)
+    const file = picked && await Acolia.cropPhoto(picked, { title: 'Ajustar foto de perfil' });
     if (!file) return;
     const fd = new FormData();
-    fd.append('photo', await Acolia.shrinkImage(file, 640)); // foto de perfil aparece pequena: 640 px basta
+    fd.append('photo', file);
     try {
       me = await api('/api/professional/photo', { method: 'POST', form: fd }); renderMe(); toast('Foto atualizada!');
       if (me.photo && $('[data-photo-banner]')) { $('[data-photo-banner]').remove(); Acolia.installBanner($('.panel-main')); }

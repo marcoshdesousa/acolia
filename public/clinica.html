@@ -186,10 +186,12 @@
     handleForm($('[data-slug-form]'), async (d) => { me = await api('/api/clinic/slug', { method: 'POST', body: d }); render(); toast('Link salvo!'); });
     $('[data-copy-link]').addEventListener('click', () => copyText(`${location.origin}/${me.slug}`));
     $('[data-logo-input]').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
+      const picked = e.target.files[0];
+      e.target.value = '';
+      const file = picked && await Acolia.cropPhoto(picked, { title: 'Ajustar a logo', label: 'Usar logo' }); // posição e tamanho no círculo
       if (!file) return;
       const fd = new FormData();
-      fd.append('photo', await Acolia.shrinkImage(file, 640));
+      fd.append('photo', file);
       try { me = await api('/api/clinic/logo', { method: 'POST', form: fd }); render(); toast('Logo atualizada!'); } catch (ex) { toast(ex.message, 'error'); }
       e.target.value = '';
     });

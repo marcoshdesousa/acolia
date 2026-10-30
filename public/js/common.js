@@ -710,6 +710,116 @@
     } catch { return file; }
   }
 
+  // Ajustar a foto de perfil (ou a logo) antes de salvar: arrasta para posicionar dentro do círculo e
+  // aumenta/diminui o tamanho (barra, pinça com dois dedos ou rodinha do mouse). Devolve a foto quadrada
+  // (640 × 640, como fica no círculo) ou null se a pessoa cancelar. Diminuir mais que o círculo deixa
+  // um fundo branco em volta (bom para logos).
+  async function cropPhoto(file, { title = 'Ajustar foto', label = 'Usar foto' } = {}) {
+    if (!file || !/^image\//.test(file.type)) return null;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    try {
+      await new Promise((ok, bad) => { img.onload = ok; img.onerror = bad; img.src = url; });
+    } catch { URL.revokeObjectURL(url); toast('Não foi possível abrir essa imagem. Escolha outra.', 'error'); return null; }
+    const W = img.naturalWidth;
+    const H = img.naturalHeight;
+    let S = 280; // lado da área de ajuste na tela (px)
+    let fit;
+    let scale;
+    let x = 0;
+    let y = 0;
+    let stage;
+    let pic;
+    let range;
+    const minS = () => fit * 0.5;
+    const maxS = () => fit * 5;
+    const clamp = () => {
+      scale = Math.min(maxS(), Math.max(minS(), scale));
+      const w = W * scale;
+      const h = H * scale;
+      // Maior que o círculo: não deixa sobrar buraco; menor: fica dentro da área
+      x = w >= S ? Math.min(0, Math.max(S - w, x)) : Math.max(0, Math.min(S - w, x));
+      y = h >= S ? Math.min(0, Math.max(S - h, y)) : Math.max(0, Math.min(S - h, y));
+    };
+    const draw = () => {
+      clamp();
+      pic.style.width = `${W * scale}px`;
+      pic.style.height = `${H * scale}px`;
+      pic.style.transform = `translate(${x}px, ${y}px)`;
+      range.value = String(Math.round(((scale - minS()) / (maxS() - minS())) * 1000));
+    };
+    // Zoom mantendo fixo o ponto (cx, cy) da área
+    const zoomTo = (ns, cx = S / 2, cy = S / 2) => {
+      ns = Math.min(maxS(), Math.max(minS(), ns));
+      x = cx - ((cx - x) * ns) / scale;
+      y = cy - ((cy - y) * ns) / scale;
+      scale = ns;
+      draw();
+    };
+    const out = await modal({
+      title,
+      html: `<p class="small muted" style="margin:0 0 10px">Arraste a foto para posicionar e use a barra (ou dois dedos) para aumentar ou diminuir. O que está dentro do círculo é o que aparece no perfil.</p>
+        <div class="crop-stage" data-crop-stage><img data-crop-img alt="" draggable="false"><div class="crop-ring" aria-hidden="true"></div></div>
+        <div class="crop-zoom"><span aria-hidden="true">−</span><input type="range" min="0" max="1000" step="1" data-crop-range aria-label="Tamanho da foto"><span aria-hidden="true">+</span></div>`,
+      actions: [{ label: 'Cancelar', value: null, class: 'secondary' }, {
+        label,
+        handler: async () => {
+          const N = 640;
+          const c = document.createElement('canvas');
+          c.width = N; c.height = N;
+          const g = c.getContext('2d');
+          g.fillStyle = '#fff';
+          g.fillRect(0, 0, N, N);
+          const k = N / S;
+          g.drawImage(img, x * k, y * k, W * scale * k, H * scale * k);
+          const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9));
+          return blob ? new File([blob], 'foto.jpg', { type: 'image/jpeg' }) : null;
+        },
+      }],
+      onOpen(dlg) {
+        stage = $('[data-crop-stage]', dlg);
+        pic = $('[data-crop-img]', dlg);
+        range = $('[data-crop-range]', dlg);
+        S = stage.clientWidth || S;
+        fit = Math.max(S / W, S / H); // cobre o círculo inteiro
+        scale = fit;
+        x = (S - W * scale) / 2;
+        y = (S - H * scale) / 2;
+        pic.src = url;
+        draw();
+        range.addEventListener('input', () => {
+          const t = Number(range.value) / 1000;
+          zoomTo(minS() + t * (maxS() - minS()));
+        });
+        // Arrastar (um dedo / mouse) e pinça (dois dedos)
+        const pts = new Map();
+        let last = null;
+        stage.addEventListener('pointerdown', (e) => { stage.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); last = null; });
+        stage.addEventListener('pointermove', (e) => {
+          if (!pts.has(e.pointerId)) return;
+          const prev = pts.get(e.pointerId);
+          pts.set(e.pointerId, [e.clientX, e.clientY]);
+          if (pts.size === 1) { x += e.clientX - prev[0]; y += e.clientY - prev[1]; draw(); return; }
+          const [a, b] = [...pts.values()];
+          const dist = Math.hypot(a[0] - b[0], a[1] - b[1]);
+          const r = stage.getBoundingClientRect();
+          if (last) zoomTo(scale * (dist / last), (a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top);
+          last = dist;
+        });
+        const up = (e) => { pts.delete(e.pointerId); last = null; };
+        stage.addEventListener('pointerup', up);
+        stage.addEventListener('pointercancel', up);
+        stage.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const r = stage.getBoundingClientRect();
+          zoomTo(scale * (e.deltaY < 0 ? 1.08 : 1 / 1.08), e.clientX - r.left, e.clientY - r.top);
+        }, { passive: false });
+      },
+    });
+    URL.revokeObjectURL(url);
+    return out || null;
+  }
+
   // "há 5 min", "há 2 h", "ontem", "12 de set."
   // Barra flutuante: encolhe quando a pessoa rola para baixo e volta ao subir
   (function shrinkNavOnScroll() {
@@ -1126,7 +1236,7 @@
 
   window.Acolia = {
     $, $$, esc, api, ICONS, avatar, initials, money, fmtTime, fmtDay, fmtShort, fmtDate, parseDate, toast, modal,
-    supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, timeAgo, fitChat,
+    supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, cropPhoto, timeAgo, fitChat,
     handleForm, logout, showBlocked, verifiedBadge, ratingHtml, STAR, pixBox, renewPix, platformPixOn, showNeedsCpf, showNeedsPassword, installBanner, namePicker, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
     SOCIAL, socialLinks, socialFields,
     PORTAL_UI, PORTAL_KEYS, portal, setPortal, applyPortal, portalsOn, portalPicker,

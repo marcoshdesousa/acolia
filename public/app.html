@@ -319,9 +319,11 @@
       f.reset(); toast('Senha alterada!');
     });
     $('[data-photo-input]').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
+      const picked = e.target.files[0];
+      e.target.value = '';
+      const file = picked && await Acolia.cropPhoto(picked, { title: 'Ajustar foto de perfil' }); // posição e tamanho no círculo
       if (!file) return;
-      const fd = new FormData(); fd.append('photo', await Acolia.shrinkImage(file, 640)); // foto de perfil leve
+      const fd = new FormData(); fd.append('photo', file);
       try { me = await api('/api/patient/photo', { method: 'POST', form: fd }); renderMe(); toast('Foto atualizada!'); } catch (ex) { toast(ex.message, 'error'); }
       e.target.value = '';
     });
