@@ -1274,9 +1274,14 @@ test('planos (Nutri e Fisio): plano alimentar com lista de compras, plano de exe
   // Fisio: exercícios e "Fiz hoje"
   info = (await F.cl.get(`/api/plans/conversation/${cf}`)).data;
   assert.equal(info.can.kind, 'exercicios');
-  r = await F.cl.post('/api/plans', { conversation_id: cf, data: { items: [{ name: 'Ponte de glúteo', sets: '3', reps: '12', video: 'javascript:alert(1)' }], freq: '3x por semana' } });
+  // Vídeo: só link do YouTube
+  r = await F.cl.post('/api/plans', { conversation_id: cf, data: { items: [{ name: 'Ponte de glúteo', times: '2 vezes ao dia', video: 'javascript:alert(1)' }] } });
+  assert.equal(r.status, 400);
+  assert.equal((await F.cl.post('/api/plans', { conversation_id: cf, data: { items: [{ name: 'Ponte', video: 'https://vimeo.com/123' }] } })).status, 400);
+  r = await F.cl.post('/api/plans', { conversation_id: cf, data: { items: [{ name: 'Ponte de glúteo', times: '2 vezes ao dia', reps: '12', video: 'youtu.be/abc123' }], freq: '3x por semana' } });
   assert.equal(r.status, 201, JSON.stringify(r.data));
-  assert.equal(r.data.plan.data.items[0].video, ''); // só link https
+  assert.equal(r.data.plan.data.items[0].video, 'https://youtu.be/abc123');
+  assert.equal(r.data.plan.data.items[0].times, '2 vezes ao dia');
   r = await pat.post(`/api/plans/${r.data.plan.id}/check`, {});
   assert.equal(r.data.done_today, true);
   assert.equal(r.data.days.filter((d) => d.done).length, 1);

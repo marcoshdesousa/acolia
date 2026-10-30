@@ -51,8 +51,10 @@
     }
     return `${by}${d.freq ? `<p class="small"><b>Frequência:</b> ${esc(d.freq)}</p>` : ''}
       ${d.items.map((i, n) => `<div class="plan-ex"><span class="pe-n">${n + 1}</span><div><b>${esc(i.name)}</b>
-        <div class="small">${[i.sets && `${esc(i.sets)} séries`, i.reps && `${esc(i.reps)}`, i.rest && `descanso ${esc(i.rest)}`].filter(Boolean).join(' · ')}</div>
-        ${i.notes ? `<div class="small muted">${esc(i.notes)}</div>` : ''}${i.video ? `<a class="small" href="${esc(i.video)}" target="_blank" rel="noopener">Ver como fazer ↗</a>` : ''}</div></div>`).join('')}
+        <div class="small">${[i.times && `<b>${esc(i.times)}</b>`, i.sets && `${esc(i.sets)} séries`, i.reps && `${esc(i.reps)}`, i.rest && `descanso ${esc(i.rest)}`].filter(Boolean).join(' · ')}</div>
+        ${i.notes ? `<div class="small muted">${esc(i.notes)}</div>` : ''}
+        ${i.video ? `<a class="yt-rec" href="${esc(i.video)}" target="_blank" rel="noopener"><span class="yt-badge">Recomendado</span><span class="yt-play" aria-hidden="true">▶</span> Assistir no YouTube</a>` : ''}</div></div>`).join('')}
+      ${d.items.some((i) => i.video) ? '<p class="small muted" style="margin:8px 0 0">Os vídeos abrem no YouTube. Depois de assistir, é só voltar para a Acolia para continuar o seu plano.</p>' : ''}
       ${d.notes ? `<div class="plan-notes">${esc(d.notes)}</div>` : ''}
       <h3 style="margin:16px 0 6px">${p.viewer === 'patient' ? 'Seus últimos 14 dias' : 'Adesão (últimos 14 dias)'}</h3>
       <div class="plan-days">${p.days.map((x) => `<span class="${x.done ? 'on' : ''}" title="${br(x.date)}">${br(x.date).slice(0, 2)}</span>`).join('')}</div>
@@ -79,6 +81,26 @@
     });
   }
 
+  // ---------- Listas de sugestões (escolhe da lista ou escreve outro) ----------
+  const FOODS = ['Arroz branco', 'Arroz integral', 'Feijão', 'Lentilha', 'Grão-de-bico', 'Ervilha', 'Batata-doce', 'Batata inglesa', 'Mandioca', 'Inhame',
+    'Cuscuz', 'Macarrão integral', 'Pão integral', 'Pão francês', 'Tapioca', 'Aveia em flocos', 'Granola sem açúcar', 'Quinoa', 'Milho', 'Torrada integral',
+    'Ovo cozido', 'Ovo mexido', 'Omelete', 'Frango grelhado', 'Peito de frango desfiado', 'Carne magra', 'Patinho moído', 'Peixe grelhado', 'Atum', 'Sardinha',
+    'Tofu', 'Queijo branco', 'Queijo minas frescal', 'Ricota', 'Requeijão light', 'Iogurte natural', 'Iogurte grego', 'Leite desnatado', 'Leite vegetal', 'Whey protein',
+    'Banana', 'Maçã', 'Mamão', 'Melão', 'Melancia', 'Laranja', 'Morango', 'Abacaxi', 'Manga', 'Uva', 'Pera', 'Kiwi', 'Abacate', 'Açaí sem açúcar',
+    'Alface', 'Rúcula', 'Tomate', 'Pepino', 'Cenoura', 'Beterraba', 'Brócolis', 'Couve', 'Couve-flor', 'Abobrinha', 'Abóbora', 'Chuchu', 'Vagem', 'Espinafre',
+    'Salada verde', 'Legumes cozidos', 'Legumes refogados', 'Sopa de legumes', 'Castanha-do-pará', 'Castanha de caju', 'Amêndoas', 'Amendoim', 'Pasta de amendoim',
+    'Chia', 'Linhaça', 'Azeite de oliva', 'Café sem açúcar', 'Chá sem açúcar', 'Água de coco', 'Suco natural sem açúcar', 'Chocolate 70%'];
+  const QTYS = ['1 unidade', '2 unidades', '1 fatia', '2 fatias', '1 colher de sopa', '2 colheres de sopa', '4 colheres de sopa', '1 concha', '1 xícara', '1/2 xícara',
+    '1 copo (200 ml)', '1 pote (170 g)', '100 g', '120 g', '150 g', '1 porção', '1 prato de sobremesa', 'À vontade'];
+  const EXERCISES = ['Ponte de glúteo', 'Prancha', 'Prancha lateral', 'Agachamento', 'Agachamento na parede', 'Afundo', 'Elevação de panturrilha', 'Abdominal',
+    'Bird dog (quatro apoios)', 'Gato e camelo', 'Alongamento de isquiotibiais', 'Alongamento de quadríceps', 'Alongamento de panturrilha', 'Alongamento de peitoral',
+    'Alongamento cervical', 'Rotação de ombros', 'Mobilidade de quadril', 'Rolamento pélvico', 'Respiração diafragmática', 'Ponte com uma perna', 'Ostra (concha)',
+    'Elevação lateral de perna', 'Remada com elástico', 'Rotação externa de ombro com elástico', 'Fortalecimento de punho', 'Caminhada', 'Bicicleta ergométrica',
+    'Equilíbrio em uma perna', 'Subir e descer degrau', 'Pilates: hundred', 'Pilates: roll up', 'Pilates: swan', 'Yoga: postura da criança', 'Yoga: cachorro olhando para baixo'];
+  const TIMES = ['1 vez ao dia', '2 vezes ao dia', '3 vezes ao dia', 'Dia sim, dia não', '3 vezes por semana', '2 vezes por semana', 'Antes de dormir', 'Ao acordar'];
+  const lists = () => `<datalist id="dl-foods">${FOODS.map((f) => `<option value="${esc(f)}">`).join('')}</datalist><datalist id="dl-qty">${QTYS.map((f) => `<option value="${esc(f)}">`).join('')}</datalist>
+    <datalist id="dl-ex">${EXERCISES.map((f) => `<option value="${esc(f)}">`).join('')}</datalist><datalist id="dl-times">${TIMES.map((f) => `<option value="${esc(f)}">`).join('')}</datalist>`;
+
   // ---------- Montar o plano (profissional) ----------
   const MEALS = [['Café da manhã', '07:00'], ['Lanche da manhã', '10:00'], ['Almoço', '12:30'], ['Lanche da tarde', '16:00'], ['Jantar', '19:30'], ['Ceia', '21:30']];
   const mealRow = (m = {}) => `<div class="pe-meal" data-meal>
@@ -86,14 +108,14 @@
       <div data-items>${(m.items && m.items.length ? m.items : [{}]).map(foodRow).join('')}</div>
       <button type="button" class="btn ghost sm" data-add-food>+ alimento</button></div>`;
   function foodRow(i = {}) {
-    return `<div class="pe-food" data-food><input data-f="food" value="${esc(i.food || '')}" placeholder="Alimento (ex.: pão integral)" maxlength="120">
-      <input data-f="qty" value="${esc(i.qty || '')}" placeholder="Quantidade (ex.: 2 fatias)" maxlength="60">
+    return `<div class="pe-food" data-food><input data-f="food" list="dl-foods" value="${esc(i.food || '')}" placeholder="Alimento: escolha ou escreva" maxlength="120">
+      <input data-f="qty" list="dl-qty" value="${esc(i.qty || '')}" placeholder="Quantidade (ex.: 2 fatias)" maxlength="60">
       <input data-f="subs" value="${esc(i.subs || '')}" placeholder="Substituições (opcional)" maxlength="200"><button type="button" class="icon-btn" data-rm title="Tirar" aria-label="Tirar">✕</button></div>`;
   }
   function exRow(i = {}) {
-    return `<div class="pe-ex" data-ex><div class="row" style="gap:8px;flex-wrap:nowrap"><input data-x="name" value="${esc(i.name || '')}" placeholder="Exercício (ex.: ponte de glúteo)" maxlength="100" class="grow"><button type="button" class="icon-btn" data-rm title="Tirar" aria-label="Tirar">✕</button></div>
-      <div class="pe-3"><input data-x="sets" value="${esc(i.sets || '')}" placeholder="Séries (ex.: 3)" maxlength="20"><input data-x="reps" value="${esc(i.reps || '')}" placeholder="Repetições ou tempo" maxlength="30"><input data-x="rest" value="${esc(i.rest || '')}" placeholder="Descanso (ex.: 30 s)" maxlength="30"></div>
-      <input data-x="video" value="${esc(i.video || '')}" placeholder="Link do vídeo de como fazer (opcional, https://…)" maxlength="300">
+    return `<div class="pe-ex" data-ex><div class="row" style="gap:8px;flex-wrap:nowrap"><input data-x="name" list="dl-ex" value="${esc(i.name || '')}" placeholder="Exercício: escolha ou escreva" maxlength="100" class="grow"><button type="button" class="icon-btn" data-rm title="Tirar" aria-label="Tirar">✕</button></div>
+      <div class="pe-2"><input data-x="times" list="dl-times" value="${esc(i.times || '')}" placeholder="Quantas vezes (ex.: 2 vezes ao dia)" maxlength="40"><input data-x="reps" value="${esc(i.reps || '')}" placeholder="Repetições ou tempo (opcional)" maxlength="40"></div>
+      <input data-x="video" value="${esc(i.video || '')}" placeholder="Link do vídeo no YouTube (opcional)" maxlength="300" inputmode="url">
       <input data-x="notes" value="${esc(i.notes || '')}" placeholder="Observação (opcional)" maxlength="300"></div>`;
   }
   async function openEditor({ conversationId, can, patient, onSent }) {
@@ -113,13 +135,14 @@
       html: `${can.title === 'Cardápio e orientações' ? '<p class="small notice info" style="margin-top:0">Orientações e cardápio, sem prescrição de dieta (a dieta é do nutricionista).</p>' : ''}
         ${tpl.length ? `<div class="field"><label>Começar de um plano anterior</label><select data-tpl><option value="">Plano em branco</option>${tpl.map((t, i) => `<option value="${i}">${esc(t.title)} · ${esc(t.patient.split(' ')[0])} · ${br(t.created_at)}</option>`).join('')}</select></div>` : ''}
         <div class="field"><label>Título</label><input data-k="title" value="${esc(can.title)}" maxlength="80"></div>
-        <div data-plan-form class="plan-form">${body()}</div><div class="form-error hidden" data-err></div>`,
+        ${food ? '<p class="small muted" style="margin:0 0 8px">Toque no campo do alimento para escolher da lista. Não achou? É só escrever.</p>' : '<p class="small muted" style="margin:0 0 8px">Escolha o exercício da lista ou escreva outro. O vídeo precisa ser um link do YouTube: o paciente assiste lá e volta para a Acolia.</p>'}
+        <div data-plan-form class="plan-form">${body()}</div>${lists()}<div class="form-error hidden" data-err></div>`,
       actions: [{ label: 'Cancelar', class: 'secondary', value: false }, {
         label: 'Enviar na conversa', handler: async (dlg) => {
           const g = (k) => ($(`[data-k="${k}"]`, dlg)?.value || '').trim();
           const data = food
             ? { meals: $$('[data-meal]', dlg).map((m) => ({ name: $('[data-m="name"]', m).value, time: $('[data-m="time"]', m).value, items: $$('[data-food]', m).map((f) => ({ food: $('[data-f="food"]', f).value, qty: $('[data-f="qty"]', f).value, subs: $('[data-f="subs"]', f).value })).filter((i) => i.food.trim()) })), water: g('water'), notes: g('notes') }
-            : { items: $$('[data-ex]', dlg).map((x) => Object.fromEntries(['name', 'sets', 'reps', 'rest', 'video', 'notes'].map((k) => [k, $(`[data-x="${k}"]`, x).value]))), freq: g('freq'), notes: g('notes') };
+            : { items: $$('[data-ex]', dlg).map((x) => Object.fromEntries(['name', 'times', 'reps', 'video', 'notes'].map((k) => [k, $(`[data-x="${k}"]`, x).value]))), freq: g('freq'), notes: g('notes') };
           try {
             const r = await api('/api/plans', { method: 'POST', body: { conversation_id: conversationId, title: g('title'), data } });
             toast('Enviado na conversa!'); onSent?.(r); return true;

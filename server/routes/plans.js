@@ -52,7 +52,17 @@ function kindFor(pro) {
 
 const txt = (v, n) => U.cleanText(v, n);
 const num = (v, min, max) => { const x = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(x) && x >= min && x <= max ? Math.round(x * 10) / 10 : null; };
-const safeUrl = (u) => (/^https:\/\/[^\s<>"]{4,300}$/.test(String(u || '').trim()) ? String(u).trim() : '');
+// Vídeo do exercício: só link do YouTube (o paciente assiste no próprio YouTube e volta para a Acolia)
+function youtube(u) {
+  const s = String(u || '').trim();
+  if (!s) return '';
+  let url;
+  try { url = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`); } catch { url = null; }
+  const host = url ? url.hostname.replace(/^www\.|^m\./, '') : '';
+  if (!url || !['youtube.com', 'youtu.be', 'youtube-nocookie.com'].includes(host) || s.length > 300) throw new U.HttpError(400, 'O link do vídeo precisa ser do YouTube (youtube.com ou youtu.be).');
+  url.protocol = 'https:';
+  return url.toString();
+}
 
 // Limpa o que veio da tela
 function cleanData(kind, d = {}) {
@@ -65,7 +75,7 @@ function cleanData(kind, d = {}) {
     return { meals, water: txt(d.water, 40), notes: txt(d.notes, 1500) };
   }
   const items = (Array.isArray(d.items) ? d.items : []).slice(0, 30).map((i) => ({
-    name: txt(i.name, 100), sets: txt(i.sets, 20), reps: txt(i.reps, 30), rest: txt(i.rest, 30), video: safeUrl(i.video), notes: txt(i.notes, 300),
+    name: txt(i.name, 100), times: txt(i.times, 40), reps: txt(i.reps, 40), sets: txt(i.sets, 20), rest: txt(i.rest, 30), video: youtube(i.video), notes: txt(i.notes, 300),
   })).filter((i) => i.name);
   if (!items.length) throw new U.HttpError(400, 'Coloque pelo menos um exercício.');
   return { items, freq: txt(d.freq, 60), notes: txt(d.notes, 1500) };

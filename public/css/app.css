@@ -1619,3 +1619,8 @@ dialog.wide { max-width: 640px; width: calc(100vw - 24px); }
 .plan-item { display: grid; gap: 2px; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 8px; font: inherit; color: inherit; cursor: pointer; }
 .plan-item .ptag { width: max-content; }
 .plan-item small { color: var(--muted); }
+.pe-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.yt-rec { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; padding: 6px 12px 6px 6px; border-radius: 999px; background: #fdeceb; color: #b3261e; font-weight: 800; font-size: .88rem; text-decoration: none; border: 1.5px solid #f4c4c0; }
+.yt-badge { background: #e8b84a; color: #3a2a00; border-radius: 999px; padding: 2px 8px; font-size: .72rem; letter-spacing: .02em; }
+.yt-play { width: 22px; height: 22px; border-radius: 6px; background: #ff0000; color: #fff; display: grid; place-items: center; font-size: .7rem; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .yt-rec { background: #3b1f1d; color: #ffb4ab; border-color: #6b2b26; } }
