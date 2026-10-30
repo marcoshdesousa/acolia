@@ -98,7 +98,7 @@
       y = wrap(g, 'Esta declaração comprova o comparecimento ao atendimento. Não é atestado e não indica afastamento.', M, y, bodyW, 40);
       g.fillStyle = INK;
     } else if (doc.kind === 'atestado') {
-      const tipo = d.title === 'Atestado médico' ? 'médico' : 'psicológico';
+      const tipo = { 'Atestado médico': 'médico', 'Atestado fisioterapêutico': 'fisioterapêutico', 'Atestado de terapia ocupacional': 'de terapia ocupacional' }[d.title] || 'psicológico';
       y = wrap(g, `Atesto, para os devidos fins, que ${who}, esteve sob meu atendimento ${tipo}${online ? ' online' : ' presencial'} no dia ${attDate}, às ${attTime}, necessitando de afastamento de suas atividades por ${d.days || 1} (um) dia, a contar da data do atendimento.`, M, y, bodyW, 50);
       if (d.cid) { y += 20; g.font = font(30, 700); y = wrap(g, `CID: ${d.cid} (informado com a autorização do(a) paciente)`, M, y, bodyW, 46); }
     } else if (doc.kind === 'receita') {
@@ -198,9 +198,10 @@
     const fy = 1620;
     g.fillStyle = '#e3e2dc';
     g.fillRect(M, fy, W - 2 * M, 2);
-    const sym = await loadImg('/img/logo-simbolo.png');
+    const sym = await loadImg((Acolia.PORTAL_UI[p.portal] || Acolia.PORTAL_UI.psi).symbol);
     const word = await loadImg('/img/logo-nome.png');
-    if (sym) g.drawImage(sym, M, fy + 24, 58, 58);
+    const symW = sym ? Math.round(58 * Math.min(1, sym.width / sym.height)) : 58; // símbolos em pé (Nutri, Fisio) sem esticar
+    if (sym) g.drawImage(sym, M + (58 - symW) / 2, fy + 24, symW, 58);
     if (word) g.drawImage(word, M + 72, fy + 38, 160, 30);
     g.font = font(20, 400);
     g.fillStyle = MUTED;
@@ -365,7 +366,7 @@
     } else if (kind === 'atestado') {
       extra = modSel;
       extra += `<p class="small notice info" style="margin:0">Afastamento de <b>1 dia</b> (o dia do atendimento).</p>
-        <div class="field" style="margin-top:10px"><label>CID (opcional)</label><input data-f="cid" placeholder="Ex.: F41.1" maxlength="10"></div>
+        <div class="field" style="margin-top:10px"><label>CID (opcional)</label><input data-f="cid" placeholder="Ex.: F41.1 ou M54.5" maxlength="10"></div>
         <label class="check"><input type="checkbox" data-f="cid_authorized"> O paciente autorizou colocar o CID no atestado</label>`;
     } else if (kind === 'receita') {
       extra = `<p class="small notice warn" style="margin:0"><b>Medicamentos controlados</b> (tarja preta, receita azul ou amarela — Portaria 344/98) exigem receituário especial e não devem ser prescritos por aqui.</p>

@@ -400,7 +400,7 @@ router.post('/verified-seen', (req, res) => {
 // "Ver dados do paciente": termo de sigilo (aceito uma vez) e os dados dos pacientes do profissional
 router.get('/patient-data/terms', (req, res) => {
   const D = require('../patientData');
-  res.json({ ...D.publicTerms(), accepted: D.accepted(req.auth.user.id), full_name: req.auth.user.legal_name || req.auth.user.name });
+  res.json({ ...D.publicTerms(req.auth.user.portal || 'psi'), accepted: D.accepted(req.auth.user.id), full_name: req.auth.user.legal_name || req.auth.user.name });
 });
 router.post('/patient-data/terms', (req, res) => res.json({ ok: true, accepted: require('../patientData').accept(req.auth.user, req.body || {}, req) }));
 router.get('/patient-data/:patientId', (req, res) => res.json(require('../patientData').dataFor(req.auth.user, req.params.patientId, req)));

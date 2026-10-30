@@ -32,21 +32,39 @@ db.exec(`CREATE TABLE IF NOT EXISTS terms_acceptances (
   accepted_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
 
-const publicTerms = () => ({ version: VERSION, title: TITLE, sections: SECTIONS.map(([title, text]) => ({ title, text })) });
+// Portais (versão 2.0): o mesmo termo, com a área e os conselhos de cada portal (cada portal tem a sua versão;
+// o texto do Psi continua exatamente o mesmo)
+const VERSIONS = { psi: VERSION, nutri: 'profissional-nutri-v1-2026-10', fisio: 'profissional-fisio-v1-2026-10' };
+const PORTAL_TEXT = {
+  nutri: { area: 'profissionais da área da nutrição e da alimentação', councils: '(CRN, CRM ou outro)',
+    content: 'da área da nutrição, da alimentação e da saúde, sem propaganda de outros produtos ou serviços, sem promessas de resultado (como perda de peso garantida)' },
+  fisio: { area: 'profissionais da área do movimento, da fisioterapia e da reabilitação', councils: '(CREFITO, CREF, CRM ou outro)',
+    content: 'da área do movimento, da reabilitação e da saúde, sem propaganda de outros produtos ou serviços, sem promessas de cura ou de resultado' },
+};
+const versionOf = (portal) => VERSIONS[portal] || VERSION;
+function sectionsOf(portal) {
+  const t = PORTAL_TEXT[portal];
+  if (!t) return SECTIONS;
+  return SECTIONS.map(([title, text]) => [title, text
+    .replace('profissionais da área da mente', t.area)
+    .replace('(CRP, CRM ou outro)', t.councils)
+    .replace('da área da mente e da saúde mental, sem propaganda de outros produtos ou serviços, sem promessas de cura', t.content)]);
+}
+const publicTerms = (portal) => ({ version: versionOf(portal), title: TITLE, sections: sectionsOf(portal).map(([title, text]) => ({ title, text })) });
 
 // Confere a assinatura do cadastro (antes de criar a conta): marcou "Li e concordo", a versão é a atual e o
 // nome digitado é o mesmo nome completo do cadastro
-function checkSignature(body, fullName) {
+function checkSignature(body, fullName, portal = 'psi') {
   if (!(body.terms_accept === '1' || body.terms_accept === true || body.terms_accept === 'true')) throw new U.HttpError(400, 'Leia e aceite o Termo de Adesão e Responsabilidade para continuar.');
-  if (body.terms_version !== VERSION) throw new U.HttpError(409, 'O termo foi atualizado. Recarregue a página e assine a versão nova.');
+  if (body.terms_version !== versionOf(portal)) throw new U.HttpError(409, 'O termo foi atualizado. Recarregue a página e assine a versão nova.');
   const signed = U.cleanText(body.terms_name, 120);
   if (U.norm(signed) !== U.norm(fullName)) throw new U.HttpError(400, 'Para assinar, digite o seu nome completo igual ao do cadastro.');
   return signed;
 }
-function record(role, userId, signedName, req) {
+function record(role, userId, signedName, req, portal = 'psi') {
   db.prepare('INSERT INTO terms_acceptances (role, user_id, version, signed_name, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(role, userId, VERSION, signedName, req.ip || '', String(req.headers['user-agent'] || '').slice(0, 300));
+    .run(role, userId, versionOf(portal), signedName, req.ip || '', String(req.headers['user-agent'] || '').slice(0, 300));
 }
 const lastAcceptance = (role, userId) => db.prepare('SELECT version, signed_name, ip, accepted_at FROM terms_acceptances WHERE role = ? AND user_id = ? ORDER BY id DESC LIMIT 1').get(role, userId) || null;
 
-module.exports = { VERSION, publicTerms, checkSignature, record, lastAcceptance };
+module.exports = { VERSION, versionOf, publicTerms, checkSignature, record, lastAcceptance };

@@ -1199,3 +1199,43 @@ test('Ver dados do paciente: só dos pacientes dele (link, conversa ou consulta)
   // Paciente não usa
   assert.notEqual((await ana.get(`/api/professional/patient-data/${lia}`)).status, 200);
 });
+
+test('portais: Nutri e Fisio funcionam como o Psi (agenda, consulta no mesmo dia em portais diferentes, sem horários cruzados)', async () => {
+  await admin.post('/api/auth/admin/login', { username: 'admin', password: 'senha-admin-123' });
+  const mk = async (portal, profession, registry, name, email, phone) => {
+    const r = await admin.post('/api/admin/professionals', { portal, name, profession, registry, email, phone, state: 'SP', city: 'Campinas', specialties: [portal === 'nutri' ? 'Emagrecimento' : 'Ansiedade'] });
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    const cl = client();
+    await cl.post('/api/auth/professional/login', { login: r.data.code, password: r.data.password });
+    const prof = await cl.put('/api/professional/profile', { name, phone, state: 'SP', city: 'Campinas', bio: '', price: '180', specialties: [portal === 'nutri' ? 'Emagrecimento' : 'Ansiedade'] });
+    assert.equal(prof.status, 200, JSON.stringify(prof.data));
+    assert.equal((await cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true, pix_key: `${email}` })).status, 200);
+    return { cl, id: r.data.id };
+  };
+  const N = await mk('nutri', 'Nutricionista', 'CRN-3 12345', 'Nina Nutri Souza', 'nina.nutri@example.com', '11933330001');
+  const S = await mk('psi', 'Psicólogo(a)', 'CRP 06/51077', 'Sara Psi Lima', 'sara.psi@example.com', '11933330002');
+  assert.equal((await N.cl.get('/api/auth/me')).data.user.portal, 'nutri');
+  const pat = await mkPatient('Paula Portais Dias', nextCpf());
+  const day = '2030-03-12';
+  // Psi às 08:00
+  let r = await pat.post('/api/agenda/book', { professional_id: S.id, start: at(day, '08:00'), accept: true });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  // Outro psicólogo no mesmo dia: continua proibido (uma por dia no portal)
+  r = await pat.post('/api/agenda/book', { professional_id: P.id, start: at(day, '14:00'), accept: true });
+  assert.equal(r.status, 409);
+  // Nutricionista no mesmo horário: proibido (horários cruzados)
+  r = await pat.post('/api/agenda/book', { professional_id: N.id, start: at(day, '08:00'), accept: true });
+  assert.equal(r.status, 409);
+  // Nutricionista no mesmo dia, outro horário: pode (cada portal tem a sua regra de uma por dia)
+  r = await pat.post('/api/agenda/book', { professional_id: N.id, start: at(day, '14:00'), accept: true });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  // Os dias do mês do nutricionista não aparecem como "ocupados" por causa do psicólogo
+  const month = (await pat.get(`/api/agenda/pro/${N.id}/month?ym=2030-03`)).data;
+  assert.ok(!(month.days.find((d) => d.date === day) || {}).taken || (month.days.find((d) => d.date === day).taken.with || '').includes('Nina'));
+  // O nutricionista vê a consulta dele e conversa com o paciente (igual ao Psi)
+  const appts = (await N.cl.get('/api/agenda/appointments')).data;
+  assert.ok(JSON.stringify(appts).includes('Paula Portais Dias'));
+  // Documentos do nutricionista: declaração e encaminhamento (sem atestado nem receita)
+  const { allowedKinds } = require('../server/routes/docs');
+  assert.deepEqual(allowedKinds('Nutricionista'), ['declaracao', 'encaminhamento']);
+});

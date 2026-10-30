@@ -78,11 +78,11 @@
     if (safeNext) $('a[href="/cadastro-paciente"]').href = '/cadastro-paciente?next=' + encodeURIComponent(safeNext);
     handleForm($('[data-login-patient]'), async (d) => {
       await api('/api/auth/patient/login', { method: 'POST', body: d });
-      location.replace(safeNext || '/');
+      location.replace(safeNext || (Acolia.portal() ? '/app' : '/')); // veio de um portal: entra direto nele
     });
     handleForm($('[data-login-pro]'), async (d, f) => {
       try {
-        await api('/api/auth/professional/login', { method: 'POST', body: d });
+        await api('/api/auth/professional/login', { method: 'POST', body: { ...d, portal: Acolia.portal() || undefined } });
       } catch (e) {
         // Cadastro em análise: mostra o aviso com o botão do WhatsApp de atendimento
         if (e.data?.pending) {
@@ -93,7 +93,7 @@
         }
         throw e;
       }
-      location.replace(safeNext || '/');
+      location.replace(safeNext || '/painel'); // o profissional cai direto no painel (no portal da conta dele)
     });
     handleForm($('[data-login-clinic]'), async (d, f) => {
       try {

@@ -167,7 +167,7 @@ function insertProfessional(d, passwordHash, status, subscriptionUntil = null) {
 const PLANS = { 'mensal-30': 'Mensal — R$ 30,00 a cada 30 dias' };
 
 // Texto do Termo de Adesão e Responsabilidade (aparece no cadastro, antes de assinar)
-router.get('/terms/professional', (_req, res) => res.json(require('../terms').publicTerms()));
+router.get('/terms/professional', (req, res) => res.json(require('../terms').publicTerms(PO.enabled() ? PO.normalize(req.query.portal) : 'psi')));
 
 router.post('/professional/register', async (req, res) => {
   const documentFile = await handleDocument(req, res);
@@ -179,7 +179,7 @@ router.post('/professional/register', async (req, res) => {
     if (!PLANS[plan]) throw new HttpError(400, 'Selecione um plano.');
     // Termo de Adesão e Responsabilidade: assinado antes de criar a conta (nome completo digitado)
     const T = require('../terms');
-    const signedName = T.checkSignature(req.body, d.name);
+    const signedName = T.checkSignature(req.body, d.name, d.portal);
     // O profissional não cria senha no cadastro: a administração gera a primeira senha ao aprovar
     // e manda pelo WhatsApp. Depois de entrar, ele pode trocar em Conta.
     const needsCard = !!require('../registry').councilFor(d.profession);
@@ -205,14 +205,14 @@ router.post('/professional/register', async (req, res) => {
         U.hashPassword(password), 'aprovado', until);
       db.prepare('UPDATE professionals SET plan = ?, birth_date = ?, trial = 1, review_pending = 1, must_change_password = 1 WHERE id = ?').run(plan, birth, t.id);
       TR.markUsed(d.cpf, d.portal);
-      T.record('professional', t.id, signedName, req);
+      T.record('professional', t.id, signedName, req, d.portal);
       return res.status(201).json({ ok: true, code: t.code, trial: { days: TR.TRIAL_DAYS, until }, password, support: require('../accountState').SUPPORT_WHATSAPP });
     }
     require('../trial').markUsed(d.cpf, d.portal); // já usou (ou bloqueado): paga; e o CPF fica marcado
     const { id, code } = insertProfessional({ ...d, registry: reg.registry, document_file: needsCard ? documentFile : null, registry_verified: verified },
       NO_PASSWORD, blocked ? 'bloqueado' : 'pendente');
     db.prepare('UPDATE professionals SET plan = ?, birth_date = ? WHERE id = ?').run(plan, birth, id);
-    T.record('professional', id, signedName, req);
+    T.record('professional', id, signedName, req, d.portal);
     // Pagamento pelo Pix (SyncPay): pago → conta liberada na hora. Sem a SyncPay configurada: finaliza no WhatsApp.
     let pay = null;
     const PP = require('../platformPay');

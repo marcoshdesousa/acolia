@@ -101,7 +101,9 @@
     form.state.insertAdjacentHTML('beforeend', ufOptions('', '').replace('<option value=""></option>', ''));
     form.state.value = 'todos';
     api('/api/config').then((c) => {
-      form.profession.insertAdjacentHTML('beforeend', c.professions.map((p) => `<option>${esc(p)}</option>`).join(''));
+      // Portais (versão 2.0): só as profissões do portal em que a pessoa está
+      const P = c.portals_enabled !== false && (c.portals || []).find((x) => x.key === (Acolia.portal() || 'psi'));
+      form.profession.insertAdjacentHTML('beforeend', (P ? P.professions : c.professions).map((p) => `<option>${esc(p)}</option>`).join(''));
     }).catch(() => {});
     bindUfCity(form.state, form.city);
     // Especialidades escolhidas no filtro (vão para a busca separadas por "|")

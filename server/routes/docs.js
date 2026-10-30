@@ -78,7 +78,8 @@ function lastAttendance(c) {
 }
 
 function proInfo(p) {
-  return { name: p.legal_name || p.name, profession: p.profession, registry: p.registry, city: p.city, state: p.state };
+  // portal: o rodapé do documento leva o símbolo do portal do profissional (Psi, Nutri ou Fisio)
+  return { name: p.legal_name || p.name, profession: p.profession, registry: p.registry, city: p.city, state: p.state, portal: p.portal || 'psi' };
 }
 
 function docOut(d, { masked = false } = {}) {

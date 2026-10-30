@@ -365,7 +365,7 @@
         ${fld('Nome no perfil', '<input type="hidden" data-f="display_name"><div data-name-picker></div>', 'Toque nas palavras do nome completo para escolher como aparece no perfil e nas mensagens (pelo menos 2).')}
         <div class="grid-2">${fld('CPF', `<input data-f="cpf" inputmode="numeric" value="${esc(p.cpf || '')}" placeholder="000.000.000-00">`)}
           ${fld('Profissão', `<select data-f="profession">${((cfg.portals || []).find((x) => x.key === (p.portal || 'psi')) || { professions: cfg.professions }).professions.map((x) => `<option ${x === p.profession ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`)}</div>
-        <div class="grid-2">${fld('Carteirinha (CRP/CRM)', `<input data-f="registry" value="${esc(p.registry || '')}" maxlength="40" placeholder="Ex.: CRP 06/12345">`)}
+        <div class="grid-2">${fld('Carteirinha (conselho)', `<input data-f="registry" value="${esc(p.registry || '')}" maxlength="40" placeholder="Ex.: ${esc((cfg.council_examples || {})[(cfg.councils || {})[p.profession]] || 'CRP 06/12345')}">`)}
           ${fld('Plano', `<select data-f="plan">${(cfg.plans || []).map((x) => `<option value="${esc(x.key)}" ${x.key === (p.plan_key || 'mensal-30') ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>`)}</div>
         <div class="grid-2">${fld('E-mail', `<input data-f="email" type="email" value="${esc(p.email)}">`)}
           ${fld('WhatsApp', `<input data-f="phone" inputmode="tel" value="${esc(fmtPhone(p.phone))}">`)}</div>
@@ -467,7 +467,7 @@
           <tr><th>Carteirinha</th><td>${p.has_document
             ? (p.document_is_pdf ? `<a href="/api/admin/professionals/${p.id}/document" target="_blank" rel="noopener">Abrir PDF da carteirinha</a>`
               : `<a href="/api/admin/professionals/${p.id}/document" target="_blank" rel="noopener"><img src="/api/admin/professionals/${p.id}/document" alt="Carteirinha de ${esc(p.name)}" style="max-height:220px;border-radius:8px;border:1px solid var(--line)"></a>`)
-            : `<span class="muted">${council ? 'Não enviada (cadastrado pela administração)' : 'Não precisa (profissão sem conselho: sem CRP/CRM)'}</span>`}
+            : `<span class="muted">${council ? 'Não enviada (cadastrado pela administração)' : 'Não precisa (profissão sem conselho)'}</span>`}
             ${council ? '<div class="small muted">Confira se nome, número e estado batem com os dados acima antes de aprovar.</div>' : ''}</td></tr>
           <tr><th>E-mail</th><td>${esc(p.email)}</td></tr>
           <tr><th>WhatsApp</th><td><a href="${esc(waTo(p.phone, `Olá, ${p.name.split(' ')[0]}! Aqui é da Acolia.`))}" target="_blank" rel="noopener">${esc(fmtPhone(p.phone))}</a></td></tr>

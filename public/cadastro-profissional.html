@@ -186,6 +186,9 @@
       $('[data-intro]').textContent = `${INTRO[k] || INTRO.psi} Seu cadastro será conferido pela nossa equipe.`;
       syncCard();
       sp = await AcoliaSpecialties.picker($('[data-sp-picker]'), { name: 'specialties', portal: k });
+      terms = null; // o termo muda com o portal (área e conselhos)
+      // O guia em imagens ("Tudo o que você terá") foi feito para o Psi: nos outros portais fica escondido
+      document.querySelectorAll('[data-guide-open]').forEach((b) => b.classList.toggle('hidden', k !== 'psi'));
     }
     // Os campos da carteirinha só aparecem depois de escolher uma profissão que precisa dela
     const syncCard = () => {
@@ -323,7 +326,7 @@
     let terms = null;
     const loadTerms = async () => {
       if (terms) return;
-      terms = await api('/api/auth/terms/professional');
+      terms = await api('/api/auth/terms/professional?portal=' + encodeURIComponent(form.portal.value || 'psi'));
       $('[data-terms-title]').textContent = terms.title;
       $('[data-terms-box]').innerHTML = terms.sections.map((x, i) => `<h3>${i + 1}. ${esc(x.title)}</h3><p>${esc(x.text)}</p>`).join('');
     };

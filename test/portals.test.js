@@ -71,7 +71,7 @@ after(() => {
 const proForm = (over) => ({
   name: 'Camila Ferreira Lopes', email: 'camila@example.com', phone: '(19) 99999-1111', state: 'SP', city: 'Campinas',
   cpf: cpfOf(7001), specialties: JSON.stringify(['Emagrecimento']), birth_date: '1990-03-22',
-  terms_accept: '1', terms_version: require('../server/terms').VERSION, terms_name: 'Camila Ferreira Lopes', plan: 'mensal-30', ...over,
+  terms_accept: '1', terms_version: require('../server/terms').versionOf(over.portal), terms_name: 'Camila Ferreira Lopes', plan: 'mensal-30', ...over,
 });
 
 test('portais: página principal, páginas de cada portal, ícones e configuração', async () => {

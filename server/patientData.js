@@ -33,7 +33,13 @@ db.exec(`CREATE TABLE IF NOT EXISTS patient_data_access (
 )`);
 db.exec('CREATE INDEX IF NOT EXISTS idx_pda_pro ON patient_data_access(professional_id, id)');
 
-const publicTerms = () => ({ version: VERSION, title: TITLE, sections: SECTIONS.map(([title, text]) => ({ title, text })) });
+// Portais (versão 2.0): o código de ética citado é o da área do profissional (mesma versão do termo)
+const ETHICS = {
+  nutri: 'O sigilo também é dever ético: Código de Ética e de Conduta do Nutricionista (Resolução CFN nº 599/2018) e Código de Ética Médica (Resolução CFM nº 2.217/2018), entre outros. O descumprimento pode levar a processo no conselho profissional.',
+  fisio: 'O sigilo também é dever ético: Códigos de Ética da Fisioterapia e da Terapia Ocupacional (Resoluções COFFITO nº 424 e 425/2013), Código de Ética do Profissional de Educação Física (CONFEF) e Código de Ética Médica (Resolução CFM nº 2.217/2018), entre outros. O descumprimento pode levar a processo no conselho profissional.',
+};
+const publicTerms = (portal) => ({ version: VERSION, title: TITLE,
+  sections: SECTIONS.map(([title, text]) => ({ title, text: title === 'Código de Ética da profissão' && ETHICS[portal] ? ETHICS[portal] : text })) });
 const accepted = (proId) => db.prepare('SELECT version, signed_name, ip, accepted_at FROM terms_acceptances WHERE role = ? AND user_id = ? AND version = ? ORDER BY id DESC LIMIT 1').get(ROLE, proId, VERSION) || null;
 function accept(pro, body, req) {
   if (!(body.accept === true || body.accept === '1' || body.accept === 'true')) throw new U.HttpError(400, 'Marque "Li e aceito" para continuar.');

@@ -333,7 +333,7 @@
       <li>Baixe o app <b>Asaas</b> (Play Store ou App Store) ou entre no site <b>asaas.com</b> e toque em <b>Criar conta grátis</b>.</li>
       <li>Escolha <b>pessoa física (CPF)</b> ou <b>pessoa jurídica (CNPJ)</b>. Preencha nome, e-mail e celular e crie uma senha.</li>
       <li>Confirme o e-mail e o celular com o código que o Asaas envia.</li>
-      <li>Complete o cadastro (endereço e informações do seu trabalho: pode colocar que presta serviços de saúde/psicologia).</li>
+      <li>Complete o cadastro (endereço e informações do seu trabalho: pode colocar que presta serviços de saúde).</li>
       <li>Envie os documentos que o Asaas pedir (normalmente um documento com foto e uma selfie).</li>
       <li><b>Espere a aprovação da conta</b> (o Asaas avisa por e-mail; costuma levar poucos dias úteis). A conta só recebe Pix depois de aprovada.</li></ol>`],
     ['Passo 2 — Cadastre uma chave Pix no Asaas', `<ol class="policy-list">
