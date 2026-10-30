@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-no-portal>
 <head>
   <title>Entrar — Acolia</title>
   <meta charset="utf-8">
@@ -17,6 +17,8 @@
     <a class="brand" href="/"><span data-logo><img class="brand-mark" src="/img/logo-simbolo.png" alt="" width="34" height="34"></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
   </div></header>
   <main class="narrow" style="padding-top:32px;padding-bottom:48px">
+    <!-- Portais (versão 2.0): o login é da Acolia toda (logo oficial); depois a pessoa escolhe o portal -->
+    <div class="center" style="margin-bottom:8px"><img src="/img/acolia-saude.png" alt="Acolia — Saúde ao seu alcance" style="width:min(200px,50vw);height:auto;margin:0 auto;background:#faf9f5;border-radius:24px;padding:16px 18px 12px;box-shadow:var(--shadow)"></div>
     <h1 class="center">Entrar</h1>
     <div class="tabs" role="tablist" style="margin-bottom:20px">
       <button role="tab" data-tab="paciente" class="active">Sou paciente</button>
@@ -62,7 +64,7 @@
   <script>
   (function () {
     const { $, $$, api, ICONS, handleForm, maskCpf, modal, esc, copyText, toast } = Acolia;
-    $('[data-logo]').innerHTML = ICONS.logo;
+    $('[data-logo]').innerHTML = '<img class="brand-mark" src="/img/acolia-saude-simbolo.png" alt="" width="34" height="34" style="object-fit:contain">';
     const show = (t) => {
       $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
       $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== t));
@@ -78,7 +80,7 @@
     if (safeNext) $('a[href="/cadastro-paciente"]').href = '/cadastro-paciente?next=' + encodeURIComponent(safeNext);
     handleForm($('[data-login-patient]'), async (d) => {
       await api('/api/auth/patient/login', { method: 'POST', body: d });
-      location.replace(safeNext || (Acolia.portal() ? '/app' : '/')); // veio de um portal: entra direto nele
+      location.replace(safeNext || '/'); // volta para a página da Acolia e escolhe o portal
     });
     handleForm($('[data-login-pro]'), async (d, f) => {
       try {

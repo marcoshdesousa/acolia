@@ -132,9 +132,24 @@ function createApp() {
     res.type('html').send(indexHtml.replace('<html lang="pt-BR">', `<html lang="pt-BR" data-portal="${k}">`));
   });
   const NEW_ICONS = new Set(['/img/app-icon-192.png', '/img/app-icon-512.png', '/img/app-icon-maskable-512.png', '/img/apple-touch-icon.png', '/img/favicon.png']);
-  app.use((req, _res, next) => {
+  app.use((req, res, next) => {
+    // Ícones: sempre confere de novo (ao ligar/desligar os portais o ícone muda no mesmo endereço)
+    if (NEW_ICONS.has(req.path)) res.setHeader('Cache-Control', 'no-cache');
     if (NEW_ICONS.has(req.path) && PO.enabled()) req.url = req.url.replace('/img/', '/img/v2/');
     next();
+  });
+  // Manifesto do app: com os portais ligados, o app instalado usa a logo oficial nova (endereço próprio
+  // /img/v2/, para o celular não reaproveitar o ícone antigo) e o nome "Saúde ao seu alcance"
+  const manifest = JSON.parse(fsx.readFileSync(path.join(pub, 'manifest.webmanifest'), 'utf8'));
+  app.get('/manifest.webmanifest', (_req, res, next) => {
+    if (!PO.enabled()) return next();
+    const v2 = (x) => ({ ...x, src: x.src.replace('/img/', '/img/v2/') });
+    res.setHeader('Cache-Control', 'no-cache');
+    res.type('application/manifest+json').send(JSON.stringify({
+      ...manifest, name: 'Acolia — Saúde ao seu alcance',
+      description: 'Psicologia, nutrição e fisioterapia num só aplicativo: profissionais verificados, chat, agenda e consulta online ou presencial.',
+      icons: manifest.icons.map(v2), shortcuts: manifest.shortcuts.map((s) => ({ ...s, icons: s.icons.map(v2) })),
+    }));
   });
   // Páginas, CSS e JS já compactados (Brotli/gzip) e imagens com cache no aparelho
   app.use(require('./compress').staticCompressed(pub));
