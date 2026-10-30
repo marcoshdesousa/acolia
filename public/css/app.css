@@ -286,6 +286,10 @@ td .row { flex-wrap: nowrap; }
 .call-stage { position: relative; height: 100dvh; overflow: hidden; background: #0c1211; }
 .call-stage video { background: #000; }
 #remoteVideo { width: 100%; height: 100%; object-fit: contain; }
+/* Celular em pé: a imagem de quem está do outro lado ocupa a tela toda (como no WhatsApp); o botão mostra a imagem inteira */
+@media (orientation: portrait) and (max-width: 700px) { #remoteVideo { object-fit: cover; } .call-stage.fit-whole #remoteVideo { object-fit: contain; } }
+.call-fit { display: none; position: absolute; left: 16px; bottom: 120px; z-index: 4; border: 0; border-radius: 999px; background: rgba(0,0,0,.55); color: #fff; font: inherit; font-weight: 800; font-size: .8rem; padding: 8px 14px; cursor: pointer; }
+@media (orientation: portrait) and (max-width: 700px) { .call-fit.on { display: block; } }
 #localVideo, .local-off { position: absolute; right: 16px; top: 16px; width: min(28vw, 220px); aspect-ratio: 3/4; object-fit: cover; border-radius: 14px; border: 2px solid rgba(255,255,255,.2); transform: scaleX(-1); z-index: 3; }
 .call-overlay { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; z-index: 1; pointer-events: none; background: linear-gradient(135deg, #3f5550, #6f8a83); color: #fff; }
 .call-overlay .avatar { box-shadow: 0 8px 30px rgba(0,0,0,.25); border: 3px solid rgba(255,255,255,.85); }
@@ -308,7 +312,9 @@ td .row { flex-wrap: nowrap; }
 .g-empty { flex: none; align-self: center; font-size: .85rem; opacity: .8; padding: 0 8px; color: #fff; }
 .gtile { position: relative; border: 0; padding: 0; border-radius: 14px; overflow: hidden; background: #1d2826; cursor: pointer; min-height: 0; color: #fff; font: inherit; }
 .gtile video { width: 100%; height: 100%; object-fit: cover; display: block; }
-.g-main .gtile { flex: 1; }
+.g-main .gtile { flex: 1; background: #0c1211; }
+/* Grande: a imagem inteira (celular em pé ou computador deitado), sem cortar a pessoa */
+.g-main .gtile video { object-fit: contain; }
 .g-strip .gtile { flex: none; width: 82px; height: 112px; border: 2px solid transparent; }
 .gtile.self video { transform: scaleX(-1); }
 .gt-off { position: absolute; inset: 0; display: none; place-items: center; background: linear-gradient(135deg, #3f5550, #6f8a83); }
@@ -321,7 +327,13 @@ td .row { flex-wrap: nowrap; }
 .gt-wait { position: absolute; left: 8px; top: 6px; font-size: .75rem; opacity: .85; }
 .call-stage.is-group #localVideo, .call-stage.is-group .local-off { display: none; }
 .call-stage.is-group .call-top { max-width: calc(100% - 32px); }
-@media (min-width: 700px) { .group-grid { top: 120px; bottom: 112px; } .g-strip .gtile { width: 110px; height: 140px; } }
+/* Computador: o grande à esquerda e os pacientes numa coluna à direita (em pé, como a tela do celular) */
+@media (min-width: 900px) {
+  .group-grid { top: 120px; bottom: 112px; flex-direction: row; }
+  .g-strip { width: 300px; flex-direction: row; flex-wrap: wrap; align-content: flex-start; overflow-x: hidden; overflow-y: auto; }
+  .g-strip .gtile { width: calc(50% - 4px); height: auto; aspect-ratio: 3 / 4; }
+  .g-empty { align-self: flex-start; padding: 8px; }
+}
 
 .install-banner { display: flex; gap: 12px; align-items: center; }
 .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; margin: 24px auto; }

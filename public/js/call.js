@@ -205,6 +205,20 @@
     window.addEventListener('beforeunload', () => S.socket?.emit('call:leave'));
   }
 
+  // Celular em pé recebendo imagem deitada (ex.: profissional no computador): ocupa a tela toda, cortando as
+  // laterais; "Ver imagem inteira" mostra tudo (bom para ver o exercício de corpo inteiro)
+  const fitBtn = $('[data-fit]');
+  const updateFit = () => {
+    const v = $('#remoteVideo');
+    const lying = v.videoWidth > v.videoHeight * 1.05;
+    fitBtn.classList.toggle('on', lying && !S.peers);
+    if (!lying) $('.call-stage').classList.remove('fit-whole');
+    fitBtn.textContent = $('.call-stage').classList.contains('fit-whole') ? 'Preencher a tela' : 'Ver imagem inteira';
+  };
+  fitBtn.addEventListener('click', () => { $('.call-stage').classList.toggle('fit-whole'); updateFit(); });
+  $('#remoteVideo').addEventListener('resize', updateFit);
+  $('#remoteVideo').addEventListener('loadedmetadata', updateFit);
+
   function renderPeerIdentity() {
     const who = peerIdentity();
     $('[data-top-avatar]').innerHTML = avatar(who.name, who.photo, 'sm');
