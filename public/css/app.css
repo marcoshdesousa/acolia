@@ -1578,3 +1578,11 @@ html:not([data-portal]) .portal-tag { display: none; }
 .portal-opt .po-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--pc); flex: none; }
 .ptag { display: inline-block; font-size: .68rem; font-weight: 800; border-radius: 6px; padding: 1px 6px; color: #fff; vertical-align: middle; }
 .ptag.psi { background: #3f5550; } .ptag.nutri { background: #4f7a4a; } .ptag.fisio { background: #2f6f8f; }
+/* Portal escolhido no modo escuro: fundo escuro com a cor do portal (o nome continua legível) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .portal-opt[data-k="psi"] { --pc: #9db8b0; --pcs: #22302d; }
+  :root:not([data-theme="light"]) .portal-opt[data-k="nutri"] { --pc: #a8c79f; --pcs: #23301f; }
+  :root:not([data-theme="light"]) .portal-opt[data-k="fisio"] { --pc: #8fc3d4; --pcs: #1d2c33; }
+}
+.portal-opt.on b { color: var(--text); }
+.portal-opt.on small { color: var(--muted); }
