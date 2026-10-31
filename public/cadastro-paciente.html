@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-no-portal>
 <head>
   <title>Criar conta — Acolia</title>
   <meta charset="utf-8">
@@ -19,7 +19,15 @@
   <main class="narrow" style="padding-top:32px;padding-bottom:48px">
     <h1 class="center">Criar sua conta</h1>
     <p class="center muted">Com a conta você vê os valores, o endereço e a galeria completa dos profissionais, conversa pelo chat e faz sua consulta.</p>
-    <!-- A conta do paciente vale nos três portais: não precisa escolher portal (só o profissional escolhe) -->
+    <!-- A conta do paciente é da Acolia (vale nos três portais): a página é da Acolia, sem portal -->
+    <section class="card stack center hidden" data-done>
+      <img src="/img/acolia-saude-simbolo.png" alt="" style="width:84px;height:84px;object-fit:contain;margin:0 auto">
+      <h2 style="margin:0">Conta criada!</h2>
+      <p style="margin:0">A sua conta vale para os <b>3 portais da Acolia</b>. Use a mesma conta em todos:</p>
+      <div data-done-portals style="text-align:left"></div>
+      <p class="small muted" style="margin:0" data-done-note>Escolha por onde começar. Depois dá para trocar quando quiser pelo botão no topo do app.</p>
+      <a class="btn block hidden" data-done-next>Continuar</a>
+    </section>
     <form class="card" data-form novalidate>
       <div class="field"><label for="name">Nome completo</label><input id="name" name="name" autocomplete="name" required maxlength="120">
         <div class="hint">Igual ao que consta no seu CPF.</div></div>
@@ -52,7 +60,7 @@
   <script src="/js/common.js"></script>
   <script>
   (function () {
-    const { $, api, ICONS, handleForm, maskCpf, isValidCpf, ufOptions, bindUfCity, maskPhone } = Acolia;
+    const { $, $$, api, ICONS, handleForm, maskCpf, isValidCpf, ufOptions, bindUfCity, maskPhone } = Acolia;
     $('[data-logo]').innerHTML = ICONS.logo;
     const form = $('[data-form]');
     // "Gerar @" a partir do nome (o servidor confere se está livre; em branco, ele cria um)
@@ -63,10 +71,7 @@
     const next = new URLSearchParams(location.search).get('next');
     const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
     if (safeNext) $('a[href="/entrar"]').href = '/entrar?next=' + encodeURIComponent(safeNext);
-    // Sem escolher portal: a conta vale nos três. Se veio de um portal (ou já estava num), começa por ele;
-    // senão, o app pergunta por onde começar
-    const asked = new URLSearchParams(location.search).get('portal');
-    const portal = Acolia.PORTAL_KEYS.includes(asked) ? asked : (Acolia.portal() || '');
+    // Sem escolher portal: a conta é da Acolia e vale nos três (no fim, a pessoa escolhe por onde começar)
     form.state.innerHTML = ufOptions('', 'UF');
     bindUfCity(form.state, form.city);
     form.birth_date.max = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
@@ -86,12 +91,27 @@
       if (!d.terms) throw new Error('Para continuar, aceite o uso dos dados.');
       try {
         // Veio do link de um profissional (a página dele): ele recebe o aviso do novo paciente
-        await api('/api/auth/patient/register', { method: 'POST', body: { ...d, ref: safeNext || '', portal } });
+        await api('/api/auth/patient/register', { method: 'POST', body: { ...d, ref: safeNext || '' } });
       } catch (e) {
         if (e.data?.cpf_exists) { Acolia.cpfExistsDialog({ role: 'patient', cpf: d.cpf }); return; }
         throw e;
       }
-      location.replace(safeNext || (portal ? `/app?portal=${portal}` : '/app')); // sem portal: o app pergunta por onde começar
+      // Conta criada: mostra que ela vale nos 3 portais. Veio do link de um profissional: continua para ele.
+      form.classList.add('hidden');
+      $$('h1.center, h1.center + p').forEach((el) => el.classList.add('hidden'));
+      const done = $('[data-done]');
+      done.classList.remove('hidden');
+      if (safeNext) {
+        Acolia.portalPicker($('[data-done-portals]'), { href: () => safeNext });
+        $$('[data-done-portals] .portal-opt').forEach((a) => { a.removeAttribute('href'); a.style.pointerEvents = 'none'; });
+        $('[data-done-note]').classList.add('hidden');
+        const go = $('[data-done-next]');
+        go.href = safeNext;
+        go.classList.remove('hidden');
+      } else {
+        Acolia.portalPicker($('[data-done-portals]'), { href: (k) => `/app?portal=${k}` });
+      }
+      scrollTo(0, 0);
     });
   })();
   </script>
