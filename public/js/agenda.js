@@ -98,6 +98,39 @@
     };
   }
 
+  // ---------- Consulta na agenda do celular (paciente) ----------
+  // iPhone/iPad/Mac: o arquivo de calendário (.ics) abre "Adicionar ao Calendário" com os alarmes de 1 dia e
+  // 1 hora antes. Android: Google Agenda (ou outro app de agenda pelo arquivo). Computador: as duas opções.
+  const isApple = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  const isAndroid = () => /Android/i.test(navigator.userAgent);
+  const gDate = (iso) => new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  async function addToCalendar(a) {
+    const ics = `/api/agenda/appointments/${a.id}/calendar.ics`;
+    if (isApple()) { location.href = ics; return; }
+    let ev;
+    try { ev = await api(`/api/agenda/appointments/${a.id}/calendar`); } catch (e) { toast(e.message, 'error'); return; }
+    const google = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(ev.title)}&dates=${gDate(ev.start)}/${gDate(ev.end)}&details=${encodeURIComponent(ev.details)}&location=${encodeURIComponent(ev.location)}`;
+    await modal({
+      title: 'Adicionar à minha agenda',
+      html: `<p style="margin-top:0">Escolha a agenda do seu celular:</p>
+        <div class="stack" style="gap:10px">
+          <a class="btn block" href="${esc(google)}" target="_blank" rel="noopener">${ic('calendar', 18)} Google Agenda</a>
+          <a class="btn secondary block" href="${esc(ics)}">${ic('calendar', 18)} ${isAndroid() ? 'Outro app de agenda' : 'Outlook, iPhone ou outro'}</a>
+        </div>
+        <p class="small muted" style="margin-bottom:0">${isAndroid() ? 'No Google Agenda, toque em <b>Salvar</b>. O aviso de 1 hora antes você pode ajustar na própria agenda.' : 'Pelo arquivo, a consulta já entra com os avisos de 1 dia e 1 hora antes.'}</p>`,
+      actions: [{ label: 'Fechar', value: true, class: 'secondary' }],
+    });
+  }
+  // Depois de marcar ou remarcar: pergunta uma vez se quer pôr na agenda do celular
+  async function askCalendar(a, rescheduled = false) {
+    const v = await modal({
+      title: rescheduled ? 'Atualizar a sua agenda?' : 'Não esqueça da consulta',
+      html: `<p style="margin-top:0">${rescheduled ? 'A consulta mudou de horário. Adicione de novo para a sua agenda ficar com o horário novo.' : 'Coloque a consulta na agenda do seu celular: ele avisa <b>1 dia</b> e <b>1 hora</b> antes.'}</p><p class="small muted" style="margin:0">${esc(a.when || '')}</p>`,
+      actions: [{ label: 'Agora não', value: false, class: 'secondary' }, { label: 'Adicionar à agenda', value: true }],
+    });
+    if (v) addToCalendar(a);
+  }
+
   // ---------- Pacote mensal: comprar ----------
   // Explica como funciona, a pessoa aceita e paga o Pix: automático (QR Code, confirma sozinho) ou na chave
   // do profissional (ele confirma quando o dinheiro cair). onDone: o pacote começou ou o pedido foi feito.
@@ -420,6 +453,7 @@
             page.close();
             opts.onDone?.(a);
             refreshAll();
+            askCalendar(a);
             return;
           }
           if (a.mode === 'auto') payScreen(page, a);
@@ -562,9 +596,13 @@
         stop();
         page.setTitle('Consulta marcada');
         page.body.innerHTML = `<div class="card stack center"><div class="big-ic ok">${ic('check', 32)}</div><h2 style="margin:0">Pagamento aprovado!</h2>
-          <p><b>Consulta marcada</b> para ${esc(cur.when)}.</p><p class="muted small">Levando você para a conversa com ${esc(cur.professional.name)}…</p></div>`;
+          <p><b>Consulta marcada</b> para ${esc(cur.when)}.</p>
+          <button type="button" class="btn block" data-cal>${ic('calendar', 18)} Adicionar à minha agenda</button>
+          <p class="small muted" style="margin:0">O seu celular avisa 1 dia e 1 hora antes.</p>
+          <button type="button" class="btn secondary block" data-go-chat>Ir para a conversa</button></div>`;
         refreshAll();
-        setTimeout(async () => { await page.close(); goChat(cur.conversation_id); }, 1800);
+        $('[data-cal]', page.body).addEventListener('click', () => addToCalendar(cur));
+        $('[data-go-chat]', page.body).addEventListener('click', async () => { await page.close(); goChat(cur.conversation_id); });
       } else if (!['aguardando_pagamento'].includes(cur.status)) {
         stop();
         page.body.innerHTML = `<div class="card stack center"><div class="big-ic warn">${ic('clock', 30)}</div><h2 style="margin:0">${cur.status === 'expirada' ? 'O tempo para pagar acabou' : 'Esta cobrança não vale mais'}</h2>
@@ -674,7 +712,8 @@
       switch (action) {
         case 'pay': payScreen(null, a); return;
         case 'accept': await acceptAndPay(a); return;
-        case 'reschedule': openBooking({ mode: 'reschedule', appt: a, onDone: refreshAll }); return;
+        case 'reschedule': openBooking({ mode: 'reschedule', appt: a, onDone: (x) => { refreshAll(); if (x?.can?.calendar) askCalendar(x, true); } }); return;
+        case 'calendar': await addToCalendar(a); return;
         case 'switch_type': await switchType(a); break;
         case 'choose': {
           const v = await modal({
@@ -768,6 +807,7 @@
       if (c.retry) { out.push(b('retry_yes', 'Sim, quero tentar de novo', '')); out.push(b('retry_no', 'Não')); }
       if (c.reschedule) out.push(b('reschedule', 'Remarcar'));
       if (c.switch_type) out.push(b('switch_type', a.modality === 'presencial' ? `${ic('video', 16)} Trocar para online` : `${ic('home', 16)} Trocar para presencial`));
+      if (c.calendar) out.push(b('calendar', `${ic('calendar', 16)} Adicionar à minha agenda`));
       if (c.cancel) out.push(b('cancel', 'Cancelar consulta', 'ghost danger-text'));
       if (c.give_up && !c.retry) out.push(b('give_up', 'Cancelar agendamento', 'ghost tiny-link'));
     } else {

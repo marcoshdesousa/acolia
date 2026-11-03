@@ -224,6 +224,37 @@ function loadMine(req, id) {
 }
 const role = (req) => (req.auth.secretary ? 'secretary' : req.auth.role);
 
+// Consulta para a agenda do celular (iPhone, Android, computador): arquivo de calendário (.ics) com
+// alarmes 1 dia e 1 hora antes. O mesmo UID: remarcou e adicionou de novo, a agenda atualiza o evento.
+const icsText = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/([,;])/g, '\\$1');
+const icsDate = (iso) => new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+function calendarEvent(a) {
+  const pro = G.getPro(a.professional_id);
+  const site = (process.env.SITE_URL || 'https://acolia.onrender.com').replace(/\/+$/, '');
+  const loc = a.modality === 'presencial' ? G.clinicOf(pro) : null;
+  return {
+    title: `Consulta com ${pro.name} (Acolia)`,
+    location: loc ? [loc.name, loc.address, loc.place].filter(Boolean).join(', ') : 'Online pela Acolia',
+    details: `${a.modality === 'presencial' ? 'Consulta presencial' : 'Consulta online: o link da chamada aparece na conversa da Acolia 5 minutos antes'}.\nAbrir a Acolia: ${site}/app#conversas`,
+    start: a.start_at, end: a.end_at,
+  };
+}
+router.get('/appointments/:id/calendar.ics', (req, res) => {
+  const a = loadMine(req, Number(req.params.id));
+  const ev = calendarEvent(a);
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Acolia//Consultas//PT-BR', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    'BEGIN:VEVENT', `UID:acolia-consulta-${a.id}@acolia`, `SEQUENCE:${a.reschedules || 0}`, `DTSTAMP:${icsDate(new Date().toISOString())}`,
+    `DTSTART:${icsDate(ev.start)}`, `DTEND:${icsDate(ev.end)}`, `SUMMARY:${icsText(ev.title)}`, `LOCATION:${icsText(ev.location)}`, `DESCRIPTION:${icsText(ev.details)}`,
+    'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsText(`Amanhã: ${ev.title}`)}`, 'TRIGGER:-P1D', 'END:VALARM',
+    'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsText(`Em 1 hora: ${ev.title}`)}`, 'TRIGGER:-PT1H', 'END:VALARM',
+    'END:VEVENT', 'END:VCALENDAR'];
+  res.set('Content-Type', 'text/calendar; charset=utf-8');
+  res.set('Content-Disposition', `inline; filename="consulta-acolia-${a.id}.ics"`);
+  res.send(lines.join('\r\n') + '\r\n');
+});
+// Para o link do Google Agenda (Android)
+router.get('/appointments/:id/calendar', (req, res) => res.json(calendarEvent(loadMine(req, Number(req.params.id)))));
+
 router.get('/appointments', (req, res) => {
   const col = isPatient(req) ? 'patient_id' : 'professional_id';
   const scope = req.query.scope || 'upcoming';

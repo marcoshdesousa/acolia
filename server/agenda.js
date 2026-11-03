@@ -717,6 +717,8 @@ function canDo(a, role) {
     c.presence_check = a.modality === 'presencial' && a.status === 'confirmada' && t >= start;
   }
   c.enter_call = a.status === 'confirmada' && !!a.call_id && a.modality !== 'presencial';
+  // Paciente: colocar a consulta na agenda do celular (com alarme 1 dia e 1 hora antes)
+  c.calendar = role === 'patient' && a.status === 'confirmada' && now() < ms(a.start_at);
   return c;
 }
 

@@ -1478,6 +1478,18 @@ test('pacote mensal (qualquer profissional que quiser): profissional cria, pacie
   assert.equal(b1.status, 201, JSON.stringify(b1.data));
   assert.equal(b1.data.status, 'confirmada');
   assert.equal(b1.data.billing, 'pacote');
+  // Agenda do celular: o paciente vê o botão e baixa o arquivo de calendário com os avisos de 1 dia e 1 hora antes
+  assert.equal(b1.data.can.calendar, true);
+  const ics = await fetch(`${base}/api/agenda/appointments/${b1.data.id}/calendar.ics`, { headers: { Cookie: pat.cookie } });
+  assert.equal(ics.status, 200);
+  assert.match(ics.headers.get('content-type'), /text\/calendar/);
+  const icsBody = await ics.text();
+  assert.match(icsBody, /BEGIN:VEVENT/);
+  assert.match(icsBody, /DTSTART:20300507T110000Z/);
+  assert.match(icsBody, /TRIGGER:-P1D/);
+  assert.match(icsBody, /TRIGGER:-PT1H/);
+  assert.match(icsBody, /Paulo Pacote Ramos/);
+  assert.equal((await fetch(`${base}/api/agenda/appointments/${b1.data.id}/calendar.ics`)).status, 401, 'sem conta não baixa');
   assert.equal((await pat.post('/api/agenda/book', { professional_id: fid, start: at('2030-05-08', '08:00'), accept: true, use_package: true })).status, 201);
   const b3 = await pat.post('/api/agenda/book', { professional_id: fid, start: at('2030-05-09', '08:00'), accept: true, use_package: true });
   assert.equal(b3.status, 409);
