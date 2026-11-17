@@ -188,7 +188,7 @@
       ? `<div class="agenda-box"><div>${ic('calendar', 18)} Próximo horário livre: <b>${esc(nx.label)} às ${esc(nx.first)}</b></div>
           ${canBook ? `<button type="button" class="btn block" data-book="${p.id}">${ic('calendar', 18)} Agendar consulta</button>
           <span class="small muted">Escolha o dia e o horário e pague pelo Pix para confirmar. Pacotes: combine pelo chat.</span>` : ''}</div>`
-      : p.test_only
+      : p.test_only && p.next_hint
         ? `<div class="small muted">🧪 Conta de teste: a agenda deste profissional só abre para o <b>Paciente Teste</b>. Entre com o Paciente Teste para marcar e pagar (pagamento simulado).</div>`
       : `<div class="agenda-box">${Acolia.pauseNote('closed')}${canBook ? '<span class="small muted">Mande uma mensagem para combinar.</span>' : ''}</div>`;
     let values;

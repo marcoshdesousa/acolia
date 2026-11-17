@@ -248,7 +248,7 @@ async function start(port = Number(process.env.PORT) || 3000) {
   // Pedido do dono (depois de testar o pagamento): apaga de novo, UMA vez, as contas de teste
   require('./testAccounts').removeTestAccountsOnce('test_accounts_removed_v3');
   // Pedido do dono: 24 profissionais de demonstração (contas de teste, PSI01…FIS08), criados uma vez
-  if (process.env.TEST_ACCOUNTS !== '0') { require('./demoPros').createOnce(); require('./demoPros').clearRegistriesOnce(); }
+  if (process.env.TEST_ACCOUNTS !== '0') { require('./demoPros').createOnce(); require('./demoPros').clearRegistriesOnce(); require('./demoPros').onlineNoAgendaOnce(); }
   require('./handles').backfill(); // todo paciente tem um @ (o Paciente Teste é @pacienteteste)
   // Pedido do dono (uma vez): quem já tinha conta de profissional cria a própria senha no próximo acesso
   require('./accountState').requireNewPasswordOnce();

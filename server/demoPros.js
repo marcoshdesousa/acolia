@@ -43,7 +43,7 @@ const PHOTO = (code) => `/img/demo/${PORTAL[code.slice(0, 3)]}${code.slice(3)}.j
 
 function bioFor(name, profession, sp, city) {
   const first = name.split(' ')[0];
-  return `Olá, eu sou ${first}. Atuo como ${profession.replace('(a)', '').replace('(a) ', ' ').toLowerCase()} há alguns anos, com foco em ${sp.slice(0, 2).join(' e ').toLowerCase()}.\n\n`
+  return `Olá, eu sou ${first}. Trabalho há alguns anos com ${sp.slice(0, 2).join(' e ').toLowerCase()}.\n\n`
     + `Meu atendimento é acolhedor, sem julgamentos e com um plano feito para você. Atendo online para todo o Brasil${city ? ` e presencialmente em ${city}` : ''}.\n\n`
     + 'Perfil de demonstração da Acolia.';
 }
@@ -92,4 +92,21 @@ function clearRegistriesOnce() {
   db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(K, new Date().toISOString());
 }
 
-module.exports = { createOnce, clearRegistriesOnce, LIST, PASSWORD, KEY };
+// Pedido do dono: todos só online e sem agenda no momento (ninguém marca consulta; mensagem continua).
+// Sem o selo de verificado: ninguém conferiu o registro deles.
+function onlineNoAgendaOnce() {
+  const K = 'demo_pros_online_v1';
+  if (db.prepare('SELECT 1 FROM settings WHERE key = ?').get(K)) return;
+  try { db.exec('ALTER TABLE professionals ADD COLUMN verified INTEGER NOT NULL DEFAULT 0'); } catch { /* já existe */ }
+  for (const [code, name, profession, , sp] of LIST) {
+    const p = db.prepare('SELECT id FROM professionals WHERE is_test = 1 AND code = ?').get(code);
+    if (!p) continue;
+    db.prepare(`UPDATE professionals SET has_clinic = 0, presencial_on = 0, price_presencial_cents = NULL, clinic_name = '', clinic_address = '',
+      agenda_on = 0, verified = 0, bio = ? WHERE id = ?`).run(bioFor(name, profession, sp, ''), p.id);
+    db.prepare('DELETE FROM agenda_hours WHERE professional_id = ?').run(p.id);
+  }
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(K, new Date().toISOString());
+  try { require('./agenda').touch(); } catch { /* ignora */ }
+}
+
+module.exports = { createOnce, clearRegistriesOnce, onlineNoAgendaOnce, LIST, PASSWORD, KEY };
