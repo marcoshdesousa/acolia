@@ -62,7 +62,7 @@
               <div class="hint">Para os lembretes das suas consultas (1 dia e 1 hora antes). Não aparece para ninguém.</div></div>
             <div class="field"><label>Onde você mora</label>
               <div class="grid-uf"><select name="state" aria-label="Estado" required></select><input name="city" placeholder="Município" aria-label="Município" required></div></div>
-            <p class="small muted" style="margin:0 0 12px">Seu @, nome completo, CPF e data de nascimento não podem ser alterados.</p>
+            <p class="small muted" style="margin:0 0 12px">Seu nome completo, CPF e data de nascimento não podem ser alterados.</p>
             <button class="btn" type="submit">Salvar</button>
           </form>
         </div>
@@ -139,14 +139,14 @@
       $('[data-me-avatar]').innerHTML = '<a href="#config" aria-label="Configurações">' + avatar(me.name, me.photo, 'sm') + '</a>';
       $('[data-photo]').innerHTML = avatar(me.name, me.photo, 'lg');
       $('[data-name]').textContent = me.name;
-      $('[data-handle]').textContent = me.handle ? '@' + me.handle : '';
+      $('[data-handle]').textContent = ''; // sem curtidas e comentários (versão 2.2): o @ não aparece mais
       $('[data-cpf]').textContent = 'CPF ' + me.cpf_masked;
       $('[data-birth]').textContent = me.birth_date ? 'Nascimento ' + me.birth_date.split('-').reverse().join('/') : '';
       $('[data-loc]').textContent = me.city + ' - ' + me.state;
       const pf = $('[data-profile-form]');
-      // O @ é escolhido no cadastro e não muda. Só conta antiga, ainda sem @, escolhe uma vez aqui.
-      $('[data-handle-field]').classList.toggle('hidden', !!me.handle);
-      pf.handle.disabled = !!me.handle;
+      // Sem @ na tela (versão 2.2): o servidor cria um sozinho quando falta
+      $('[data-handle-field]').classList.add('hidden');
+      pf.handle.disabled = true;
       pf.handle.value = me.handle || '';
       pf.state.value = me.state; pf.city.value = me.city;
       pf.phone.value = me.phone ? Acolia.fmtPhone(me.phone) : '';

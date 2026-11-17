@@ -346,6 +346,23 @@
       } catch (ex) { toast(ex.message, 'error'); }
       reloadAll();
     }
+    if (e.target.closest('[data-test-delete-all]')) {
+      const c = await api('/api/admin/test-accounts/count');
+      if (!c.professionals && !c.patients) { toast('Não há contas de teste.'); return; }
+      const v = await modal({
+        title: 'Apagar todas as contas de teste',
+        html: `<p style="margin-top:0">Vão ser apagados <b>${c.professionals}</b> profissional(is) e <b>${c.patients}</b> paciente(s) de teste, com as conversas e consultas deles. Contas reais não são tocadas. Não dá para desfazer.</p>
+          <div class="field"><label for="tdel">Digite APAGAR para confirmar</label><input id="tdel" data-tdel autocomplete="off" autocapitalize="characters"></div>`,
+        actions: [{ label: 'Cancelar', class: 'secondary', value: '' }, { label: 'Apagar tudo', class: 'danger', handler: (dlg) => $('[data-tdel]', dlg).value }],
+      });
+      if (!v) return;
+      try {
+        const r = await api('/api/admin/test-accounts/delete-all', { method: 'POST', body: { confirm: v } });
+        toast(`Apagadas: ${r.professionals} profissional(is) e ${r.patients} paciente(s) de teste`);
+      } catch (ex) { toast(ex.message, 'error'); }
+      reloadAll();
+      return;
+    }
     const tb = e.target.closest('[data-test-accounts]');
     if (tb) {
       const r = await api('/api/admin/test-accounts', { method: 'POST' });

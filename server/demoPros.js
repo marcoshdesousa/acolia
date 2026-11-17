@@ -83,4 +83,13 @@ function createOnce() {
   return n;
 }
 
-module.exports = { createOnce, LIST, PASSWORD, KEY };
+// Sem números de conselho inventados (podiam coincidir com o registro de um profissional de verdade)
+function clearRegistriesOnce() {
+  const K = 'demo_pros_registry_v1';
+  if (db.prepare('SELECT 1 FROM settings WHERE key = ?').get(K)) return;
+  const codes = LIST.map((r) => r[0]);
+  db.prepare(`UPDATE professionals SET registry = '', registry_verified = 0 WHERE is_test = 1 AND code IN (${codes.map(() => '?').join(',')})`).run(...codes);
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(K, new Date().toISOString());
+}
+
+module.exports = { createOnce, clearRegistriesOnce, LIST, PASSWORD, KEY };

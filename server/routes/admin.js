@@ -399,6 +399,29 @@ router.post('/test-accounts', (_req, res) => {
   res.json({ created, professional: { login: T.PRO.code, password: T.PRO.password }, patient: { cpf: U.formatCpf(T.PATIENT.cpf), password: T.PATIENT.password } });
 });
 
+// Apagar TODAS as contas de teste de uma vez (profissionais de demonstração PSI01…FIS08, Profissional
+// Teste, Paciente Teste): some na hora, sem atualizar o site. Contas reais não são tocadas (só is_test = 1).
+router.get('/test-accounts/count', (_req, res) => {
+  const pros = db.prepare("SELECT COUNT(*) n FROM professionals WHERE is_test = 1 AND status <> 'excluido'").get().n;
+  const patients = db.prepare("SELECT COUNT(*) n FROM patients WHERE is_test = 1 AND status <> 'excluido'").get().n;
+  res.json({ professionals: pros, patients });
+});
+router.post('/test-accounts/delete-all', (req, res) => {
+  if (String(req.body.confirm || '').trim().toUpperCase() !== 'APAGAR') throw new U.HttpError(400, 'Digite APAGAR para confirmar.');
+  const out = { professionals: 0, patients: 0 };
+  for (const p of db.prepare("SELECT * FROM professionals WHERE is_test = 1 AND status <> 'excluido'").all()) {
+    require('./professional').wipeProfessional(p);
+    db.prepare('UPDATE professionals SET code = ?, slug = NULL WHERE id = ?').run(`excluido-${p.id}`, p.id);
+    out.professionals++;
+  }
+  for (const p of db.prepare("SELECT * FROM patients WHERE is_test = 1 AND status <> 'excluido'").all()) {
+    require('./patient').wipePatient(p);
+    out.patients++;
+  }
+  try { require('../agenda').touch(); } catch { /* ignora */ }
+  res.json(out);
+});
+
 // Teste da agenda do dono: ver o que está pronto e preparar de novo (não mexe nos horários)
 router.get('/test-agenda', (_req, res) => res.json(require('../testAgenda').status()));
 router.post('/test-agenda/prepare', (_req, res) => {
