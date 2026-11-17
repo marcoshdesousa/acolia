@@ -123,7 +123,7 @@
   $$('input[name="presencial_price"]', form).forEach((r) => r.addEventListener('change', syncPres));
 
   // Especialidades: escolhe na lista (pode acrescentar e tirar; as 2 primeiras aparecem no perfil)
-  const spPicker = AcoliaSpecialties.picker($('[data-sp-picker]', form), { name: 'specialties', hint: 'As <b>2 primeiras</b> aparecem no seu perfil; as outras ficam no botão <b>+</b>. Para mudar a ordem, tire e escolha de novo.' });
+  const spPicker = AcoliaSpecialties.picker($('[data-sp-picker]', form), { name: 'specialties', main: true, hint: 'Toque na <b>estrela</b> para escolher as <b>2 principais</b>: elas aparecem no seu cartão na vitrine e no topo do seu perfil. As outras ficam no botão <b>+</b>.' });
   function fillProfile() {
     $('[data-legal-name]').textContent = me.legal_name || me.name;
     Acolia.namePicker($('[data-name-picker]'), { full: me.legal_name || me.name, value: me.name, input: form.name });

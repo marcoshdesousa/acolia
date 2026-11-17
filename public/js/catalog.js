@@ -19,20 +19,43 @@
     return `<div>${bits.join(' ')}</div>${where}`;
   }
 
-  // Cartão compacto: 2 por linha no celular (foto, nome, profissão, as principais especialidades, valor)
+  // Quando tem horário: Hoje, Amanhã, Esta semana ou a data
+  function whenLabel(nx) {
+    if (!nx || !nx.date) return null;
+    const t = new Date();
+    const today = Date.UTC(t.getFullYear(), t.getMonth(), t.getDate());
+    const [y, m, d] = nx.date.split('-').map(Number);
+    const days = Math.round((Date.UTC(y, m - 1, d) - today) / 864e5);
+    if (days <= 0) return { text: 'Hoje', now: true };
+    if (days === 1) return { text: 'Amanhã', now: true };
+    if (days <= 6) return { text: 'Esta semana', now: false };
+    return { text: `A partir de ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`, now: false };
+  }
+  // Cartão da vitrine: foto grande, selo de verificado no canto, quando tem horário, nome, profissão,
+  // as 2 especialidades principais (o profissional escolhe) e o valor (o mais barato, "a partir de")
   function card(p, { profileHref }) {
     const sp = String(p.specialties || '').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 2);
     const min = p.price_min_cents != null ? p.price_min_cents : p.price_cents;
-    const price = p.locked ? '' : min != null ? `<div class="pc-price">${p.price_same === false ? '<span>a partir de</span> ' : ''}<b>${money(min)}</b></div>` : '';
+    const when = whenLabel(p.next_available);
+    const ini = String(p.name || '').split(/\s+/).filter(Boolean).map((w) => w[0]).filter((c, i, a) => i === 0 || i === a.length - 1).join('').toUpperCase();
+    const price = p.locked
+      ? `<div class="pc-price lock">${ICONS.lock || ''} Entre para ver o valor</div>`
+      : min != null
+        ? `<div class="pc-price">${p.price_same === false ? '<small>a partir de</small>' : ''}<b>${money(min)}</b></div>`
+        : '<div class="pc-price"><small>Valor a combinar</small></div>';
     return `<article class="card pro-card mini" data-id="${p.id}">
       <a class="pc-link" href="${profileHref(p)}" aria-label="Ver o perfil de ${esc(p.name)}"></a>
-      <div class="pc-photo">${avatar(p.name, p.photo, 'xl')}</div>
-      <div class="pc-name">${esc(p.name)}${p.verified ? Acolia.verifiedBadge : ''}</div>
-      <div class="pc-prof">${esc(p.profession)}</div>
-      ${p.rating ? `<div class="pc-rating">${Acolia.ratingHtml(p.rating, { short: true })}</div>` : ''}
-      ${sp.length ? `<div class="pc-sp">${sp.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : ''}
-      ${p.next_available ? `<div class="pc-next">${ICONS.calendar.replace('<svg', '<svg style="width:13px;height:13px"')} ${esc(p.next_available.label)}</div>` : ''}
-      ${price}
+      <div class="pc-top">
+        ${p.photo ? `<img src="${esc(p.photo)}" alt="" loading="lazy">` : `<div class="pc-ini">${esc(ini)}</div>`}
+        ${p.verified ? `<span class="pc-ok" title="Verificado pela Acolia">${Acolia.verifiedBadge}</span>` : ''}
+        ${when ? `<span class="pc-when ${when.now ? 'now' : ''}"><i></i>${esc(when.text)}</span>` : ''}
+      </div>
+      <div class="pc-body">
+        <div class="pc-name">${esc(p.name)}</div>
+        <div class="pc-prof">${esc(p.profession)}</div>
+        ${sp.length ? `<div class="pc-sp">${sp.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : ''}
+        ${price}
+      </div>
     </article>`;
   }
 

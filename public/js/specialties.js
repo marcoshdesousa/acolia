@@ -31,7 +31,7 @@
       const set = new Set(chosen.map(norm));
       $$('[data-sp]', box).forEach((b) => { const on = set.has(b.dataset.n); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
       $('[data-sp-chosen]', host).innerHTML = chosen.length
-        ? chosen.map((s, i) => `<span class="sp-tag">${esc(s)}<button type="button" data-sp-rm="${i}" aria-label="Tirar ${esc(s)}">✕</button></span>`).join('')
+        ? chosen.map((s, i) => `<span class="sp-tag ${opts.main && i < 2 ? 'main' : ''}">${opts.main ? `<button type="button" class="sp-star" data-sp-star="${i}" aria-label="${i < 2 ? 'Tirar das principais' : 'Escolher como principal'}" title="${i < 2 ? 'Principal (aparece no cartão)' : 'Tornar principal'}">${i < 2 ? '★' : '☆'}</button>` : ''}${esc(s)}<button type="button" data-sp-rm="${i}" aria-label="Tirar ${esc(s)}">✕</button></span>`).join('')
         : '<span class="muted small">Nenhuma escolhida ainda.</span>';
       if (hidden) hidden.value = JSON.stringify(chosen);
       opts.onChange?.(chosen);
@@ -45,7 +45,15 @@
     });
     $('[data-sp-chosen]', host).addEventListener('click', (e) => {
       const r = e.target.closest('[data-sp-rm]');
-      if (r) { chosen.splice(Number(r.dataset.spRm), 1); paint(); }
+      if (r) { chosen.splice(Number(r.dataset.spRm), 1); paint(); return; }
+      // Estrela: as 2 primeiras são as principais (aparecem no cartão da vitrine e no perfil)
+      const st = e.target.closest('[data-sp-star]');
+      if (!st) return;
+      const i = Number(st.dataset.spStar);
+      const [it] = chosen.splice(i, 1);
+      if (i < 2) chosen.push(it); // tira das principais: vai para o fim (a próxima da lista sobe)
+      else chosen.unshift(it); // vira a 1ª principal; a 2ª antiga sai das principais
+      paint();
     });
     $('[data-sp-search]', host).addEventListener('input', (e) => {
       const q = norm(e.target.value);
