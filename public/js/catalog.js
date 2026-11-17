@@ -36,7 +36,7 @@
   function card(p, { profileHref }) {
     const sp = String(p.specialties || '').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 2);
     const min = p.price_min_cents != null ? p.price_min_cents : p.price_cents;
-    const when = whenLabel(p.next_available);
+    const when = whenLabel(p.next_available || p.next_hint);
     const ini = String(p.name || '').split(/\s+/).filter(Boolean).map((w) => w[0]).filter((c, i, a) => i === 0 || i === a.length - 1).join('').toUpperCase();
     const price = p.locked
       ? `<div class="pc-price lock">${ICONS.lock || ''} Entre para ver o valor</div>`

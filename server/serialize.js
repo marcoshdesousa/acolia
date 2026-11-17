@@ -109,6 +109,8 @@ function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest 
     next_available: !!p.is_test === !!viewerTest ? require('./agenda').nextAvailableFor(p, viewerPatientId) : null,
     // Profissional Teste visto por conta de verdade: a agenda só abre para o Paciente Teste
     test_only: !!p.is_test && !viewerTest,
+    // Conta de teste vista por conta real: só o dia para o cartão da vitrine (marcar continua só para o Paciente Teste)
+    next_hint: p.is_test && !viewerTest ? (({ date, label } = {}) => (date ? { date, label } : null))(require('./agenda').nextAvailable(p) || undefined) : null,
   };
   if (!loggedIn) {
     const { state, city, ...visible } = common; // localização só com conta
