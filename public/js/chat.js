@@ -1,6 +1,11 @@
 /* Acolia — chat estilo WhatsApp (usado pelo paciente e pelo profissional).
    Apagar para mim / para todos, limpar conversa, bloquear (só mensagens) e arquivar. */
 (function () {
+  // Símbolo do portal do profissional na conversa (Psi, Nutri, Fisio): mostra com que tipo de profissional a pessoa fala
+  const ptag = (peer) => {
+    const u = peer && peer.portal && window.Acolia.PORTAL_UI[peer.portal];
+    return u ? ` <span class="ptag ${peer.portal}" title="${u.name}"><img src="${u.symbol}" alt="">${u.short}</span>` : '';
+  };
   'use strict';
   const { $, $$, esc, api, ICONS, avatar, fmtTime, fmtDay, fmtShort, toast, modal, copyText, money } = window.Acolia;
 
@@ -131,7 +136,7 @@
         <li class="conv ${state.current?.id === c.id ? 'active' : ''}" data-id="${c.id}" tabindex="0">
           ${avatar(c.peer.name, c.peer.photo)}
           <div class="grow">
-            <div class="top"><span class="nm">${esc(c.peer.name)}${c.peer.verified ? Acolia.verifiedBadge : ''}${c.peer.portal && Acolia.PORTAL_UI[c.peer.portal] ? ` <span class="ptag ${c.peer.portal}">${Acolia.PORTAL_UI[c.peer.portal].short}</span>` : ''}</span><span class="tm">${c.last_message ? fmtShort(c.last_message.created_at) : ''}</span></div>
+            <div class="top"><span class="nm">${esc(c.peer.name)}${c.peer.verified ? Acolia.verifiedBadge : ''}${ptag(c.peer)}</span><span class="tm">${c.last_message ? fmtShort(c.last_message.created_at) : ''}</span></div>
             ${c.peer.handle ? `<div class="hd-line">@${esc(c.peer.handle)}</div>` : ''}
             <div class="row" style="gap:8px;flex-wrap:nowrap"><span class="pv grow">${esc(previewOf(c.last_message))}</span>${c.unread ? `<span class="unread">${c.unread}</span>` : ''}</div>
           </div>
@@ -217,7 +222,7 @@
           <button class="icon-btn back-btn" aria-label="Voltar" data-close>${ICONS.back}</button>
           ${avatar(c.peer.name, c.peer.photo, 'sm')}
           <div class="grow" style="min-width:0">
-            <div class="nm">${esc(c.peer.name)}${c.peer.verified ? Acolia.verifiedBadge : ''}</div>
+            <div class="nm">${esc(c.peer.name)}${c.peer.verified ? Acolia.verifiedBadge : ''}${ptag(c.peer)}</div>
             <div class="sub" data-sub>${esc(c.peer.subtitle || '')}${c.peer.active ? '' : ' · conta inativa'}</div>
           </div>
           ${proActions}

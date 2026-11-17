@@ -98,8 +98,10 @@
     $('[data-logo]').innerHTML = ICONS.logo;
     // Portais: site.com/psi, /nutri e /fisio usam esta mesma página com a logo, a cor e os textos do portal
     // (o servidor marca <html data-portal>); a vitrine abre filtrada pelo portal, e dá para ver todos
-    const pk = document.documentElement.dataset.portal;
-    const PU = pk && Acolia.PORTAL_UI[pk];
+    // Logo oficial sempre: /psi, /nutri e /fisio só abrem a vitrine com aquele portal marcado no filtro
+    const pk = Acolia.portal() && /^\/(psi|nutri|fisio)\/?$/.test(location.pathname) ? location.pathname.replace(/\//g, '') : '';
+    const PU = null;
+    if (pk) setTimeout(() => document.getElementById('vitrine')?.scrollIntoView(), 400);
     if (PU) {
       Acolia.setPortal(pk);
       document.title = `${PU.name} — ${PU.title.replace(/\.$/, '')}`;
@@ -144,7 +146,7 @@
     }
     // Portal único (versão 2.2): a vitrine tem todos; a página do portal já abre com ele no filtro
     AcoliaCatalog.mount($('[data-catalog]'), {
-      portal: PU ? pk : '',
+      portal: pk,
       loggedIn: me.role === 'patient',
       me: me.role === 'patient' ? me.user : null,
       profileHref: (p) => me.role === 'patient' ? `/app#perfil/${p.id}` : `/${p.slug || 'profissional?id=' + p.id}`,
