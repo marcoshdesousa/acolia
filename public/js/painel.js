@@ -46,7 +46,7 @@
   if (isSec) $('[data-accepts-card]')?.remove();
   $('[data-accepts-messages]')?.addEventListener('change', async (e) => {
     const on = e.target.checked;
-    if (!on && !await confirmDialog('Desligar as mensagens e os agendamentos? Seu perfil continua aparecendo e você continua publicando, mas os pacientes não conseguem mandar mensagem nova nem marcar consulta até você ligar de novo. Sua agenda fica guardada.', { okLabel: 'Desligar', title: 'Pausar atendimento' })) { e.target.checked = true; return; }
+    if (!on && !await confirmDialog('Desligar as mensagens e os agendamentos? Seu perfil continua aparecendo, mas os pacientes não conseguem mandar mensagem nova nem marcar consulta até você ligar de novo. Sua agenda fica guardada.', { okLabel: 'Desligar', title: 'Pausar atendimento' })) { e.target.checked = true; return; }
     try {
       await api('/api/professional/accepts-messages', { method: 'POST', body: { on } });
       me.accepts_messages = on;
@@ -172,22 +172,35 @@
     toast('Perfil salvo!');
   });
 
-  // ---------- Minhas publicações (versão 1.2: substituem a galeria de 6 fotos) ----------
-  async function loadMyPosts() {
-    const box = $('[data-my-posts]');
-    try {
-      const data = await api(`/api/social/professionals/${me.id}/posts?limit=60`);
-      box.innerHTML = data.items.length
-        ? data.items.map(AcoliaSocial.gridTile).join('')
-        : '<p class="muted small" style="grid-column:1/-1;margin:0">Você ainda não publicou nada.</p>';
-    } catch (e) { box.innerHTML = `<p class="muted small">${esc(e.message)}</p>`; }
+  // ---------- Fotos do perfil (versão 2.2: sem feed; até 4 fotos no perfil) ----------
+  const photosBox = $('[data-my-photos]');
+  const photosInput = $('[data-photos-input]');
+  function renderPhotos() {
+    const list = me.photos || [];
+    photosBox.innerHTML = list.map((src, i) => `<div class="ph"><img src="${esc(src)}" alt="Foto ${i + 1}">
+        <button type="button" class="icon-btn x" data-photo-del="${i}" title="Tirar esta foto" aria-label="Tirar a foto ${i + 1}">${ICONS.trash || '×'}</button></div>`).join('')
+      + (list.length < 4 ? `<button type="button" class="ph add" data-photo-add>+ Colocar foto</button>` : '');
   }
-  $('[data-my-posts]').addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-post-open]');
-    if (b) { await AcoliaSocial.openPost(Number(b.dataset.postOpen)); loadMyPosts(); }
+  photosBox.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-photo-add]')) return photosInput.click();
+    const del = e.target.closest('[data-photo-del]');
+    if (!del) return;
+    if (!(await Acolia.confirmDialog('Tirar esta foto do seu perfil?', { okLabel: 'Tirar', title: 'Fotos do perfil' }))) return;
+    try { me = await api(`/api/professional/photos/${del.dataset.photoDel}`, { method: 'DELETE' }); renderPhotos(); toast('Foto retirada.'); } catch (ex) { toast(ex.message, 'error'); }
   });
-  loadMyPosts();
-  window.addEventListener('acolia:posted', loadMyPosts); // terminou um envio em segundo plano
+  photosInput.addEventListener('change', async () => {
+    const f = photosInput.files[0];
+    photosInput.value = '';
+    if (!f) return;
+    const fd = new FormData();
+    try {
+      fd.append('photo', await Acolia.shrinkImage(f), 'foto.jpg');
+      me = await api('/api/professional/photos', { method: 'POST', form: fd });
+      renderPhotos(); toast('Foto colocada!');
+    } catch (ex) { toast(ex.message, 'error'); }
+  });
+  if (isSec) $('[data-photos-card]').classList.add('hidden');
+  renderPhotos();
 
   $('[data-photo-input]').addEventListener('change', async (e) => {
     const picked = e.target.files[0];
@@ -206,7 +219,7 @@
 
   $('[data-preview]').addEventListener('click', (e) => {
     e.preventDefault();
-    const p = { ...me, locked: false, gallery: (me.gallery || []).filter(Boolean) };
+    const p = { ...me, locked: false };
     modal({ title: 'Prévia do seu perfil', html: `<div style="zoom:.85">${AcoliaProfile.render(p)}</div>`, actions: [{ label: 'Fechar' }] })
       .then(() => {});
     $$('dialog').at(-1).style.maxWidth = 'min(900px, calc(100vw - 32px))';
@@ -496,7 +509,7 @@
       await Acolia.modal({
         title: 'Você é verificado!',
         html: `<div class="center" style="font-size:3rem;line-height:1">${Acolia.verifiedBadge}</div>
-          <p>A equipe Acolia conferiu os seus dados. O <b>selo azul de verificado</b> agora aparece ao lado do seu nome no perfil, na vitrine, nas publicações e nas conversas.</p>`,
+          <p>A equipe Acolia conferiu os seus dados. O <b>selo azul de verificado</b> agora aparece ao lado do seu nome no perfil, na vitrine, e nas conversas.</p>`,
         actions: [{ label: 'Que bom!' }],
       });
       api('/api/professional/verified-seen', { method: 'POST' }).catch(() => {});
@@ -511,11 +524,11 @@
     onNavigate: (id) => { const h = id ? `#conversas/${id}` : '#conversas'; if (location.hash.startsWith('#conversas') && location.hash !== h) history.replaceState(null, '', h); },
   });
 
-  // ---------- Início estilo Instagram e outros profissionais (versão 1.2) ----------
+  // ---------- Outros profissionais e clínicas ----------
   const openPro = (id) => { location.hash = id === me.id ? 'perfil' : `verpro/${id}`; };
   AcoliaClinics.setOpenPro(openPro); // profissionais da clínica: abre o perfil no painel
-  AcoliaSocial.setContext({ role: 'professional', me, onOpenProfile: openPro, onAllPosts: (id, kind) => { location.hash = `posts/${id}/${kind || 'photo'}`; } });
-  let home = null;
+  AcoliaSocial.setContext({ role: 'professional', me, onOpenProfile: openPro });
+  AcoliaSocial.mountBell($('[data-bell]'), { socket }); // avisos da Acolia
   let catalogMounted = false;
 
   async function showPro(id) {
@@ -523,28 +536,18 @@
     box.innerHTML = '<div class="spinner"></div>';
     try {
       const p = await api(`/api/professionals/${id}`);
-      // Profissional não manda mensagem para profissional: só segue, curte e comenta
+      // Profissional não manda mensagem para profissional: só vê o perfil
       box.innerHTML = AcoliaProfile.render(p);
-      AcoliaSocial.bindProfile(box, p);
     } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   }
 
   // ---------- Rotas ----------
   function route() {
-    const [view, arg] = (location.hash.slice(1) || 'inicio').split('/');
-    const views = ['inicio', 'profissionais', 'clinicas', 'verpro', 'posts', 'conversas', 'atendimento', 'perfil', 'conta', ...(isSec ? [] : ['chamadas', 'financeiro'])];
-    const v = views.includes(view) ? view : 'inicio';
+    const [view, arg] = (location.hash.slice(1) || 'atendimento').split('/');
+    const views = ['profissionais', 'clinicas', 'verpro', 'conversas', 'atendimento', 'perfil', 'conta', ...(isSec ? [] : ['chamadas', 'financeiro'])];
+    const v = views.includes(view) ? view : 'atendimento';
     $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
-    $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'verpro' || v === 'posts' ? 'profissionais' : v)));
-    if (v === 'posts' && arg) AcoliaSocial.mountPostsPage($('[data-posts-page]'), Number(arg), { onBack: (id) => openPro(id) });
-    if (v === 'inicio' && home) home.refreshIfStale();
-    if (v === 'inicio' && !home) {
-      home = AcoliaSocial.mountHome($('[data-home]'), {
-        role: 'professional', me, socket, onOpenProfile: openPro,
-        onFindPros: () => { location.hash = 'profissionais'; },
-        onUnread: (n) => $$('[data-home-badge]').forEach((el) => { el.textContent = n ? String(n) : ''; }),
-      });
-    }
+    $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'verpro' ? 'profissionais' : v)));
     if (v === 'profissionais' && !catalogMounted) {
       catalogMounted = true;
       AcoliaCatalog.mount($('[data-catalog]'), { loggedIn: false, viewerRole: 'professional', excludeId: me.id, profileHref: (p) => `#verpro/${p.id}` });
@@ -553,7 +556,7 @@
     if (v === 'chamadas') callsPage?.load();
     if (v === 'clinicas') AcoliaClinics.mountList($('[data-clinics-page]'));
     if (v === 'financeiro') loadFinance().catch((e) => toast(e.message, 'error'));
-    if (v === 'perfil') loadMyPosts(); // sempre atualizada (inclusive depois de publicar no Início)
+    if (v === 'perfil') renderPhotos();
     if (v === 'atendimento') { agendaPro.load(); loadCalls().catch((e) => toast(e.message, 'error')); loadMyPatients().catch((e) => toast(e.message, 'error')); }
     if (v === 'conversas') {
       if (arg === 'suporte') { if (!chat.current?.support) chat.openSupport(); } else if (arg && chat.current?.id !== Number(arg)) chat.open(Number(arg)); // Suporte Acolia: #…/suporte
@@ -561,10 +564,6 @@
     }
     document.body.style.overflow = v === 'conversas' ? 'hidden' : '';
   }
-  // Casinha tocada estando no Início: volta ao topo e atualiza o feed
-  $$('[data-nav="inicio"]').forEach((a) => a.addEventListener('click', (e) => {
-    if (home && (location.hash || '#inicio').startsWith('#inicio')) { e.preventDefault(); home.toTop(); }
-  }));
   window.addEventListener('hashchange', route);
   renderMe();
   if (isSec) AcoliaSecretary.lockPanel(me);

@@ -244,9 +244,8 @@
       BIO_CACHE.set(p.id, { name: p.name, bio: p.bio, photo: p.photo, profession: p.profession });
     }
 
-    const gallery = postsHtml(p, { next, signup });
-    const counts = countsHtml(p);
-    const followBtn = followHtml(p);
+    // Sem feed (versão 2.2): no lugar das publicações, as até 4 fotos que o profissional escolheu
+    const gallery = photosHtml(p);
 
     return `
       <div class="card stack" data-pro-id="${p.id}">
@@ -255,7 +254,6 @@
           <div class="grow" style="min-width:220px">
             <h1 style="font-size:1.6rem;margin-bottom:4px">${esc(p.name)}${p.verified ? window.Acolia.verifiedBadge : ''}</h1>
             ${p.rating ? `<div class="pv-rating">${window.Acolia.ratingHtml(p.rating)}</div>` : ''}
-            ${counts}
             <div class="muted" style="font-weight:700">${esc(p.profession)}</div>
             <div class="row" style="margin-top:6px;gap:6px">${p.registry ? `<span class="badge ok">${ic('badge', 15)} ${esc(p.registry)}</span>` : ''}
               ${p.session_minutes ? `<span class="badge">${ic('clock', 15)} Sessão de ${duration(p.session_minutes)}</span>` : ''}
@@ -264,7 +262,7 @@
             ${nx ? `<button type="button" class="next-chip" data-next-go>${ic('calendar', 16)} Dia disponível: <b>${esc(nx.label)}</b></button>` : ''}
             ${specialties.length ? `<div class="meta row" style="gap:6px;margin-top:10px">${window.AcoliaSpecialties ? AcoliaSpecialties.badges(p) : specialties.slice(0, 2).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
           </div>
-          <div class="row">${followBtn}${actions}</div>
+          <div class="row">${actions}</div>
         </div>
         ${about}
         ${gallery}
@@ -273,6 +271,15 @@
         <div class="row" style="margin-top:10px"><a class="btn sm" href="${signup}">Criar conta grátis</a><a class="btn secondary sm" href="/entrar?next=${encodeURIComponent(next || '/app#perfil/' + p.id)}">Já tenho conta</a></div></div>` : ''}
       <div class="grid-2" style="margin-top:16px;align-items:start" data-values-anchor>${values}${location}</div>`;
   }
+
+  // Fotos do perfil (até 4): tocar amplia
+  function photosHtml(p) {
+    const list = (p.photos || []).slice(0, 4);
+    if (!list.length) return '';
+    return `<div><h3>Fotos</h3><div class="profile-photos">${list.map((src, i) => `<button type="button" data-gallery-open="${esc(src)}" aria-label="Ampliar a foto ${i + 1} de ${esc(p.name)}"><img src="${esc(src)}" alt="Foto ${i + 1} de ${esc(p.name)}" loading="lazy"></button>`).join('')}</div></div>`;
+  }
+  // As fotos já abrem pelo clique geral (data-gallery-open); fica para quem chamava o bind antigo
+  const bindPhotos = () => {};
 
   // Abas Fotos | Vídeos do perfil
   document.addEventListener('click', (e) => {
@@ -301,8 +308,12 @@
     }
     const b = e.target.closest('[data-gallery-open]');
     if (!b) return;
-    window.Acolia.modal({ title: 'Galeria', html: `<img src="${esc(b.dataset.galleryOpen)}" alt="" style="width:100%;border-radius:12px">`, actions: [{ label: 'Fechar' }] });
+    const z = document.createElement('div');
+    z.className = 'photo-zoom';
+    z.innerHTML = `<img src="${esc(b.dataset.galleryOpen)}" alt="">`;
+    z.addEventListener('click', () => z.remove());
+    document.body.appendChild(z);
   });
 
-  window.AcoliaProfile = { render, duration, postsHtml, countsHtml, followHtml };
+  window.AcoliaProfile = { render, duration, photosHtml, bindPhotos, postsHtml, countsHtml, followHtml };
 })();

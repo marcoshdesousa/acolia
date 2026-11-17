@@ -119,12 +119,15 @@ test('portais: profissional de cada portal, CPF e e-mail por portal, 7 dias grá
   assert.equal(r.status, 201, JSON.stringify(r.data));
   assert.equal(db.prepare('SELECT registry FROM professionals WHERE code = ?').get(r.data.code).registry, 'CREFITO-3/123456-F');
 
-  // Vitrine: cada portal mostra só os seus
-  const names = async (portal) => (await client(portal).get('/api/professionals')).data.items.map((p) => p.profession);
+  // Vitrine (portal único, versão 2.2): todos juntos; "Filtrar por portal" (?portal=) mostra só uma área
+  const names = async (portal) => (await client().get('/api/professionals' + (portal ? `?portal=${portal}` : ''))).data.items.map((p) => p.profession);
   assert.deepEqual(await names('nutri'), ['Nutricionista']);
   assert.deepEqual((await names('fisio')).sort(), ['Fisioterapeuta', 'Instrutor(a) de Pilates']);
   assert.deepEqual(await names('psi'), []);
-  assert.deepEqual(await names(null), []); // sem portal escolhido: Psi
+  assert.deepEqual((await names(null)).sort(), ['Fisioterapeuta', 'Instrutor(a) de Pilates', 'Nutricionista']); // sem filtro: todos
+  // O cookie do portal não filtra mais a vitrine
+  assert.equal((await client('nutri').get('/api/professionals')).data.items.length, 3);
+  assert.deepEqual((await client().get('/api/professionals?portal=fisio&profession=' + encodeURIComponent('Instrutor(a) de Pilates'))).data.items.map((p) => p.profession), ['Instrutor(a) de Pilates']);
 
   // Login pelo e-mail: entra na conta do portal em que a pessoa está; o e-mail aparece sem o "#portal"
   const pn = client('nutri');
@@ -139,9 +142,8 @@ test('portais: profissional de cada portal, CPF e e-mail por portal, 7 dias grá
   me = (await pf.get('/api/auth/me')).data;
   assert.equal(me.user.portal, 'fisio');
   assert.equal(me.user.profession, 'Instrutor(a) de Pilates');
-  // Profissional vê a vitrine do próprio portal (mesmo com outro portal no cookie)
-  pf.jar.set('acolia_portal', 'psi');
-  assert.ok((await pf.get('/api/professionals')).data.items.every((p) => p.portal === 'fisio'));
+  // Profissional também vê todos (e filtra por portal se quiser)
+  assert.ok((await pf.get('/api/professionals?portal=nutri')).data.items.every((p) => p.portal === 'nutri'));
 
   // Documentos por profissão
   const { allowedKinds } = require('../server/routes/docs');

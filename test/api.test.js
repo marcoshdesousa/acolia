@@ -507,14 +507,16 @@ test('admin cadastra profissional já aprovado', async () => {
   const v = client();
   const all = (await v.get('/api/professionals')).data.items.map((x) => x.name);
   let r2 = await v.get('/api/professionals?state=SP&sort=preco_menor');
-  assert.deepEqual(r2.data.items.map((x) => x.name), all, 'estado e ordem por valor ignorados');
+  assert.deepEqual(r2.data.items.map((x) => x.name).sort(), all.sort(), 'estado ignorado (a ordem é aleatória)');
   assert.equal(r2.data.items[0].price_cents, undefined);
   assert.equal(r2.data.items[0].city, undefined);
   r2 = await v.get('/api/professionals?max_price=100');
-  assert.deepEqual(r2.data.items.map((x) => x.name), all, 'valor máximo ignorado');
-  // Destaques: quem tem mais conversas/atendimentos aparece primeiro para o visitante
-  r2 = await v.get('/api/professionals');
-  assert.equal(r2.data.items[0].name, 'João Pereira', 'João tem conversa e atendimentos');
+  assert.deepEqual(r2.data.items.map((x) => x.name).sort(), all.sort(), 'valor máximo ignorado');
+  // Portal único (versão 2.2): sem ordem escolhida, a vitrine vem misturada (aleatória), com todos
+  const seen = new Set();
+  for (let i = 0; i < 30; i++) seen.add((await v.get('/api/professionals')).data.items[0].name);
+  assert.ok(seen.size > 1, 'o primeiro da lista muda');
+  assert.equal((await v.get('/api/professionals?sort=avaliacao')).data.items.length, all.length, 'mais bem avaliados vale sem conta');
   const login = await client().post('/api/auth/professional/login', { login: r.data.code, password: r.data.password });
   assert.equal(login.status, 200);
 });
@@ -755,6 +757,24 @@ test('perfil: duração da sessão, Instagram e galeria de até 6 fotos (visitan
   assert.deepEqual((await lp.get('/api/professional/quick-replies')).data.items, r.data.items);
   r = await lp.put('/api/professional/quick-replies', { items: Array.from({ length: 11 }, (_, i) => `m${i}`) });
   assert.equal(r.status, 400, 'no máximo 10');
+
+  // Fotos do perfil (versão 2.2, sem feed): até 4; tirar uma libera o lugar
+  const addPhoto = async (i) => {
+    const fd = new FormData();
+    fd.append('photo', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, i])], { type: 'image/png' }), 'f.png');
+    const res = await fetch(`${base}/api/professional/photos`, { method: 'POST', body: fd, headers: { Cookie: lp.cookie } });
+    return { status: res.status, data: await res.json() };
+  };
+  for (let i = 0; i < 4; i++) { r = await addPhoto(i); assert.equal(r.status, 200, JSON.stringify(r.data)); }
+  assert.equal(r.data.photos.length, 4);
+  assert.equal((await addPhoto(9)).status, 400, 'no máximo 4');
+  const second = r.data.photos[1];
+  r = await lp.del('/api/professional/photos/0');
+  assert.equal(r.status, 200);
+  assert.equal(r.data.photos.length, 3);
+  assert.equal(r.data.photos[0], second);
+  assert.equal((await lp.del('/api/professional/photos/7')).status, 404);
+  assert.deepEqual((await anon.get(`/api/professionals/${created.data.id}`)).data.photos, r.data.photos, 'as fotos aparecem para todos');
 
   // A galeria do perfil agora são as publicações (versão 1.2)
   const upload = async (caption = '') => {
@@ -2167,7 +2187,7 @@ test('versão 1.1.3: secretária do profissional — login gerado, responde no l
   assert.equal(after.state, 'RJ');
   assert.equal(after.clinic_name, 'Clínica Sara');
   assert.equal(after.pix_key, '', 'secretária não muda a chave Pix pelo perfil');
-  for (const [m, url, body] of [['post', '/api/professional/photo', {}], ['post', '/api/professional/password', { current: 'x', password: 'nova123' }],
+  for (const [m, url, body] of [['post', '/api/professional/photo', {}], ['post', '/api/professional/photos', {}], ['del', '/api/professional/photos/0'], ['post', '/api/professional/password', { current: 'x', password: 'nova123' }],
     ['post', '/api/professional/delete', {}], ['post', '/api/professional/secretary', {}], ['del', '/api/professional/secretary'],
     ['put', '/api/agenda/asaas', { enabled: false }], ['post', '/api/agenda/asaas', { key: 'x' }], ['put', '/api/agenda/settings', { pix_key: 'minha@pix' }],
     ['post', '/api/calls', { patient_label: 'Teste' }]]) {

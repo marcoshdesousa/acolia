@@ -20,15 +20,11 @@
   </div></header>
   <main class="narrow" style="padding-top:20px;padding-bottom:120px">
     <div class="tabs" role="tablist" style="margin-bottom:16px">
-      <button role="tab" data-tab="inicio" class="active">Início</button>
+      <button role="tab" data-tab="perfil" class="active">Perfil</button>
       <button role="tab" data-tab="clinicas">Clínicas</button>
-      <button role="tab" data-tab="perfil">Perfil</button>
       <button role="tab" data-tab="conta">Conta</button>
     </div>
 
-    <!-- Início: feed da Acolia (a clínica publica fotos, vídeos e textos e coloca no story, como o profissional) -->
-    <section data-panel="inicio"><div data-home></div></section>
-    <section data-panel="posts" class="hidden"><div data-posts-page></div></section>
 
 
     <section data-panel="clinicas" class="hidden">
@@ -118,22 +114,18 @@
     const cfg = await api('/api/config');
     // Portais (versão 2.0): o painel da clínica tem a logo e a cor do portal dela
     if (cfg.portals_enabled !== false) { Acolia.applyPortal(me.portal || 'psi'); $('[data-logo]').innerHTML = ICONS.logo; }
-    // Feed: a clínica publica e vê as publicações de quem segue (mesmo Início dos profissionais)
-    let home = null;
-    AcoliaSocial.setContext({ role: 'clinic', me, onAllPosts: (id, kind) => { location.hash = `posts/${id}/${kind || 'photo'}`; } });
+    // Sem feed (versão 2.2): o painel da clínica abre no perfil
+    AcoliaSocial.setContext({ role: 'clinic', me });
     const show = (t, arg) => {
-      $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === (t === 'posts' ? 'perfil' : t)));
+      $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
       $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== t));
       if (t === 'clinicas') AcoliaClinics.mountList($('[data-clinics-page]'));
-      if (t === 'inicio' && home) home.refreshIfStale();
-      if (t === 'inicio' && !home) home = AcoliaSocial.mountHome($('[data-home]'), { role: 'clinic', me, onFindPros: () => { location.href = '/'; } });
       if (t === 'perfil') loadMine();
-      if (t === 'posts' && arg) AcoliaSocial.mountPostsPage($('[data-posts-page]'), Number(arg), { onBack: () => { location.hash = 'perfil'; } });
     };
     $$('[data-tab]').forEach((b) => b.addEventListener('click', () => { location.hash = b.dataset.tab; }));
     const route = () => {
-      const [t, arg] = (location.hash.slice(1) || 'inicio').split('/');
-      show(['inicio', 'clinicas', 'perfil', 'conta', 'posts'].includes(t) ? t : t === 'clinica' ? 'perfil' : 'inicio', arg);
+      const [t, arg] = (location.hash.slice(1) || 'perfil').split('/');
+      show(['clinicas', 'perfil', 'conta'].includes(t) ? t : 'perfil', arg);
     };
     window.addEventListener('hashchange', route);
     // "Minha clínica": como os outros veem o perfil (publicações, seguidores e profissionais)

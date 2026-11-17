@@ -83,7 +83,6 @@
         actions: pro ? '' : p.accepts_messages === false ? Acolia.pauseNote('msg') : '<button class="btn" data-msg>' + chat + ' Enviar mensagem</button>',
       });
       AcoliaSocial.setContext({ role: me.role, me: me.user, onOpenProfile: (id) => { location.href = '/profissional.html?id=' + id; }, onMessage: (id) => { location.href = '/app#conversar/' + id; } });
-      AcoliaSocial.bindProfile($('[data-profile]'), p, { onNeedAccount: needAccount });
       // Acabou de criar a conta (ou entrar) depois de escolher um horário: vai direto para o pagamento
       if (patient) { const pend = AcoliaAgenda.takePending(p.id); if (pend) AcoliaAgenda.resumeBooking(p, pend); }
       if (pro || p.official) return;

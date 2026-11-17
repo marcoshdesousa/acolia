@@ -37,18 +37,18 @@
           ${logoOf(c)}
           <div class="grow" style="min-width:220px">
             <h1 style="font-size:1.6rem;margin-bottom:4px">${esc(c.name)}</h1>
-            ${sp && P ? P.countsHtml(sp) : ''}
+
             <div class="muted" style="font-weight:700">${IC.hospital.replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px"')} Clínica · ${esc(c.city)} - ${esc(c.state)}</div>
             ${window.Acolia.socialLinks(c.social)}
           </div>
-          <div class="row">${sp && P ? P.followHtml(sp) : ''}${actions}</div>
+          <div class="row">${actions}</div>
         </div>
         ${c.bio ? `<div><h3>Sobre a clínica</h3><p style="white-space:pre-wrap;margin:0">${esc(c.bio)}</p></div>` : ''}
         ${c.has_doctors && c.doctors.length ? `<div><h3>${IC.steth.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px"')} Também tem médicos</h3>
           <div class="row" style="gap:6px;flex-wrap:wrap">${c.doctors.map((d) => `<span class="badge">${esc(d)}</span>`).join('')}</div></div>` : ''}
-        ${sp && P ? P.postsHtml(sp, { next, signup }) : ''}
+
       </div>
-      ${c.locked ? `<div class="notice info" style="margin-top:16px">${IC.lock.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px"')} Crie sua conta grátis para ver todas as publicações, o endereço e o mapa da clínica.
+      ${c.locked ? `<div class="notice info" style="margin-top:16px">${IC.lock.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px"')} Crie sua conta grátis para ver o endereço e o mapa da clínica.
         <div class="row" style="margin-top:10px"><a class="btn sm" href="${signup}">Criar conta grátis</a><a class="btn secondary sm" href="/entrar${next ? `?next=${encodeURIComponent(next)}` : ''}">Já tenho conta</a></div></div>` : ''}
       ${membersHtml(c)}
       <div class="card flat stack" style="margin-top:16px"><h3>${IC.pin.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px"')} Localização</h3>${place}</div>`;

@@ -19,20 +19,20 @@
     return `<div>${bits.join(' ')}</div>${where}`;
   }
 
-  function card(p, { profileHref, viewerRole }) {
-    const pro = viewerRole === 'professional'; // profissional vê a vitrine, mas não manda mensagem
-    return `<article class="card pro-card" data-id="${p.id}">
-      <div class="head">${avatar(p.name, p.photo, 'lg')}
-        <div style="min-width:0;padding-right:28px"><div class="name">${esc(p.name)}${p.verified ? Acolia.verifiedBadge : ''}</div><div class="muted small">${esc(p.profession)}</div>
-        ${p.rating ? `<div class="small">${Acolia.ratingHtml(p.rating, { short: true })}</div>` : ''}
-        ${p.registry ? `<div class="small">${ICONS.badge.replace('<svg', '<svg style="width:15px;height:15px;vertical-align:-3px"')} ${esc(p.registry)}</div>` : ''}</div>
-      </div>
-      ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ''}
-      ${p.specialties ? `<div class="meta">${window.AcoliaSpecialties ? AcoliaSpecialties.badges(p) : p.specialties.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 2).map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div>` : ''}
-      ${p.next_available ? `<div class="next-line">${ICONS.calendar.replace('<svg', '<svg style="width:15px;height:15px"')} Próximo dia disponível: <b>${esc(p.next_available.label)}${p.next_available.first ? ` às ${esc(p.next_available.first)}` : ''}</b></div>` : ''}
-      ${priceLine(p)}
-      <div class="actions"><a class="btn ${pro ? '' : 'secondary'} sm grow" href="${profileHref(p)}">Ver perfil</a>
-        ${pro ? '' : `<button class="btn sm grow" ${p.locked ? 'data-need-account' : 'data-msg'}>${ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"')} Mensagem</button>`}</div>
+  // Cartão compacto: 2 por linha no celular (foto, nome, profissão, as principais especialidades, valor)
+  function card(p, { profileHref }) {
+    const sp = String(p.specialties || '').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 2);
+    const min = p.price_min_cents != null ? p.price_min_cents : p.price_cents;
+    const price = p.locked ? '' : min != null ? `<div class="pc-price">${p.price_same === false ? '<span>a partir de</span> ' : ''}<b>${money(min)}</b></div>` : '';
+    return `<article class="card pro-card mini" data-id="${p.id}">
+      <a class="pc-link" href="${profileHref(p)}" aria-label="Ver o perfil de ${esc(p.name)}"></a>
+      <div class="pc-photo">${avatar(p.name, p.photo, 'xl')}</div>
+      <div class="pc-name">${esc(p.name)}${p.verified ? Acolia.verifiedBadge : ''}</div>
+      <div class="pc-prof">${esc(p.profession)}</div>
+      ${p.rating ? `<div class="pc-rating">${Acolia.ratingHtml(p.rating, { short: true })}</div>` : ''}
+      ${sp.length ? `<div class="pc-sp">${sp.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : ''}
+      ${p.next_available ? `<div class="pc-next">${ICONS.calendar.replace('<svg', '<svg style="width:13px;height:13px"')} ${esc(p.next_available.label)}</div>` : ''}
+      ${price}
     </article>`;
   }
 
@@ -55,6 +55,8 @@
         </div>
         <div class="filter-panel card flat hidden" id="filtros" data-panel>
           <div class="filter-grid">
+            <div class="field"><label for="f-portal">Filtrar por portal</label>
+              <select id="f-portal" name="portal"><option value="">Todos os portais</option></select></div>
             <div class="field"><label for="f-prof">Tipo de profissional</label>
               <select id="f-prof" name="profession"><option value="">Todos os tipos</option></select></div>
             <div class="field"><label for="f-disp">Consulta disponível</label>
@@ -72,6 +74,7 @@
             <div class="field ${full ? '' : 'hidden'}"><label for="f-sort">Ordenar por</label>
               <select id="f-sort" name="sort">
                 <option value="">${logged ? 'Mais perto de você' : 'Destaques'}</option>
+                <option value="avaliacao">Mais bem avaliados</option>
                 <option value="preco_menor">Menor valor primeiro</option>
                 <option value="preco_maior">Maior valor primeiro</option>
               </select></div>
@@ -87,6 +90,8 @@
           <div class="row"><button class="btn" type="submit">Aplicar filtros</button><button class="btn ghost" type="button" data-clear>Limpar filtros</button></div>
         </div>
       </form>
+      <div class="portal-chips" role="group" aria-label="Filtrar por portal" data-portal-chips></div>
+      <div class="prof-chips hidden" role="group" aria-label="Tipo de profissional" data-prof-chips></div>
       <div class="disp-chips" role="group" aria-label="Consulta disponível">
         <span class="small muted">Consulta disponível:</span>
         ${[['', 'Qualquer dia'], ['hoje', 'Hoje'], ['amanha', 'Até amanhã'], ['7', 'Próximos 7 dias']].map(([v, t]) => `<button type="button" class="chip-btn ${v ? '' : 'on'}" data-disp="${v}">${t}</button>`).join('')}
@@ -100,16 +105,52 @@
     const toggle = $('[data-toggle]', root);
     form.state.insertAdjacentHTML('beforeend', ufOptions('', '').replace('<option value=""></option>', ''));
     form.state.value = 'todos';
-    api('/api/config').then((c) => {
-      // Portais (versão 2.0): só as profissões do portal em que a pessoa está
-      const P = c.portals_enabled !== false && (c.portals || []).find((x) => x.key === (Acolia.portal() || 'psi'));
-      form.profession.insertAdjacentHTML('beforeend', (P ? P.professions : c.professions).map((p) => `<option>${esc(p)}</option>`).join(''));
+    // Portal único (versão 2.2): todos os profissionais juntos; "Filtrar por portal" mostra só uma área e
+    // as profissões dela (ex.: Fisio → Fisioterapeuta, Instrutor(a) de Pilates…)
+    let portals = [];
+    let allProfs = [];
+    const chipsP = $('[data-portal-chips]', root);
+    const chipsF = $('[data-prof-chips]', root);
+    const fillProfessions = () => {
+      const P = portals.find((x) => x.key === form.portal.value);
+      const keep = form.profession.value;
+      const list = P ? P.professions : allProfs;
+      form.profession.innerHTML = '<option value="">Todos os tipos</option>' + list.map((x) => `<option>${esc(x)}</option>`).join('');
+      form.profession.value = list.includes(keep) ? keep : '';
+      chipsP.innerHTML = `<button type="button" class="chip-btn ${form.portal.value ? '' : 'on'}" data-pchip="">Todos</button>`
+        + portals.map((x) => `<button type="button" class="chip-btn pchip ${form.portal.value === x.key ? 'on' : ''}" data-pchip="${x.key}"><img src="${esc(x.symbol)}" alt="">${esc(x.short)}</button>`).join('');
+      chipsF.classList.toggle('hidden', !P);
+      chipsF.innerHTML = P ? `<button type="button" class="chip-btn ${form.profession.value ? '' : 'on'}" data-fchip="">Todos de ${esc(P.short)}</button>`
+        + P.professions.map((x) => `<button type="button" class="chip-btn ${form.profession.value === x ? 'on' : ''}" data-fchip="${esc(x)}">${esc(x)}</button>`).join('') : '';
+    };
+    const ready = api('/api/config').then((c) => {
+      portals = c.portals_enabled !== false ? (c.portals || []) : [];
+      allProfs = [...new Set(portals.length ? portals.flatMap((x) => x.professions) : c.professions)];
+      form.portal.insertAdjacentHTML('beforeend', portals.map((x) => `<option value="${x.key}">${esc(x.name)}</option>`).join(''));
+      if (!portals.length) form.portal.closest('.field').classList.add('hidden');
+      if (opts.portal && portals.some((x) => x.key === opts.portal)) form.portal.value = opts.portal;
+      fillProfessions();
+      mountSp();
     }).catch(() => {});
     bindUfCity(form.state, form.city);
-    // Especialidades escolhidas no filtro (vão para a busca separadas por "|")
+    // Especialidades escolhidas no filtro (vão para a busca separadas por "|"): cada portal tem a sua lista,
+    // então aparecem depois de escolher o portal
     let spChosen = [];
-    const spFilter = window.AcoliaSpecialties ? AcoliaSpecialties.picker($('[data-sp-filter]', root), { onChange: (l) => { spChosen = l; } }) : null;
-    if (!spFilter) $('.sp-filter', root).remove();
+    function mountSp() {
+      const host = $('[data-sp-filter]', root);
+      spChosen = [];
+      if (!host) return;
+      if (!window.AcoliaSpecialties || !form.portal.value) {
+        host.innerHTML = '<p class="small muted" style="margin:0">Escolha um portal acima para filtrar por especialidade.</p>';
+        return;
+      }
+      AcoliaSpecialties.picker(host, { portal: form.portal.value, onChange: (l) => { spChosen = l; } });
+    }
+    const setPortal = (k) => { form.portal.value = k; form.profession.value = ''; fillProfessions(); mountSp(); load(); };
+    chipsP.addEventListener('click', (e) => { const b = e.target.closest('[data-pchip]'); if (b) setPortal(b.dataset.pchip); });
+    chipsF.addEventListener('click', (e) => { const b = e.target.closest('[data-fchip]'); if (b) { form.profession.value = b.dataset.fchip; fillProfessions(); load(); } });
+    form.portal.addEventListener('change', () => setPortal(form.portal.value));
+    form.profession.addEventListener('change', () => fillProfessions());
 
     // Atalhos de disponibilidade (os mesmos do filtro "Consulta disponível")
     const syncDisp = () => $$('[data-disp]', root).forEach((b) => b.classList.toggle('on', b.dataset.disp === form.disp.value));
@@ -123,14 +164,15 @@
       form.reset();
       form.state.value = 'todos';
       form.city.value = '';
-      spFilter?.then((sp) => sp.set([]));
-      spChosen = [];
+      fillProfessions();
+      mountSp();
       syncDisp();
       load();
     });
 
     function activeFilters() {
       let n = 0;
+      if (form.portal.value) n++;
       if (form.profession.value) n++;
       if (form.disp.value) n++;
       if (form.state.value && form.state.value !== 'todos') n++;
@@ -212,12 +254,12 @@
       // Toque em qualquer parte do cartão (foto, nome, cidade, especialidades…) abre o perfil;
       // os botões (Mensagem, "+N" das especialidades) continuam fazendo o que fazem
       if (e.target.closest('a, button, input, select, label')) return;
-      const link = art.querySelector('.actions a[href]');
+      const link = art.querySelector('.pc-link, .actions a[href]');
       if (link) link.click();
     });
     form.addEventListener('submit', (e) => { e.preventDefault(); load(); });
-    $$('select, input[type=checkbox]', panel).forEach((el) => el.addEventListener('change', () => load()));
-    load({ auto: logged });
+    $$('select, input[type=checkbox]', panel).forEach((el) => { if (el !== form.portal) el.addEventListener('change', () => load()); });
+    ready.then(() => load({ auto: logged }));
     return { reload: () => load() };
   }
 

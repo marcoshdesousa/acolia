@@ -401,6 +401,17 @@ db.exec(`CREATE TABLE IF NOT EXISTS post_images (
   }
 }
 
+// Sem feed (versão 2.2): o profissional tem até 4 fotos no perfil. Uma vez só: começa com as 4 fotos mais
+// recentes que ele já tinha publicado (as publicações continuam guardadas, só não aparecem mais)
+addColumn('professionals', 'profile_photos', "TEXT NOT NULL DEFAULT '[]'");
+if (!db.prepare("SELECT 1 FROM settings WHERE key = 'profile_photos_v1'").get()) {
+  for (const p of db.prepare("SELECT id FROM professionals WHERE profile_photos = '[]'").all()) {
+    const imgs = db.prepare("SELECT COALESCE(thumb, image) AS u FROM posts WHERE professional_id = ? AND kind NOT IN ('reel', 'text') AND image LIKE '/uploads/%' ORDER BY id DESC LIMIT 4").all(p.id).map((r) => r.u);
+    if (imgs.length) db.prepare('UPDATE professionals SET profile_photos = ? WHERE id = ?').run(JSON.stringify(imgs), p.id);
+  }
+  db.prepare("INSERT INTO settings (key, value) VALUES ('profile_photos_v1', ?)").run(new Date().toISOString());
+}
+
 require('./cloud').attachDb(db);
 
 function tx(fn) {

@@ -96,8 +96,8 @@
   (async function () {
     const { $, $$, api, ICONS, esc } = Acolia;
     $('[data-logo]').innerHTML = ICONS.logo;
-    // Portais (versão 2.0): site.com/psi, /nutri e /fisio usam esta mesma página com a logo, a cor e os
-    // textos do portal (o servidor marca <html data-portal> e o cookie, que filtra a vitrine)
+    // Portais: site.com/psi, /nutri e /fisio usam esta mesma página com a logo, a cor e os textos do portal
+    // (o servidor marca <html data-portal>); a vitrine abre filtrada pelo portal, e dá para ver todos
     const pk = document.documentElement.dataset.portal;
     const PU = pk && Acolia.PORTAL_UI[pk];
     if (PU) {
@@ -126,7 +126,7 @@
     // Já entrou: a página inicial mostra o botão para abrir o app (paciente), o sistema
     // (profissional) ou o administrativo (admin), e um "Sair" para trocar de conta
     const ENTER = {
-      patient: { href: pk ? `/app?portal=${pk}` : '/app', label: 'Entrar no aplicativo' },
+      patient: { href: '/app', label: 'Entrar no aplicativo' },
       professional: { href: '/painel', label: 'Entrar no sistema' },
       admin: { href: '/admin', label: 'Entrar no administrativo' },
       clinic: { href: '/clinica', label: 'Entrar no painel da clínica' },
@@ -142,10 +142,12 @@
       $('[data-have]').classList.add('hidden');
       $('[data-logout-home]').addEventListener('click', (e) => { e.currentTarget.disabled = true; Acolia.logout('/'); });
     }
+    // Portal único (versão 2.2): a vitrine tem todos; a página do portal já abre com ele no filtro
     AcoliaCatalog.mount($('[data-catalog]'), {
+      portal: PU ? pk : '',
       loggedIn: me.role === 'patient',
       me: me.role === 'patient' ? me.user : null,
-      profileHref: (p) => me.role === 'patient' ? `/app${pk ? `?portal=${pk}` : ''}#perfil/${p.id}` : `/${p.slug || 'profissional?id=' + p.id}`,
+      profileHref: (p) => me.role === 'patient' ? `/app#perfil/${p.id}` : `/${p.slug || 'profissional?id=' + p.id}`,
       onMessage: (id) => { location.href = `/app#conversar/${id}`; },
     });
   })();

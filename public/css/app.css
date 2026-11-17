@@ -1687,3 +1687,38 @@ dialog.wide { max-width: 640px; width: calc(100vw - 24px); }
 .pay-opt b { font-size: 1.05rem; }
 .pay-go { color: var(--primary); font-weight: 800; margin-top: 4px; }
 @media (min-width: 700px) { .pay-opts { grid-template-columns: repeat(3, 1fr); } }
+
+/* Portal único (versão 2.2): vitrine com cartões compactos, 2 por linha no celular */
+.pro-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
+@media (max-width: 640px) { .pro-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+.pro-card.mini { align-items: center; text-align: center; gap: 4px; padding: 14px 10px 12px; }
+.pro-card.mini .pc-link { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.pro-card.mini .pc-photo { margin-bottom: 4px; }
+.pro-card.mini .pc-photo .avatar { width: 76px; height: 76px; font-size: 1.6rem; }
+.pro-card.mini .pc-name { font-weight: 800; font-size: .95rem; line-height: 1.25; overflow-wrap: anywhere; }
+.pro-card.mini .pc-name .verified-badge { display: inline-block; vertical-align: -2px; margin-left: 3px; }
+.pro-card.mini .pc-name svg { width: 15px; height: 15px; }
+.pro-card.mini .pc-prof { color: var(--primary-strong); font-weight: 700; font-size: .82rem; }
+.pro-card.mini .pc-rating { font-size: .78rem; }
+.pro-card.mini .pc-sp { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 2px; }
+.pro-card.mini .pc-sp span { background: #e5ebe8; color: #2e403c; border-radius: 999px; padding: 2px 8px; font-size: .7rem; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pro-card.mini .pc-next { color: var(--muted); font-size: .74rem; display: inline-flex; align-items: center; gap: 4px; }
+.pro-card.mini .pc-price { font-size: .85rem; margin-top: 2px; }
+.pro-card.mini .pc-price span { color: var(--muted); font-size: .72rem; }
+.portal-chips, .prof-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.prof-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
+.prof-chips::-webkit-scrollbar { display: none; }
+.prof-chips .chip-btn { padding: 5px 12px; font-size: .8rem; white-space: nowrap; flex: none; }
+.pchip { display: inline-flex; align-items: center; gap: 6px; }
+.pchip img { width: 18px; height: 18px; object-fit: contain; }
+.profile-photos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (min-width: 640px) { .profile-photos { grid-template-columns: repeat(4, 1fr); } }
+.profile-photos button, .profile-photos .ph { position: relative; aspect-ratio: 1; border: 0; padding: 0; border-radius: 14px; overflow: hidden; background: #e5ebe8; cursor: pointer; }
+.profile-photos img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.profile-photos .ph .x { position: absolute; top: 6px; right: 6px; z-index: 2; }
+.profile-photos .ph.add { display: grid; place-items: center; color: #3f5550; font-weight: 700; font-size: .85rem; border: 2px dashed #9db8b0; background: #faf9f5; }
+.photo-zoom { position: fixed; inset: 0; background: rgba(20,28,26,.88); z-index: 1000; display: grid; place-items: center; padding: 16px; }
+.photo-zoom img { max-width: 100%; max-height: 90vh; border-radius: 12px; }
+.bell-btn { position: relative; }
+.bell-btn .nav-badge { position: absolute; top: 2px; right: 2px; }
+.bell-btn .nav-badge:empty { display: none; }

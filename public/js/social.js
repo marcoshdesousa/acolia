@@ -819,6 +819,22 @@
     });
   }
 
+  // Sininho solto (sem feed, versão 2.2): avisos da Acolia e notificações ficam no topo do app/painel
+  function mountBell(btn, { socket, onUnread } = {}) {
+    btn.innerHTML = ic('bell', 20) + '<span class="nav-badge" data-bell-count></span>';
+    const refresh = async () => {
+      try {
+        const { unread } = await api('/api/social/notifications/unread');
+        btn.querySelector('[data-bell-count]').textContent = unread ? String(unread) : '';
+        onUnread?.(unread);
+      } catch { /* ignora */ }
+    };
+    btn.addEventListener('click', () => openNotifications(refresh));
+    socket?.on('social:notification', refresh);
+    refresh();
+    return { refresh };
+  }
+
   // ---------- Envios em segundo plano ----------
   // Tocou em Publicar: a janela fecha na hora e o envio segue sozinho, com a barrinha no topo.
   // A pessoa continua usando o app (feed, Reels, mensagens…). Se a internet cair ou o app for
@@ -1678,5 +1694,5 @@
     b.remove();
   });
 
-  window.AcoliaSocial = { contentPledge, readVideo, charCount, CAPTION_MAX, openNewText: newText, resumeUploads: () => Uploads.resume(), openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
+  window.AcoliaSocial = { mountBell, openNotifications, contentPledge, readVideo, charCount, CAPTION_MAX, openNewText: newText, resumeUploads: () => Uploads.resume(), openReels, openNewReel: newReel, officialBadge, mountPostsPage, gridTile, mountHome, openNewPost: newPost, openPost, openComments, bindProfile, postCard, bindActions, setContext: (o) => { ctx = { ...ctx, ...o }; } };
 })();

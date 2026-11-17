@@ -16,12 +16,11 @@
 <body>
   <header class="topbar"><div class="container" style="max-width:none">
     <a class="brand" href="/painel"><span data-logo><img class="brand-mark" src="/img/acolia-saude-simbolo.png" alt="" width="34" height="34" style="object-fit:contain"></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"> <span class="badge primary">Profissional</span></a>
-    <nav><span data-me-avatar></span></nav>
+    <nav><button type="button" class="icon-btn bell-btn" data-bell title="Notificações" aria-label="Notificações"></button><span data-me-avatar></span></nav>
   </div></header>
 
   <div class="panel rail">
     <aside class="sidebar" aria-label="Menu">
-      <a href="#inicio" data-nav="inicio" title="Início" aria-label="Início"><span data-i="home"></span><span class="nav-badge" data-home-badge></span></a>
       <a href="#profissionais" data-nav="profissionais" title="Profissionais" aria-label="Profissionais"><span data-i="therapist"></span></a>
       <a href="#clinicas" data-nav="clinicas" title="Clínicas" aria-label="Clínicas"><span data-i="hospital"></span></a>
       <a href="#conversas" data-nav="conversas" title="Mensagens" aria-label="Mensagens"><span data-i="chat"></span><span class="nav-badge" data-unread></span></a>
@@ -35,11 +34,9 @@
     <main class="panel-main">
       <div data-status-notice></div>
 
-      <section data-view="inicio" class="hidden"><div data-home></div></section>
-
       <section data-view="profissionais" class="hidden" style="max-width:1100px">
         <h1 style="font-size:1.5rem">Profissionais</h1>
-        <p class="muted small">Siga outros profissionais para ver as publicações e os stories deles no Início.</p>
+        <p class="muted small">Todos os profissionais da Acolia, de todos os portais.</p>
         <div data-catalog></div>
       </section>
 
@@ -48,7 +45,6 @@
         <div data-pro-view></div>
       </section>
 
-      <section data-view="posts" class="hidden" style="max-width:900px"><div data-posts-page></div></section>
 
       <section data-view="clinicas" class="hidden" style="max-width:820px">
         <h1 style="font-size:1.5rem">Clínicas</h1>
@@ -148,7 +144,7 @@
         <div data-accepts-card style="margin-bottom:16px">
           <label class="switch-row" style="margin:0"><span class="sw-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8.5 8.5 0 0 1-12.4 7.6L3 21l1.5-5.2A8.5 8.5 0 1 1 21 12z"/></svg></span>
             <span class="sw-text"><b>Aceitar mensagens e agendamentos</b><span class="sw-state"><i class="sw-on">● Ligado: pacientes mandam mensagem e marcam consulta</i><i class="sw-off">○ Desligado: ninguém manda mensagem nem marca consulta</i></span>
-              <span class="small muted">Vai viajar, está de férias, de repouso ou de atestado? Desligue. Seu perfil continua aparecendo e você continua publicando. Sua agenda (horários, valores, online e presencial) fica guardada e volta do jeito que estava quando você ligar de novo. Quem já tem consulta marcada com você continua falando com você.</span></span>
+              <span class="small muted">Vai viajar, está de férias, de repouso ou de atestado? Desligue. Seu perfil continua aparecendo. Sua agenda (horários, valores, online e presencial) fica guardada e volta do jeito que estava quando você ligar de novo. Quem já tem consulta marcada com você continua falando com você.</span></span>
             <input type="checkbox" class="switch" role="switch" data-accepts-messages aria-label="Aceitar mensagens e agendamentos"></label>
         </div>
         <div class="card stack">
@@ -156,10 +152,11 @@
             <div class="stack"><label class="btn secondary sm" style="margin:0;width:max-content">Trocar foto de perfil<input type="file" accept="image/jpeg,image/png,image/webp" data-photo-input hidden></label>
             <span class="small muted">JPG, PNG ou WEBP, até 3 MB.</span></div></div>
         </div>
-        <div class="card stack" style="margin-top:16px">
-          <h2 style="margin:0">Minhas publicações</h2>
-          <p class="small muted" style="margin:0">Para publicar, use a cruz (+) no Início. Suas publicações ficam no seu perfil até você apagar: toque numa delas e use os três pontinhos (⋮) para apagar.</p>
-          <div class="gallery-grid" data-my-posts></div>
+        <div class="card stack" style="margin-top:16px" data-photos-card>
+          <h2 style="margin:0">Fotos do perfil <span class="muted small">(até 4)</span></h2>
+          <p class="small muted" style="margin:0">Aparecem no seu perfil, embaixo do "Sobre". Mostre o consultório, você atendendo ou o seu trabalho. Para trocar, tire uma e coloque outra.</p>
+          <div class="profile-photos" data-my-photos></div>
+          <input type="file" accept="image/jpeg,image/png,image/webp" data-photos-input hidden>
         </div>
         <form class="card" data-profile-form style="margin-top:16px" novalidate>
           <h2>Dados profissionais</h2>
@@ -251,7 +248,6 @@
   </div>
 
   <nav class="bottom-nav icons" aria-label="Navegação">
-    <a href="#inicio" data-nav="inicio" title="Início" aria-label="Início"><span data-i="home"></span><span class="nav-badge" data-home-badge></span></a>
     <a href="#profissionais" data-nav="profissionais" title="Profissionais" aria-label="Profissionais"><span data-i="therapist"></span></a>
     <a href="#clinicas" data-nav="clinicas" title="Clínicas" aria-label="Clínicas"><span data-i="hospital"></span></a>
     <a href="#conversas" data-nav="conversas" title="Mensagens" aria-label="Mensagens"><span data-i="chat"></span><span class="nav-badge" data-unread></span></a>

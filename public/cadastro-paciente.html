@@ -23,9 +23,8 @@
     <section class="card stack center hidden" data-done>
       <img src="/img/acolia-saude-simbolo.png" alt="" style="width:84px;height:84px;object-fit:contain;margin:0 auto">
       <h2 style="margin:0">Conta criada!</h2>
-      <p style="margin:0">A sua conta vale para os <b>3 portais da Acolia</b>. Use a mesma conta em todos:</p>
+      <p style="margin:0">A sua conta vale para <b>toda a Acolia</b>: psicologia, nutrição e fisioterapia, tudo no mesmo app.</p>
       <div data-done-portals style="text-align:left"></div>
-      <p class="small muted" style="margin:0" data-done-note>Escolha por onde começar. Depois dá para trocar quando quiser pelo botão no topo do app.</p>
       <a class="btn block hidden" data-done-next>Continuar</a>
     </section>
     <form class="card" data-form novalidate>
@@ -101,16 +100,12 @@
       $$('h1.center, h1.center + p').forEach((el) => el.classList.add('hidden'));
       const done = $('[data-done]');
       done.classList.remove('hidden');
-      if (safeNext) {
-        Acolia.portalPicker($('[data-done-portals]'), { href: () => safeNext });
-        $$('[data-done-portals] .portal-opt').forEach((a) => { a.removeAttribute('href'); a.style.pointerEvents = 'none'; });
-        $('[data-done-note]').classList.add('hidden');
-        const go = $('[data-done-next]');
-        go.href = safeNext;
-        go.classList.remove('hidden');
-      } else {
-        Acolia.portalPicker($('[data-done-portals]'), { href: (k) => `/app?portal=${k}` });
-      }
+      Acolia.portalPicker($('[data-done-portals]'), { href: () => safeNext || '/app' });
+      $$('[data-done-portals] .portal-opt').forEach((a) => { a.removeAttribute('href'); a.style.pointerEvents = 'none'; });
+      const go = $('[data-done-next]');
+      go.href = safeNext || '/app';
+      go.textContent = safeNext ? 'Continuar' : 'Entrar no aplicativo';
+      go.classList.remove('hidden');
       scrollTo(0, 0);
     });
   })();

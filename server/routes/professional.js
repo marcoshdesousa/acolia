@@ -4,7 +4,7 @@ const { db } = require('../db');
 const U = require('../util');
 const A = require('../auth');
 const { handlePhoto, removePhoto, removeDocument } = require('../upload');
-const { ownProfessional, parseGallery, GALLERY_SLOTS } = require('../serialize');
+const { ownProfessional, parseGallery, GALLERY_SLOTS, parsePhotos, PHOTO_SLOTS } = require('../serialize');
 const { requirePassword, validateLocation } = require('./auth');
 const rt = require('../realtime');
 
@@ -213,6 +213,30 @@ router.delete('/gallery/:slot', (req, res) => {
   res.json(ownFor(req, db.prepare('SELECT * FROM professionals WHERE id = ?').get(me.id)));
 });
 
+// Fotos do perfil (até 4): adicionar no fim e tirar uma (a foto só sai do disco se não for de uma publicação antiga)
+router.post('/photos', async (req, res) => {
+  if (req.auth.secretary) throw new U.HttpError(403, 'Só o profissional muda as fotos do perfil.');
+  const me = db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id);
+  if (parsePhotos(me.profile_photos).length >= PHOTO_SLOTS) throw new U.HttpError(400, `Você já tem ${PHOTO_SLOTS} fotos. Tire uma para colocar outra.`);
+  const url = await handlePhoto(req, res);
+  const cur = parsePhotos(db.prepare('SELECT profile_photos FROM professionals WHERE id = ?').get(me.id).profile_photos);
+  if (cur.length >= PHOTO_SLOTS) { removePhoto(url); throw new U.HttpError(400, `Você já tem ${PHOTO_SLOTS} fotos.`); }
+  db.prepare('UPDATE professionals SET profile_photos = ? WHERE id = ?').run(JSON.stringify([...cur, url]), me.id);
+  res.json(ownFor(req, db.prepare('SELECT * FROM professionals WHERE id = ?').get(me.id)));
+});
+router.delete('/photos/:i', (req, res) => {
+  if (req.auth.secretary) throw new U.HttpError(403, 'Só o profissional muda as fotos do perfil.');
+  const me = db.prepare('SELECT * FROM professionals WHERE id = ?').get(req.auth.user.id);
+  const cur = parsePhotos(me.profile_photos);
+  const i = Number(req.params.i);
+  if (!Number.isInteger(i) || i < 0 || i >= cur.length) throw new U.HttpError(404, 'Foto não encontrada.');
+  const [gone] = cur.splice(i, 1);
+  db.prepare('UPDATE professionals SET profile_photos = ? WHERE id = ?').run(JSON.stringify(cur), me.id);
+  const inPost = db.prepare('SELECT 1 FROM posts WHERE image = ? OR thumb = ? LIMIT 1').get(gone, gone) || db.prepare('SELECT 1 FROM post_images WHERE image = ? LIMIT 1').get(gone);
+  if (!inPost) removePhoto(gone);
+  res.json(ownFor(req, db.prepare('SELECT * FROM professionals WHERE id = ?').get(me.id)));
+});
+
 // O profissional exclui a própria conta: sai da vitrine, os dados pessoais são apagados
 // e as conversas continuam para os pacientes com o nome "Profissional removido".
 router.post('/delete', (req, res) => {
@@ -232,6 +256,7 @@ function wipeProfessional(me) {
   if (active) require('./calls').endCall(active);
   removePhoto(me.photo);
   parseGallery(me.gallery).forEach(removePhoto);
+  parsePhotos(me.profile_photos).forEach(removePhoto);
   removeDocument(me.document_file);
   require('./plans').purge('professional', me.id);
   // Apaga tudo: publicações, reels, stories, curtidas, comentários, seguidores e o conteúdo das

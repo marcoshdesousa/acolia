@@ -16,12 +16,10 @@
   <div class="app-shell">
     <header class="topbar"><div class="container">
       <a class="brand" href="/app"><span data-logo><img class="brand-mark" src="/img/acolia-saude-simbolo.png" alt="" width="34" height="34" style="object-fit:contain"></span><img class="brand-word" src="/img/logo-nome.png" alt="Acolia"></a>
-      <nav><a class="btn ghost sm" href="/atendimento" target="_blank" rel="noopener">Entrar no atendimento</a><span data-me-avatar></span></nav>
+      <nav><a class="btn ghost sm" href="/atendimento" target="_blank" rel="noopener">Entrar no atendimento</a><button type="button" class="icon-btn bell-btn" data-bell title="Notificações" aria-label="Notificações"></button><span data-me-avatar></span></nav>
     </div></header>
 
     <main class="app-main">
-      <section data-view="inicio" class="container hidden"><div data-home></div></section>
-
       <section data-view="buscar" class="container hidden">
         <h1 style="font-size:1.5rem">Encontre seu profissional</h1>
         <div data-catalog></div>
@@ -36,8 +34,6 @@
         <a href="#buscar" class="btn ghost sm" style="margin-bottom:12px" data-back>← Voltar</a>
         <div data-profile></div>
       </section>
-
-      <section data-view="posts" class="container hidden" style="max-width:900px"><div data-posts-page></div></section>
 
       <section data-view="chat" class="container chat-wrap hidden" style="padding-top:0">
         <div data-chat></div>
@@ -104,7 +100,6 @@
     </main>
 
     <nav class="bottom-nav icons" aria-label="Navegação">
-      <a href="#inicio" data-nav="inicio" title="Início" aria-label="Início"><span data-i="home"></span><span class="nav-badge" data-home-badge></span></a>
       <a href="#buscar" data-nav="buscar" title="Profissionais" aria-label="Profissionais"><span data-i="therapist"></span></a>
       <a href="#clinicas" data-nav="clinicas" title="Clínicas" aria-label="Clínicas"><span data-i="hospital"></span></a>
       <a href="#chat" data-nav="chat" title="Mensagens" aria-label="Mensagens"><span data-i="chat"></span><span class="nav-badge" data-unread></span></a>
@@ -136,38 +131,8 @@
     if (auth.account?.blocked) { Acolia.showBlocked(auth); return; } // perfil bloqueado: só a tela de bloqueio
     let me = auth.user;
     $('[data-logo]').innerHTML = ICONS.logo;
-    // Portais (versão 2.0): a conta vale nos três. Abre no portal pedido (?portal=), no último usado ou
-    // pergunta; o botão de quadradinhos no topo troca (conversas e consultas continuam as mesmas).
-    if (await Acolia.portalsOn()) {
-      const qp = new URLSearchParams(location.search).get('portal');
-      const keys = Acolia.PORTAL_KEYS;
-      let cur = keys.includes(qp) ? qp : (keys.includes(Acolia.portal()) ? Acolia.portal() : (keys.includes(me.last_portal) ? me.last_portal : ''));
-      if (qp) history.replaceState(null, '', location.pathname + location.hash);
-      const choose = (first) => new Promise((resolve) => {
-        let picked = cur;
-        Acolia.modal({
-          title: first ? `Olá, ${String(me.name).split(' ')[0]}! Em qual portal você quer entrar?` : 'Trocar de portal',
-          html: `<p class="small muted" style="margin-top:0">${first ? 'Sua conta vale nos 3. Dá para trocar quando quiser pelo botão no topo.' : 'Sua conta, conversas e consultas continuam as mesmas.'}</p><div data-pp></div>`,
-          locked: first,
-          actions: first ? [] : [{ label: 'Voltar para a página da Acolia', class: 'secondary', value: 'hub' }],
-          onOpen: (dlg) => Acolia.portalPicker($('[data-pp]', dlg), { selected: picked, onPick: (k) => { picked = k; dlg.close(); dlg.remove(); resolve(k); } }),
-        }).then((v) => { if (v === 'hub') location.href = '/'; });
-      });
-      if (!cur) cur = await choose(true);
-      Acolia.setPortal(cur);
-      if (cur !== me.last_portal) api('/api/patient/portal', { method: 'POST', body: { portal: cur } }).catch(() => {});
-      const sw = document.createElement('button');
-      sw.type = 'button'; sw.className = 'icon-btn portal-switch'; sw.title = 'Trocar de portal'; sw.setAttribute('aria-label', 'Trocar de portal');
-      sw.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>';
-      sw.addEventListener('click', async () => {
-        const k = await choose(false);
-        if (!k || k === Acolia.portal()) return;
-        Acolia.setPortal(k);
-        await api('/api/patient/portal', { method: 'POST', body: { portal: k } }).catch(() => {});
-        location.hash = ''; location.reload(); // vitrine, feed e clínicas do portal novo
-      });
-      document.querySelector('.topbar nav').prepend(sw);
-    }
+    // Portal único (versão 2.2): a vitrine mostra Psi, Nutri e Fisio juntos; o filtro "por portal" separa
+    if (new URLSearchParams(location.search).get('portal')) history.replaceState(null, '', location.pathname + location.hash);
     $$('[data-i]').forEach((el) => { el.outerHTML = ICONS[el.dataset.i]; });
 
     function renderMe() {
@@ -227,28 +192,21 @@
     setTimeout(() => AcoliaAgenda.askRatings(), 1500); // avaliar a consulta que acabou (1 a 5 estrelas)
     const chat = AcoliaChat.mount($('[data-chat]'), {
       role: 'patient', me, socket, onUnreadChange: setUnread,
-      // Abriu a conversa com um profissional de outro portal: o app passa para o portal dele
-      onPortal: (k) => {
-        Acolia.setPortal(k);
-        api('/api/patient/portal', { method: 'POST', body: { portal: k } }).catch(() => {});
-        portalChanged = true;
-        toast(`Você está no ${Acolia.PORTAL_UI[k].name}`);
-      },
+      // Conversa com um profissional de outro portal: só guarda o tema (a vitrine é uma só)
+      onPortal: (k) => { Acolia.setPortal(k); api('/api/patient/portal', { method: 'POST', body: { portal: k } }).catch(() => {}); },
       onNavigate: (id) => { const h = id ? '#chat/' + id : '#chat'; if (location.hash !== h && location.hash.startsWith('#chat')) history.replaceState(null, '', h); },
     });
 
-    // Início estilo Instagram (versão 1.2)
-    let home = null;
+    AcoliaSocial.mountBell($('[data-bell]'), { socket }); // avisos da Acolia
     const openPro = (id) => { location.hash = 'perfil/' + id; };
     AcoliaClinics.setOpenPro(openPro); // profissionais da clínica: abre o perfil no app
     AcoliaSocial.setContext({ role: 'patient', me, onOpenProfile: openPro, onMessage: (id) => { location.hash = 'conversar/' + id; },
-      onAllPosts: (id, kind) => { location.hash = 'posts/' + id + '/' + (kind || 'photo'); } });
+    });
 
     let catalogMounted = false;
-    let portalChanged = false; // trocou de portal pela conversa: a vitrine e o feed recarregam ao voltar
     let backTo = '#buscar';
     async function route() {
-      const [view, arg] = (location.hash.slice(1) || 'inicio').split('/');
+      const [view, arg] = (location.hash.slice(1) || 'buscar').split('/');
       if (view === 'conversar' && arg) {
         try {
           const c = await api('/api/chat/conversations', { method: 'POST', body: { professional_id: Number(arg) } });
@@ -260,22 +218,11 @@
         }
         return;
       }
-      const v = ['inicio', 'buscar', 'clinicas', 'perfil', 'posts', 'chat', 'config', 'planos'].includes(view) ? view : 'inicio';
-      if (portalChanged && (v === 'inicio' || v === 'buscar')) { location.reload(); return; }
-      if (v === 'inicio' || v === 'buscar') backTo = '#' + v;
+      const v = ['buscar', 'clinicas', 'perfil', 'chat', 'config', 'planos'].includes(view) ? view : 'buscar';
+      if (v === 'buscar' || v === 'clinicas') backTo = '#' + v;
       $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
-      $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'perfil' || v === 'posts' ? backTo.slice(1) : v)));
-      if (v === 'posts' && arg) AcoliaSocial.mountPostsPage($('[data-posts-page]'), Number(arg), { onBack: (id) => { location.hash = 'perfil/' + id; } });
+      $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'perfil' ? backTo.slice(1) : v)));
       $('[data-back]').setAttribute('href', backTo);
-      if (v === 'inicio' && home) home.refreshIfStale();
-      if (v === 'inicio' && !home) {
-        home = AcoliaSocial.mountHome($('[data-home]'), {
-          role: 'patient', me, socket, onOpenProfile: openPro,
-          onMessage: (id) => { location.hash = 'conversar/' + id; },
-          onFindPros: () => { location.hash = 'buscar'; },
-          onUnread: (n) => { $('[data-home-badge]').textContent = n ? String(n) : ''; },
-        });
-      }
       if (v === 'buscar' && !catalogMounted) {
         catalogMounted = true;
         AcoliaCatalog.mount($('[data-catalog]'), {
@@ -294,7 +241,7 @@
             actions: p.accepts_messages === false ? Acolia.pauseNote('msg')
               : '<a class="btn" href="#conversar/' + p.id + '">' + ICONS.chat.replace('<svg', '<svg style="width:18px;height:18px"') + ' Enviar mensagem</a>',
           });
-          AcoliaSocial.bindProfile($('[data-profile]'), p);
+          AcoliaProfile.bindPhotos($('[data-profile]'));
         } catch (e) { $('[data-profile]').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
       }
       if (v === 'chat') {
@@ -303,10 +250,6 @@
       }
       document.body.style.overflow = v === 'chat' ? 'hidden' : '';
     }
-    // Casinha tocada estando no Início: volta ao topo e atualiza o feed
-    $$('[data-nav="inicio"]').forEach((a) => a.addEventListener('click', (e) => {
-      if (home && (location.hash || '#inicio').startsWith('#inicio')) { e.preventDefault(); home.toTop(); }
-    }));
     window.addEventListener('hashchange', route);
     route();
 
@@ -329,7 +272,7 @@
     });
     $('[data-install-btn]').addEventListener('click', installApp);
     Acolia.setupNotifications($('[data-view=buscar]'));
-    Acolia.installBanner($('[data-view=inicio]'));
+    Acolia.installBanner($('[data-view=buscar]'));
     $('[data-logout]').addEventListener('click', () => logout('/'));
     AcoliaDeleteAccount($('[data-delete-account]'), '/api/patient/delete');
   })();

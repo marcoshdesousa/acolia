@@ -71,9 +71,14 @@ router.get('/professionals', (req, res) => {
   const isPatient = req.auth?.role === 'patient';
   const viewerIsPro = req.auth?.role === 'professional'; // profissional vê a vitrine completa (sem filtro automático)
   const me = isPatient ? req.auth.user : null;
-  // Só os profissionais do portal em que a pessoa está (com os portais desligados, todos são do Psi)
-  const where = [VISIBLE_SQL, "COALESCE(p.portal, 'psi') = ?"];
-  const params = [require('../portals').fromReq(req)];
+  // Portal único (versão 2.2): a vitrine mostra os profissionais das três áreas juntos. "Filtrar por portal"
+  // (?portal=psi|nutri|fisio) mostra só os daquela área.
+  const where = [VISIBLE_SQL];
+  const params = [];
+  const PO = require('../portals');
+  // Portal único (versão 2.2): sem filtro, todos juntos. Portais desligados pelo admin: o site é só o Psi
+  const portalQ = !PO.enabled() ? 'psi' : PO.valid(req.query.portal) ? req.query.portal : '';
+  if (portalQ) { where.push("COALESCE(p.portal, 'psi') = ?"); params.push(portalQ); }
   const profession = U.cleanText(req.query.profession, 60);
   if (profession) { where.push('p.profession = ?'); params.push(profession); }
   let rows = db.prepare(`SELECT p.* FROM professionals p WHERE ${where.join(' AND ')}`).all(...params);
@@ -140,10 +145,16 @@ router.get('/professionals', (req, res) => {
   const byRating = (a, b) => R.score(rat.get(b.id)) - R.score(rat.get(a.id));
   const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
   const price = (p, dir) => (p.price_cents == null ? Infinity : dir * p.price_cents); // sem valor vai para o fim
-  const sort = me || viewerIsPro ? req.query.sort : ''; // ordenar por valor também só com conta
+  // Ordenar por valor só com conta; "mais bem avaliados" vale para todos
+  const sort = me || viewerIsPro || req.query.sort === 'avaliacao' ? req.query.sort : '';
   if (sort === 'preco_menor') rows.sort((a, b) => price(a, 1) - price(b, 1) || byPop(a, b) || byName(a, b));
+  else if (sort === 'avaliacao') rows.sort((a, b) => byRating(a, b) || byPop(a, b) || byName(a, b));
   else if (sort === 'preco_maior') rows.sort((a, b) => price(a, -1) - price(b, -1) || byPop(a, b) || byName(a, b));
-  else rows.sort((a, b) => near(a) - near(b) || byRating(a, b) || byPop(a, b) || byName(a, b));
+  else {
+    // Ordem aleatória (as três áreas misturadas); o paciente vê primeiro quem é da cidade dele
+    const rnd = new Map(rows.map((p) => [p.id, Math.random()]));
+    rows.sort((a, b) => near(a) - near(b) || rnd.get(a.id) - rnd.get(b.id));
+  }
 
   res.json({
     loggedIn: !!me,

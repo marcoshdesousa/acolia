@@ -51,7 +51,7 @@
       <div class="hub-logo"><img src="/img/acolia-saude.png" alt="Acolia — Saúde ao seu alcance"></div>
       <p class="eyebrow">Mente · Alimentação · Movimento</p>
       <h1>Cuidado para você por inteiro.</h1>
-      <p class="lead muted">Psicologia, nutrição e fisioterapia num só aplicativo. Escolha por onde começar: dá para olhar os profissionais sem cadastro.</p>
+      <p class="lead muted">Psicologia, nutrição e fisioterapia num só aplicativo. Dá para olhar os profissionais sem cadastro.</p>
       <div class="hub-hello hidden" data-hello></div>
     </section>
 
@@ -59,12 +59,18 @@
       <div class="hub-portals" data-portals></div>
     </section>
 
+    <section class="section" id="vitrine">
+      <h2>Encontre seu profissional</h2>
+      <p class="muted" style="margin-top:-6px">Psicologia, nutrição e fisioterapia juntos. Use "Filtrar por portal" para ver só uma área.</p>
+      <div data-catalog></div>
+    </section>
+
     <section class="section">
       <h2 class="center">Uma conta para tudo</h2>
       <div class="hub-steps">
-        <div class="hub-step"><span class="n" data-i="search"></span><div><b>Olhe sem cadastro</b><span class="small muted">Entre em qualquer portal e veja os profissionais.</span></div></div>
+        <div class="hub-step"><span class="n" data-i="search"></span><div><b>Olhe sem cadastro</b><span class="small muted">Veja os profissionais de todas as áreas aqui mesmo.</span></div></div>
         <div class="hub-step"><span class="n" data-i="heart"></span><div><b>Crie uma conta só</b><span class="small muted">Para conversar, agendar e ver valores. Vale nos 3 portais.</span></div></div>
-        <div class="hub-step"><span class="n" data-i="chat"></span><div><b>Troque de portal quando quiser</b><span class="small muted">Suas conversas e consultas vão junto.</span></div></div>
+        <div class="hub-step"><span class="n" data-i="chat"></span><div><b>Tudo num lugar só</b><span class="small muted">Psicólogo, nutricionista e fisioterapeuta nas mesmas conversas e na mesma agenda.</span></div></div>
         <div class="hub-step"><span class="n" data-i="video"></span><div><b>Baixe o app</b><span class="small muted">Avisos de mensagem e lembretes de consulta. <a href="#" data-install>Baixar o app</a></span></div></div>
       </div>
       <div class="row" style="justify-content:center;margin-top:18px;gap:10px" data-cta>
@@ -104,6 +110,8 @@
   </footer>
 
   <script src="/js/common.js"></script>
+  <script src="/js/specialties.js"></script>
+  <script src="/js/catalog.js"></script>
   <script>
   (async function () {
     const { $, $$, api, ICONS, esc } = Acolia;
@@ -114,7 +122,7 @@
     // Paciente conectado: entra no portal escolhido já logado. Sem conta: abre a página do portal.
     const patient = me.role === 'patient';
     Acolia.portalPicker($('[data-portals]'), {
-      href: (k) => (patient ? `/app?portal=${k}` : `/${k}`),
+      href: (k) => `/${k}`,
       onPick: (k) => Acolia.setPortal(k),
     });
     $('[data-portals]').classList.add('hub-portals');
@@ -126,7 +134,7 @@
     const first = String((me.user && (me.user.name || me.user.username)) || '').trim().split(/\s+/)[0];
     if (patient) {
       $('[data-nav]').innerHTML = '<button type="button" class="btn ghost sm" data-out>Sair</button>';
-      $('[data-hello]').innerHTML = `<p class="muted" style="margin:0">Olá, <b>${esc(first)}</b>! Em qual portal você quer entrar?</p>`;
+      $('[data-hello]').innerHTML = `<p class="muted" style="margin:0">Olá, <b>${esc(first)}</b>! <a href="/app">Entrar no aplicativo</a></p>`;
       $('[data-hello]').classList.remove('hidden');
       $('[data-cta]').classList.add('hidden');
     } else if (ENTER) {
@@ -134,6 +142,12 @@
       $('[data-hello]').innerHTML = `<div class="card"><p class="muted" style="margin:0 0 10px">${first ? `Olá, <b>${esc(first)}</b>! ` : ''}Você já está conectado.</p><a class="btn block" href="${ENTER.href}">${ENTER.label} →</a></div>`;
       $('[data-hello]').classList.remove('hidden');
     }
+    AcoliaCatalog.mount($('[data-catalog]'), {
+      loggedIn: patient,
+      me: patient ? me.user : null,
+      profileHref: (p) => (patient ? `/app#perfil/${p.id}` : `/${p.slug || 'profissional?id=' + p.id}`),
+      onMessage: (id) => { location.href = `/app#conversar/${id}`; },
+    });
     $('[data-out]')?.addEventListener('click', (e) => { e.currentTarget.disabled = true; Acolia.logout('/'); });
     $$('[data-install]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); Acolia.installApp?.(); }));
   })();

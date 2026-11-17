@@ -37,6 +37,13 @@ function parsePackages(json) {
 const GALLERY_SLOTS = 6;
 const PROFILE_POSTS = 4; // publicações que aparecem no perfil
 
+// Fotos do perfil (sem feed): até 4, na ordem em que o profissional colocou
+const PHOTO_SLOTS = 4;
+function parsePhotos(json) {
+  let arr;
+  try { arr = JSON.parse(json || '[]'); } catch { arr = []; }
+  return (Array.isArray(arr) ? arr : []).filter((u) => typeof u === 'string' && u.startsWith('/uploads/')).slice(0, PHOTO_SLOTS);
+}
 // Galeria: 6 posições fixas (Foto 1 a Foto 6); posição vazia = null
 function parseGallery(json) {
   let arr;
@@ -79,6 +86,7 @@ function publicProfessional(p, { loggedIn = false, favorite = false, viewerTest 
     photo: p.photo,
     verified: !!p.verified, // selo azul (a equipe conferiu os dados)
     portal: p.portal || 'psi',
+    photos: parsePhotos(p.profile_photos), // até 4 fotos do perfil
     rating: require('./ratings').summary(p.id), // { avg, count } ou null
   };
   const { db } = require('./db');
@@ -211,6 +219,7 @@ function ownProfessional(p) {
     social: require('./social').list(p),
     social_values: require('./social').values(p),
     gallery: parseGallery(p.gallery),
+    photos: parsePhotos(p.profile_photos),
     subscription_until: p.subscription_until,
     visible: isVisible(p),
     created_at: p.created_at,
@@ -237,4 +246,4 @@ function ownPatient(p) {
   };
 }
 
-module.exports = { postsSummary, postsForProfile, prices, clinicMap, PROFILE_POSTS, freeGalleryCount, VISIBLE_SQL, isVisible, parsePackages, parseGallery, GALLERY_SLOTS, publicProfessional, ownProfessional, ownPatient };
+module.exports = { postsSummary, postsForProfile, prices, clinicMap, PROFILE_POSTS, freeGalleryCount, VISIBLE_SQL, isVisible, parsePackages, parseGallery, GALLERY_SLOTS, parsePhotos, PHOTO_SLOTS, publicProfessional, ownProfessional, ownPatient };
