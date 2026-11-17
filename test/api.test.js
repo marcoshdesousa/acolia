@@ -1,4 +1,5 @@
 'use strict';
+process.env.CLINIC_SIGNUP = '1'; // o cadastro de clínica está "em breve" no site; os testes ligam
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -421,9 +422,16 @@ test('mensalidade: vence no dia, funciona mais 1 dia e depois bloqueia; aviso 2 
   // Venceu há muito tempo: some da vitrine e a conta fica bloqueada (só vê a tela de bloqueio)
   await admin.post(`/api/admin/professionals/${proId}/subscription`, { until: '2020-01-01' });
   assert.equal((await anon.get('/api/professionals')).data.items.length, 0);
+  // Entra e vê o painel, mas não muda nada até pagar (402 com needs_payment)
   let r = await pro.get('/api/professional/me');
-  assert.equal(r.status, 423, 'bloqueado');
-  assert.equal(r.data.blocked, true);
+  assert.equal(r.status, 200, 'vê o painel');
+  r = await pro.put('/api/professional/profile', { bio: 'x' });
+  assert.equal(r.status, 402, 'não muda nada até pagar');
+  assert.equal(r.data.needs_payment, true);
+  // Some das conversas do paciente enquanto não paga (e o paciente não manda mensagem para ele)
+  assert.equal((await pat.get(`/api/chat/conversations/${convId}`)).status, 404, 'conversa some para o paciente');
+  assert.ok(!(await pat.get('/api/chat/conversations')).data.items.some((c) => c.id === convId));
+  assert.equal((await pat.post(`/api/chat/conversations/${convId}/messages`, { body: 'oi' })).status, 404);
   r = await pro.get('/api/auth/me');
   assert.equal(r.data.account.blocked, 'vencido');
   assert.equal(r.data.account.until, '2020-01-01');
@@ -440,6 +448,7 @@ test('mensalidade: vence no dia, funciona mais 1 dia e depois bloqueia; aviso 2 
   await admin.post(`/api/admin/professionals/${proId}/subscription`, { until: day(10) });
   assert.equal((await pro.get('/api/auth/me')).data.account.warn, undefined);
   assert.equal((await pro.get('/api/professional/me')).status, 200);
+  assert.equal((await pat.get(`/api/chat/conversations/${convId}`)).status, 200, 'pagou: a conversa volta');
 
   await admin.post(`/api/admin/professionals/${proId}/status`, { status: 'restrito' });
   assert.equal((await anon.get('/api/professionals')).data.items.length, 0);

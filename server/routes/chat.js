@@ -20,7 +20,11 @@ const viewRole = (req) => (req.auth.secretary ? 'secretary' : req.auth.role);
 // (versão 1.1.2: pelo comentário do paciente numa publicação dele)
 const PATIENT_WROTE = '(c.patient_wrote = 1 OR c.pro_started = 1)';
 // Conversa aberta pelo profissional só aparece para o paciente quando chega a primeira mensagem
-const PATIENT_SEES = 'NOT (c.pro_started = 1 AND c.patient_wrote = 0 AND c.last_message_at IS NULL)';
+// Profissional sem mensalidade em dia (ou bloqueado / ainda não aprovado) some das conversas do paciente;
+// quando paga, a conversa volta como estava. Conta oficial, clínica e conta apagada continuam aparecendo.
+const PRO_ACTIVE = `EXISTS (SELECT 1 FROM professionals pa WHERE pa.id = c.professional_id AND (pa.status IN ('oficial', 'clinica', 'excluido')
+  OR (pa.status IN ('aprovado', 'restrito') AND pa.subscription_until IS NOT NULL AND pa.subscription_until >= date('now', '-1 day'))))`;
+const PATIENT_SEES = `NOT (c.pro_started = 1 AND c.patient_wrote = 0 AND c.last_message_at IS NULL) AND ${PRO_ACTIVE}`;
 
 // ---------- Apagar e bloquear ----------
 // Apagar mensagem (uma a uma, só as suas): é para todos — o conteúdo sai do banco e os DOIS lados
@@ -149,6 +153,7 @@ router.post('/conversations', (req, res) => {
   if (req.auth.role !== 'patient') throw new U.HttpError(403, 'Somente pacientes iniciam conversas.');
   const proId = Number(req.body.professional_id);
   let c = db.prepare('SELECT * FROM conversations WHERE patient_id = ? AND professional_id = ?').get(req.auth.user.id, proId);
+  if (c && !db.prepare(`SELECT 1 FROM conversations c WHERE id = ? AND ${PRO_ACTIVE}`).get(c.id)) throw new U.HttpError(404, 'Profissional indisponível no momento.');
   if (!c) {
     const p = db.prepare(`SELECT id FROM professionals p WHERE id = ? AND ${VISIBLE_SQL}`).get(proId);
     if (!p) throw new U.HttpError(404, 'Profissional indisponível no momento.');
@@ -402,7 +407,7 @@ router.get('/unread', (req, res) => {
   const s = side(req);
   const n = db.prepare(`SELECT COUNT(*) n FROM messages m JOIN conversations c ON c.id = m.conversation_id
     WHERE c.${s.col} = ? AND m.sender_role = ? AND m.read_at IS NULL AND m.kind <> 'deleted' AND m.${hideCol(req.auth.role)} = 0
-      AND NOT EXISTS (SELECT 1 FROM chat_blocks b WHERE b.conversation_id = c.id AND b.blocker_role = ?)`).get(req.auth.user.id, s.other, req.auth.role).n;
+      AND NOT EXISTS (SELECT 1 FROM chat_blocks b WHERE b.conversation_id = c.id AND b.blocker_role = ?)${req.auth.role === 'patient' ? ` AND ${PRO_ACTIVE}` : ''}`).get(req.auth.user.id, s.other, req.auth.role).n;
   res.json({ unread: n });
 });
 

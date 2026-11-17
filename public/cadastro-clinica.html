@@ -107,6 +107,13 @@
   (async function () {
     const { $, api, ICONS, handleForm, maskPhone, ufOptions, bindUfCity, esc, copyText, modal } = Acolia;
     $('[data-logo]').innerHTML = ICONS.logo;
+    // Clínicas "em breve": no lugar do cadastro, só o aviso
+    if ((await api('/api/config').catch(() => ({}))).clinics_soon !== false) {
+      $('main').innerHTML = `<div class="card center soon-card"><span class="soon-ic">${ICONS.hospital}</span><h1 style="margin:6px 0">Clínicas: em breve</h1>
+        <p class="muted" style="margin:0 0 16px">Em breve as clínicas vão poder ter a sua página na Acolia. Por enquanto, o cadastro é só para profissionais.</p>
+        <a class="btn" href="/cadastro-profissional">Sou profissional: quero me cadastrar</a> <a class="btn ghost" href="/">Voltar</a></div>`;
+      return;
+    }
     const form = $('[data-form]');
     form.state.innerHTML = ufOptions('', 'UF');
     bindUfCity(form.state, form.city);

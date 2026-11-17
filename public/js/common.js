@@ -135,6 +135,44 @@
       });
     }
   }
+  // Mensalidade vencida (profissional): entra e vê o painel, mas qualquer ação pede o pagamento.
+  // O servidor também recusa qualquer mudança (402) até pagar.
+  function paymentRequired(me) {
+    const a = me.account || {};
+    const u = me.user || {};
+    const who = `${u.name || ''}${u.code ? ` (código ${u.code})` : ''}`;
+    const msg = `Olá! Sou ${who}, profissional da Acolia. Quero pagar a mensalidade para reativar a minha conta.`;
+    const text = a.trial
+      ? `Os seus <b>7 dias grátis</b> terminaram em <b>${brDate(a.until)}</b>.`
+      : `A sua mensalidade venceu em <b>${brDate(a.until)}</b>.`;
+    return modal({
+      title: 'Pagamento pendente',
+      html: `<p style="margin-top:0">${text} Enquanto não pagar, o seu perfil não aparece para os pacientes e você não consegue usar nem mudar nada no painel.</p>
+        <p class="small muted" style="margin:0">Pagou, tudo volta na hora: perfil, conversas e agenda.</p>`,
+      actions: [{ label: 'Agora não', value: '', class: 'secondary' }, { label: 'Pagar mensalidade', value: 'pay' }],
+    }).then(async (v) => {
+      if (v !== 'pay') return;
+      if (!me.secretary && await platformPixOn()) return renewPix();
+      window.open(supportLink(a.support, msg), '_blank', 'noopener');
+    });
+  }
+  function lockUnpaid(me, root) {
+    const bar = document.createElement('div');
+    bar.className = 'notice warn unpaid-bar';
+    bar.innerHTML = `<b>Pagamento pendente.</b> Seu perfil está fora do ar e o painel está travado até você pagar. <button type="button" class="btn sm" data-unpaid-pay>Pagar mensalidade</button>`;
+    root.prepend(bar);
+    // Qualquer toque para fazer ou mudar algo (botões, campos, chaves) pede o pagamento. Navegar no menu continua.
+    document.addEventListener('click', (e) => {
+      const t = e.target.closest('button, input, select, textarea, label, [contenteditable], [role="menuitem"], [data-post-open]');
+      if (!t || t.closest('.sidebar, .bottom-nav, .topbar nav') || (t.closest('dialog') && !t.closest('[data-unpaid-pay]'))) return;
+      if (t.closest('.conv') || t.closest('[data-back], .thread-head .icon-btn[data-back]')) return; // abrir e voltar das conversas (só ler)
+      e.preventDefault(); e.stopPropagation();
+      paymentRequired(me);
+    }, true);
+    document.addEventListener('submit', (e) => { e.preventDefault(); e.stopPropagation(); paymentRequired(me); }, true);
+    setTimeout(() => paymentRequired(me), 600);
+  }
+
   // Aviso com "?" quando o profissional não recebe mensagens/agendamentos ou está sem agenda.
   // kind: 'msg' (não recebe mensagens), 'agenda' (não faz agendamentos), 'closed' (sem agenda aberta)
   const PAUSE_TEXT = {
@@ -1231,6 +1269,6 @@
     supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, cropPhoto, timeAgo, fitChat,
     handleForm, logout, showBlocked, verifiedBadge, ratingHtml, STAR, pixBox, renewPix, platformPixOn, showNeedsCpf, showNeedsPassword, installBanner, namePicker, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
     SOCIAL, socialLinks, socialFields,
-    PORTAL_UI, PORTAL_KEYS, portal, setPortal, applyPortal, portalsOn, portalPicker,
+    PORTAL_UI, PORTAL_KEYS, portal, setPortal, applyPortal, portalsOn, portalPicker, paymentRequired, lockUnpaid,
   };
 })();

@@ -64,6 +64,11 @@ function createApp() {
   app.use('/api', (req, _res, next) => {
     // Mensalidade vencida: pode pagar o Pix da renovação (e a conta volta na hora)
     if (req.auth?.blocked === 'vencido' && req.path.startsWith('/plataforma/pagamento/renovar')) return next();
+    // Mensalidade vencida (não é bloqueio do admin): entra e VÊ o painel, mas não muda nada até pagar
+    if (req.auth?.blocked === 'vencido' && req.method === 'GET') return next();
+    if (req.auth?.blocked === 'vencido' && !BLOCKED_OK.includes(req.path)) {
+      return next(Object.assign(new U.HttpError(402, 'Sua mensalidade está pendente. Pague para voltar a usar a Acolia.'), { extra: { needs_payment: true } }));
+    }
     if (req.auth?.blocked && !BLOCKED_OK.includes(req.path)) {
       return next(Object.assign(new U.HttpError(423, 'Perfil bloqueado. Fale com a administração.'), { blocked: true }));
     }

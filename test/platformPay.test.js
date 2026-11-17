@@ -1,4 +1,5 @@
 'use strict';
+process.env.CLINIC_SIGNUP = '1'; // o cadastro de clínica está "em breve" no site; os testes ligam
 // Mensalidade da Acolia pelo Pix (SyncPay simulada): cadastro pago → conta liberada na hora; renovação → +30 dias
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -120,7 +121,7 @@ test('cadastro com Pix: pago → aprovado na hora, senha única mostrada uma vez
 
   // mensalidade vencida (bloqueado): ainda consegue pagar o Pix e volta na hora
   db.prepare("UPDATE professionals SET subscription_until = date('now', '-10 days') WHERE id = ?").run(p.id);
-  assert.equal((await pro.get('/api/professional/me')).status, 423);
+  assert.equal((await pro.post('/api/professional/verified-seen')).status, 402);
   const ren2 = await pro.post('/api/plataforma/pagamento/renovar');
   assert.equal(ren2.status, 200, JSON.stringify(ren2.data));
   PP()._fakePay(db.prepare('SELECT identifier FROM platform_payments WHERE id = ?').get(ren2.data.id).identifier);
@@ -238,7 +239,7 @@ test('7 dias grátis: CPF novo entra direto (vitrine, tudo liberado), só uma ve
     const meC = (await cl.get('/api/auth/me')).data;
     assert.equal(meC.account.blocked, 'vencido');
     assert.equal(meC.account.trial, true);
-    assert.equal((await cl.get('/api/professional/me')).status, 423);
+    assert.equal((await cl.post('/api/professional/verified-seen')).status, 402);
     assert.equal((await cl.post('/api/plataforma/pagamento/renovar')).status, 200, 'consegue pagar pela tela de bloqueio');
 
     // Selo de verificado: a equipe confere e dá o selo; ele vê o aviso uma vez

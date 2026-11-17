@@ -278,8 +278,11 @@ router.post('/professional/login', (req, res) => {
 });
 
 // ---------- Clínica (versão 1.3) ----------
+// Pedido do dono (versão 2.2): clínicas "em breve" — ninguém cria conta de clínica por enquanto
+const clinicSignupOn = () => process.env.CLINIC_SIGNUP === '1';
 // Pré-cadastro pelo site (com a logo): fica em análise e a administração manda a senha pelo WhatsApp
 router.post('/clinic/register', async (req, res) => {
+  if (!clinicSignupOn()) throw new HttpError(403, 'O cadastro de clínicas chega em breve.');
   const { handlePhoto } = require('../upload');
   const C = require('../clinics');
   const logo = await handlePhoto(req, res).catch((e) => { throw new HttpError(400, e.message === 'Selecione uma foto.' ? 'Envie a logo da clínica.' : e.message); });

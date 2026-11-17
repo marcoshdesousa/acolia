@@ -1,4 +1,5 @@
 'use strict';
+process.env.CLINIC_SIGNUP = '1'; // o cadastro de clínica está "em breve" no site; os testes ligam
 // Portais: 7 dias grátis e mensalidade (Pix simulado) funcionando igual no Psi, no Nutri e no Fisio.
 // Grátis → venceu (some da vitrine, tela de bloqueio) → paga → liberado de novo por 30 dias.
 const { test, before, after } = require('node:test');
@@ -119,7 +120,7 @@ for (const portal of ['psi', 'nutri', 'fisio']) {
     db.prepare('UPDATE professionals SET subscription_until = ? WHERE id = ?').run(U.addDaysISO(U.todayISO(), -2), p.id);
     me = (await c.get('/api/auth/me')).data;
     assert.equal(me.account.blocked, 'vencido');
-    assert.equal((await c.get('/api/professional/me')).status, 423);
+    assert.equal((await c.post('/api/professional/verified-seen')).status, 402);
     assert.ok(!(await inShowcase(portal, p.id)), 'vencido sai da vitrine');
 
     // Paga pela tela de bloqueio: libera na hora, +30 dias a partir de hoje, sai do período grátis

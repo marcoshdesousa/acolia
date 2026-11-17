@@ -1,4 +1,5 @@
 'use strict';
+process.env.CLINIC_SIGNUP = '1'; // o cadastro de clínica está "em breve" no site; os testes ligam
 // Portais (versão 2.0): Acolia Psi, Nutri e Fisio num app só, com uma conta de paciente para os três
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');

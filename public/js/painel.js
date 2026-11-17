@@ -7,7 +7,9 @@
   const auth = await api('/api/auth/me').catch((e) => ({ offline: e.status === 0 }));
   if (auth.offline) { window.addEventListener('online', () => location.reload(), { once: true }); return; } // sem internet: espera voltar
   if (auth.role !== 'professional') { location.replace(location.hash ? '/entrar?next=' + encodeURIComponent('/painel' + location.hash) + '#profissional' : '/'); return; }
-  if (auth.account?.blocked) { Acolia.showBlocked(auth); return; } // bloqueado (admin ou assinatura vencida)
+  // Bloqueado pelo admin: só a tela de bloqueio. Mensalidade vencida: entra no painel, mas tudo travado até pagar.
+  const unpaid = auth.account?.blocked === 'vencido';
+  if (auth.account?.blocked && !unpaid) { Acolia.showBlocked(auth); return; }
   if (auth.account?.needs_password && !auth.secretary) { Acolia.showNeedsPassword(auth); return; } // 1º acesso: cria a própria senha
   if (auth.account?.needs_cpf) { Acolia.showNeedsCpf(auth); return; } // conta antiga sem CPF: informa para liberar
   let me = auth.user;
@@ -554,7 +556,7 @@
     }
     if (v === 'verpro' && arg) showPro(Number(arg));
     if (v === 'chamadas') callsPage?.load();
-    if (v === 'clinicas') AcoliaClinics.mountList($('[data-clinics-page]'));
+    if (v === 'clinicas') $('[data-clinics-page]').innerHTML = `<div class="card center soon-card"><span class="soon-ic">${ICONS.hospital}</span><h2 style="margin:6px 0">Clínicas: em breve</h2><p class="muted" style="margin:0">Logo, logo as clínicas também vão estar aqui na Acolia.</p></div>`; // clínicas: em breve
     if (v === 'financeiro') loadFinance().catch((e) => toast(e.message, 'error'));
     if (v === 'perfil') renderPhotos();
     if (v === 'atendimento') { agendaPro.load(); loadCalls().catch((e) => toast(e.message, 'error')); loadMyPatients().catch((e) => toast(e.message, 'error')); }
@@ -567,5 +569,6 @@
   window.addEventListener('hashchange', route);
   renderMe();
   if (isSec) AcoliaSecretary.lockPanel(me);
+  if (unpaid) Acolia.lockUnpaid(auth, $('.panel-main'));
   route();
 })();

@@ -18,7 +18,7 @@ router.get('/config', (_req, res) => {
     // Portais (versão 2.0): lista, profissões, conselhos e especialidades de cada um
     portals_enabled: PO.enabled(), portals: PO.publicList(), councils: R.COUNCIL_BY_PROFESSION, council_examples: R.COUNCIL_EXAMPLE,
     specialties_by_portal: require('../specialties').BY_PORTAL,
-    plans: Object.entries(PLANS).map(([key, label]) => ({ key, label })), specialties: require('../specialties').GROUPS, ufs: U.UFS, support: require('../accountState').SUPPORT_WHATSAPP, platform_pix: require('../platformPay').configured() });
+    plans: Object.entries(PLANS).map(([key, label]) => ({ key, label })), specialties: require('../specialties').GROUPS, ufs: U.UFS, support: require('../accountState').SUPPORT_WHATSAPP, platform_pix: require('../platformPay').configured(), clinics_soon: process.env.CLINIC_SIGNUP !== '1' });
 });
 
 // Vitrine de profissionais.
