@@ -39,7 +39,7 @@ const LIST = [
   ['FIS08', 'Vinícius Rezende Baptista', 'Quiropraxista', '', ['Quiropraxia', 'Escoliose', 'Dor lombar'], 170, 190, 'Salvador', 'BA', [1, 2, 3, 4, 5], H(10), H(19)],
 ];
 const PORTAL = { PSI: 'psi', NUT: 'nutri', FIS: 'fisio' };
-const PHOTO = (code) => `/img/demo/${PORTAL[code.slice(0, 3)]}${code.slice(3)}.jpg`;
+const PHOTO = (code) => `/img/demo/f/${PORTAL[code.slice(0, 3)]}${code.slice(3)}.jpg`; // retratos gerados por IA (pessoas que não existem)
 
 function bioFor(name, profession, sp, city) {
   const first = name.split(' ')[0];
@@ -109,4 +109,12 @@ function onlineNoAgendaOnce() {
   try { require('./agenda').touch(); } catch { /* ignora */ }
 }
 
-module.exports = { createOnce, clearRegistriesOnce, onlineNoAgendaOnce, LIST, PASSWORD, KEY };
+// Pedido do dono: troca os desenhos pelos retratos realistas (gerados por IA, pessoas que não existem)
+function realPhotosOnce() {
+  const K = 'demo_pros_photos_v2';
+  if (db.prepare('SELECT 1 FROM settings WHERE key = ?').get(K)) return;
+  for (const [code] of LIST) db.prepare('UPDATE professionals SET photo = ? WHERE is_test = 1 AND code = ?').run(PHOTO(code), code);
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(K, new Date().toISOString());
+}
+
+module.exports = { createOnce, clearRegistriesOnce, onlineNoAgendaOnce, realPhotosOnce, LIST, PASSWORD, KEY };
