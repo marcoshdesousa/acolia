@@ -91,7 +91,6 @@
         <h3>Para profissionais</h3>
         <a href="/cadastro-profissional">Cadastrar-me</a>
         <a href="/entrar#profissional">Área do profissional</a>
-        <span class="small muted">Clínicas: em breve</span>
       </nav>
       <div class="footer-col">
         <h3>Precisa de ajuda agora?</h3>
@@ -113,6 +112,7 @@
     $$('[data-i]').forEach((el) => { el.innerHTML = ICONS[el.dataset.i] || ''; });
     window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
     const me = await api('/api/auth/me').catch(() => ({ role: null }));
+    if (Acolia.loggedHome(me)) return; // conectado: só a logo e o "Entrar no aplicativo"
     // Portal único: a página mostra a vitrine com todos os profissionais
     const patient = me.role === 'patient';
     const ENTER = {

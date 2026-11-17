@@ -173,6 +173,29 @@
     setTimeout(() => paymentRequired(me), 600);
   }
 
+  // Página inicial com a conta já conectada (paciente, profissional, admin): só a logo oficial grande, o botão
+  // grande para entrar e "Trocar de conta" embaixo. Sem vitrine (sem conta, a página inicial funciona normal).
+  function loggedHome(me) {
+    const ENTER = {
+      patient: { href: '/app', label: 'Entrar no aplicativo' },
+      professional: { href: '/painel', label: 'Entrar no aplicativo' },
+      admin: { href: '/admin', label: 'Entrar no administrativo' },
+      clinic: { href: '/clinica', label: 'Entrar no aplicativo' },
+    }[me && me.role];
+    if (!ENTER) return false;
+    const u = me.user || {};
+    const first = String(u.display_name || u.name || u.username || '').trim().split(/\s+/)[0];
+    document.body.classList.add('logged-home-page');
+    document.body.innerHTML = `<main class="logged-home">
+        <img class="lh-logo" src="/img/acolia-saude.png" alt="Acolia: saúde ao seu alcance">
+        ${first ? `<p class="lh-hello">Olá, <b>${esc(first)}</b>!</p>` : ''}
+        <a class="btn lh-enter" href="${ENTER.href}">${ENTER.label}</a>
+        <button type="button" class="lh-switch" data-lh-switch>Trocar de conta</button>
+      </main>`;
+    $('[data-lh-switch]').addEventListener('click', (e) => { e.currentTarget.disabled = true; logout('/entrar'); });
+    return true;
+  }
+
   // Aviso com "?" quando o profissional não recebe mensagens/agendamentos ou está sem agenda.
   // kind: 'msg' (não recebe mensagens), 'agenda' (não faz agendamentos), 'closed' (sem agenda aberta)
   const PAUSE_TEXT = {
@@ -1269,6 +1292,6 @@
     supportLink, pendingProBox, cpfExistsDialog, confirmDialog, copyText, ufOptions, bindUfCity, citiesOf, UFS, maskCpf, maskPhone, fmtPhone, isValidCpf, formData, shrinkImage, cropPhoto, timeAgo, fitChat,
     handleForm, logout, showBlocked, verifiedBadge, ratingHtml, STAR, pixBox, renewPix, platformPixOn, showNeedsCpf, showNeedsPassword, installBanner, namePicker, pauseNote, pauseWhy, renewBanner, deleteAccountFlow, installApp, installGuide, enableNotifications, setupNotifications, isStandalone,
     SOCIAL, socialLinks, socialFields,
-    PORTAL_UI, PORTAL_KEYS, portal, setPortal, applyPortal, portalsOn, portalPicker, paymentRequired, lockUnpaid,
+    PORTAL_UI, PORTAL_KEYS, portal, setPortal, applyPortal, portalsOn, portalPicker, paymentRequired, lockUnpaid, loggedHome,
   };
 })();

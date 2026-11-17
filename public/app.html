@@ -101,7 +101,6 @@
 
     <nav class="bottom-nav icons" aria-label="Navegação">
       <a href="#buscar" data-nav="buscar" title="Profissionais" aria-label="Profissionais"><span data-i="therapist"></span></a>
-      <a href="#clinicas" data-nav="clinicas" title="Clínicas (em breve)" aria-label="Clínicas (em breve)"><span data-i="hospital"></span><span class="soon-tag">em breve</span></a>
       <a href="#chat" data-nav="chat" title="Mensagens" aria-label="Mensagens"><span data-i="chat"></span><span class="nav-badge" data-unread></span></a>
       <a href="#config" data-nav="config" title="Configurações" aria-label="Configurações"><span data-i="gear"></span></a>
     </nav>
@@ -218,8 +217,8 @@
         }
         return;
       }
-      const v = ['buscar', 'clinicas', 'perfil', 'chat', 'config', 'planos'].includes(view) ? view : 'buscar';
-      if (v === 'buscar' || v === 'clinicas') backTo = '#' + v;
+      const v = ['buscar', 'perfil', 'chat', 'config', 'planos'].includes(view) ? view : 'buscar'; // clínicas: fora por enquanto
+      if (v === 'buscar') backTo = '#' + v;
       $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
       $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'perfil' ? backTo.slice(1) : v)));
       $('[data-back]').setAttribute('href', backTo);
@@ -231,7 +230,6 @@
           onMessage: (id) => { location.hash = 'conversar/' + id; },
         });
       }
-      if (v === 'clinicas') $('[data-clinics-page]').innerHTML = `<div class="card center soon-card"><span class="soon-ic">${ICONS.hospital}</span><h2 style="margin:6px 0">Clínicas: em breve</h2><p class="muted" style="margin:0">Logo, logo as clínicas também vão estar aqui na Acolia.</p></div>`; // clínicas: em breve
       if (v === 'planos') AcoliaPlans.mountMine($('[data-my-plans]'));
       if (v === 'perfil') {
         $('[data-profile]').innerHTML = '<div class="spinner"></div>';

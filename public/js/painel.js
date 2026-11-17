@@ -546,7 +546,7 @@
   // ---------- Rotas ----------
   function route() {
     const [view, arg] = (location.hash.slice(1) || 'atendimento').split('/');
-    const views = ['profissionais', 'clinicas', 'verpro', 'conversas', 'atendimento', 'perfil', 'conta', ...(isSec ? [] : ['chamadas', 'financeiro'])];
+    const views = ['profissionais', 'verpro', 'conversas', 'atendimento', 'perfil', 'conta', ...(isSec ? [] : ['chamadas', 'financeiro'])];
     const v = views.includes(view) ? view : 'atendimento';
     $$('[data-view]').forEach((s) => s.classList.toggle('hidden', s.dataset.view !== v));
     $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (v === 'verpro' ? 'profissionais' : v)));
@@ -556,7 +556,6 @@
     }
     if (v === 'verpro' && arg) showPro(Number(arg));
     if (v === 'chamadas') callsPage?.load();
-    if (v === 'clinicas') $('[data-clinics-page]').innerHTML = `<div class="card center soon-card"><span class="soon-ic">${ICONS.hospital}</span><h2 style="margin:6px 0">Clínicas: em breve</h2><p class="muted" style="margin:0">Logo, logo as clínicas também vão estar aqui na Acolia.</p></div>`; // clínicas: em breve
     if (v === 'financeiro') loadFinance().catch((e) => toast(e.message, 'error'));
     if (v === 'perfil') renderPhotos();
     if (v === 'atendimento') { agendaPro.load(); loadCalls().catch((e) => toast(e.message, 'error')); loadMyPatients().catch((e) => toast(e.message, 'error')); }

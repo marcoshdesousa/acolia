@@ -76,7 +76,6 @@
         <a href="/cadastro-profissional">Cadastrar-me</a>
         <a href="/entrar#profissional">Área do profissional</a>
         <a href="/atendimento">Entrar no atendimento</a>
-        <span class="small muted">Clínicas: em breve</span>
       </nav>
       <div class="footer-col">
         <h3>Precisa de ajuda agora?</h3>
@@ -123,6 +122,7 @@
     // Voltou pelo "voltar" do navegador depois de sair/entrar: recarrega para mostrar o estado certo
     window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
     const me = await api('/api/auth/me').catch(() => ({ role: null }));
+    if (Acolia.loggedHome(me)) return; // conectado: só a logo e o "Entrar no aplicativo"
     const nav = $('[data-nav]');
     // Já entrou: a página inicial mostra o botão para abrir o app (paciente), o sistema
     // (profissional) ou o administrativo (admin), e um "Sair" para trocar de conta
