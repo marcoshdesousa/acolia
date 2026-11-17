@@ -55,13 +55,8 @@
       <div class="hub-hello hidden" data-hello></div>
     </section>
 
-    <section class="section" style="padding-top:0">
-      <div class="hub-portals" data-portals></div>
-    </section>
-
-    <section class="section" id="vitrine">
+    <section class="section" id="vitrine" style="padding-top:0">
       <h2>Encontre seu profissional</h2>
-      <p class="muted" style="margin-top:-6px">Psicologia, nutrição e fisioterapia juntos. Use "Filtrar por portal" para ver só uma área.</p>
       <div data-catalog></div>
     </section>
 
@@ -86,11 +81,11 @@
         <img src="/img/logo-nome.png" alt="Acolia" class="brand-word" style="height:20px">
         <p class="small muted">Saúde ao seu alcance. Profissionais verificados, chat e atendimento online e presencial em um só lugar.</p>
       </div>
-      <nav class="footer-col" aria-label="Portais">
-        <h3>Portais</h3>
-        <a href="/psi">Acolia Psi</a>
-        <a href="/nutri">Acolia Nutri</a>
-        <a href="/fisio">Acolia Fisio</a>
+      <nav class="footer-col" aria-label="Para você">
+        <h3>Para você</h3>
+        <a href="/cadastro-paciente">Criar conta</a>
+        <a href="/entrar">Entrar</a>
+        <a href="#vitrine">Encontrar profissional</a>
       </nav>
       <nav class="footer-col" aria-label="Para profissionais">
         <h3>Para profissionais</h3>
@@ -119,13 +114,8 @@
     $$('[data-i]').forEach((el) => { el.innerHTML = ICONS[el.dataset.i] || ''; });
     window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
     const me = await api('/api/auth/me').catch(() => ({ role: null }));
-    // Paciente conectado: entra no portal escolhido já logado. Sem conta: abre a página do portal.
+    // Portal único: a página mostra a vitrine com todos os profissionais
     const patient = me.role === 'patient';
-    Acolia.portalPicker($('[data-portals]'), {
-      href: (k) => `/${k}`,
-      onPick: (k) => Acolia.setPortal(k),
-    });
-    $('[data-portals]').classList.add('hub-portals');
     const ENTER = {
       professional: { href: '/painel', label: 'Entrar no sistema' },
       admin: { href: '/admin', label: 'Entrar no administrativo' },
