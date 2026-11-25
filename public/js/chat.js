@@ -636,7 +636,7 @@
           html: `<div class="notice info small" style="margin:0 0 12px">${ICONS.lock.replace('<svg', '<svg style="width:15px;height:15px;vertical-align:-2px"')} Confidencial: use só para o atendimento (termo de sigilo aceito).</div>
             <table class="kv-table" style="font-size:.95rem"><tbody>
               <tr><th>Nome completo</th><td><b>${esc(d.name)}</b></td></tr>
-              ${d.handle ? `<tr><th>Na Acolia</th><td>@${esc(d.handle)}</td></tr>` : ''}
+
               <tr><th>CPF</th><td>${esc(d.cpf)} <button type="button" class="btn ghost sm" data-copy-cpf>Copiar</button></td></tr>
               <tr><th>Nascimento</th><td>${br(d.birth_date)}${d.age != null ? ` <span class="muted">(${d.age} anos)</span>` : ''}</td></tr>
               <tr><th>Cidade</th><td>${esc(d.city)} - ${esc(d.state)}</td></tr>

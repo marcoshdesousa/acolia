@@ -97,7 +97,8 @@ function peerOf(role, c) {
       portal: require('../portals').enabled() ? p.portal || 'psi' : undefined };
   }
   const p = db.prepare('SELECT id, name, handle, photo, city, state, status FROM patients WHERE id = ?').get(c.patient_id);
-  return { id: p.id, name: p.name, full_name: p.name, handle: p.handle || '', photo: p.photo, subtitle: p.handle ? `@${p.handle}` : `${p.city} - ${p.state}`, active: p.status === 'ativo' };
+  // Sem @ (versão 2.2): o profissional vê o município do paciente
+  return { id: p.id, name: p.name, full_name: p.name, handle: '', photo: p.photo, subtitle: `${p.city} - ${p.state}`, active: p.status === 'ativo' };
 }
 
 function summarize(role, c) {
