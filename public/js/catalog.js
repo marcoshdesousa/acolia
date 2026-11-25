@@ -78,10 +78,10 @@
         </div>
         <div class="filter-panel card flat hidden" id="filtros" data-panel>
           <div class="filter-grid">
-            <div class="field"><label for="f-portal">Filtrar por portal</label>
-              <select id="f-portal" name="portal"><option value="">Todos os portais</option></select></div>
-            <div class="field"><label for="f-prof">Tipo de profissional</label>
-              <select id="f-prof" name="profession"><option value="">Todos os tipos</option></select></div>
+            <div class="field"><label for="f-portal">Área</label>
+              <select id="f-portal" name="portal"><option value="">Todas as áreas</option></select></div>
+            <div class="field"><label for="f-prof">Profissão</label>
+              <select id="f-prof" name="profession"><option value="">Todas as profissões</option></select></div>
             <div class="field"><label for="f-disp">Consulta disponível</label>
               <select id="f-disp" name="disp">
                 <option value="">Qualquer dia</option>
@@ -113,8 +113,6 @@
           <div class="row"><button class="btn" type="submit">Aplicar filtros</button><button class="btn ghost" type="button" data-clear>Limpar filtros</button></div>
         </div>
       </form>
-      <div class="portal-chips" role="group" aria-label="Filtrar por portal" data-portal-chips></div>
-      <div class="prof-chips hidden" role="group" aria-label="Tipo de profissional" data-prof-chips></div>
       <div class="disp-chips" role="group" aria-label="Consulta disponível">
         <span class="small muted">Consulta disponível:</span>
         ${[['', 'Qualquer dia'], ['hoje', 'Hoje'], ['amanha', 'Até amanhã'], ['7', 'Próximos 7 dias']].map(([v, t]) => `<button type="button" class="chip-btn ${v ? '' : 'on'}" data-disp="${v}">${t}</button>`).join('')}
@@ -128,28 +126,24 @@
     const toggle = $('[data-toggle]', root);
     form.state.insertAdjacentHTML('beforeend', ufOptions('', '').replace('<option value=""></option>', ''));
     form.state.value = 'todos';
-    // Portal único (versão 2.2): todos os profissionais juntos; "Filtrar por portal" mostra só uma área e
-    // as profissões dela (ex.: Fisio → Fisioterapeuta, Instrutor(a) de Pilates…)
+    // Versão 2.3: tudo pelo "Filtrar". Área (saúde mental, nutrição, movimento) → profissões daquela área →
+    // especialidades daquela área. Escolher só a profissão já marca a área dela.
     let portals = [];
     let allProfs = [];
-    const chipsP = $('[data-portal-chips]', root);
-    const chipsF = $('[data-prof-chips]', root);
+    const areaOf = (prof) => (portals.find((x) => x.professions.includes(prof)) || {}).key || '';
     const fillProfessions = () => {
       const P = portals.find((x) => x.key === form.portal.value);
       const keep = form.profession.value;
       const list = P ? P.professions : allProfs;
-      form.profession.innerHTML = '<option value="">Todos os tipos</option>' + list.map((x) => `<option>${esc(x)}</option>`).join('');
+      form.profession.innerHTML = '<option value="">Todas as profissões</option>' + (P || !portals.length
+        ? list.map((x) => `<option>${esc(x)}</option>`).join('')
+        : portals.map((x) => `<optgroup label="${esc(x.area)}">${x.professions.map((y) => `<option>${esc(y)}</option>`).join('')}</optgroup>`).join(''));
       form.profession.value = list.includes(keep) ? keep : '';
-      chipsP.innerHTML = `<button type="button" class="chip-btn ${form.portal.value ? '' : 'on'}" data-pchip="">Todos</button>`
-        + portals.map((x) => `<button type="button" class="chip-btn pchip ${form.portal.value === x.key ? 'on' : ''}" data-pchip="${x.key}"><img src="${esc(x.symbol)}" alt="">${esc(x.short)}</button>`).join('');
-      chipsF.classList.toggle('hidden', !P);
-      chipsF.innerHTML = P ? `<button type="button" class="chip-btn ${form.profession.value ? '' : 'on'}" data-fchip="">Todos de ${esc(P.short)}</button>`
-        + P.professions.map((x) => `<button type="button" class="chip-btn ${form.profession.value === x ? 'on' : ''}" data-fchip="${esc(x)}">${esc(x)}</button>`).join('') : '';
     };
     const ready = api('/api/config').then((c) => {
       portals = c.portals_enabled !== false ? (c.portals || []) : [];
       allProfs = [...new Set(portals.length ? portals.flatMap((x) => x.professions) : c.professions)];
-      form.portal.insertAdjacentHTML('beforeend', portals.map((x) => `<option value="${x.key}">${esc(x.name)}</option>`).join(''));
+      form.portal.insertAdjacentHTML('beforeend', portals.map((x) => `<option value="${x.key}">${esc(x.area)}</option>`).join(''));
       if (!portals.length) form.portal.closest('.field').classList.add('hidden');
       if (opts.portal && portals.some((x) => x.key === opts.portal)) form.portal.value = opts.portal;
       fillProfessions();
@@ -164,16 +158,17 @@
       spChosen = [];
       if (!host) return;
       if (!window.AcoliaSpecialties || !form.portal.value) {
-        host.innerHTML = '<p class="small muted" style="margin:0">Escolha um portal acima para filtrar por especialidade.</p>';
+        host.innerHTML = '<p class="small muted" style="margin:0">Escolha a área ou a profissão acima para filtrar por especialidade.</p>';
         return;
       }
       AcoliaSpecialties.picker(host, { portal: form.portal.value, onChange: (l) => { spChosen = l; } });
     }
-    const setPortal = (k) => { form.portal.value = k; form.profession.value = ''; fillProfessions(); mountSp(); load(); };
-    chipsP.addEventListener('click', (e) => { const b = e.target.closest('[data-pchip]'); if (b) setPortal(b.dataset.pchip); });
-    chipsF.addEventListener('click', (e) => { const b = e.target.closest('[data-fchip]'); if (b) { form.profession.value = b.dataset.fchip; fillProfessions(); load(); } });
-    form.portal.addEventListener('change', () => setPortal(form.portal.value));
-    form.profession.addEventListener('change', () => fillProfessions());
+    form.portal.addEventListener('change', () => { form.profession.value = ''; fillProfessions(); mountSp(); load(); });
+    // Escolheu a profissão sem a área: a área dela fica marcada (e aparecem as especialidades dela)
+    form.profession.addEventListener('change', () => {
+      const k = areaOf(form.profession.value);
+      if (k && form.portal.value !== k) { const prof = form.profession.value; form.portal.value = k; fillProfessions(); form.profession.value = prof; mountSp(); }
+    });
 
     // Atalhos de disponibilidade (os mesmos do filtro "Consulta disponível")
     const syncDisp = () => $$('[data-disp]', root).forEach((b) => b.classList.toggle('on', b.dataset.disp === form.disp.value));

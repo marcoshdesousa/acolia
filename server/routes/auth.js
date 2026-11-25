@@ -16,6 +16,8 @@ const PO = require('../portals');
 const PROFESSIONS = PO.PORTALS.psi.professions;
 // Portal do cadastro: o escolhido no 1º passo (com os portais desligados, sempre Psi)
 const portalFromBody = (body) => (PO.enabled() ? PO.normalize(body && body.portal) : 'psi');
+// Profissional (versão 2.3): escolhe só a profissão (lista única); a área (portal) vem dela
+const proPortalFromBody = (body) => (PO.enabled() ? (PO.portalOfProfession(U.cleanText(body && body.profession, 60)) || portalFromBody(body)) : 'psi');
 
 const NO_PASSWORD = '!sem-senha'; // profissional que ainda não recebeu a primeira senha
 
@@ -172,7 +174,7 @@ router.get('/terms/professional', (req, res) => res.json(require('../terms').pub
 router.post('/professional/register', async (req, res) => {
   const documentFile = await handleDocument(req, res);
   try {
-    const d = validateProfessionalInput(req.body, portalFromBody(req.body));
+    const d = validateProfessionalInput(req.body, proPortalFromBody(req.body));
     const birth = String(req.body.birth_date || '');
     if (!U.isValidBirthDate(birth)) throw new HttpError(400, 'Informe sua data de nascimento.');
     const plan = String(req.body.plan || 'mensal-30');

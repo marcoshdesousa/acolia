@@ -95,11 +95,9 @@ test('portais: página principal, páginas de cada portal, ícones e configuraç
 
 test('portais: profissional de cada portal, CPF e e-mail por portal, 7 dias grátis em cada um, vitrine separada', async () => {
   const anon = client();
-  // Profissão de outro portal é recusada
-  let r = await anon.form('/api/auth/professional/register', proForm({ portal: 'nutri', profession: 'Psicólogo(a)', registry: 'CRP 06/12345' }), card);
-  assert.equal(r.status, 400);
+  // (Versão 2.3: a área vem da profissão; o "portal" mandado não decide mais)
   // Nutricionista (CRN) no Nutri: 7 dias grátis, entra direto
-  r = await anon.form('/api/auth/professional/register', proForm({ portal: 'nutri', profession: 'Nutricionista', registry: 'crn 3 45678' }), card);
+  let r = await anon.form('/api/auth/professional/register', proForm({ portal: 'nutri', profession: 'Nutricionista', registry: 'crn 3 45678' }), card);
   assert.equal(r.status, 201, JSON.stringify(r.data));
   assert.ok(r.data.trial && r.data.password);
   const nutriCode = r.data.code;
@@ -119,6 +117,14 @@ test('portais: profissional de cada portal, CPF e e-mail por portal, 7 dias grá
   r = await anon.form('/api/auth/professional/register', proForm({ portal: 'fisio', profession: 'Fisioterapeuta', registry: 'CREFITO-3/123456', cpf: cpfOf(7002), email: 'bruno@example.com', name: 'Bruno Nogueira Silva', terms_name: 'Bruno Nogueira Silva', specialties: JSON.stringify(['Dor lombar']) }), card);
   assert.equal(r.status, 201, JSON.stringify(r.data));
   assert.equal(db.prepare('SELECT registry FROM professionals WHERE code = ?').get(r.data.code).registry, 'CREFITO-3/123456-F');
+  // Versão 2.3: o cadastro não manda o portal; a área vem da profissão (Massoterapeuta → Fisio)
+  const noPortal = proForm({ profession: 'Massoterapeuta', cpf: cpfOf(7003), email: 'dora@example.com', name: 'Dora Lima Prado', terms_name: 'Dora Lima Prado',
+    specialties: JSON.stringify(['Drenagem linfática']), terms_version: require('../server/terms').versionOf('fisio') });
+  delete noPortal.portal;
+  r = await anon.form('/api/auth/professional/register', noPortal);
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  assert.equal(db.prepare('SELECT portal FROM professionals WHERE code = ?').get(r.data.code).portal, 'fisio');
+  db.prepare("DELETE FROM professionals WHERE code = ?").run(r.data.code); // só para conferir; não entra nas contas abaixo
 
   // Vitrine (portal único, versão 2.2): todos juntos; "Filtrar por portal" (?portal=) mostra só uma área
   const names = async (portal) => (await client().get('/api/professionals' + (portal ? `?portal=${portal}` : ''))).data.items.map((p) => p.profession);
