@@ -1754,3 +1754,7 @@ body.logged-home-page { background: var(--bg); }
 .logged-home .lh-hello { margin: 6px 0 0; font-size: 1.15rem; color: var(--muted); }
 .logged-home .lh-enter { width: min(340px, 100%); padding: 16px 20px; font-size: 1.1rem; border-radius: 16px; }
 .logged-home .lh-switch { border: 0; background: none; color: var(--muted); font: inherit; font-size: .92rem; text-decoration: underline; cursor: pointer; padding: 6px; }
+
+.seg-pick { display: flex; gap: 6px; flex-wrap: wrap; }
+[data-calls-new] h2 svg { width: 20px; height: 20px; vertical-align: -3px; }
+[data-calls-new] .link-box { word-break: break-all; }

@@ -1,4 +1,5 @@
 'use strict';
+process.env.ALLOW_MANUAL_PIX = '1'; // testes do fluxo antigo (Pix manual); o site usa só o recebimento automático
 process.env.CLINIC_SIGNUP = '1'; // o cadastro de clínica está "em breve" no site; os testes ligam
 // Portais: 7 dias grátis e mensalidade (Pix simulado) funcionando igual no Psi, no Nutri e no Fisio.
 // Grátis → venceu (some da vitrine, tela de bloqueio) → paga → liberado de novo por 30 dias.

@@ -354,7 +354,18 @@ db.exec(`CREATE TABLE IF NOT EXISTS call_guests (
 )`);
 db.exec('CREATE INDEX IF NOT EXISTS idx_call_guests_call ON call_guests(call_id)');
 addColumn('professionals', 'price_presencial_cents', 'INTEGER'); // valor da presencial; NULL = o mesmo da online     // quando o paciente entrou (não entrou em 3 min → encerrada, sem reembolso)
-addColumn('calls', 'host_joined_at', 'TEXT');      // quando o profissional entrou (ausência → reembolso)
+addColumn('calls', 'host_joined_at', 'TEXT');
+// Versão 2.3: chamada criada pelo profissional a qualquer hora, solo ou em grupo, com link para mandar por
+// onde quiser (WhatsApp…). Em grupo, o mesmo link vale para até 10 pessoas; cada uma entra com o nome.
+addColumn('calls', 'shared', 'INTEGER NOT NULL DEFAULT 0');
+db.exec(`CREATE TABLE IF NOT EXISTS call_open_guests (
+  id INTEGER PRIMARY KEY,
+  call_id INTEGER NOT NULL,
+  device TEXT NOT NULL,
+  label TEXT NOT NULL,
+  joined_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_call_open_guests_call ON call_open_guests(call_id, device)');      // quando o profissional entrou (ausência → reembolso)
 db.exec(`UPDATE conversations SET patient_wrote = 1 WHERE patient_wrote = 0
   AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = conversations.id AND m.sender_role = 'patient')`);
 // Chat: bloquear alguém (só as mensagens: quem foi bloqueado não consegue mais mandar mensagem)

@@ -90,6 +90,7 @@ const groupAllowed = (pro) => !!pro && pro.portal === 'fisio';
 // Vagas de cada horário em grupo: o profissional escolhe de 2 a 10
 const groupMax = (pro) => Math.min(RULES.GROUP_MAX, Math.max(2, Number(pro?.group_size) || RULES.GROUP_MAX));
 
+const manualPixOn = () => process.env.ALLOW_MANUAL_PIX === '1';
 // Pagamento automático (Asaas, Mercado Pago ou PagBank) do profissional, com a chave já aberta; null = manual
 function autoPayment(proId) {
   const row = db.prepare('SELECT * FROM pro_payment WHERE professional_id = ? AND enabled = 1').get(proId);
@@ -140,8 +141,11 @@ function readiness(pro) {
   if (!pro.agenda_on && !presencialOpen(pro)) missing.push('online');
   if (!db.prepare('SELECT 1 FROM agenda_hours WHERE professional_id = ?').get(pro.id)) missing.push('horarios');
   if (!(pro.price_cents > 0)) missing.push('valor');
+  // Versão 2.3: marcar pelo app (calendário e horários) só com recebimento automático conectado (Asaas,
+  // Mercado Pago ou PagBank). Sem ele, a agenda aparece no perfil, mas o paciente combina pela conversa.
+  // (ALLOW_MANUAL_PIX=1 mantém o Pix manual antigo: só nos testes automáticos do fluxo antigo)
   const auto = !!autoPayment(pro.id);
-  if (!auto && !String(pro.pix_key || '').trim()) missing.push('pix');
+  if (!auto && !(manualPixOn() && String(pro.pix_key || '').trim())) missing.push('pix');
   return { ok: missing.length === 0, missing, mode: auto ? 'auto' : 'manual', online: !!pro.agenda_on, presencial: presencialOpen(pro) };
 }
 
@@ -289,7 +293,8 @@ function nextAvailable(pro) {
   const hit = nextCache.get(pro.id);
   if (hit && hit.v === version && now() - hit.at < 30e3) return hit.value;
   let value = null;
-  if (readiness(pro).ok) {
+  // O dia livre aparece com a agenda aberta, mesmo sem o recebimento automático (aí o paciente combina pela conversa)
+  if (readiness(pro).missing.every((m) => m === 'pix')) {
     const today = localDate(now());
     const last = maxDate(pro);
     const busy = loadBusy(pro.id, fromLocal(today, 0), fromLocal(last, 0) + 1440 * MIN);

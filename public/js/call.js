@@ -74,8 +74,28 @@
     if (hasVideo) msg.innerHTML = '';
     actions.innerHTML = (hasVideo ? `<button class="btn" data-join-video>${ICONS.video.replace('<svg', '<svg style="width:20px;height:20px"')} ${host ? 'Iniciar com vídeo' : 'Entrar com vídeo'}</button>` : '')
       + `<button class="btn ${hasVideo ? 'secondary' : ''}" data-join-audio>${ICONS.mic.replace('<svg', '<svg style="width:20px;height:20px"')} ${host ? 'Iniciar só com voz' : 'Entrar só com voz'}</button>`;
-    $('[data-join-video]')?.addEventListener('click', () => join());
-    $('[data-join-audio]').onclick = () => { setCamera(false); join(); };
+    // Chamada em grupo pelo link: cada pessoa diz o nome (é assim que o profissional a vê)
+    if (S.info.call.ask_name && !host && !$('[data-name-field]')) {
+      actions.insertAdjacentHTML('beforebegin', `<div class="field" style="text-align:left;margin:0" data-name-field><label for="gname">Seu nome</label><input id="gname" data-guest-name maxlength="60" autocomplete="name" placeholder="Como o profissional vai ver você"></div>`);
+    }
+    const named = () => {
+      const f = $('[data-guest-name]');
+      if (!f) return true;
+      S.name = f.value.trim();
+      if (S.name.length < 2) { f.focus(); Acolia.toast('Digite o seu nome para entrar.', 'error'); return false; }
+      S.meIdentity = { name: S.name, photo: null };
+      return true;
+    };
+    $('[data-join-video]')?.addEventListener('click', () => { if (named()) join(); });
+    $('[data-join-audio]').onclick = () => { if (!named()) return; setCamera(false); join(); };
+  }
+  // Um número por aparelho (para a mesma pessoa voltar para o mesmo lugar na chamada em grupo)
+  function deviceId() {
+    try {
+      let d = localStorage.getItem('acolia.callDevice');
+      if (!d) { d = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('acolia.callDevice', d); }
+      return d;
+    } catch { return ''; }
   }
 
   // ---------- Quem é quem (nome e foto para o avatar quando a câmera desliga) ----------
@@ -178,7 +198,7 @@
     setupBackground();
     S.socket = io();
     S.socket.on('connect', () => {
-      S.socket.emit('call:join', { code: S.code }, (r) => {
+      S.socket.emit('call:join', { code: S.code, name: S.name, device: deviceId() }, (r) => {
         if (r.error) return finish(r.error, true);
         status(r.peerPresent ? 'Conectando…' : 'Aguardando…');
         sendMediaState();

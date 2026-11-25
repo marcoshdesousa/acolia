@@ -1,4 +1,5 @@
 'use strict';
+process.env.ALLOW_MANUAL_PIX = '1'; // testes do fluxo antigo (Pix manual); o site usa só o recebimento automático
 process.env.CLINIC_SIGNUP = '1'; // o cadastro de clínica está "em breve" no site; os testes ligam
 // Mensalidade da Acolia pelo Pix (SyncPay simulada): cadastro pago → conta liberada na hora; renovação → +30 dias
 const { test, before, after } = require('node:test');

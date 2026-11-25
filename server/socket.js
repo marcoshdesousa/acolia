@@ -29,7 +29,7 @@ function setupSocket(httpServer) {
     });
 
     // ---------- Atendimento (chamada de vídeo/voz, WebRTC) ----------
-    socket.on('call:join', async ({ code } = {}, ack = () => {}) => {
+    socket.on('call:join', async ({ code, name, device } = {}, ack = () => {}) => {
       let r;
       try {
         // Reavalia a sessão no momento da entrada (pode ter logado depois de abrir a página)
@@ -38,6 +38,20 @@ function setupSocket(httpServer) {
         return ack({ error: e.message });
       }
       const room = `call:${r.call.id}`;
+      if (r.open) {
+        // Link da chamada em grupo: cada aparelho é um participante (com o nome que digitou); até 10
+        const dev = String(device || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || socket.id;
+        let g = db.prepare('SELECT * FROM call_open_guests WHERE call_id = ? AND device = ?').get(r.call.id, dev);
+        if (!g) {
+          const { OPEN_GROUP_MAX } = require('./routes/calls');
+          const n = db.prepare('SELECT COUNT(*) n FROM call_open_guests WHERE call_id = ?').get(r.call.id).n;
+          if (n >= OPEN_GROUP_MAX) return ack({ error: `Esta chamada em grupo já está cheia (até ${OPEN_GROUP_MAX} pessoas).` });
+          const label = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 60) || `Participante ${n + 1}`;
+          const id = Number(db.prepare('INSERT INTO call_open_guests (call_id, device, label) VALUES (?, ?, ?)').run(r.call.id, dev, label).lastInsertRowid);
+          g = { id, label };
+        }
+        r.guest = { id: -g.id, label: g.label }; // número negativo: não se mistura com os pacientes das consultas
+      }
       if (r.call.is_group) return joinGroup(r, room, ack);
       // Uma pessoa por papel na sala: nova conexão substitui a antiga
       for (const s of await io.in(room).fetchSockets()) {

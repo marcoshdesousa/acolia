@@ -1,4 +1,5 @@
 'use strict';
+process.env.ALLOW_MANUAL_PIX = '1'; // testes do fluxo antigo (Pix manual); o site usa só o recebimento automático
 // Agenda, consultas e pagamento por Pix (automático pelo Asaas do profissional ou manual pelo chat).
 // O Asaas é simulado por um servidor falso e o relógio é controlado pelo teste.
 const { test, before, after } = require('node:test');
@@ -245,6 +246,20 @@ test('manual: paciente marca, profissional manda a chave Pix, aprova e a consult
   await Q.cl.put('/api/agenda/settings', { hours: HOURS, session_minutes: 50, online: true });
   r = await ana.post('/api/agenda/book', { professional_id: Q.id, start: at('2030-01-08', '08:00'), accept: true });
   assert.equal(r.status, 409, 'Quitéria ainda não abriu (sem forma de receber)');
+});
+
+test('versão 2.3: sem recebimento automático, a agenda aparece mas ninguém marca pelo app (combina pela conversa)', async () => {
+  process.env.ALLOW_MANUAL_PIX = '0';
+  try {
+    const prof = (await ana.get(`/api/professionals/${P.id}`)).data;
+    assert.equal(prof.books_online, false, 'sem Asaas/Mercado Pago/PagBank: não marca pelo app');
+    assert.ok(prof.next_available, 'o dia livre continua aparecendo');
+    const r = await ana.post('/api/agenda/book', { professional_id: P.id, start: at('2030-01-09', '08:00'), accept: true });
+    assert.equal(r.status, 409);
+    assert.match(r.data.error, /mensagem/);
+    const mo = (await P.cl.get(`/api/agenda/pro/${P.id}/month?ym=2030-01`)).data;
+    assert.equal(mo.needs_payment, true, 'o profissional vê que falta conectar o recebimento');
+  } finally { process.env.ALLOW_MANUAL_PIX = '1'; }
 });
 
 test('manual: sem a chave Pix em 2 horas o pedido é cancelado e o horário volta; "não aprovado" pergunta se quer tentar de novo', async () => {

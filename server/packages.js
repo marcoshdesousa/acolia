@@ -115,8 +115,9 @@ async function buy(patient, offerId) {
   const cur = current(patient.id, pro.id).pop();
   if (cur && cur.ends_on > G.addDays(G.localDate(t), 7)) throw new U.HttpError(409, `Você já tem um pacote valendo até ${brDate(cur.ends_on)}. A renovação abre 7 dias antes de ele acabar.`);
   const pay = G.autoPayment(pro.id);
-  const manualKey = String(pro.pix_key || '').trim();
-  if (!pay && !manualKey) throw new U.HttpError(409, 'Este profissional ainda não configurou a forma de receber.');
+  const manualKey = process.env.ALLOW_MANUAL_PIX === '1' ? String(pro.pix_key || '').trim() : '';
+  // Versão 2.3: pacote só com o recebimento automático (sem Pix manual)
+  if (!pay && !manualKey) throw new U.HttpError(409, 'Este profissional ainda não recebe pelo app. Mande uma mensagem para combinar.');
   const c = G.ensureConversation(patient.id, pro.id);
   const mode = pay ? 'auto' : 'manual';
   const info = db.prepare(`INSERT INTO patient_packages (package_id, professional_id, patient_id, conversation_id, per_week, price_cents, mode, status, hold_until)

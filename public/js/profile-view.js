@@ -178,7 +178,8 @@
     // Agenda: próximo dia livre e o botão de marcar (paciente; visitante é convidado a criar a conta).
     // Profissional vendo outro profissional não marca consulta.
     const nx = p.next_available;
-    const canBook = !p.is_self && p.viewer_role !== 'professional';
+    const canBook = !p.is_self && p.viewer_role !== 'professional' && p.books_online !== false;
+    const viaChat = !p.is_self && p.viewer_role !== 'professional' && p.books_online === false;
     if (nx) PRO_CACHE.set(p.id, p);
     // Pausou mensagens e agendamentos: só o aviso (com o "?" que explica). Sem agenda aberta: outro aviso.
     const paused = p.accepts_messages === false;
@@ -187,7 +188,7 @@
       : nx
       ? `<div class="agenda-box"><div>${ic('calendar', 18)} Próximo horário livre: <b>${esc(nx.label)} às ${esc(nx.first)}</b></div>
           ${canBook ? `<button type="button" class="btn block" data-book="${p.id}">${ic('calendar', 18)} Agendar consulta</button>
-          <span class="small muted">Escolha o dia e o horário e pague pelo Pix para confirmar. Pacotes: combine pelo chat.</span>` : ''}</div>`
+          <span class="small muted">Escolha o dia e o horário e pague pelo Pix para confirmar. Pacotes: combine pelo chat.</span>` : viaChat ? '<span class="small muted">Para marcar, mande uma mensagem e combine o horário com o profissional.</span>' : ''}</div>`
       : p.test_only && p.next_hint
         ? `<div class="small muted">🧪 Conta de teste: a agenda deste profissional só abre para o <b>Paciente Teste</b>. Entre com o Paciente Teste para marcar e pagar (pagamento simulado).</div>`
       : `<div class="agenda-box">${Acolia.pauseNote('closed')}${canBook ? '<span class="small muted">Mande uma mensagem para combinar.</span>' : ''}</div>`;

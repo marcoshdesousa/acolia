@@ -1,4 +1,5 @@
 'use strict';
+process.env.ALLOW_MANUAL_PIX = '1'; // testes do fluxo antigo (Pix manual); o site usa só o recebimento automático
 // Pagamento automático na conta do profissional pelo Mercado Pago e pelo PagBank (além do Asaas):
 // conectar, Pix da consulta, confirmação sozinha, reembolso automático e pacote mensal.
 // Os dois são simulados por servidores falsos; o relógio é controlado pelo teste.

@@ -520,6 +520,60 @@
   const agendaPro = AcoliaAgendaPro.mount({ appts: $('[data-appts]'), agenda: $('[data-agenda-card]'), asaas: $('[data-asaas-card]'), secretary: isSec });
   // Chamadas (câmera): só o profissional
   const callsPage = isSec ? null : AcoliaSecretary.mountCalls($('[data-calls-list]'));
+  // ---------- Criar chamada a qualquer hora (versão 2.3): solo ou em grupo, com link para mandar por onde quiser ----------
+  const callsNew = $('[data-calls-new]');
+  let newKind = 'solo';
+  const callLink = (code) => `${location.origin}/atendimento?codigo=${encodeURIComponent(code)}`;
+  async function renderCallsNew() {
+    if (!callsNew || isSec) return;
+    let data = { actives: [], max_active: 3 };
+    try { data = await api('/api/calls'); } catch { /* mostra só o formulário */ }
+    const open = (data.actives || []).filter((c) => !c.appointment_id);
+    callsNew.innerHTML = `<h2 style="margin:0">${ICONS.video} Criar chamada agora</h2>
+      <p class="small muted" style="margin:0">Para atender na hora, com ou sem consulta marcada. Mande o link pelo WhatsApp ou por onde quiser: a pessoa entra pelo navegador, sem baixar nada.</p>
+      <div class="seg-pick" role="group" aria-label="Tipo de chamada">
+        <button type="button" class="chip-btn ${newKind === 'solo' ? 'on' : ''}" data-call-kind="solo">Individual (você e 1 paciente)</button>
+        <button type="button" class="chip-btn ${newKind === 'grupo' ? 'on' : ''}" data-call-kind="grupo">Em grupo (até 10 pessoas)</button>
+      </div>
+      <form class="row" data-call-form style="gap:8px;align-items:flex-end">
+        <div class="field grow" style="margin:0"><label for="cl-name">${newKind === 'grupo' ? 'Nome da turma ou do grupo' : 'Nome do paciente'}</label>
+          <input id="cl-name" name="patient_label" maxlength="80" required placeholder="${newKind === 'grupo' ? 'Ex.: Turma de Pilates das 18h' : 'Ex.: Maria'}"></div>
+        <button class="btn" type="submit">Criar chamada</button>
+      </form>
+      ${newKind === 'grupo' ? '<p class="small muted" style="margin:0">Em grupo, todos entram pelo mesmo link e dizem o nome. Você vê todo mundo; cada pessoa vê só você.</p>' : ''}
+      ${open.length ? `<div class="stack" style="gap:10px;margin-top:6px"><b>Chamadas abertas</b>${open.map((c) => `<div class="card flat stack" style="padding:12px;gap:8px">
+          <div><b>${esc(c.patient_label)}</b> <span class="badge">${c.is_group ? 'Em grupo' : 'Individual'}</span></div>
+          <div class="link-box small"><span>${esc(callLink(c.patient_code))}</span></div>
+          <div class="row" style="gap:8px;flex-wrap:wrap">
+            <a class="btn sm" href="${esc(callLink(c.patient_code))}" target="_blank" rel="noopener">Entrar na chamada</a>
+            <button type="button" class="btn secondary sm" data-call-copy="${esc(c.patient_code)}">Copiar link</button>
+            <a class="btn secondary sm" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`Entre na chamada de vídeo pela Acolia: ${callLink(c.patient_code)}`)}">Mandar no WhatsApp</a>
+            <button type="button" class="btn ghost sm" data-call-end="${c.id}">Finalizar</button>
+          </div></div>`).join('')}</div>` : ''}`;
+  }
+  if (callsNew && !isSec) {
+    callsNew.addEventListener('click', async (e) => {
+      const k = e.target.closest('[data-call-kind]');
+      if (k) { newKind = k.dataset.callKind; renderCallsNew(); return; }
+      const cp = e.target.closest('[data-call-copy]');
+      if (cp) { copyText(callLink(cp.dataset.callCopy)); toast('Link copiado!'); return; }
+      const en = e.target.closest('[data-call-end]');
+      if (en) {
+        if (!await confirmDialog('Finalizar esta chamada? O link deixa de funcionar.', { okLabel: 'Finalizar', title: 'Finalizar chamada' })) return;
+        try { await api(`/api/calls/${en.dataset.callEnd}/end`, { method: 'POST' }); toast('Chamada finalizada.'); } catch (ex) { toast(ex.message, 'error'); }
+        renderCallsNew();
+      }
+    });
+    callsNew.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target.closest('[data-call-form]');
+      try {
+        await api('/api/calls', { method: 'POST', body: { patient_label: f.patient_label.value, group: newKind === 'grupo' } });
+        toast('Chamada criada! Copie o link ou mande no WhatsApp.');
+        renderCallsNew();
+      } catch (ex) { toast(ex.message, 'error'); }
+    });
+  }
   const chat = AcoliaChat.mount($('[data-chat]'), {
     secretary: isSec, // secretária: sem documentos
     role: 'professional', me: () => me, socket, onUnreadChange: setUnread,
@@ -555,7 +609,7 @@
       AcoliaCatalog.mount($('[data-catalog]'), { loggedIn: false, viewerRole: 'professional', excludeId: me.id, profileHref: (p) => `#verpro/${p.id}` });
     }
     if (v === 'verpro' && arg) showPro(Number(arg));
-    if (v === 'chamadas') callsPage?.load();
+    if (v === 'chamadas') { callsPage?.load(); renderCallsNew(); }
     if (v === 'financeiro') loadFinance().catch((e) => toast(e.message, 'error'));
     if (v === 'perfil') renderPhotos();
     if (v === 'atendimento') { agendaPro.load(); loadCalls().catch((e) => toast(e.message, 'error')); loadMyPatients().catch((e) => toast(e.message, 'error')); }

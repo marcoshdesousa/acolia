@@ -54,7 +54,7 @@ router.get('/pro/:id/month', (req, res) => {
   }
   res.json({
     ym, today: G.localDate(G.now()), max_date: G.maxDate(pro),
-    ready: ready.ok, agenda_ok: agendaOk, mode: ready.mode, price_cents: pro.price_cents, price_presencial_cents: G.clinicOf(pro) ? G.priceFor(pro, 'presencial') : null, minutes: G.duration(pro),
+    ready: ready.ok, agenda_ok: agendaOk, mode: ready.mode, needs_payment: !ready.ok && ready.missing.every((m) => m === 'pix'), price_cents: pro.price_cents, price_presencial_cents: G.clinicOf(pro) ? G.priceFor(pro, 'presencial') : null, minutes: G.duration(pro),
     paused: pro.accepts_messages === 0,
     presencial: G.clinicOf(pro), presencial_open: G.presencialOpen(pro), online: !!pro.agenda_on, insurance: !!pro.accepts_insurance, patient,
     days: agendaOk ? G.monthDays(pro, ym, { patientId }) : [],
@@ -118,7 +118,9 @@ router.post('/book', async (req, res) => {
   if (pro.accepts_messages === 0) throw new U.HttpError(409, 'Este profissional não está fazendo agendamentos no momento.');
   // Sessão do pacote mensal: já está paga (só precisa dos horários)
   const usePackage = !!req.body.use_package && PK.allowed(pro);
-  if (!ready.ok && !(usePackage && ready.missing.every((m) => ['valor', 'pix'].includes(m)))) throw new U.HttpError(409, 'Este profissional ainda não abriu a agenda.');
+  if (!ready.ok && !(usePackage && ready.missing.every((m) => ['valor', 'pix'].includes(m)))) {
+    throw new U.HttpError(409, ready.missing.every((m) => m === 'pix') ? 'Este profissional ainda não marca consultas pelo app. Mande uma mensagem para combinar o horário.' : 'Este profissional ainda não abriu a agenda.');
+  }
   const modality = req.body.modality === 'presencial' ? 'presencial' : 'online';
   if (modality === 'presencial' && !G.presencialOpen(pro)) throw new U.HttpError(400, 'Este profissional não está com a agenda presencial aberta. Marque uma consulta online.');
   if (modality === 'online' && !pro.agenda_on) throw new U.HttpError(400, 'Este profissional não está com a agenda online aberta no momento.');
@@ -192,7 +194,9 @@ router.post('/propose', async (req, res) => {
     G.notifyBoth(conv);
     return res.status(201).json(G.view(conv, role(req)));
   }
-  if (!ready.ok) throw new U.HttpError(409, 'Abra a sua agenda primeiro (horários, valor da consulta e forma de receber).');
+  if (!ready.ok) throw new U.HttpError(409, ready.missing.every((m) => m === 'pix')
+    ? 'Para marcar e receber pelo app, conecte o recebimento automático (Asaas, Mercado Pago ou PagBank) em Consultas. Sem ele, combine o horário com o paciente pela conversa.'
+    : 'Abra a sua agenda primeiro (horários, valor da consulta e forma de receber).');
   const a = tx(() => {
     const slot = G.assertFree(pro, req.body.start, { patientId: pat.id, who: 'pro' });
     const t = G.now();

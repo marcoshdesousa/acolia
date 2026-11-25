@@ -22,8 +22,9 @@ function newPatientCode(proCode) {
   }
 }
 
-// O profissional pode ter até 2 atendimentos abertos ao mesmo tempo
-const MAX_ACTIVE_CALLS = 2;
+// O profissional pode ter até 3 chamadas abertas ao mesmo tempo (ex.: uma turma e duas individuais)
+const MAX_ACTIVE_CALLS = 3;
+const OPEN_GROUP_MAX = 10; // chamada em grupo pelo link: até 10 pessoas além do profissional
 
 function activeCalls(proId) {
   return db.prepare("SELECT * FROM calls WHERE professional_id = ? AND status = 'ativo' ORDER BY id").all(proId);
@@ -60,6 +61,8 @@ function resolveCode(code, auth) {
   if (auth?.secretary) throw new U.HttpError(403, 'A secretária não entra nas chamadas de vídeo. Só o profissional.');
   // O próprio profissional, logado, entra no atendimento dele pelo código do paciente (como anfitrião)
   if (auth?.role === 'professional' && auth.user.id === p.id) return { role: 'host', call, pro: p };
+  // Grupo criado pelo profissional (link para a turma): todos entram pelo mesmo código, cada um com o nome
+  if (call.is_group && !guest && call.shared) return { role: 'guest', call, pro: p, guest: null, open: true };
   if (call.is_group && !guest) throw new U.HttpError(404, 'Código inválido ou atendimento já finalizado. Peça um novo código ao profissional.');
   return { role: 'guest', call, pro: p, guest };
 }
@@ -69,7 +72,7 @@ router.post('/resolve', (req, res) => {
   res.json({
     role: r.role,
     // O paciente não fica sabendo que é em grupo: vê só o profissional
-    call: { id: r.call.id, patient_label: r.guest ? r.guest.label : r.call.patient_label, ...(r.role === 'host' && r.call.is_group ? { group: true } : {}) },
+    call: { id: r.call.id, patient_label: r.guest ? r.guest.label : r.call.patient_label, ...(r.role === 'host' && r.call.is_group ? { group: true } : {}), ...(r.open ? { ask_name: true } : {}) },
     professional: { name: r.pro.name, photo: r.pro.photo, profession: r.pro.profession, registry: r.pro.registry },
   });
 });
@@ -101,8 +104,10 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
+  if (req.auth.secretary) throw new U.HttpError(403, 'A secretária não cria chamadas de vídeo. Só o profissional.');
+  const group = !!req.body.group && !req.body.conversation_id;
   const label = U.cleanText(req.body.patient_label, 80);
-  if (label.length < 2) throw new U.HttpError(400, 'Informe o nome (ou um nome fictício) do paciente.');
+  if (label.length < 2) throw new U.HttpError(400, group ? 'Dê um nome para a chamada em grupo (ex.: Turma de Pilates).' : 'Informe o nome (ou um nome fictício) do paciente.');
   const pro = req.auth.user;
   let conv = null;
   if (req.body.conversation_id) conv = loadConversation(req, req.body.conversation_id);
@@ -112,7 +117,7 @@ router.post('/', (req, res) => {
       throw new U.HttpError(409, `Você já tem ${MAX_ACTIVE_CALLS} atendimentos em aberto. Finalize um deles antes de criar outro.`);
     }
     const code = newPatientCode(pro.code);
-    const info = db.prepare('INSERT INTO calls (professional_id, patient_label, patient_code, conversation_id) VALUES (?, ?, ?, ?)').run(pro.id, label, code, conv ? conv.id : null);
+    const info = db.prepare('INSERT INTO calls (professional_id, patient_label, patient_code, conversation_id, is_group, shared) VALUES (?, ?, ?, ?, ?, ?)').run(pro.id, label, code, conv ? conv.id : null, group ? 1 : 0, group ? 1 : 0);
     return db.prepare('SELECT * FROM calls WHERE id = ?').get(Number(info.lastInsertRowid));
   });
   if (conv) postMessage(req, conv, 'call', call.patient_code);
@@ -129,4 +134,4 @@ router.post('/:id/end', (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router, resolveCode, endCall, cleanCode, newPatientCode };
+module.exports = { router, resolveCode, endCall, cleanCode, newPatientCode, OPEN_GROUP_MAX };

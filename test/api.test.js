@@ -1,4 +1,5 @@
 'use strict';
+process.env.ALLOW_MANUAL_PIX = '1'; // testes do fluxo antigo (Pix manual); o site usa só o recebimento automático
 process.env.CLINIC_SIGNUP = '1'; // o cadastro de clínica está "em breve" no site; os testes ligam
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -365,8 +366,12 @@ test('atendimento: código do paciente, até dois ao mesmo tempo, finalizar inva
   assert.equal(r.status, 201, 'dois atendimentos ao mesmo tempo');
   const second = r.data;
   r = await pro.post('/api/calls', { patient_label: 'Terceiro' });
-  assert.equal(r.status, 409, 'no máximo dois');
-  assert.equal((await pro.get('/api/calls')).data.actives.length, 2);
+  assert.equal(r.status, 201, 'até três ao mesmo tempo (versão 2.3)');
+  const third = r.data;
+  r = await pro.post('/api/calls', { patient_label: 'Quarto' });
+  assert.equal(r.status, 409, 'no máximo três');
+  assert.equal((await pro.get('/api/calls')).data.actives.length, 3);
+  await pro.post(`/api/calls/${third.id}/end`);
   r = await pro.post('/api/calls/resolve', { code: proCode });
   assert.equal(r.status, 409, 'com dois abertos, o código único não sabe qual abrir');
   r = await pro.post('/api/calls/resolve', { code: second.patient_code });
@@ -415,6 +420,49 @@ test('atendimento: sinalização WebRTC via socket e encerramento', async () => 
     hostSock.close();
     guestSock.close();
   }
+});
+
+test('chamada criada a qualquer hora: em grupo pelo mesmo link (cada um com o nome), até 10; o profissional vê todos', async () => {
+  let r = await pro.post('/api/calls', { patient_label: 'Turma de Pilates', group: true });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const g = r.data;
+  assert.equal(g.is_group, 1);
+  r = await anon.post('/api/calls/resolve', { code: g.patient_code });
+  assert.equal(r.data.role, 'guest');
+  assert.equal(r.data.call.ask_name, true, 'pede o nome de quem entra pelo link');
+  const emit = (s, ev, data) => new Promise((res) => s.emit(ev, data, res));
+  const host = ioClient(base, { extraHeaders: { Cookie: pro.cookie }, transports: ['websocket'] });
+  const socks = [];
+  try {
+    r = await emit(host, 'call:join', { code: g.patient_code });
+    assert.equal(r.role, 'host');
+    assert.equal(r.group, true);
+    const seen = new Promise((res) => host.once('call:guest-joined', res));
+    const a = ioClient(base, { transports: ['websocket'] }); socks.push(a);
+    r = await emit(a, 'call:join', { code: g.patient_code, name: 'Ana', device: 'dev-a' });
+    assert.equal(r.role, 'guest');
+    const j = await seen;
+    assert.equal(j.label, 'Ana');
+    assert.ok(j.gid < 0);
+    for (let i = 1; i < 10; i++) {
+      const s = ioClient(base, { transports: ['websocket'] }); socks.push(s);
+      assert.equal((await emit(s, 'call:join', { code: g.patient_code, name: `P${i}`, device: `dev-${i}` })).role, 'guest');
+    }
+    const full = ioClient(base, { transports: ['websocket'] }); socks.push(full);
+    r = await emit(full, 'call:join', { code: g.patient_code, name: 'Onze', device: 'dev-11' });
+    assert.match(r.error, /cheia/);
+    // O mesmo aparelho volta para o mesmo lugar (não conta de novo)
+    const again = ioClient(base, { transports: ['websocket'] }); socks.push(again);
+    assert.equal((await emit(again, 'call:join', { code: g.patient_code, name: 'Ana', device: 'dev-a' })).role, 'guest');
+  } finally {
+    host.close(); socks.forEach((s) => s.close());
+  }
+  // Individual: segue como antes; e a secretária não cria chamada
+  r = await pro.post('/api/calls', { patient_label: 'Paciente Z' });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.is_group, 0);
+  await pro.post(`/api/calls/${r.data.id}/end`);
+  await pro.post(`/api/calls/${g.id}/end`);
 });
 
 test('mensalidade: vence no dia, funciona mais 1 dia e depois bloqueia; aviso 2 dias antes; restrito/bloqueado', async () => {

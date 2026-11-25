@@ -306,6 +306,7 @@
         pop.setAttribute('role', 'menu');
         pop.innerHTML = `${window.AcoliaQuick ? `<button type="button" role="menuitem" data-fn-quick>${ICONS.chat}<span><b>Mensagens prontas</b><small>Escolha uma e mande com um toque</small></span></button>` : ''}
           ${window.AcoliaAgenda ? `<button type="button" role="menuitem" data-fn-schedule>${ICONS.calendar}<span><b>Agendar consulta</b><small>O paciente recebe e paga o Pix aqui</small></span></button>` : ''}
+          ${role === 'professional' && !secretary ? `<button type="button" role="menuitem" data-fn-call>${ICONS.video}<span><b>Chamada de vídeo agora</b><small>Cria a chamada e manda o link para o paciente</small></span></button>` : ''}
           <button type="button" role="menuitem" data-fn-photo>${ICONS.camera}<span><b>Enviar foto</b><small>Ex.: o comprovante do reembolso</small></span></button>
           ${!secretary && window.AcoliaPlans && ['nutri', 'fisio'].includes(getMe()?.portal) ? `<button type="button" role="menuitem" data-fn-plan>${ICONS.doc}<span><b>${getMe().portal === 'nutri' ? 'Plano alimentar' : 'Plano de exercícios'}</b><small>${getMe().portal === 'nutri' ? 'Refeições, substituições e lista de compras' : 'Séries, repetições e "Fiz hoje" para o paciente'}</small></span></button>
             <button type="button" role="menuitem" data-fn-evo>${ICONS.chart || ICONS.calendar}<span><b>Evolução</b><small>${getMe().portal === 'nutri' ? 'Peso e medidas, com gráfico' : 'Dor de 0 a 10, com gráfico'}</small></span></button>` : ''}
@@ -321,6 +322,13 @@
           else if (b.hasAttribute('data-fn-loc')) api(`/api/chat/conversations/${c.id}/location`, { method: 'POST' }).then(addMessage).catch((ex) => toast(ex.message, 'error'));
           else if (b.hasAttribute('data-fn-plan')) api(`/api/plans/conversation/${c.id}`).then((info) => window.AcoliaPlans.openEditor({ conversationId: c.id, can: info.can, patient: info.patient, onSent: (r) => addMessage(r.message) })).catch((ex) => toast(ex.message, 'error'));
           else if (b.hasAttribute('data-fn-evo')) window.AcoliaPlans.openEvolution({ conversationId: c.id });
+          else if (b.hasAttribute('data-fn-call')) {
+            // Abre a janela antes (o navegador do celular bloqueia janela aberta depois de esperar a resposta)
+            const w = window.open('about:blank', '_blank');
+            api('/api/calls', { method: 'POST', body: { patient_label: c.peer.name, conversation_id: c.id } })
+              .then((call) => { if (w) w.location.href = `/atendimento?codigo=${encodeURIComponent(call.patient_code)}`; toast('Chamada criada: o paciente recebeu o link na conversa.'); })
+              .catch((ex) => { w?.close(); toast(ex.message, 'error'); });
+          }
           else if (b.hasAttribute('data-fn-schedule')) window.AcoliaAgenda.openBooking({ mode: 'propose', conversationId: state.current.id, patientId: state.current.peer.id, peerName: state.current.peer.name, me: getMe() });
           else photoInput.click();
         });
@@ -683,11 +691,10 @@
           ${mine ? '' : `<span class="small proof-tip">${ICONS.camera.replace('<svg', '<svg style="width:16px;height:16px;vertical-align:-3px"')} <b>Depois de pagar, tire um print do comprovante</b> e mande aqui na conversa pela foto (botão da câmera ao lado de "Digite uma mensagem").</span>`}</div>`;
       } else if (m.kind === 'call') {
         const link = `${location.origin}/atendimento?codigo=${encodeURIComponent(m.body)}`;
-        inner = `<div class="msg-card"><strong>${ICONS.video.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px"')} Código de atendimento</strong>
-          <span class="code">${esc(m.body)}</span>
-          <span class="small muted">Use este código em “Entrar no atendimento”. Ele deixa de valer quando o atendimento for finalizado.</span>
-          ${mine ? `<button type="button" class="btn secondary sm" data-copy="${esc(link)}">${ICONS.copy} Copiar link</button>`
-            : `<a class="btn sm" href="${esc(link)}" target="_blank" rel="noopener">${ICONS.video} Entrar no atendimento</a>`}</div>`;
+        inner = `<div class="msg-card"><strong>${ICONS.video.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:-3px"')} Chamada de vídeo</strong>
+          <span class="small muted">${mine ? 'O paciente entra pelo botão "Entrar na chamada". O link deixa de valer quando você finalizar a chamada.' : 'Toque para entrar. O link deixa de valer quando o profissional finalizar a chamada.'}</span>
+          <a class="btn sm" href="${esc(link)}" target="_blank" rel="noopener">${ICONS.video} Entrar na chamada</a>
+          ${mine ? `<button type="button" class="btn secondary sm" data-copy="${esc(link)}">${ICONS.copy} Copiar link</button>` : ''}</div>`;
       } else if (m.kind === 'audio') {
         const a = audioParts(m.body);
         inner = window.AcoliaVoice.playerHtml({ src: `${m.support ? '/api/support/audio/' : '/api/chat/audio/'}${encodeURIComponent(a.file)}`, secs: a.secs, peaks: a.peaks, hint: true });
