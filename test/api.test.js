@@ -2369,7 +2369,8 @@ test('@ dos pacientes: único, escolhido no cadastro ou gerado, e não muda depo
   await b.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Oi!' });
   const peer = (await pro.get('/api/chat/conversations')).data.items.find((c) => c.id === conv.id).peer;
   assert.equal(peer.name, 'Marcos Henrique Souza');
-  assert.equal(peer.handle, hb);
+  assert.equal(peer.handle, '', 'sem @ no chat (versão 2.2): o profissional vê o município');
+  assert.match(peer.subtitle, / - [A-Z]{2}$/);
   // Comentário mostra o @
   const post = (await pro.post('/api/social/texts', { text: 'Bom dia!', font: 'padrao' })).data;
   const c = (await b.post(`/api/social/posts/${post.id}/comments`, { body: 'Bom dia!' })).data;
